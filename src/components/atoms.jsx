@@ -13,7 +13,7 @@ export function Crest({ id, size = 28, className = '' }) {
       <span
         title={id}
         style={{ width: size, height: size, backgroundColor: teamColor(id) }}
-        className={`inline-flex shrink-0 items-center justify-center rounded-full border border-black/40 font-mono font-bold text-white/90 ${className}`}
+        className={`inline-flex shrink-0 items-center justify-center rounded-full border border-black/20 dark:border-white/15 font-mono font-bold text-white shadow-sm ${className}`}
       >
         <span style={{ fontSize: Math.max(8, size * 0.34) }}>{id.slice(0, 3)}</span>
       </span>
@@ -21,15 +21,20 @@ export function Crest({ id, size = 28, className = '' }) {
   }
 
   return (
-    <img
-      src={url}
-      alt={id}
-      width={size}
-      height={size}
-      onError={() => setFailed(true)}
+    <span
       style={{ width: size, height: size }}
-      className={`shrink-0 rounded-full object-contain ${className}`}
-    />
+      className={`relative inline-flex shrink-0 items-center justify-center rounded-full bg-white/5 dark:bg-white/[0.03] p-0.5 ${className}`}
+    >
+      <img
+        src={url}
+        alt={id}
+        width={size}
+        height={size}
+        onError={() => setFailed(true)}
+        style={{ width: size, height: size }}
+        className="h-full w-full object-contain filter drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)]"
+      />
+    </span>
   );
 }
 
@@ -37,7 +42,7 @@ export function Crest({ id, size = 28, className = '' }) {
 export function SleepBadge({ match, compact = false }) {
   if (match.tbd) {
     return (
-      <span className="rounded border border-dashed border-border-strong px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
+      <span className="rounded border border-dashed border-border-strong px-1.5 py-0.5 font-mono text-[10px] text-text-muted">
         时间待定
       </span>
     );
@@ -46,11 +51,11 @@ export function SleepBadge({ match, compact = false }) {
   const style = TIER_STYLE[tier.label] || TIER_STYLE.S0;
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] font-semibold ${style}`}
+      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-tight shadow-xs ${style}`}
       title={`睡眠成本 ${tier.cost}h`}
     >
       {tier.label}
-      {!compact && <span className="font-normal opacity-80">{tier.cost}h</span>}
+      {!compact && <span className="font-normal opacity-85">{tier.cost}h</span>}
     </span>
   );
 }
@@ -67,16 +72,16 @@ export function Stars({ star, className = '' }) {
 /** 通用胶囊 */
 export function Pill({ children, tone = 'slate', className = '', ...rest }) {
   const tones = {
-    slate: 'border-border-subtle bg-surface-card text-slate-400',
-    gold: 'border-primary-gold/40 bg-primary-gold/10 text-primary-gold',
-    teal: 'border-accent-teal/40 bg-accent-teal/10 text-accent-teal',
-    purple: 'border-accent-purple/40 bg-accent-purple/10 text-accent-purple',
-    red: 'border-live-red/40 bg-live-red/10 text-live-red',
-    warn: 'border-warning-amber/40 bg-warning-amber/10 text-warning-amber'
+    slate: 'bg-surface-elevated/80 text-text-muted',
+    gold: 'bg-primary-gold-dim text-primary-gold font-bold',
+    teal: 'bg-accent-teal/10 text-accent-teal font-semibold',
+    purple: 'bg-accent-purple/10 text-accent-purple font-semibold',
+    red: 'bg-live-red/15 text-live-red font-bold',
+    warn: 'bg-warning-amber/10 text-warning-amber font-semibold'
   };
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] font-semibold ${tones[tone] || tones.slate} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-semibold transition-colors ${tones[tone] || tones.slate} ${className}`}
       {...rest}
     >
       {children}
@@ -86,7 +91,7 @@ export function Pill({ children, tone = 'slate', className = '', ...rest }) {
 
 /** 直播中指示点 */
 export function LiveDot({ className = '' }) {
-  return <span className={`inline-block h-1.5 w-1.5 animate-live-pulse rounded-full bg-live-red ${className}`} />;
+  return <span className={`inline-block h-1.5 w-1.5 animate-live-pulse rounded-full bg-live-red shadow-[0_0_8px_rgba(226,75,74,0.6)] ${className}`} />;
 }
 
 /** 比分 / 状态文本（受防剧透控制） */
@@ -98,32 +103,32 @@ export function ScoreText({ match, state, revealed, onReveal, spoilerFree }) {
         <button
           type="button"
           onClick={onReveal}
-          className="rounded border border-border-subtle bg-surface-elevated/70 px-1.5 py-0.5 font-mono text-[10px] text-slate-400 transition-colors hover:border-border-strong hover:text-slate-200"
+          className="rounded-md bg-surface-elevated px-2 py-0.5 font-mono text-[10px] font-medium text-text-muted transition-all hover:text-text-primary hover:bg-surface-hover shadow-2xs active:scale-95"
           title="点击揭晓比分"
         >
-          点击揭晓
+          👁️ 揭晓
         </button>
       );
     }
-    return <span className="font-mono text-[11px] font-semibold text-slate-300">{score}</span>;
+    return <span className="font-mono text-[12px] font-bold text-text-primary">{score}</span>;
   }
 
   if (state === 'live') return <LiveDot />;
 
   if (state === 'ended_pending') {
-    return <span className="font-mono text-[10px] text-slate-500">待录比分</span>;
+    return <span className="font-mono text-[10px] text-text-muted">待录比分</span>;
   }
 
-  return <span className="font-mono text-[10px] text-slate-500">未开赛</span>;
+  return <span className="font-mono text-[10px] text-text-muted">未开赛</span>;
 }
 
 /** 空态 */
 export function EmptyState({ title, desc, icon = '○' }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
-      <span className="font-mono text-2xl text-slate-600">{icon}</span>
-      <p className="font-headline text-sm font-semibold text-slate-300">{title}</p>
-      {desc && <p className="max-w-[260px] text-[11px] leading-relaxed text-slate-500">{desc}</p>}
+    <div className="flex flex-1 flex-col items-center justify-center gap-2.5 px-6 py-10 text-center">
+      <span className="font-mono text-3xl text-text-dim">{icon}</span>
+      <p className="font-headline text-sm font-semibold text-text-primary">{title}</p>
+      {desc && <p className="max-w-[260px] text-[11px] leading-relaxed text-text-muted">{desc}</p>}
     </div>
   );
 }
@@ -131,8 +136,8 @@ export function EmptyState({ title, desc, icon = '○' }) {
 /** 小标题 */
 export function SectionLabel({ children, right = null }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500">{children}</span>
+    <div className="flex items-center justify-between py-1">
+      <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-text-muted">{children}</span>
       {right}
     </div>
   );

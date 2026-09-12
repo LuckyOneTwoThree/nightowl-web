@@ -1,27 +1,42 @@
-/** Tailwind 配置 · 视觉 token 来源：ui/UI设计规范与视觉设计系统.md §二 */
+/** Tailwind 配置 · 视觉 token 来源：ui/UI设计规范与视觉设计系统.md §二，支持双模态自适应 */
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        // 背景与表面层级
-        'bg-app': '#0A0D14',
-        'surface-panel': '#0E121B',
-        'surface-card': '#131722',
-        'surface-hover': '#1A2030',
-        'surface-elevated': '#1E2538',
-        'surface-highlight': '#1A2133',
-        'border-subtle': '#232A3B',
-        'border-strong': '#333E56',
+        // 背景与表面层级（CSS 变量驱动，全功能支持 /10, /60, /95 等透明度修饰符）
+        'bg-app': 'rgb(var(--bg-app-rgb) / <alpha-value>)',
+        'surface-panel': 'rgb(var(--surface-panel-rgb) / <alpha-value>)',
+        'surface-card': 'rgb(var(--surface-card-rgb) / <alpha-value>)',
+        'surface-hover': 'rgb(var(--surface-hover-rgb) / <alpha-value>)',
+        'surface-elevated': 'rgb(var(--surface-elevated-rgb) / <alpha-value>)',
+        'surface-highlight': 'rgb(var(--surface-highlight-rgb) / <alpha-value>)',
+        'border-subtle': 'rgb(var(--border-subtle-rgb) / <alpha-value>)',
+        'border-strong': 'rgb(var(--border-strong-rgb) / <alpha-value>)',
+        'stage-bg': 'rgb(var(--stage-bg-rgb) / <alpha-value>)',
+
+        // 语义文本颜色
+        'text-primary': 'rgb(var(--text-primary-rgb) / <alpha-value>)',
+        'text-secondary': 'rgb(var(--text-secondary-rgb) / <alpha-value>)',
+        'text-muted': 'rgb(var(--text-muted-rgb) / <alpha-value>)',
+        'text-dim': 'rgb(var(--text-dim-rgb) / <alpha-value>)',
+
         // 品牌与功能强调色
-        'primary-gold': '#FFB800',
+        'primary-gold': 'rgb(var(--primary-gold-rgb) / <alpha-value>)',
+        'primary-gold-dim': 'var(--primary-gold-dim)',
         'live-red': '#E24B4A',
         'accent-teal': '#44E2CD',
         'accent-purple': '#CEB5FF',
         'warning-amber': '#F59E0B',
         'danger-orange': '#FF7A45',
         'sleep-extreme': '#9333EA'
+      },
+      boxShadow: {
+        card: 'var(--shadow-card)',
+        'card-hover': 'var(--shadow-card-hover)',
+        elevated: 'var(--shadow-elevated)',
+        'gold-glow': '0 0 16px rgba(255, 184, 0, 0.25)'
       },
       fontFamily: {
         headline: ['Hanken Grotesk', 'system-ui', '-apple-system', 'sans-serif'],

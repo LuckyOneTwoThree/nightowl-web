@@ -9,18 +9,44 @@ import { defaultPrefs, toggleIn } from '../core/prefs.js';
  * D6 关键点：**关注联赛是算法偏好**（影响 +8 加成），与赛程列表的**筛选药丸语义不同**。
  * 前者必须放在这里，不得与筛选器混排 —— 否则开发极易当成同一件事。
  */
+const LEAGUE_TABS = [
+  { id: 'ALL', label: '全部' },
+  { id: 'PL', label: '英超' },
+  { id: 'PD', label: '西甲' },
+  { id: 'SA', label: '意甲' },
+  { id: 'BL', label: '德甲' },
+  { id: 'FL', label: '法甲' },
+  { id: 'UCL', label: '欧战' }
+];
+
 export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, onRerunOnboarding }) {
+  const [selectedLeague, setSelectedLeague] = useState('ALL');
   const [query, setQuery] = useState('');
+
+  const teamCounts = useMemo(() => {
+    const counts = { ALL: teams.length };
+    teams.forEach(t => {
+      counts[t.league] = (counts[t.league] || 0) + 1;
+    });
+    return counts;
+  }, []);
 
   const filteredTeams = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = q
-      ? teams.filter(
-          t => t.zh.includes(query.trim()) || t.en.toLowerCase().includes(q) || t.id.toLowerCase().includes(q)
-        )
-      : teams;
-    return list.slice(0, 24);
-  }, [query]);
+    let list = teams;
+    if (selectedLeague !== 'ALL') {
+      list = list.filter(t => t.league === selectedLeague);
+    }
+    if (q) {
+      list = list.filter(
+        t =>
+          t.zh.toLowerCase().includes(q) ||
+          t.en.toLowerCase().includes(q) ||
+          t.id.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [query, selectedLeague]);
 
   const leagueCount = prefs.followedLeagues.length;
   const bonusActive = leagueCount > 0 && leagueCount < 6;
@@ -32,7 +58,7 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
       {/* 遮罩 */}
       <div
         onClick={onClose}
-        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity ${
+        className={`fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm transition-opacity ${
           open ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
         aria-hidden="true"
@@ -40,78 +66,151 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
 
       {/* 抽屉 */}
       <aside
-        className={`fixed right-0 top-0 z-50 flex h-full w-[480px] flex-col border-l border-border-subtle bg-surface-card shadow-2xl transition-transform duration-200 ${
+        className={`fixed right-0 top-0 z-[110] flex h-full w-[480px] flex-col border-l border-white/[0.04] bg-surface-card shadow-2xl transition-transform duration-200 ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
         aria-hidden={!open}
       >
         {/* 头部 */}
-        <div className="flex items-center justify-between border-b border-border-subtle px-5 py-3.5">
+        <div className="flex items-center justify-between border-b border-white/[0.04] px-5 py-3.5">
           <div>
-            <h2 className="font-headline text-[15px] font-semibold text-slate-100">偏好与数据</h2>
-            <p className="mt-0.5 text-[10px] text-slate-500">定制你的熬夜决策大脑</p>
+            <h2 className="font-headline text-[15px] font-semibold text-text-primary">偏好与数据</h2>
+            <p className="mt-0.5 text-[10px] text-text-muted">定制你的熬夜决策大脑</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded border border-border-subtle px-2 py-1 font-mono text-[11px] text-slate-400 hover:text-slate-100"
+            className="rounded px-2.5 py-1 font-mono text-[11px] text-text-secondary hover:text-text-primary hover:bg-white/[0.05]"
           >
             ✕
           </button>
         </div>
 
-        <div className="scrollbar-thin-dark flex-1 space-y-5 overflow-y-auto px-5 py-4">
+        <div className="scrollbar-thin flex-1 space-y-5 overflow-y-auto px-5 py-4">
           {/* 关注球队 */}
           <section>
-            <SectionLabel right={<span className="font-mono text-[10px] text-slate-500">已选 {prefs.followedTeams.length}</span>}>
-              关注球队
-            </SectionLabel>
+            <div className="flex items-center justify-between">
+              <SectionLabel right={<span className="font-mono text-[10px] text-text-muted">已选 {prefs.followedTeams.length}</span>}>
+                关注球队
+              </SectionLabel>
+              {prefs.followedTeams.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => patch({ followedTeams: [] })}
+                  className="font-mono text-[10px] text-text-dim hover:text-text-primary transition-colors"
+                >
+                  清空已选
+                </button>
+              )}
+            </div>
 
             {prefs.followedTeams.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="scrollbar-thin mt-2 flex max-h-[76px] flex-wrap gap-1.5 overflow-y-auto rounded-md bg-bg-app/60 p-1.5">
                 {prefs.followedTeams.map(id => (
                   <button
                     key={id}
                     type="button"
                     onClick={() => patch({ followedTeams: toggleIn(prefs.followedTeams, id) })}
-                    className="flex items-center gap-1.5 rounded-full border border-primary-gold/40 bg-primary-gold/10 px-2 py-0.5 text-[11px] text-primary-gold"
+                    className="flex items-center gap-1.5 rounded-full bg-primary-gold/15 px-2.5 py-0.5 text-[11px] text-primary-gold hover:bg-primary-gold/25 transition-colors"
                   >
                     <Crest id={id} size={14} />
-                    {TEAM_MAP[id]?.zh || id}
+                    <span>{TEAM_MAP[id]?.zh || id}</span>
                     <span className="text-[9px] opacity-70">✕</span>
                   </button>
                 ))}
               </div>
             )}
 
-            <input
-              type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="搜索 111 支球队…"
-              className="mt-2.5 w-full rounded-md border border-border-subtle bg-bg-app px-3 py-1.5 text-[12px] text-slate-200 placeholder:text-slate-600 focus:border-border-strong focus:outline-none"
-            />
+            {/* 搜索框 */}
+            <div className="relative mt-2.5">
+              <input
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="搜索全部 111 支球队（中文 / 英文 / 缩写）…"
+                className="w-full rounded-md bg-bg-app px-3 py-1.5 pr-8 text-[12px] text-text-primary placeholder:text-text-dim focus:outline-none focus:ring-1 focus:ring-primary-gold/40"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-primary text-[11px]"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
 
-            <div className="mt-2 grid grid-cols-6 gap-1.5">
-              {filteredTeams.map(t => {
-                const on = prefs.followedTeams.includes(t.id);
+            {/* 联赛分类 Tabs */}
+            <div className="mt-2 flex flex-wrap gap-1">
+              {LEAGUE_TABS.map(tab => {
+                const active = selectedLeague === tab.id;
+                const count = teamCounts[tab.id] || 0;
                 return (
                   <button
-                    key={t.id}
+                    key={tab.id}
                     type="button"
-                    title={`${t.zh}${t.tag ? ` · ${t.tag}` : ''}`}
-                    onClick={() => patch({ followedTeams: toggleIn(prefs.followedTeams, t.id) })}
-                    className={`flex flex-col items-center gap-1 rounded-md border px-1 py-1.5 transition-colors ${
-                      on
-                        ? 'border-primary-gold/50 bg-primary-gold/10'
-                        : 'border-border-subtle bg-bg-app hover:border-border-strong'
+                    onClick={() => setSelectedLeague(tab.id)}
+                    className={`rounded px-2.5 py-1 font-mono text-[10px] transition-colors ${
+                      active
+                        ? 'bg-primary-gold/20 text-primary-gold font-semibold shadow-xs'
+                        : 'bg-bg-app text-text-muted hover:bg-surface-hover hover:text-text-primary'
                     }`}
                   >
-                    <Crest id={t.id} size={22} />
-                    <span className="w-full truncate text-center text-[9px] text-slate-400">{t.zh}</span>
+                    {tab.label} {count}
                   </button>
                 );
               })}
+            </div>
+
+            {/* 球队网格 (全量 111 支，带独立滚动条) */}
+            <div className="scrollbar-thin mt-2 max-h-[250px] overflow-y-auto rounded-lg bg-bg-app/60 p-1.5">
+              {filteredTeams.length === 0 ? (
+                <div className="py-8 text-center text-[11px] text-text-muted">
+                  未找到匹配球队
+                  {selectedLeague !== 'ALL' && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLeague('ALL')}
+                      className="ml-1 text-primary-gold underline"
+                    >
+                      切换至全部联赛
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-5 gap-1.5">
+                  {filteredTeams.map(t => {
+                    const on = prefs.followedTeams.includes(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        title={`${t.zh} (${t.en}) · ${LEAGUE_NAMES[t.league] || t.league}${t.tag ? ` · ${t.tag}` : ''}`}
+                        onClick={() => patch({ followedTeams: toggleIn(prefs.followedTeams, t.id) })}
+                        className={`group relative flex flex-col items-center gap-1 rounded-md px-1 py-1.5 transition-all active:scale-95 ${
+                          on
+                            ? 'bg-primary-gold/15 text-primary-gold shadow-xs font-semibold'
+                            : 'bg-surface-card text-text-secondary hover:bg-surface-hover hover:text-text-primary'
+                        }`}
+                      >
+                        {on && (
+                          <span className="absolute right-0.5 top-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-primary-gold text-[8px] font-bold text-black">
+                            ✓
+                          </span>
+                        )}
+                        <Crest id={t.id} size={22} />
+                        <span className="w-full truncate text-center text-[9px] leading-tight">{t.zh}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-1 flex items-center justify-between px-1 font-mono text-[9px] text-text-dim">
+              <span>全量 111 支欧洲顶级球队</span>
+              <span>当前展示 {filteredTeams.length} 支</span>
             </div>
           </section>
 
@@ -127,11 +226,11 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
               关注联赛（算法偏好）
             </SectionLabel>
 
-            <p className="mt-1.5 rounded border border-border-subtle bg-bg-app px-2.5 py-1.5 text-[10px] leading-relaxed text-slate-400">
-              这里影响<strong className="font-semibold text-slate-200">算法排序</strong>
+            <p className="mt-1.5 rounded bg-bg-app/80 px-2.5 py-1.5 text-[10px] leading-relaxed text-text-secondary">
+              这里影响<strong className="font-semibold text-text-primary">算法排序</strong>
               （关注联赛场次 +8 分），与「赛程日历」里的联赛筛选
-              <strong className="font-semibold text-slate-200">不是同一件事</strong>。
-              核心规则：仅当已选 <strong className="font-semibold text-slate-200">少于 6 个</strong>{' '}
+              <strong className="font-semibold text-text-primary">不是同一件事</strong>。
+              核心规则：仅当已选 <strong className="font-semibold text-text-primary">少于 6 个</strong>{' '}
               联赛时加成生效；全选 6 个时加成为 0。
             </p>
 
@@ -143,10 +242,10 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
                     key={code}
                     type="button"
                     onClick={() => patch({ followedLeagues: toggleIn(prefs.followedLeagues, code) })}
-                    className={`rounded border px-2.5 py-1 font-mono text-[10px] transition-colors ${
+                    className={`rounded px-2.5 py-1 font-mono text-[10px] transition-colors ${
                       on
-                        ? 'border-accent-teal/50 bg-accent-teal/15 text-accent-teal'
-                        : 'border-border-subtle bg-bg-app text-slate-500 hover:text-slate-300'
+                        ? 'bg-accent-teal/15 text-accent-teal font-medium shadow-xs'
+                        : 'bg-bg-app text-text-muted hover:bg-surface-hover hover:text-text-primary'
                     }`}
                   >
                     {on ? '✓ ' : ''}
@@ -159,7 +258,7 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
             <button
               type="button"
               onClick={() => patch({ followedLeagues: [...FOLLOWABLE_LEAGUES] })}
-              className="mt-1.5 font-mono text-[10px] text-slate-500 underline-offset-2 hover:text-slate-300 hover:underline"
+              className="mt-1.5 font-mono text-[10px] text-text-muted underline-offset-2 hover:text-text-primary hover:underline"
             >
               全选（注意：全选将使加成失效）
             </button>
@@ -169,9 +268,9 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
           <section>
             <SectionLabel>睡眠成本与规则</SectionLabel>
 
-            <div className="mt-2 rounded-lg border border-border-subtle bg-bg-app px-3 py-2.5">
+            <div className="mt-2 rounded-lg bg-bg-app/80 px-3 py-2.5 shadow-card">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] text-slate-300">默认每周熬夜额度</span>
+                <span className="text-[11px] text-text-secondary">默认每周熬夜额度</span>
                 <span className="font-mono text-[13px] font-bold tabular-nums text-accent-teal">
                   {prefs.weeklyBudget.toFixed(1)} 小时
                 </span>
@@ -206,7 +305,7 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
           {/* 数据状态 */}
           <section>
             <SectionLabel>数据与服务状态</SectionLabel>
-            <div className="mt-2 space-y-1.5 rounded-lg border border-border-subtle bg-bg-app px-3 py-2.5 font-mono text-[10px] leading-relaxed text-slate-400">
+            <div className="mt-2 space-y-1.5 rounded-lg bg-bg-app/60 px-3 py-2.5 font-mono text-[10px] leading-relaxed text-text-secondary">
               <p>赛程数据：本地快照 1,897 场（2026-08-16 ~ 2027-05-31）</p>
               <p>保鲜同步：未接入（P4）· 当前比分来自快照</p>
               <p>本地流代理：未接入（P3）</p>
@@ -215,12 +314,12 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
         </div>
 
         {/* 底部 */}
-        <div className="flex items-center justify-between border-t border-border-subtle px-5 py-3">
+        <div className="flex items-center justify-between border-t border-white/[0.04] px-5 py-3">
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => onPrefsChange(defaultPrefs())}
-              className="font-mono text-[11px] text-slate-500 hover:text-slate-300"
+              className="font-mono text-[11px] text-text-muted hover:text-text-primary"
             >
               恢复默认
             </button>
@@ -228,7 +327,7 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
               <button
                 type="button"
                 onClick={onRerunOnboarding}
-                className="font-mono text-[11px] text-slate-500 hover:text-slate-300"
+                className="font-mono text-[11px] text-text-muted hover:text-text-primary"
               >
                 ↻ 重新引导
               </button>
@@ -237,7 +336,7 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md bg-primary-gold px-4 py-1.5 font-mono text-[11px] font-semibold text-black hover:bg-[#FFC426]"
+            className="rounded-md bg-primary-gold px-4 py-1.5 font-mono text-[11px] font-semibold text-black hover:opacity-90 shadow-sm"
           >
             完成
           </button>
@@ -249,21 +348,23 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
 
 function SwitchRow({ label, on, onChange, note }) {
   return (
-    <div className="flex items-center justify-between rounded-md border border-border-subtle bg-bg-app px-3 py-2">
-      <div>
-        <p className="text-[11px] text-slate-300">{label}</p>
-        {note && <p className="mt-0.5 font-mono text-[9px] text-slate-600">{note}</p>}
+    <div className="flex items-center justify-between rounded-lg bg-bg-app/80 px-3.5 py-2.5 transition-colors">
+      <div className="pr-3">
+        <p className="text-[12px] font-medium text-text-secondary">{label}</p>
+        {note && <p className="mt-0.5 font-mono text-[9px] text-text-dim">{note}</p>}
       </div>
       <button
         type="button"
         role="switch"
         aria-checked={on}
         onClick={() => onChange(!on)}
-        className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? 'bg-accent-teal/70' : 'bg-slate-700'}`}
+        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-teal ${
+          on ? 'bg-accent-teal' : 'bg-slate-700'
+        }`}
       >
         <span
-          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-            on ? 'translate-x-[18px]' : 'translate-x-0.5'
+          className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ease-in-out ${
+            on ? 'translate-x-4' : 'translate-x-0'
           }`}
         />
       </button>

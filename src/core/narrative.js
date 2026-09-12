@@ -26,13 +26,13 @@ export const TIER_ADVICE = {
   S4: '极限档 · 熬夜代价较高'
 };
 
-/** 档位 → 视觉色（对齐 UI 规范 §三） */
+/** 档位 → 视觉色（对齐 UI 规范 §三，支持明暗高对比度） */
 export const TIER_STYLE = {
-  S0: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
-  S1: 'text-teal-400 border-teal-500/30 bg-teal-500/10',
-  S2: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
-  S3: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
-  S4: 'text-purple-400 border-purple-500/30 bg-purple-500/10'
+  S0: 'text-emerald-400 bg-emerald-500/15',
+  S1: 'text-teal-400 bg-teal-500/15',
+  S2: 'text-amber-400 bg-amber-500/15',
+  S3: 'text-orange-400 bg-orange-500/15',
+  S4: 'text-purple-400 bg-purple-500/15'
 };
 
 export function tierAdviceOf(match) {

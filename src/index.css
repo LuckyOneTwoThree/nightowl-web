@@ -2,6 +2,49 @@
 @tailwind components;
 @tailwind utilities;
 
+:root,
+.dark {
+  color-scheme: dark;
+  --bg-app: #0A0D14;
+  --bg-app-rgb: 10 13 20;
+  --surface-panel: #0E121B;
+  --surface-panel-rgb: 14 18 27;
+  --surface-card: #131722;
+  --surface-card-rgb: 19 23 34;
+  --surface-hover: #1A2030;
+  --surface-hover-rgb: 26 32 48;
+  --surface-elevated: #1E2538;
+  --surface-elevated-rgb: 30 37 56;
+  --surface-highlight: #1A2133;
+  --surface-highlight-rgb: 26 33 51;
+  --border-subtle: #19202E;
+  --border-subtle-rgb: 25 32 46;
+  --border-strong: #273347;
+  --border-strong-rgb: 39 51 71;
+  --stage-bg: #080B10;
+  --stage-bg-rgb: 8 11 16;
+
+  --text-primary: #F8FAFC;
+  --text-primary-rgb: 248 250 252;
+  --text-secondary: #CBD5E1;
+  --text-secondary-rgb: 203 213 225;
+  --text-muted: #8492A6;
+  --text-muted-rgb: 132 146 166;
+  --text-dim: #505C72;
+  --text-dim-rgb: 80 92 114;
+
+  --primary-gold: #FFB800;
+  --primary-gold-rgb: 255 184 0;
+  --primary-gold-dim: rgba(255, 184, 0, 0.12);
+
+  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.35), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.45), 0 2px 4px -2px rgba(0, 0, 0, 0.35);
+  --shadow-elevated: 0 10px 15px -3px rgba(0, 0, 0, 0.55), 0 4px 6px -4px rgba(0, 0, 0, 0.45);
+
+  --scrollbar-thumb: #232a3b;
+  --scrollbar-thumb-hover: #333e56;
+}
+
 @layer base {
   /* 严禁外层滚动条（UI 规范 §四）：滚动只发生在左栏内容区 */
   html,
@@ -15,7 +58,7 @@
   }
 
   body {
-    @apply bg-bg-app text-slate-200 font-body antialiased;
+    @apply bg-bg-app text-text-primary font-body antialiased transition-colors duration-200;
   }
 
   /* 桌面端可拖拽窗口（Electron 外壳复用）；交互元素需声明 no-drag */
@@ -28,20 +71,24 @@
 }
 
 @layer utilities {
-  /* 极细深色滚动条 */
+  /* 极细滚动条，自动随主题变色 */
+  .scrollbar-thin::-webkit-scrollbar,
   .scrollbar-thin-dark::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
+  .scrollbar-thin::-webkit-scrollbar-track,
   .scrollbar-thin-dark::-webkit-scrollbar-track {
     background: transparent;
   }
+  .scrollbar-thin::-webkit-scrollbar-thumb,
   .scrollbar-thin-dark::-webkit-scrollbar-thumb {
-    background: #232a3b;
+    background: var(--scrollbar-thumb);
     border-radius: 4px;
   }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover,
   .scrollbar-thin-dark::-webkit-scrollbar-thumb:hover {
-    background: #333e56;
+    background: var(--scrollbar-thumb-hover);
   }
 
   /* 防剧透：比分毛玻璃 */
@@ -49,4 +96,11 @@
     filter: blur(7px);
     user-select: none;
   }
+
+  /* 播放器穿模防护：强行限制 ArtPlayer 内部极端 1,000,000 z-index，锁定在局部层叠范围 */
+  .art-video-player [class*='hint--']:before,
+  .art-video-player [class*='hint--']:after {
+    z-index: 45 !important;
+  }
 }
+

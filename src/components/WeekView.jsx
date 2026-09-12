@@ -33,39 +33,42 @@ export default function WeekView({
     <div className="flex h-full flex-col gap-3 overflow-hidden">
       {/* ---- 预算规划器（手风琴双模态）---- */}
       <section
-        className={`rounded-xl border transition-all ${
-          expanded ? 'border-accent-teal/40 bg-surface-card' : 'border-border-subtle bg-surface-card'
+        className={`rounded-xl transition-all duration-200 shadow-card ${
+          expanded
+            ? 'bg-surface-card shadow-md'
+            : 'bg-surface-card hover:bg-surface-hover'
         }`}
       >
         {/* 紧凑态：单行胶囊 */}
         <button
           type="button"
           onClick={() => setExpanded(v => !v)}
-          className="flex h-9 w-full items-center justify-between px-3 text-left"
+          className="flex h-10 w-full items-center justify-between px-3.5 text-left"
         >
-          <div className="flex items-center gap-2">
-            <span className="font-headline text-[12px] font-semibold text-slate-200">本周睡眠预算</span>
-            <span className="font-mono text-[12px] font-bold tabular-nums text-accent-teal">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 pr-2">
+            <span className="shrink-0 font-headline text-[12px] font-bold text-text-primary">睡眠预算</span>
+            <span className="shrink-0 font-mono text-[13px] font-extrabold tabular-nums text-teal-600 dark:text-accent-teal">
               {hmCost(plan.budget)}
             </span>
-            <span className="font-mono text-[10px] text-slate-500">
-              · 预算内 {plan.best.length} 场 · 占用 {hmCost(plan.used)}（
-              {(usedRatio * 100).toFixed(0)}%）
+            <span className="truncate font-mono text-[10px] text-text-muted">
+              · 占 {hmCost(plan.used)}（{(usedRatio * 100).toFixed(0)}%）
             </span>
           </div>
-          <span className="font-mono text-[10px] text-slate-400">{expanded ? '收起 ▴' : '展开规划 ▾'}</span>
+          <span className="shrink-0 font-mono text-[10px] font-medium text-text-muted hover:text-text-primary">
+            {expanded ? '收起 ▴' : '规划 ▾'}
+          </span>
         </button>
 
         {/* 展开态 */}
         {expanded && (
-          <div className="border-t border-border-subtle px-3 py-3">
+          <div className="border-t border-white/[0.04] px-3.5 py-3">
             <div className="flex items-baseline justify-between">
-              <span className="font-mono text-[22px] font-bold tabular-nums text-accent-teal">
+              <span className="font-mono text-[22px] font-extrabold tabular-nums text-teal-600 dark:text-accent-teal">
                 {plan.budget.toFixed(1)}
-                <span className="ml-1 text-[12px] font-normal text-slate-500">小时 / 周</span>
+                <span className="ml-1 text-[12px] font-normal text-text-muted">小时 / 周</span>
               </span>
-              <span className="font-mono text-[10px] text-slate-500">
-                结余 {hmCost(Math.max(0, plan.budget - plan.used))} · 单场上限 5
+              <span className="font-mono text-[10px] font-medium text-text-muted">
+                结余 {hmCost(Math.max(0, plan.budget - plan.used))} · 单周上限 5
               </span>
             </div>
 
@@ -76,12 +79,12 @@ export default function WeekView({
               step="0.5"
               value={plan.budget}
               onChange={e => onBudgetChange(Number(e.target.value))}
-              className="mt-2.5 w-full accent-[#44E2CD]"
+              className="mt-2.5 w-full accent-[#0D9488] dark:accent-[#44E2CD]"
               aria-label="每周熬夜预算（小时）"
             />
 
             {/* 档位刻度 */}
-            <div className="mt-1 flex justify-between font-mono text-[9px] text-slate-600">
+            <div className="mt-1 flex justify-between font-mono text-[9px] font-medium text-text-dim">
               <span>0h</span>
               <span>S1 1h</span>
               <span>S2 2.5h</span>
@@ -90,24 +93,25 @@ export default function WeekView({
               <span>8h</span>
             </div>
 
-            <p className="mt-2.5 rounded border border-border-subtle bg-bg-app px-2 py-1.5 font-mono text-[10px] leading-relaxed text-slate-400">
-              DP 已解：预算内入选 {plan.best.length} 场 · 占用 {hmCost(plan.used)} · 结余{' '}
+            <p className="mt-2.5 rounded-lg bg-surface-elevated/50 px-2.5 py-1.5 font-mono text-[10px] leading-relaxed text-text-secondary">
+              DP 规划：预算内入选 <b className="text-text-primary">{plan.best.length}</b> 场 · 占用{' '}
+              <b className="text-text-primary">{hmCost(plan.used)}</b> · 结余{' '}
               {hmCost(Math.max(0, plan.budget - plan.used))}
             </p>
           </div>
         )}
       </section>
 
-      <div className="scrollbar-thin-dark -mr-1 flex-1 space-y-3 overflow-y-auto pr-1">
+      <div className="scrollbar-thin -mr-1 flex-1 space-y-3 overflow-y-auto pr-1">
         {/* ---- 算法精选组合 ---- */}
         <section>
-          <SectionLabel right={<span className="font-mono text-[10px] text-slate-500">上限 5 场</span>}>
+          <SectionLabel right={<span className="font-mono text-[10px] text-text-muted">上限 5 场</span>}>
             算法精选组合（预算内）
           </SectionLabel>
 
           <div className="mt-2 space-y-2">
             {plan.best.length === 0 && (
-              <p className="rounded-md border border-dashed border-border-subtle px-3 py-3 text-center text-[11px] text-slate-500">
+              <p className="rounded-lg bg-surface-card/50 px-3 py-3 text-center text-[11px] text-text-muted shadow-xs">
                 当前额度下没有可入包的场次。试着提高预算，或查看下方的零成本场次。
               </p>
             )}
@@ -125,13 +129,13 @@ export default function WeekView({
 
         {/* ---- 零成本顺带（不占预算）---- */}
         {plan.zeroCount > 0 && (
-          <section>
+          <section className="rounded-xl bg-surface-card/60 p-2.5 shadow-xs">
             <SectionLabel
               right={
                 <button
                   type="button"
                   onClick={() => setShowZero(v => !v)}
-                  className="font-mono text-[10px] text-slate-400 hover:text-slate-200"
+                  className="font-mono text-[10px] font-medium text-text-muted hover:text-text-primary"
                 >
                   {showZero ? '收起 ▴' : '展开 ▾'}
                 </button>
@@ -140,7 +144,7 @@ export default function WeekView({
               零成本顺带 · {plan.zeroCount} 场（不占预算）
             </SectionLabel>
 
-            <p className="mt-1.5 text-[10px] leading-relaxed text-slate-500">
+            <p className="mt-1 text-[10px] leading-relaxed text-text-muted">
               这些场次睡眠成本为 0，不计入熬夜额度，也不占用精选名额。
             </p>
 
@@ -172,15 +176,15 @@ export default function WeekView({
               {minefield.slice(0, 4).map(e => (
                 <div
                   key={e.m.id}
-                  className="rounded-md border border-danger-orange/30 bg-danger-orange/[0.07] px-2.5 py-2"
+                  className="rounded-lg bg-danger-orange/[0.08] p-2.5 shadow-xs"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate font-mono text-[11px] text-slate-300">
+                    <span className="truncate font-mono text-[11px] font-semibold text-text-primary">
                       {zhDate(e.m.t.split('T')[0])} {e.m.t.split('T')[1]} {teamName(e.m.h)} vs {teamName(e.m.a)}
                     </span>
                     <Pill tone="warn">⚠ 建议睡觉</Pill>
                   </div>
-                  <p className="mt-1 text-[10px] text-danger-orange/90">{e.reason}</p>
+                  <p className="mt-1 text-[10px] font-medium text-danger-orange/90">{e.reason}</p>
                 </div>
               ))}
             </div>
@@ -189,38 +193,39 @@ export default function WeekView({
 
         {/* ---- 周历透视 ---- */}
         <section>
-          <SectionLabel right={<span className="font-mono text-[10px] text-slate-500">按当日最高档位</span>}>
+          <SectionLabel right={<span className="font-mono text-[10px] text-text-muted">按当日最高档位</span>}>
             本周档位分布
           </SectionLabel>
 
-          <div className="mt-2 rounded-lg border border-border-subtle bg-surface-card p-2.5">
+          <div className="mt-2 rounded-xl bg-surface-card p-3 shadow-card">
             <div className="flex items-end justify-between gap-1.5" style={{ height: 68 }}>
               {days.map((d, i) => {
-                const h = d.count === 0 ? 3 : Math.max(6, (d.cost / 4.5) * 62);
+                const h = d.count === 0 ? 4 : Math.max(8, (d.cost / 4.5) * 62);
                 const color =
-                  d.count === 0
-                    ? '#232A3B'
-                    : d.cost >= 3.5
-                      ? '#FF7A45'
-                      : d.cost >= 2.5
-                        ? '#F59E0B'
-                        : d.cost >= 1
-                          ? '#44E2CD'
-                          : '#10B981';
+                  d.cost >= 3.5
+                    ? '#FF7A45'
+                    : d.cost >= 2.5
+                      ? '#F59E0B'
+                      : d.cost >= 1
+                        ? '#0D9488'
+                        : '#10B981';
                 return (
-                  <div key={d.date} className="flex flex-1 flex-col items-center gap-1">
+                  <div key={d.date} className="flex flex-1 flex-col items-center gap-1.5">
                     <div
-                      className="w-full rounded-sm transition-all"
-                      style={{ height: h, backgroundColor: color, opacity: d.count === 0 ? 0.5 : 0.85 }}
+                      className={`w-full rounded-sm transition-all ${d.count === 0 ? 'bg-border-subtle opacity-60' : 'opacity-90 hover:opacity-100'}`}
+                      style={{
+                        height: h,
+                        backgroundColor: d.count === 0 ? undefined : color
+                      }}
                       title={`${zhDate(d.date)} · ${d.count} 场 · 最高 ${hmCost(d.cost)}`}
                     />
-                    <span className="font-mono text-[9px] text-slate-500">周{WEEKDAY_SHORT[i]}</span>
+                    <span className="font-mono text-[9px] font-medium text-text-muted">周{WEEKDAY_SHORT[i]}</span>
                   </div>
                 );
               })}
             </div>
 
-            <p className="mt-2.5 border-t border-border-subtle pt-2 text-[10px] leading-relaxed text-slate-400">
+            <p className="mt-3 border-t border-white/[0.04] pt-2.5 text-[10px] leading-relaxed text-text-secondary">
               {advice}
             </p>
           </div>
@@ -236,12 +241,12 @@ export default function WeekView({
                   key={e.m.id}
                   type="button"
                   onClick={() => onSelect(e.m.id)}
-                  className="flex w-full items-center justify-between rounded-md border border-border-subtle bg-surface-card/60 px-2.5 py-1.5 text-left transition-colors hover:bg-surface-hover"
+                  className="flex w-full items-center justify-between rounded-lg bg-surface-card/70 px-2.5 py-2 text-left transition-colors hover:bg-surface-hover shadow-2xs hover:shadow-xs"
                 >
-                  <span className="truncate font-mono text-[10px] text-slate-400">
+                  <span className="truncate font-mono text-[10px] font-medium text-text-secondary">
                     {e.m.t.split('T')[1]} {teamName(e.m.h)} vs {teamName(e.m.a)}
                   </span>
-                  <span className="shrink-0 font-mono text-[10px] text-slate-500">指数 {e.index.toFixed(1)}</span>
+                  <span className="shrink-0 font-mono text-[10px] font-semibold text-text-muted">指数 {e.index.toFixed(1)}</span>
                 </button>
               ))}
             </div>
@@ -269,21 +274,24 @@ function PickRow({ e, active, onSelect, prefs }) {
     <button
       type="button"
       onClick={() => onSelect(m.id)}
-      className={`w-full rounded-md border px-2.5 py-2 text-left transition-colors ${
+      className={`relative w-full rounded-lg px-3 py-2 text-left transition-all duration-150 ${
         active
-          ? 'border-l-[3px] border-l-primary-gold border-y-border-subtle border-r-border-subtle bg-surface-highlight'
-          : 'border-border-subtle bg-surface-card hover:bg-surface-hover'
+          ? 'bg-primary-gold/15 shadow-xs'
+          : 'bg-surface-card/70 hover:bg-surface-hover shadow-2xs hover:shadow-xs'
       }`}
     >
+      {active && (
+        <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-sm bg-primary-gold" />
+      )}
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <Crest id={m.h} size={20} />
-          <span className="truncate text-[12px] text-slate-200">{teamName(m.h)}</span>
-          <span className="shrink-0 font-mono text-[10px] text-slate-600">vs</span>
-          <span className="truncate text-[12px] text-slate-200">{teamName(m.a)}</span>
+          <span className="truncate text-[12px] font-medium text-text-primary">{teamName(m.h)}</span>
+          <span className="shrink-0 font-mono text-[10px] text-text-muted">vs</span>
+          <span className="truncate text-[12px] font-medium text-text-primary">{teamName(m.a)}</span>
           <Crest id={m.a} size={20} />
         </div>
-        <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums text-primary-gold">
+        <span className="shrink-0 font-mono text-[11px] font-extrabold tabular-nums text-primary-gold">
           {e.index.toFixed(1)}
         </span>
       </div>
@@ -292,7 +300,7 @@ function PickRow({ e, active, onSelect, prefs }) {
         <SleepBadge match={m} />
         <Stars star={e.ev.star} />
         <Pill tone="teal">{reason}</Pill>
-        <span className="font-mono text-[9px] text-slate-600">
+        <span className="font-mono text-[9px] text-text-muted">
           {zhDate(m.t.split('T')[0])} {m.t.split('T')[1]} · {leagueName(m.l)}
         </span>
       </div>

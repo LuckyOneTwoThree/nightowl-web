@@ -14,7 +14,8 @@ const KEY = {
   leagues: 'followedLeagues',
   budget: 'weeklyBudget',
   spoilerFree: 'spoilerFree',
-  notify: 'notifyBefore15'
+  notify: 'notifyBefore15',
+  theme: 'theme'
 };
 
 /** 首启默认：只关注英超。刻意不设为"全部 6 个"，否则 +8 加成恒为 0 */
@@ -22,12 +23,15 @@ export const DEFAULT_FOLLOWED_LEAGUES = ['PL'];
 
 export const DEFAULT_BUDGET_HOURS = 4.0;
 
+export const DEFAULT_THEME = 'dark';
+
 export const defaultPrefs = () => ({
   followedTeams: [],
   followedLeagues: [...DEFAULT_FOLLOWED_LEAGUES],
   weeklyBudget: DEFAULT_BUDGET_HOURS,
   spoilerFree: true,
-  notifyBefore15: true
+  notifyBefore15: true,
+  theme: DEFAULT_THEME
 });
 
 function readJSON(key, fallback) {
@@ -46,16 +50,38 @@ function readNumber(key, fallback) {
   return Number.isFinite(v) ? v : fallback;
 }
 
+function readString(key, fallback) {
+  try {
+    const v = localStorage.getItem(key);
+    return v != null ? v : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function applyTheme() {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  root.classList.add('dark');
+  root.classList.remove('light');
+  root.setAttribute('data-theme', 'dark');
+}
+
 export function loadPrefs() {
   const d = defaultPrefs();
   const leagues = readJSON(KEY.leagues, d.followedLeagues);
+
+  // 始终锁定暗色夜间主题
+  applyTheme();
+
   return {
     followedTeams: Array.isArray(readJSON(KEY.teams, d.followedTeams)) ? readJSON(KEY.teams, d.followedTeams) : d.followedTeams,
     // 空数组是合法状态（不关注任何联赛），但 null/非数组要兜回默认，避免算法拿到脏输入
     followedLeagues: Array.isArray(leagues) ? leagues : d.followedLeagues,
     weeklyBudget: readNumber(KEY.budget, d.weeklyBudget),
     spoilerFree: readJSON(KEY.spoilerFree, d.spoilerFree) !== false,
-    notifyBefore15: readJSON(KEY.notify, d.notifyBefore15) !== false
+    notifyBefore15: readJSON(KEY.notify, d.notifyBefore15) !== false,
+    theme: 'dark'
   };
 }
 
@@ -66,9 +92,11 @@ export function savePrefs(p) {
     localStorage.setItem(KEY.budget, String(p.weeklyBudget));
     localStorage.setItem(KEY.spoilerFree, JSON.stringify(p.spoilerFree));
     localStorage.setItem(KEY.notify, JSON.stringify(p.notifyBefore15));
+    localStorage.setItem(KEY.theme, 'dark');
   } catch {
     // 存储不可用时静默降级：本次会话仍可用，只是不持久化
   }
+  applyTheme();
 }
 
 export function toggleIn(list, id) {

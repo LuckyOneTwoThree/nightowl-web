@@ -1,17 +1,15 @@
-import { hm, liveMinute, datePart } from '../core/format.js';
+import { hm, liveMinute } from '../core/format.js';
 import { teamName, leagueName } from '../data/index.js';
 import { ts } from '../core/engine.js';
 import { Crest, SleepBadge, Stars, Pill, ScoreText, LiveDot } from './atoms.jsx';
 
 /**
- * 紧凑比赛行（三视图共用）
+ * 紧凑比赛行（两行式高辨识度卡片）
  *
- * 状态呈现规则：
- *   tbd            → 不显示档位徽章（铁律二），显示「时间待定」
- *   live           → 进行分钟 + LIVE 点（不显示比分，见 D3）
- *   ended_pending  → 「待录比分」
- *   done           → 比分（受防剧透控制）
- *   雷区场次        → 弱化样式 + ⚠ 徽章
+ * 优化重点：
+ *   1. 队名独占第二行完整宽度，根除单字截断（如「桑...」「阿...」）
+ *   2. 进行中赛事（LIVE）强视觉标注：红色呼吸光晕、高亮左侧光条、LIVE 分钟徽标
+ *   3. 状态与比分受防剧透控制
  */
 export default function MatchRow({
   m,
@@ -32,44 +30,60 @@ export default function MatchRow({
   const live = state === 'live';
   const minute = live ? liveMinute(kickTs, now) : 0;
 
-  const border = active
-    ? 'border-l-[3px] border-l-primary-gold border-y-border-subtle border-r-border-subtle bg-surface-highlight'
-    : isMine
-      ? 'border border-dashed border-border-subtle/80 bg-surface-card/40'
-      : 'border border-border-subtle bg-surface-card hover:bg-surface-hover';
+  const cardStyle = live
+    ? 'bg-gradient-to-r from-live-red/[0.14] via-surface-card to-surface-card shadow-xs'
+    : active
+      ? 'bg-primary-gold/15 shadow-xs'
+      : isMine
+        ? 'bg-danger-orange/[0.06] hover:bg-danger-orange/[0.10]'
+        : 'bg-surface-card/70 hover:bg-surface-hover shadow-2xs hover:shadow-xs';
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(m.id)}
-      className={`w-full rounded-md px-2.5 py-2 text-left transition-all ${border} ${
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect(m.id);
+        }
+      }}
+      className={`relative w-full select-none rounded-lg px-3 py-2 text-left transition-all duration-150 ${cardStyle} ${
         flash ? 'animate-gold-flash' : ''
       }`}
     >
-      <div className="flex items-center gap-2">
-        {/* 时间 */}
-        <div className="w-[42px] shrink-0">
-          <span className="font-mono text-[12px] font-semibold tabular-nums text-slate-300">{hm(m.t)}</span>
+      {/* 活跃指示光条（LIVE 时发红光，选中时发金光） */}
+      {live && (
+        <span className="absolute left-0 top-1.5 bottom-1.5 w-[3.5px] rounded-r-sm bg-live-red shadow-[0_0_8px_rgba(226,75,74,0.9)]" />
+      )}
+      {!live && active && (
+        <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-sm bg-primary-gold" />
+      )}
+
+      {/* 第一行：时间 · 联赛 · 星级 · 状态/比分 */}
+      <div className="flex items-center justify-between gap-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <span className={`font-mono text-[11px] font-bold tabular-nums ${live ? 'text-live-red' : 'text-text-primary'}`}>
+            {hm(m.t)}
+          </span>
+          <span className="font-mono text-[10px] text-text-muted">{leagueName(m.l)}</span>
+          {m.tbd ? <Pill>待定</Pill> : <SleepBadge match={m} compact />}
+          {star != null && <Stars star={star} />}
+          {rivalry && <Pill tone="purple">{rivalry}</Pill>}
+          {isMine && <Pill tone="warn">⚠ 建议睡觉</Pill>}
         </div>
 
-        {/* 对阵 */}
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <Crest id={m.h} size={20} />
-          <span className="truncate text-[12px] text-slate-200">{teamName(m.h)}</span>
-          <span className="shrink-0 font-mono text-[10px] text-slate-600">vs</span>
-          <span className="truncate text-[12px] text-slate-200">{teamName(m.a)}</span>
-          <Crest id={m.a} size={20} />
-        </div>
-
-        {/* 状态 / 比分 */}
+        {/* 右侧：状态 / 比分 / 强 LIVE 徽标 */}
         <div className="flex shrink-0 items-center gap-1.5">
-          {live && (
-            <>
+          {live ? (
+            <div className="flex items-center gap-1 rounded bg-live-red/15 px-1.5 py-0.5">
               <LiveDot />
-              <span className="font-mono text-[11px] font-semibold text-live-red">{minute}′</span>
-            </>
-          )}
-          {!live && (
+              <span className="font-mono text-[10px] font-extrabold text-live-red tracking-tight">
+                LIVE {minute}′
+              </span>
+            </div>
+          ) : (
             <ScoreText
               match={m}
               state={state}
@@ -84,18 +98,33 @@ export default function MatchRow({
         </div>
       </div>
 
-      {/* 徽章行 */}
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-[50px]">
-        {m.tbd ? (
-          <Pill>时间待定</Pill>
-        ) : (
-          <SleepBadge match={m} compact />
-        )}
-        {star != null && <Stars star={star} />}
-        {rivalry && <Pill tone="purple">{rivalry}</Pill>}
-        <span className="font-mono text-[9px] text-slate-600">{leagueName(m.l)}</span>
-        {isMine && <Pill tone="warn">⚠ 建议睡觉</Pill>}
+      {/* 第二行：主队队徽+队名 vs 客队队名+队徽（全行舒展，彻底消除截断与内部白线） */}
+      <div className="mt-1.5 flex items-center justify-between gap-1">
+        {/* 主队 */}
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <Crest id={m.h} size={18} />
+          <span
+            className="truncate font-headline text-[12px] font-semibold text-text-primary"
+            title={teamName(m.h)}
+          >
+            {teamName(m.h)}
+          </span>
+        </div>
+
+        {/* VS 分隔符 */}
+        <span className="shrink-0 px-1 font-mono text-[10px] font-semibold text-text-dim">vs</span>
+
+        {/* 客队 */}
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+          <span
+            className="truncate font-headline text-[12px] font-semibold text-text-primary text-right"
+            title={teamName(m.a)}
+          >
+            {teamName(m.a)}
+          </span>
+          <Crest id={m.a} size={18} />
+        </div>
       </div>
-    </button>
+    </div>
   );
 }

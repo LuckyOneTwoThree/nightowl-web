@@ -11,7 +11,7 @@ function isHlsUrl(url) {
  *
  * 约定：
  *   · 传入的 src 应为**本地代理地址**（/api/proxy?url=...），由代理剥防盗链并重写 M3U8
- *   · 首次起播静音（浏览器 autoplay 政策 + FR-P-11）
+ *   · 默认 50% 音量非静音起播
  *   · 切换线路时保留时间轴（FR-P-07）——销毁前记录 currentTime，新实例 ready 后 seek 回去
  *   · 只支持 m3u8 与 mp4；FLV 需 mpegts.js，本版不承诺（PRD：仅 Chromium 增强，非跨浏览器承诺）
  */
@@ -34,7 +34,8 @@ export default function Player({ src, onError, onLoadStart, theme = '#FFB800' })
         url: src,
         type: isHlsUrl(src) ? 'm3u8' : 'mp4',
         theme,
-        muted: true,
+        volume: 0.5,
+        muted: false,
         autoplay: true,
         pip: true,
         setting: true,
