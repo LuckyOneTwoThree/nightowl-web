@@ -61,6 +61,9 @@ export default function PlayerStage({ match, state, now, countdown }) {
   const [streamUrl, setStreamUrl] = useState(null);
   const [error, setError] = useState(null);
   const [authorizing, setAuthorizing] = useState(false);
+  const [showAdv, setShowAdv] = useState(false);
+  const [referer, setReferer] = useState('');
+  const [cookie, setCookie] = useState('');
 
   // 换场次时清空当前直链，避免拿上一场的源播下一场
   useEffect(() => {
@@ -90,10 +93,14 @@ export default function PlayerStage({ match, state, now, countdown }) {
     setError(null);
     try {
       // 先在本机会话内显式授权该域名（仅内存、重启失效），再由代理剥防盗链播放
+      const headers = {};
+      if (referer.trim()) headers.Referer = referer.trim();
+      if (cookie.trim()) headers.Cookie = cookie.trim();
+
       const r = await fetch('/api/proxy/allow', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ host: u.hostname })
+        body: JSON.stringify({ host: u.hostname, headers })
       });
       const j = await r.json();
       if (!j.ok) {
@@ -223,6 +230,47 @@ export default function PlayerStage({ match, state, now, countdown }) {
             <span className="ml-1 text-slate-400">—— 可改用下方官方平台直达</span>
           </p>
         )}
+
+        {/* 高级：附带请求头（很多源站校验来源或登录态） */}
+        <div className="rounded border border-border-subtle bg-bg-app/60">
+          <button
+            type="button"
+            onClick={() => setShowAdv(v => !v)}
+            className="flex w-full items-center justify-between px-2.5 py-1.5 text-left"
+          >
+            <span className="font-mono text-[10px] text-slate-400">
+              高级：附带请求头（Referer / Cookie）
+              {(referer || cookie) && <span className="ml-1 text-accent-teal">· 已填写</span>}
+            </span>
+            <span className="font-mono text-[9px] text-slate-500">{showAdv ? '收起 ▴' : '展开 ▾'}</span>
+          </button>
+
+          {showAdv && (
+            <div className="space-y-1.5 border-t border-border-subtle px-2.5 py-2">
+              <input
+                type="text"
+                value={referer}
+                onChange={e => setReferer(e.target.value)}
+                placeholder="Referer（如 https://www.example.com/）"
+                className="w-full rounded border border-border-subtle bg-bg-app px-2 py-1 font-mono text-[10px] text-slate-200 placeholder:text-slate-600 focus:border-border-strong focus:outline-none"
+              />
+              <input
+                type="text"
+                value={cookie}
+                onChange={e => setCookie(e.target.value)}
+                placeholder="Cookie（可选，仅在自己的会话内使用）"
+                className="w-full rounded border border-border-subtle bg-bg-app px-2 py-1 font-mono text-[10px] text-slate-200 placeholder:text-slate-600 focus:border-border-strong focus:outline-none"
+              />
+              <p className="text-[9px] leading-relaxed text-slate-600">
+                取法：浏览器打开播放页 → F12 → Network → 过滤 m3u8 → 右键该请求 → Copy as cURL，
+                从中取 <span className="font-mono text-slate-500">-H 'referer: …'</span> /{' '}
+                <span className="font-mono text-slate-500">-H 'cookie: …'</span> 的值。
+                <br />
+                仅存于本机会话内存，不写盘、重启失效，且只发往你填的直链所属域名。
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* 线路台（自动对齐线路属 P5，暂为占位） */}
         <div className="flex items-center justify-between gap-2 border-t border-border-subtle pt-2">

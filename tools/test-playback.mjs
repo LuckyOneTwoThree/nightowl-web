@@ -43,10 +43,12 @@ const MASTER = [
   'hls/720/index.m3u8'
 ].join('\n');
 
-let sawReferer = false;
+const seenHeaders = {};
 
 const origin = http.createServer((req, res) => {
-  if (req.headers.referer) sawReferer = true; // 代理应剥掉 Referer
+  if (req.headers.referer) seenHeaders.referer = req.headers.referer;
+  if (req.headers.cookie) seenHeaders.cookie = req.headers.cookie;
+  if (req.headers['user-agent']) seenHeaders.ua = req.headers['user-agent'];
   const p = new URL(req.url, 'http://127.0.0.1').pathname;
 
   if (p === '/live/master.m3u8') {
@@ -182,7 +184,34 @@ console.log('三、授权后的播放链路');
 
 /* ================================================================== */
 console.log('');
-console.log('四、会话授权不落盘（新实例应重新要求授权）');
+console.log('五、会话级请求头（用户提供 → 透传到其指定域名）');
+
+{
+  const r = await fetch(`${P}/api/proxy/allow`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      host: '127.0.0.1',
+      headers: {
+        Referer: 'https://www.example.com/player',
+        Cookie: 'token=abc123',
+        Origin: 'https://evil.example.org' // 不在允许字段内，应被丢弃
+      }
+    })
+  });
+  const j = await r.json();
+  ok('带请求头重新授权成功', j.ok === true, JSON.stringify(j));
+
+  // 重新拉一次分片，触发源站记录头
+  await fetch(proxied(`${ORIGIN}/live/hls/720/seg1.ts?sign=a%2Bb`));
+  ok('Referer 已透传', seenHeaders.referer === 'https://www.example.com/player', seenHeaders.referer);
+  ok('Cookie 已透传', seenHeaders.cookie === 'token=abc123', seenHeaders.cookie);
+  ok('非允许字段（Origin）被丢弃', !Object.prototype.hasOwnProperty.call(seenHeaders, 'origin'));
+}
+
+/* ================================================================== */
+console.log('');
+console.log('六、会话授权不落盘（新实例应重新要求授权）');
 
 {
   const srv2 = createServer(testRules, { warn() {}, error() {} });

@@ -97,23 +97,39 @@ function createSemaphore(max) {
  * @param {object} log
  * @param {Set<string>} sessionAllowed 会话级白名单
  *
- * 会话级白名单的设计意图：
- *   代理的硬要求是"不做开放代理"。但用户**手动粘贴一条直链**时，其域名不可能预先写进
+ * 会话级授权的设计意图：
+ *   代理的硬要求是"不做开放代理"。但用户**手动提供一条直链**时，其域名不可能预先写进
  *   rules.json。因此提供「用户本机会话内显式授权」：前端在播放前 POST /api/proxy/allow
  *   声明该域名，服务端加入**内存 Set**（不写盘、重启即失效、上限 50 个）。
  *   这样既不是开放代理（需显式授权 + 仅 127.0.0.1 可达），又能正常使用。
+ *
+ * 会话级请求头：
+ *   很多源站校验收看来源（Referer）或登录态（Cookie）。用户从浏览器 DevTools
+ *   「Copy as cURL」拿到的正是这些头。这里允许用户在授权时一并提交，**仅存内存**，
+ *   且只作用于其声明的那个域名。
+ *   ⚠️ 用户提交的是**自己的**会话信息，仅发往其指定的域名，不落盘、不外发。
  */
 export function createProxy(rules = loadRules(), log = console, sessionAllowed = new Set()) {
   const gate = createSemaphore(rules.proxy?.maxConcurrent || 16);
   const MAX_SESSION_HOSTS = 50;
+  const sessionHeaders = new Map(); // host -> { Referer?, Cookie? }
 
-  const allowHost = host => {
+  const allowHost = (host, headers = null) => {
     if (!isValidHost(host)) return { ok: false, reason: '非法主机名' };
-    if (sessionAllowed.has(host)) return { ok: true, already: true };
-    if (sessionAllowed.size >= MAX_SESSION_HOSTS) {
+    if (sessionAllowed.has(host) && !headers) return { ok: true, already: true };
+    if (!sessionAllowed.has(host) && sessionAllowed.size >= MAX_SESSION_HOSTS) {
       return { ok: false, reason: `会话白名单已达上限（${MAX_SESSION_HOSTS}）` };
     }
     sessionAllowed.add(host);
+
+    if (headers && typeof headers === 'object') {
+      const clean = {};
+      for (const k of ['Referer', 'Cookie', 'Origin']) {
+        const v = headers[k];
+        if (typeof v === 'string' && v.trim()) clean[k] = v.trim();
+      }
+      if (Object.keys(clean).length) sessionHeaders.set(host, clean);
+    }
     return { ok: true };
   };
 
@@ -122,8 +138,14 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeoutMs);
     try {
+      // 优先级：用户会话头 > 请求自带（白名单内）> rules 里的上游头
+      const custom = sessionHeaders.get(new URL(target).hostname) || {};
       return await fetch(target, {
-        headers: { ...(rules.proxy?.upstreamHeaders || {}), ...incomingHeaders },
+        headers: {
+          ...(rules.proxy?.upstreamHeaders || {}),
+          ...incomingHeaders,
+          ...custom
+        },
         redirect: 'follow',
         signal: ac.signal
       });

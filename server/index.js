@@ -138,13 +138,14 @@ export function createServer(rules = loadRules(), log = console) {
           const list = Array.isArray(body.hosts) ? body.hosts : [body.host];
           const result = [];
           for (const h of list.filter(Boolean)) {
-            const r = proxy.allowHost(h);
+            const r = proxy.allowHost(h, body.headers || null);
             result.push({ host: h, ...r });
           }
           sendJSON(res, 200, {
             ok: result.every(r => r.ok),
             results: result,
-            sessionCount: proxy.sessionAllowed.size
+            sessionCount: proxy.sessionAllowed.size,
+            note: '自定义请求头仅存于本机会话内存，不写盘、重启失效'
           });
         } catch (err) {
           sendJSON(res, 400, { error: `解析请求体失败：${err.message}` });
