@@ -40,12 +40,20 @@ export class ProxyError extends Error {
 }
 
 /** 域名是否在白名单内 */
-export function isHostAllowed(hostname, rules) {
+export function isHostAllowed(hostname, rules, sessionAllowed = null) {
   const p = rules.proxy || {};
   const exact = p.allowedHosts || [];
   const suffixes = p.allowedHostSuffixes || [];
-  if (exact.includes(hostname)) return true;
-  return suffixes.some(s => hostname === s || hostname.endsWith(`.${s}`));
+  return (
+    exact.includes(hostname) ||
+    suffixes.some(s => hostname === s || hostname.endsWith(`.${s}`)) ||
+    (sessionAllowed ? sessionAllowed.has(hostname) : false)
+  );
+}
+
+/** 是否为合法主机名（防止把整段 URL 或路径塞进来） */
+export function isValidHost(h) {
+  return typeof h === 'string' && h.length > 0 && h.length <= 253 && /^[a-z0-9.-]+$/i.test(h) && !h.startsWith('.');
 }
 
 /** 只挑白名单里的请求头回传上游 */
@@ -82,8 +90,32 @@ function createSemaphore(max) {
   };
 }
 
-export function createProxy(rules = loadRules(), log = console) {
+/**
+ * 创建代理实例
+ *
+ * @param {object} rules 外置规则
+ * @param {object} log
+ * @param {Set<string>} sessionAllowed 会话级白名单
+ *
+ * 会话级白名单的设计意图：
+ *   代理的硬要求是"不做开放代理"。但用户**手动粘贴一条直链**时，其域名不可能预先写进
+ *   rules.json。因此提供「用户本机会话内显式授权」：前端在播放前 POST /api/proxy/allow
+ *   声明该域名，服务端加入**内存 Set**（不写盘、重启即失效、上限 50 个）。
+ *   这样既不是开放代理（需显式授权 + 仅 127.0.0.1 可达），又能正常使用。
+ */
+export function createProxy(rules = loadRules(), log = console, sessionAllowed = new Set()) {
   const gate = createSemaphore(rules.proxy?.maxConcurrent || 16);
+  const MAX_SESSION_HOSTS = 50;
+
+  const allowHost = host => {
+    if (!isValidHost(host)) return { ok: false, reason: '非法主机名' };
+    if (sessionAllowed.has(host)) return { ok: true, already: true };
+    if (sessionAllowed.size >= MAX_SESSION_HOSTS) {
+      return { ok: false, reason: `会话白名单已达上限（${MAX_SESSION_HOSTS}）` };
+    }
+    sessionAllowed.add(host);
+    return { ok: true };
+  };
 
   /** 拉取上游（带超时）；命中重定向时跟随（fetch 默认 follow） */
   async function fetchUpstream(target, incomingHeaders, timeoutMs) {
@@ -119,7 +151,7 @@ export function createProxy(rules = loadRules(), log = console) {
       throw new ProxyError('bad-request', `不支持的协议 ${target.protocol}`, 400);
     }
 
-    if (!isHostAllowed(target.hostname, rules)) {
+    if (!isHostAllowed(target.hostname, rules, sessionAllowed)) {
       throw new ProxyError('blocked', `目标域名不在白名单：${target.hostname}`, 403);
     }
 
@@ -201,7 +233,14 @@ export function createProxy(rules = loadRules(), log = console) {
     }
   }
 
-  return { handle, gate, rules };
+  return {
+    handle,
+    gate,
+    rules,
+    allowHost,
+    sessionAllowed,
+    isAllowed: h => isHostAllowed(h, rules, sessionAllowed)
+  };
 }
 
 /** 限制读取体积，防止上游返回超大 body 撑爆内存 */

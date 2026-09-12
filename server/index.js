@@ -78,6 +78,28 @@ async function serveStatic(pathname, res) {
   }
 }
 
+/** 读取并解析 JSON 请求体（限长，避免被大 body 打爆） */
+function readJsonBody(req, limit = 8192) {
+  return new Promise((resolve, reject) => {
+    let buf = '';
+    req.on('data', c => {
+      buf += c;
+      if (buf.length > limit) {
+        reject(new Error('请求体超出限制'));
+        req.destroy();
+      }
+    });
+    req.on('end', () => {
+      try {
+        resolve(buf ? JSON.parse(buf) : {});
+      } catch (e) {
+        reject(e);
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
 export function createServer(rules = loadRules(), log = console) {
   const proxy = createProxy(rules, log);
   let syncing = false;
@@ -96,6 +118,7 @@ export function createServer(rules = loadRules(), log = console) {
           proxy: {
             allowedHosts: rules.proxy?.allowedHosts?.length || 0,
             allowedHostSuffixes: rules.proxy?.allowedHostSuffixes?.length || 0,
+            sessionAllowedHosts: proxy.sessionAllowed.size,
             activeRequests: proxy.gate.active,
             maxConcurrent: rules.proxy?.maxConcurrent
           },
@@ -105,6 +128,27 @@ export function createServer(rules = loadRules(), log = console) {
             lastSync
           }
         });
+        return;
+      }
+
+      /* ---------------- 会话级域名授权 ---------------- */
+      if (pathname === '/api/proxy/allow' && req.method === 'POST') {
+        try {
+          const body = await readJsonBody(req);
+          const list = Array.isArray(body.hosts) ? body.hosts : [body.host];
+          const result = [];
+          for (const h of list.filter(Boolean)) {
+            const r = proxy.allowHost(h);
+            result.push({ host: h, ...r });
+          }
+          sendJSON(res, 200, {
+            ok: result.every(r => r.ok),
+            results: result,
+            sessionCount: proxy.sessionAllowed.size
+          });
+        } catch (err) {
+          sendJSON(res, 400, { error: `解析请求体失败：${err.message}` });
+        }
         return;
       }
 

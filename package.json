@@ -20,9 +20,12 @@
     "test:proxy": "node tools/test-proxy.mjs",
     "test:alias": "node tools/test-team-alias.mjs",
     "test:sources": "node tools/check-sources.mjs",
-    "test:all": "npm run verify:algo && npm run test:m3u8 && npm run test:proxy && npm run test:alias && npm run test:sources"
+    "test:playback": "node tools/test-playback.mjs",
+    "test:all": "npm run verify:algo && npm run test:m3u8 && npm run test:proxy && npm run test:playback && npm run test:alias && npm run test:sources"
   },
   "dependencies": {
+    "artplayer": "^5.4.0",
+    "hls.js": "^1.7.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "virtua": "^0.51.3"

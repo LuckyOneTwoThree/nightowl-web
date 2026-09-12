@@ -1,8 +1,14 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { hm, zhDate, weekdayOf, datePart, liveMinute, humanCountdown } from '../core/format.js';
 import { teamName, leagueName } from '../data/index.js';
 import { ts } from '../core/engine.js';
 import { Crest, Pill, LiveDot } from './atoms.jsx';
+
+/**
+ * 播放器懒加载：ArtPlayer + hls.js 约 700KB，不应计入首屏。
+ * 只在用户真正点播放时才拉这个 chunk。
+ */
+const Player = lazy(() => import('./Player.jsx'));
 
 /** 服务不可用时的最小回退清单（保证 dev 不开本地服务也能跳转） */
 const FALLBACK_SOURCES = [
@@ -49,19 +55,59 @@ export function sourceUrlFor(src, match) {
   return src.homeUrl;
 }
 
-/**
- * 右栏播放区 + 线路切换台
- *
- * 当前阶段（P2）说明：
- *   直播链路（本地流代理 / M3U8 重写 / 抓取对齐）属 P3，尚未接入。
- *   本组件先把「赛前态 / 进行中态 / 完赛态」三种非播放形态做对，
- *   播放器容器与线路台的骨架就位，P3 时替换为 ArtPlayer + hls.js。
- *
- * 数据纪律（D3）：进行中只显示**进行分钟**，比分位显示 —（实时比分不可达）。
- * 线路标签只显示**文本名**，不显示码率 / 帧率 / 延迟（`tv` 字段全空，无结构化元数据）。
- */
 export default function PlayerStage({ match, state, now, countdown }) {
   const sources = useWatchSources();
+  const [input, setInput] = useState('');
+  const [streamUrl, setStreamUrl] = useState(null);
+  const [error, setError] = useState(null);
+  const [authorizing, setAuthorizing] = useState(false);
+
+  // 换场次时清空当前直链，避免拿上一场的源播下一场
+  useEffect(() => {
+    setStreamUrl(null);
+    setError(null);
+  }, [match?.id]);
+
+  const proxyUrl = streamUrl ? `/api/proxy?url=${encodeURIComponent(streamUrl)}` : null;
+
+  /** 粘贴直链 → 会话内授权域名 → 交给本地代理播放 */
+  const play = async () => {
+    const raw = input.trim();
+    if (!raw) return;
+    let u;
+    try {
+      u = new URL(raw);
+    } catch {
+      setError('地址不合法，请粘贴完整的 http(s) 链接');
+      return;
+    }
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') {
+      setError('仅支持 http / https 地址');
+      return;
+    }
+
+    setAuthorizing(true);
+    setError(null);
+    try {
+      // 先在本机会话内显式授权该域名（仅内存、重启失效），再由代理剥防盗链播放
+      const r = await fetch('/api/proxy/allow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ host: u.hostname })
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        const why = (j.results || []).map(x => `${x.host}: ${x.reason || '被拒绝'}`).join('；');
+        setError(`域名授权失败 —— ${why || '未知原因'}`);
+        return;
+      }
+      setStreamUrl(raw);
+    } catch (e) {
+      setError(`无法连接本地服务（npm run server）：${e.message}`);
+    } finally {
+      setAuthorizing(false);
+    }
+  };
 
   if (!match) {
     return (
@@ -80,11 +126,47 @@ export default function PlayerStage({ match, state, now, countdown }) {
     <div className="flex flex-col gap-2.5">
       {/* 16:9 播放容器 */}
       <div className="relative aspect-video max-h-[46vh] w-full overflow-hidden rounded-xl border border-border-subtle bg-black">
-        {/* 背景：无球赛时的静态氛围（不使用任何编造的战术图 / 数据可视化） */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_120%,rgba(255,184,0,0.10),transparent_60%)]" />
+        {streamUrl ? (
+          <Suspense
+            fallback={
+              <div className="flex h-full w-full items-center justify-center bg-black">
+                <span className="font-mono text-[11px] text-slate-400">正在加载播放器…</span>
+              </div>
+            }
+          >
+            <Player src={proxyUrl} onError={setError} />
+          </Suspense>
+        ) : (
+          <>
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_120%,rgba(255,184,0,0.10),transparent_60%)]" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+              <div className="flex items-center gap-4">
+                <Crest id={match.h} size={52} />
+                <span className="font-mono text-[22px] font-bold tabular-nums text-slate-200">
+                  {finished ? match.sc || '—' : '—'}
+                </span>
+                <Crest id={match.a} size={52} />
+              </div>
 
-        {/* 顶部信息条 */}
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-gradient-to-b from-black/75 to-transparent px-3.5 py-2.5">
+              {state === 'sched' && (
+                <div className="text-center">
+                  <p className="font-mono text-[10px] tracking-wider text-slate-500">距开球</p>
+                  <p className="font-mono text-[28px] font-bold tabular-nums text-primary-gold">{countdown}</p>
+                  <p className="mt-0.5 font-mono text-[10px] text-slate-500">
+                    {zhDate(datePart(match.t))} {weekdayOf(datePart(match.t))} {hm(match.t)} 北京时间
+                  </p>
+                </div>
+              )}
+              {live && <p className="font-mono text-[11px] text-live-red">比赛进行中 · {minute} 分钟</p>}
+              {state === 'ended_pending' && <p className="text-[11px] text-slate-400">比赛已结束，等待比分录入</p>}
+              {finished && <p className="font-mono text-[10px] text-slate-500">终场</p>}
+              {state === 'pp' && <p className="text-[11px] text-slate-400">本场延期，日历将原位提示</p>}
+            </div>
+          </>
+        )}
+
+        {/* 顶部信息条（播放中也在） */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-gradient-to-b from-black/75 to-transparent px-3.5 py-2.5">
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate font-headline text-[13px] font-semibold text-slate-100">
               {teamName(match.h)} vs {teamName(match.a)}
@@ -100,109 +182,85 @@ export default function PlayerStage({ match, state, now, countdown }) {
             </Pill>
           )}
         </div>
+      </div>
 
-        {/* 中央态 */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-          <div className="flex items-center gap-4">
-            <Crest id={match.h} size={52} />
-            <span className="font-mono text-[22px] font-bold tabular-nums text-slate-200">
-              {finished ? match.sc || '—' : '—'}
-            </span>
-            <Crest id={match.a} size={52} />
-          </div>
-
-          {state === 'sched' && (
-            <div className="text-center">
-              <p className="font-mono text-[10px] tracking-wider text-slate-500">距开球</p>
-              <p className="font-mono text-[28px] font-bold tabular-nums text-primary-gold">{countdown}</p>
-              <p className="mt-0.5 font-mono text-[10px] text-slate-500">
-                {zhDate(datePart(match.t))} {weekdayOf(datePart(match.t))} {hm(match.t)} 北京时间
-              </p>
-            </div>
+      {/* 直链播放入口 */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-1.5">
+          <input
+            type="text"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && play()}
+            placeholder="粘贴直播源地址（m3u8 / mp4），经本地代理剥防盗链后播放"
+            className="min-w-0 flex-1 rounded border border-border-subtle bg-bg-app px-2.5 py-1.5 font-mono text-[10px] text-slate-200 placeholder:text-slate-600 focus:border-border-strong focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={play}
+            disabled={authorizing || !input.trim()}
+            className="shrink-0 rounded border border-primary-gold/50 bg-primary-gold/15 px-3 py-1.5 font-mono text-[10px] font-semibold text-primary-gold transition-colors hover:bg-primary-gold/25 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {authorizing ? '授权中…' : streamUrl ? '换源' : '播放'}
+          </button>
+          {streamUrl && (
+            <button
+              type="button"
+              onClick={() => {
+                setStreamUrl(null);
+                setError(null);
+              }}
+              className="shrink-0 rounded border border-border-subtle bg-surface-card px-2.5 py-1.5 font-mono text-[10px] text-slate-400 hover:text-slate-200"
+            >
+              停止
+            </button>
           )}
-
-          {live && (
-            <p className="font-mono text-[11px] text-live-red">比赛进行中 · {minute} 分钟</p>
-          )}
-
-          {state === 'ended_pending' && (
-            <p className="text-[11px] text-slate-400">比赛已结束，等待比分录入</p>
-          )}
-
-          {finished && <p className="font-mono text-[10px] text-slate-500">终场</p>}
-
-          {state === 'pp' && <p className="text-[11px] text-slate-400">本场延期，日历将原位提示</p>}
         </div>
 
-        {/* 底部：链路状态（P3 接入后替换为播放器控制条） */}
-        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/80 to-transparent px-3.5 py-2.5">
+        {error && (
+          <p className="rounded border border-danger-orange/40 bg-danger-orange/10 px-2.5 py-1.5 text-[10px] leading-relaxed text-danger-orange">
+            {error}
+            <span className="ml-1 text-slate-400">—— 可改用下方官方平台直达</span>
+          </p>
+        )}
+
+        {/* 线路台（自动对齐线路属 P5，暂为占位） */}
+        <div className="flex items-center justify-between gap-2 border-t border-border-subtle pt-2">
           <div className="flex items-center gap-1.5">
-            <Pill tone="warn">直播链路待接入</Pill>
-            <span className="font-mono text-[9px] text-slate-500">
-              本地流代理与抓取对齐属 P3，尚未实现
-            </span>
+            {['线路1', '线路2', '线路3', '备用内嵌'].map((l, i) => (
+              <button
+                key={l}
+                type="button"
+                disabled
+                title="自动对齐线路属 P5，尚未接入"
+                className="cursor-not-allowed rounded border border-border-subtle bg-surface-card px-2.5 py-1 font-mono text-[10px] text-slate-600"
+              >
+                {i === 0 ? '● ' : ''}
+                {l}
+              </button>
+            ))}
           </div>
           <span className="font-mono text-[9px] text-slate-600">
-            快捷键 [F] 全屏 [P] 画中画 [M] 静音 [1-4] 切源（接入后启用）
+            自动对齐线路待接入 · 快捷键 [F] 全屏 [P] 画中画 [M] 静音
           </span>
         </div>
-      </div>
 
-      {/* 线路切换台骨架 + 官方平台直达 */}
-      <StreamSwitcher sources={sources} match={match} />
-    </div>
-  );
-}
-
-/**
- * 线路切换台
- *
- * 左侧 4 条线路为 P5 抓取模块的占位（直链解析尚未接入，故禁用）。
- * 右侧「官方平台直达」已可用：链接来自外置注册表，且每一项都经 check-sources 验证过。
- * 线路标签只显示文本名 —— 不展示码率 / 清晰度（`tv` 字段全空，无结构化元数据）。
- */
-function StreamSwitcher({ sources, match }) {
-  const lines = [
-    { id: 1, label: '线路1', primary: true },
-    { id: 2, label: '线路2' },
-    { id: 3, label: '线路3' },
-    { id: 4, label: '备用内嵌' }
-  ];
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          {lines.map(l => (
-            <button
-              key={l.id}
-              type="button"
-              disabled
-              title="直链解析属 P5，尚未接入"
-              className="cursor-not-allowed rounded border border-border-subtle bg-surface-card px-2.5 py-1 font-mono text-[10px] text-slate-600"
+        {/* 官方平台直达 */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="font-mono text-[10px] text-slate-500">↗ 官方平台直达</span>
+          {sources.map(s => (
+            <a
+              key={s.id}
+              href={sourceUrlFor(s, match)}
+              target="_blank"
+              rel="noreferrer noopener"
+              title={s.note || s.homeUrl}
+              className="rounded border border-border-strong bg-surface-elevated px-2.5 py-1 font-mono text-[10px] text-slate-200 transition-colors hover:bg-surface-hover"
             >
-              {l.primary ? '● ' : ''}
-              {l.label}
-            </button>
+              {s.name}
+            </a>
           ))}
         </div>
-        <span className="font-mono text-[9px] text-slate-600">直链解析属 P5</span>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-1.5 border-t border-border-subtle pt-2">
-        <span className="font-mono text-[10px] text-slate-500">↗ 官方平台直达</span>
-        {sources.map(s => (
-          <a
-            key={s.id}
-            href={sourceUrlFor(s, match)}
-            target="_blank"
-            rel="noreferrer noopener"
-            title={s.note || s.homeUrl}
-            className="rounded border border-border-strong bg-surface-elevated px-2.5 py-1 font-mono text-[10px] text-slate-200 transition-colors hover:bg-surface-hover"
-          >
-            {s.name}
-          </a>
-        ))}
       </div>
     </div>
   );
