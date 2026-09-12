@@ -61,6 +61,18 @@
   "_proxy": {
     "_readme": "直链代理白名单。抓取模块（P5）从源站解析出 .m3u8 直链后，其域名需登记在此，代理才会放行。",
     "allowedHosts": [],
-    "allowedHostSuffixes": []
+    "allowedHostSuffixes": [
+      ".cmvideo.cn",
+      ".miguvideo.com",
+      ".aarray.cn",
+      ".rtmpcdn.com",
+      ".lmqvw.com",
+      ".71edge.com",
+      ".ooo0ooo.top",
+      ".sportsteam368.com",
+      ".88player.top",
+      ".tiyucdn.com",
+      ".dyrur1.com"
+    ]
   }
 }

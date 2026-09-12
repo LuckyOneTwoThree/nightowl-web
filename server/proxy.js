@@ -46,7 +46,10 @@ export function isHostAllowed(hostname, rules, sessionAllowed = null) {
   const suffixes = p.allowedHostSuffixes || [];
   return (
     exact.includes(hostname) ||
-    suffixes.some(s => hostname === s || hostname.endsWith(`.${s}`)) ||
+    suffixes.some(s => {
+      const clean = s.startsWith('.') ? s.slice(1) : s;
+      return hostname === clean || hostname.endsWith(`.${clean}`);
+    }) ||
     (sessionAllowed ? sessionAllowed.has(hostname) : false)
   );
 }
@@ -204,11 +207,12 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
       if (isPlaylistResponse(contentType, target.pathname + target.search)) {
         const buf = await readLimited(upstream, rules.proxy?.maxPlaylistBytes || 4194304);
         const raw = Buffer.from(buf).toString('utf8');
-        const { text } = rewritePlaylist(raw, target.toString());
+        const finalBaseUrl = upstream.url || target.toString();
+        const { text } = rewritePlaylist(raw, finalBaseUrl);
 
         res.writeHead(200, {
           'Content-Type': contentType || 'application/vnd.apple.mpegurl',
-          'Cache-Control': cacheControlFor(target.toString(), contentType),
+          'Cache-Control': cacheControlFor(finalBaseUrl, contentType),
           'Access-Control-Allow-Origin': '*',
           'Content-Length': Buffer.byteLength(text)
         });

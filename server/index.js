@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join, extname, normalize } from 'node:path';
 import { createProxy, loadRules, ProxyError } from './proxy.js';
 import { syncScores } from './scores.js';
+import { getLiveSourcesForMatch } from './scraper.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -216,6 +217,34 @@ export function createServer(rules = loadRules(), log = console) {
           });
         } catch (err) {
           sendJSON(res, 500, { error: `注册表读取失败：${err.message}` });
+        }
+        return;
+      }
+
+      /* ---------------- 自动赛事直播源 ---------------- */
+      if (pathname === '/api/live-sources') {
+        const matchId = searchParams.get('matchId') || '';
+        const h = searchParams.get('h') || '';
+        const a = searchParams.get('a') || '';
+        const date = searchParams.get('date') || '';
+
+        try {
+          const result = await getLiveSourcesForMatch({ matchId, h, a, date });
+
+          // 自动将抓取到的各线路域名授权给当前代理会话，无需用户手动登记
+          for (const line of result.lines || []) {
+            try {
+              if (line.url && (line.url.startsWith('http://') || line.url.startsWith('https://'))) {
+                const u = new URL(line.url);
+                proxy.allowHost(u.hostname);
+              }
+            } catch {}
+          }
+
+          sendJSON(res, 200, result);
+        } catch (err) {
+          log.warn?.(`[scraper] 获取直播源失败: ${err.message}`);
+          sendJSON(res, 500, { ok: false, error: err.message, lines: [] });
         }
         return;
       }

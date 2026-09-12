@@ -8,7 +8,19 @@
 
   "proxy": {
     "allowedHosts": [],
-    "allowedHostSuffixes": [],
+    "allowedHostSuffixes": [
+      ".cmvideo.cn",
+      ".miguvideo.com",
+      ".aarray.cn",
+      ".rtmpcdn.com",
+      ".lmqvw.com",
+      ".71edge.com",
+      ".ooo0ooo.top",
+      ".sportsteam368.com",
+      ".88player.top",
+      ".tiyucdn.com",
+      ".dyrur1.com"
+    ],
     "forwardHeaders": [
       "Range",
       "If-Range",
