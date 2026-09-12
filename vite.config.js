@@ -7,7 +7,15 @@ export default defineConfig({
   server: {
     host: '127.0.0.1',
     port: 5173,
-    strictPort: false
+    strictPort: false,
+    // dev 模式下把 /api 转发给本地服务（server/index.js，默认 3100），
+    // 前端代码无需感知两个端口
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:3100',
+        changeOrigin: false
+      }
+    }
   },
   preview: {
     host: '127.0.0.1',

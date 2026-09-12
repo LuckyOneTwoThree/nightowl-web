@@ -19,6 +19,7 @@ import ScheduleView from './components/ScheduleView.jsx';
 import IntelPanel from './components/IntelPanel.jsx';
 import PlayerStage from './components/PlayerStage.jsx';
 import SettingsDrawer from './components/SettingsDrawer.jsx';
+import Onboarding, { shouldShowOnboarding } from './components/Onboarding.jsx';
 
 /** 比赛 id → 记录（O(1) 取用） */
 const MATCH_MAP = fixtures.reduce((acc, m) => {
@@ -67,6 +68,13 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [revealed, setRevealed] = useState(() => new Set());
   const [filters, setFilters] = useState(() => defaultScheduleFilters());
+
+  // 首次引导：未完成标记且未设主队时展示（跳过或完成都会写入标记，不再骚扰）
+  const [onboardingOpen, setOnboardingOpen] = useState(() => shouldShowOnboarding(prefs));
+  const rerunOnboarding = () => {
+    setSettingsOpen(false);
+    setOnboardingOpen(true);
+  };
 
   // 防剧透开关变化时清空已揭晓状态，避免"关掉又打开还留着旧揭晓"
   useEffect(() => {
@@ -209,6 +217,14 @@ export default function App() {
         prefs={prefs}
         onPrefsChange={setPrefs}
         onClose={() => setSettingsOpen(false)}
+        onRerunOnboarding={rerunOnboarding}
+      />
+
+      <Onboarding
+        open={onboardingOpen}
+        prefs={prefs}
+        onPrefsChange={setPrefs}
+        onClose={() => setOnboardingOpen(false)}
       />
     </div>
   );

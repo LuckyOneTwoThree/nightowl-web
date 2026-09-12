@@ -161,6 +161,20 @@ export function createServer(rules = loadRules(), log = console) {
         return;
       }
 
+      /* ---------------- 观赛源注册表 ---------------- */
+      if (pathname === '/api/watch-sources') {
+        try {
+          const reg = JSON.parse(await readFile(resolve(ROOT, 'server/watch-sources.json'), 'utf8'));
+          sendJSON(res, 200, {
+            official: reg.official || [],
+            watch: reg.watch || []
+          });
+        } catch (err) {
+          sendJSON(res, 500, { error: `注册表读取失败：${err.message}` });
+        }
+        return;
+      }
+
       /* ---------------- 静态资源 ---------------- */
       await serveStatic(pathname, res);
     } catch (err) {

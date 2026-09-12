@@ -1,0 +1,66 @@
+{
+  "_readme": [
+    "观赛源注册表：'直达原站' 与后续抓取对齐的源配置。",
+    "纪律：只登记【已实测可达】的条目；每条带 verifiedAt。",
+    "改这里不需要重新构建；改动后跑 `node tools/check-sources.mjs` 复核。",
+    "第三方聚合站如需接入：在 watch 下新增条目（kind=portal 或 embed），",
+    "先跑 check-sources 确认可达，再由 P5 抓取模块对齐。"
+  ],
+
+  "official": [
+    {
+      "id": "yangshipin",
+      "name": "央视频",
+      "kind": "deeplink",
+      "homeUrl": "https://yangshipin.cn/",
+      "searchTemplate": "https://yangshipin.cn/search?keyword={q}",
+      "note": "官方免费源。CSP frame-ancestors 'self'，禁止内嵌，仅支持跳转。",
+      "verifiedAt": "2026-09-12"
+    },
+    {
+      "id": "miguvideo",
+      "name": "咪咕视频",
+      "kind": "deeplink",
+      "homeUrl": "https://www.miguvideo.com/",
+      "searchTemplate": null,
+      "note": "官方源。无 CSP 限制可内嵌，但具体赛事页需动态 ID，暂以首页入口接入。",
+      "verifiedAt": "2026-09-12"
+    },
+    {
+      "id": "iqiyi-sports",
+      "name": "爱奇艺体育",
+      "kind": "deeplink",
+      "homeUrl": "https://sports.iqiyi.com/",
+      "searchTemplate": null,
+      "note": "官方付费源，部分场次需会员。以首页入口接入。",
+      "verifiedAt": "2026-09-12"
+    },
+    {
+      "id": "qq-sports",
+      "name": "腾讯体育",
+      "kind": "deeplink",
+      "homeUrl": "https://sports.qq.com/",
+      "searchTemplate": null,
+      "note": "官方源，部分场次需会员。以首页入口接入。",
+      "verifiedAt": "2026-09-12"
+    }
+  ],
+
+  "watch": [
+    {
+      "id": "zhibo8",
+      "name": "直播吧",
+      "kind": "portal",
+      "homeUrl": "https://www.zhibo8.com/",
+      "searchTemplate": null,
+      "note": "聚合导航站，老域名 zhibo8.cc 已 301 至此。作为赛程/线路发现入口。",
+      "verifiedAt": "2026-09-12"
+    }
+  ],
+
+  "_proxy": {
+    "_readme": "直链代理白名单。抓取模块（P5）从源站解析出 .m3u8 直链后，其域名需登记在此，代理才会放行。",
+    "allowedHosts": [],
+    "allowedHostSuffixes": []
+  }
+}

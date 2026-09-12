@@ -1,7 +1,53 @@
+import { useEffect, useState } from 'react';
 import { hm, zhDate, weekdayOf, datePart, liveMinute, humanCountdown } from '../core/format.js';
 import { teamName, leagueName } from '../data/index.js';
 import { ts } from '../core/engine.js';
 import { Crest, Pill, LiveDot } from './atoms.jsx';
+
+/** 服务不可用时的最小回退清单（保证 dev 不开本地服务也能跳转） */
+const FALLBACK_SOURCES = [
+  {
+    id: 'yangshipin',
+    name: '央视频',
+    kind: 'deeplink',
+    homeUrl: 'https://yangshipin.cn/',
+    searchTemplate: 'https://yangshipin.cn/search?keyword={q}'
+  },
+  { id: 'zhibo8', name: '直播吧', kind: 'portal', homeUrl: 'https://www.zhibo8.com/', searchTemplate: null }
+];
+
+/**
+ * 观赛源来自本地服务的外置注册表（server/watch-sources.json），
+ * 经 /api/watch-sources 提供 —— 改注册表不重新构建。
+ */
+function useWatchSources() {
+  const [sources, setSources] = useState(FALLBACK_SOURCES);
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/watch-sources')
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then(j => {
+        if (!alive) return;
+        const all = [...(j.official || []), ...(j.watch || [])];
+        if (all.length) setSources(all);
+      })
+      .catch(() => {
+        /* 本地服务未启动 → 保持回退清单 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return sources;
+}
+
+/** 有搜索模板的用主队名构造搜索，否则打开首页 */
+export function sourceUrlFor(src, match) {
+  if (src.searchTemplate && match) {
+    return src.searchTemplate.replace('{q}', encodeURIComponent(teamName(match.h)));
+  }
+  return src.homeUrl;
+}
 
 /**
  * 右栏播放区 + 线路切换台
@@ -15,6 +61,8 @@ import { Crest, Pill, LiveDot } from './atoms.jsx';
  * 线路标签只显示**文本名**，不显示码率 / 帧率 / 延迟（`tv` 字段全空，无结构化元数据）。
  */
 export default function PlayerStage({ match, state, now, countdown }) {
+  const sources = useWatchSources();
+
   if (!match) {
     return (
       <div className="flex aspect-video max-h-[46vh] w-full items-center justify-center rounded-xl border border-border-subtle bg-black/60">
@@ -100,17 +148,20 @@ export default function PlayerStage({ match, state, now, countdown }) {
         </div>
       </div>
 
-      {/* 线路切换台骨架 */}
-      <StreamSwitcher disabled />
+      {/* 线路切换台骨架 + 官方平台直达 */}
+      <StreamSwitcher sources={sources} match={match} />
     </div>
   );
 }
 
 /**
  * 线路切换台
- * 线路名来自抓取源原始文案（纯文本）；不展示码率 / 清晰度等结构化字段。
+ *
+ * 左侧 4 条线路为 P5 抓取模块的占位（直链解析尚未接入，故禁用）。
+ * 右侧「官方平台直达」已可用：链接来自外置注册表，且每一项都经 check-sources 验证过。
+ * 线路标签只显示文本名 —— 不展示码率 / 清晰度（`tv` 字段全空，无结构化元数据）。
  */
-function StreamSwitcher({ disabled }) {
+function StreamSwitcher({ sources, match }) {
   const lines = [
     { id: 1, label: '线路1', primary: true },
     { id: 2, label: '线路2' },
@@ -119,39 +170,40 @@ function StreamSwitcher({ disabled }) {
   ];
 
   return (
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex items-center gap-1.5">
-        {lines.map(l => (
-          <button
-            key={l.id}
-            type="button"
-            disabled={disabled}
-            className={`rounded border px-2.5 py-1 font-mono text-[10px] transition-colors ${
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          {lines.map(l => (
+            <button
+              key={l.id}
+              type="button"
               disabled
-                ? 'cursor-not-allowed border-border-subtle bg-surface-card text-slate-600'
-                : l.primary
-                  ? 'border-primary-gold/50 bg-primary-gold/15 text-primary-gold'
-                  : 'border-border-subtle bg-surface-card text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            {l.primary ? '● ' : ''}
-            {l.label}
-          </button>
-        ))}
+              title="直链解析属 P5，尚未接入"
+              className="cursor-not-allowed rounded border border-border-subtle bg-surface-card px-2.5 py-1 font-mono text-[10px] text-slate-600"
+            >
+              {l.primary ? '● ' : ''}
+              {l.label}
+            </button>
+          ))}
+        </div>
+        <span className="font-mono text-[9px] text-slate-600">直链解析属 P5</span>
       </div>
 
-      <button
-        type="button"
-        disabled={disabled}
-        title={disabled ? '需先确定目标源站（SP-2）' : undefined}
-        className={`rounded border px-2.5 py-1 font-mono text-[10px] transition-colors ${
-          disabled
-            ? 'cursor-not-allowed border-border-subtle bg-surface-card text-slate-600'
-            : 'border-border-strong bg-surface-elevated text-slate-200 hover:bg-surface-hover'
-        }`}
-      >
-        ↗ 直达原站
-      </button>
+      <div className="flex flex-wrap items-center gap-1.5 border-t border-border-subtle pt-2">
+        <span className="font-mono text-[10px] text-slate-500">↗ 官方平台直达</span>
+        {sources.map(s => (
+          <a
+            key={s.id}
+            href={sourceUrlFor(s, match)}
+            target="_blank"
+            rel="noreferrer noopener"
+            title={s.note || s.homeUrl}
+            className="rounded border border-border-strong bg-surface-elevated px-2.5 py-1 font-mono text-[10px] text-slate-200 transition-colors hover:bg-surface-hover"
+          >
+            {s.name}
+          </a>
+        ))}
+      </div>
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { defaultPrefs, toggleIn } from '../core/prefs.js';
  * D6 关键点：**关注联赛是算法偏好**（影响 +8 加成），与赛程列表的**筛选药丸语义不同**。
  * 前者必须放在这里，不得与筛选器混排 —— 否则开发极易当成同一件事。
  */
-export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose }) {
+export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, onRerunOnboarding }) {
   const [query, setQuery] = useState('');
 
   const filteredTeams = useMemo(() => {
@@ -216,13 +216,24 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose }) 
 
         {/* 底部 */}
         <div className="flex items-center justify-between border-t border-border-subtle px-5 py-3">
-          <button
-            type="button"
-            onClick={() => onPrefsChange(defaultPrefs())}
-            className="font-mono text-[11px] text-slate-500 hover:text-slate-300"
-          >
-            恢复默认
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => onPrefsChange(defaultPrefs())}
+              className="font-mono text-[11px] text-slate-500 hover:text-slate-300"
+            >
+              恢复默认
+            </button>
+            {onRerunOnboarding && (
+              <button
+                type="button"
+                onClick={onRerunOnboarding}
+                className="font-mono text-[11px] text-slate-500 hover:text-slate-300"
+              >
+                ↻ 重新引导
+              </button>
+            )}
+          </div>
           <button
             type="button"
             onClick={onClose}
