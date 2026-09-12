@@ -1,0 +1,63 @@
+/**
+ * 数据层入口
+ *
+ * 6 项数据资产由 `tools/migrate-data.mjs` 从旧项目迁移生成（见该脚本注释）：
+ *   fixtures / teams / rivalries / storylines / recommendations / crests
+ *
+ * ⚠️ 数据文件不得手工编辑，一律走迁移脚本或后续的保鲜脚本。
+ */
+
+import fixtures from './fixtures.json';
+import teams from './teams.json';
+import rivalries from './rivalries.json';
+import storylines from './storylines.json';
+import recommendations from './recommendations.json';
+import quips from './quips.json';
+
+export { fixtures, teams, rivalries, storylines, recommendations, quips };
+
+/** 联赛中文名。SCG 是数据集中唯一的非联赛赛事（德国超级杯），单独归为「其他」以便筛选器兜住 */
+export const LEAGUE_NAMES = {
+  PL: '英超',
+  PD: '西甲',
+  SA: '意甲',
+  BL: '德甲',
+  FL: '法甲',
+  UCL: '欧冠',
+  SCG: '其他'
+};
+
+/** 筛选器展示顺序（七大联赛，含 SCG —— 不可漏） */
+export const LEAGUE_ORDER = ['PL', 'PD', 'SA', 'BL', 'FL', 'UCL', 'SCG'];
+
+/** 可被用户设为「关注联赛」的六个主要联赛（不带 SCG，单场赛事不作为偏好项） */
+export const FOLLOWABLE_LEAGUES = ['PL', 'PD', 'SA', 'BL', 'FL', 'UCL'];
+
+export const TEAM_MAP = teams.reduce((acc, t) => {
+  acc[t.id] = t;
+  return acc;
+}, {});
+
+export const REC_MAP = recommendations.reduce((acc, r) => {
+  acc[r.m] = r;
+  return acc;
+}, {});
+
+export function teamName(id) {
+  const t = TEAM_MAP[id];
+  return t ? t.zh : id;
+}
+
+export function teamColor(id) {
+  const t = TEAM_MAP[id];
+  return t ? t.color : '#64748B';
+}
+
+export function leagueName(code) {
+  return LEAGUE_NAMES[code] || code;
+}
+
+/** 队徽：本地 111 张 PNG（public/crests/）。未收录时返回 null，由调用方回退纯色圆标 */
+export function crestUrl(id) {
+  return TEAM_MAP[id] ? `/crests/${id}.png` : null;
+}

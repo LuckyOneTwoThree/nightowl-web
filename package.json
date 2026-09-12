@@ -1,0 +1,36 @@
+{
+  "name": "nightowl-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "夜猫看台 · 纯净观赛桌面版（本地单机）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "server": "node server/index.js",
+    "migrate:data": "node tools/migrate-data.mjs",
+    "sync:scores": "node tools/sync-scores.mjs",
+    "sync:scores:apply": "node tools/sync-scores.mjs --apply",
+    "build:espn-alias": "node tools/build-espn-alias.mjs",
+    "verify:algo": "node spike/algo-baseline/run.mjs",
+    "verify:findings": "node spike/algo-baseline/findings.mjs",
+    "verify:calibrate": "node spike/algo-baseline/calibrate.mjs",
+    "test:m3u8": "node tools/test-m3u8.mjs",
+    "test:proxy": "node tools/test-proxy.mjs",
+    "test:alias": "node tools/test-team-alias.mjs",
+    "test:all": "npm run verify:algo && npm run test:m3u8 && npm run test:proxy && npm run test:alias"
+  },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "virtua": "^0.51.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.1",
+    "autoprefixer": "^10.5.6",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^3.4.19",
+    "vite": "^8.3.0"
+  }
+}

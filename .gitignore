@@ -1,0 +1,33 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 构建产物
+dist/
+build/
+out/
+release/
+
+# 参考项目本地副本（自带 .git，不属于本仓库）
+参考项目/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# WorkBuddy 会话与记忆工件（不入库）
+.workbuddy/
+
+# 运行期数据与日志
+*.log
+logs/
+.env
+.env.local
+
+# 本地数据快照（由保鲜模块生成，不入库）
+server/cache/
+
+# 验证用截图（可再生）
+.shots/

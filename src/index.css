@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* 严禁外层滚动条（UI 规范 §四）：滚动只发生在左栏内容区 */
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  body {
+    @apply bg-bg-app text-slate-200 font-body antialiased;
+  }
+
+  /* 桌面端可拖拽窗口（Electron 外壳复用）；交互元素需声明 no-drag */
+  .drag-region {
+    -webkit-app-region: drag;
+  }
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+}
+
+@layer utilities {
+  /* 极细深色滚动条 */
+  .scrollbar-thin-dark::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin-dark::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin-dark::-webkit-scrollbar-thumb {
+    background: #232a3b;
+    border-radius: 4px;
+  }
+  .scrollbar-thin-dark::-webkit-scrollbar-thumb:hover {
+    background: #333e56;
+  }
+
+  /* 防剧透：比分毛玻璃 */
+  .spoiler-mask {
+    filter: blur(7px);
+    user-select: none;
+  }
+}
