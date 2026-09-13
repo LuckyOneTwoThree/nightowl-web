@@ -4,9 +4,10 @@ node_modules/
 
 # 构建产物
 dist/
-build/
 out/
 release/
+# 例外：build/ 存放 electron-builder 的图标资源（约定路径），必须入库
+!build/
 
 # 参考项目本地副本（自带 .git，不属于本仓库）
 参考项目/
