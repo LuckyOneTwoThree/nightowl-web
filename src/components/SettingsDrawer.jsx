@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fixtures, FOLLOWABLE_LEAGUES, LEAGUE_NAMES, leagueColor } from '../data/index.js';
 import { defaultPrefs } from '../core/prefs.js';
 import { Button, Chip, Fieldset, Hint, Meta, Switch, TogglePill } from './atoms.jsx';
@@ -25,11 +25,74 @@ const NOTIFY_NOTE = '依赖桌面外壳（P5），当前只保存偏好，不会
 const SERVICE_RULE =
   '本机单机产品：赛程与算法只读本地快照，不联网也能完整使用；直播代理与比分保鲜需要本地服务在跑。';
 
-export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, onRerunOnboarding }) {
+export default function SettingsDrawer({
+  open,
+  prefs,
+  onPrefsChange,
+  onClose,
+  onRerunOnboarding,
+  onDataRefresh
+}) {
   const leagueCount = prefs.followedLeagues.length;
   const bonusActive = leagueCount > 0 && leagueCount < 6;
 
   const { health, refresh } = useServiceHealth(open);
+
+  /* ---- 数据新鲜度与一键同步 ----
+     快照是构建期内联的，桌面端同步后写在 userData；这里负责显示陈旧程度并触发同步。 */
+  const [fresh, setFresh] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState(null);
+
+  const loadFreshness = useCallback(async () => {
+    try {
+      const r = await fetch('/api/scores/status');
+      if (!r.ok) return;
+      const j = await r.json();
+      setFresh(j?.freshness || null);
+    } catch {
+      setFresh(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open) loadFreshness();
+  }, [open, loadFreshness]);
+
+  const runSync = async () => {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const r = await fetch('/api/scores/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apply: true })
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setSyncMsg({ ok: false, text: j?.error || '同步失败' });
+        return;
+      }
+      const changed = j?.summary?.written?.changed ?? 0;
+      // 拉新数据替换内存里的快照（同步完不刷新页面，视图也要跟着变）
+      await onDataRefresh?.();
+      await loadFreshness();
+      refresh();
+      setSyncMsg({ ok: true, text: changed > 0 ? `已更新 ${changed} 场比分` : '已经是最新' });
+    } catch (err) {
+      setSyncMsg({ ok: false, text: err?.message || '同步失败' });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const freshText = useMemo(() => {
+    if (!fresh?.lastScoreAt) return '未知';
+    const h = fresh.staleHours ?? 0;
+    if (h < 1) return '刚刚';
+    if (h < 24) return `${h.toFixed(1)} 小时前`;
+    return `${Math.floor(h / 24)} 天前`;
+  }, [fresh]);
   const range = useMemo(() => {
     const days = fixtures.map(m => m.t.slice(0, 10)).sort();
     return days.length ? `${days[0]} ~ ${days[days.length - 1]}` : '—';
@@ -216,6 +279,36 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
                       ? ` · 上次 ${health.scores.lastSync.patches} 条补丁 / ${health.scores.lastSync.errors} 错`
                       : ' · 本次启动后未运行'}
                   </p>
+
+                  {/* 数据新鲜度 + 应用内同步
+                      此前这里只说"本次启动后未运行"，用户看到「待录比分」无从下手 ——
+                      现在直接把陈旧程度和一键同步摆出来。 */}
+                  <div className="mt-1.5 border-t border-line-hairline pt-1.5">
+                    <p>
+                      数据更新于 <span className="text-text-primary">{freshText}</span>
+                      {fresh?.pendingCount > 0 && (
+                        <span className="text-warn"> · {fresh.pendingCount} 场待录比分</span>
+                      )}
+                    </p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={runSync}
+                        disabled={syncing || !fresh?.writable}
+                        title={
+                          fresh?.writable
+                            ? '从 ESPN / openfootball 拉取最新比分并写入本地数据'
+                            : '当前没有可写的数据目录（桌面版才有），只能预览'
+                        }
+                        className="rounded bg-surface-elevated px-2 py-0.5 font-ui text-[10px] text-text-secondary transition-colors hover:text-primary-gold disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {syncing ? '同步中…' : '立即同步比分'}
+                      </button>
+                      {syncMsg && (
+                        <span className={syncMsg.ok ? 'text-resource' : 'text-warn'}>{syncMsg.text}</span>
+                      )}
+                    </div>
+                  </div>
                 </>
               ) : (
                 <>

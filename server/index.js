@@ -12,8 +12,9 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join, extname, normalize } from 'node:path';
 import { createProxy, loadRules, ProxyError } from './proxy.js';
-import { syncScores } from './scores.js';
+import { syncScores, applyPatches, validateFixtures } from './scores.js';
 import { getLiveSourcesForMatch } from './scraper.js';
+import { loadFixtures, saveFixtures, freshness } from './data-store.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -190,6 +191,46 @@ export function createServer(rules = loadRules(), log = console) {
       }
 
       /* ---------------- 保鲜 ---------------- */
+      // 数据新鲜度：界面据此显示「数据更新于 X · 落后 N 场待录」，
+      // 而不是让用户误以为应用坏了
+      if (pathname === '/api/scores/status' && req.method === 'GET') {
+        try {
+          const fixtures = await loadFixtures();
+          sendJSON(res, 200, {
+            ok: true,
+            freshness: freshness(fixtures),
+            lastSync,
+            note: freshness(fixtures).writable
+              ? '可写数据目录已就绪，支持在应用内同步比分'
+              : '当前没有可写的数据目录（纯预览模式），同步结果不会保存'
+          });
+        } catch (err) {
+          sendJSON(res, 500, { error: String(err?.message || err) });
+        }
+        return;
+      }
+
+      // 当前生效的赛程数据（前端启动时拉取，用于把静态快照热更新为最新数据）
+      if (pathname === '/api/fixtures' && req.method === 'GET') {
+        try {
+          const fixtures = await loadFixtures();
+          sendJSON(
+            res,
+            200,
+            {
+              ok: true,
+              count: fixtures.length,
+              freshness: freshness(fixtures),
+              fixtures
+            },
+            { 'Cache-Control': 'no-store' }
+          );
+        } catch (err) {
+          sendJSON(res, 500, { error: String(err?.message || err) });
+        }
+        return;
+      }
+
       if (pathname === '/api/scores/sync' && req.method === 'POST') {
         if (rules.scores?.enabled === false) {
           sendJSON(res, 503, { error: '保鲜模块已禁用（rules.scores.enabled=false）' });
@@ -202,22 +243,40 @@ export function createServer(rules = loadRules(), log = console) {
         syncing = true;
         const startedAt = Date.now();
         try {
-          const fixtures = JSON.parse(
-            await readFile(resolve(ROOT, 'src/data/fixtures.json'), 'utf8')
-          );
+          const body = await readJsonBody(req).catch(() => ({}));
+          // apply=true 时写回用户数据目录；否则只预览（保持旧行为）
+          const apply = body?.apply === true || searchParams.get('apply') === '1';
+          const fixtures = await loadFixtures();
           const result = await syncScores({ fixtures, rules, log });
+
+          let written = null;
+          if (apply && result.patches.size > 0) {
+            const { fixtures: next, changed } = applyPatches(fixtures, result.patches);
+            const issues = validateFixtures(next);
+            if (issues.length) {
+              // 与 CLI 一致：校验不通过就绝不写盘，宁可这次不同步
+              written = { ok: false, reason: '校验未通过，已放弃写盘', issues: issues.slice(0, 5) };
+            } else {
+              const saved = saveFixtures(next);
+              written = { ...saved, changed };
+            }
+          } else if (apply) {
+            written = { ok: true, changed: 0, note: '没有需要写入的补丁' };
+          }
+
           lastSync = {
             at: new Date().toISOString(),
             ms: Date.now() - startedAt,
             patches: result.patches.size,
+            applied: !!apply,
+            written,
             errors: result.errors.length,
             stats: result.stats,
             bySource: result.bySource
           };
           sendJSON(res, 200, {
             ok: true,
-            dryRun: true,
-            note: '本接口只做预览，不写盘。落盘请执行 `node tools/sync-scores.mjs --apply`',
+            dryRun: !apply,
             summary: lastSync,
             conflicts: result.conflicts.slice(0, 20),
             incompleteScore: (result.incompleteScore || []).slice(0, 20),

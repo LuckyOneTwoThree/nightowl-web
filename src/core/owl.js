@@ -10,7 +10,7 @@
  *   nextFocal  → 吃全量未来场次
  */
 
-import { fixtures, rivalries, storylines, REC_MAP, LEAGUE_ORDER, TEAM_MAP, leagueName } from '../data/index.js';
+import { getFixtures, rivalries, storylines, REC_MAP, LEAGUE_ORDER, TEAM_MAP, leagueName } from '../data/index.js';
 import * as E from './engine.js';
 import { weekDistributionAdvice } from './narrative.js';
 
@@ -50,7 +50,7 @@ function isPickable(m, nowTs) {
 
 export function computeTonight(nowTs, prefs) {
   const night = E.nightOf(nowTs);
-  const slice = fixtures.filter(m => E.owlDay(m.t) === night).sort(byTs);
+  const slice = getFixtures().filter(m => E.owlDay(m.t) === night).sort(byTs);
 
   // slice 供展示（含刚终场、待录比分的场次）；算法只吃尚未结束的
   const pickable = slice.filter(m => isPickable(m, nowTs));
@@ -68,7 +68,7 @@ export function computeTonight(nowTs, prefs) {
   // 无球日 / 全部 tbd → 降级为"下一场焦点战倒计时"
   const focal = hero
     ? null
-    : E.nextFocal(fixtures, REC_MAP, rivalries, storylines, prefs.followedTeams, nowTs, prefs.followedLeagues);
+    : E.nextFocal(getFixtures(), REC_MAP, rivalries, storylines, prefs.followedTeams, nowTs, prefs.followedLeagues);
 
   // 今晚的雷区场次（复用引擎，避免界面自造判据）
   const minefieldIds = new Set(
@@ -113,7 +113,7 @@ function buildWeekDays(weekStartStr, matches) {
 export function computeWeek(nowTs, prefs) {
   const ws = E.weekStartBJ(nowTs);
   const end = ws.ts + 7 * DAY_MS;
-  const matches = fixtures
+  const matches = getFixtures()
     .filter(m => {
       const t = E.ts(m.t);
       return t >= ws.ts && t < end;
@@ -159,7 +159,7 @@ export function computeScheduleRows(nowTs, prefs, filters) {
   const { leagues, onlyFollowed, query } = filters;
   const q = (query || '').trim().toLowerCase();
 
-  const pool = fixtures.filter(m => {
+  const pool = getFixtures().filter(m => {
     if (leagues && leagues.length && !leagues.includes(m.l)) return false;
     if (onlyFollowed) {
       const hit = prefs.followedTeams.includes(m.h) || prefs.followedTeams.includes(m.a);
@@ -219,7 +219,7 @@ export function evalOne(m, prefs) {
 /** 当前进行中的场次计数（用于顶栏指示） */
 export function liveCountAt(nowTs) {
   let n = 0;
-  for (const m of fixtures) {
+  for (const m of getFixtures()) {
     if (m.st !== 'sched') continue;
     if (E.matchState(m, nowTs) === 'live') n++;
   }

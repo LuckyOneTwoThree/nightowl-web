@@ -1,4 +1,4 @@
-import fixtures from '../data/fixtures.json' with { type: 'json' };
+import { getFixtures } from '../data/index.js';
 import { ts } from './engine.js';
 
 /**
@@ -20,7 +20,8 @@ function parseTime(t) {
  * @param {number} limit - 返回的最大场次数（默认 5）
  * @returns {Array} 近期走势列表
  */
-export function computeTeamForm(teamId, currentMatch, allFixtures = fixtures, limit = 5) {
+export function computeTeamForm(teamId, currentMatch, allFixtures = null, limit = 5) {
+  allFixtures = allFixtures || getFixtures();
   if (!teamId) return [];
 
   const currentTs = currentMatch?.t ? parseTime(currentMatch.t) : Infinity;
@@ -74,7 +75,8 @@ export function computeTeamForm(teamId, currentMatch, allFixtures = fixtures, li
  * @param {string} leagueCode - 联赛编码（如 PL, PD）
  * @param {Array} allFixtures - 全量赛程
  */
-export function computeSeasonStats(teamId, leagueCode, allFixtures = fixtures) {
+export function computeSeasonStats(teamId, leagueCode, allFixtures = null) {
+  allFixtures = allFixtures || getFixtures();
   if (!teamId) {
     return {
       played: 0,
@@ -168,7 +170,8 @@ export function computeSeasonStats(teamId, leagueCode, allFixtures = fixtures) {
  * @param {object|null} currentMatch 当前查看的比赛；为空表示不限时间
  * @param {number} limit 最多返回几场（按时间倒序）
  */
-export function computeHeadToHead(team1, team2, allFixtures = fixtures, currentMatch = null, limit = 5) {
+export function computeHeadToHead(team1, team2, allFixtures = null, currentMatch = null, limit = 5) {
+  allFixtures = allFixtures || getFixtures();
   if (!team1 || !team2) return { meetings: [], summary: { t1Wins: 0, draws: 0, t2Wins: 0, total: 0 } };
 
   const cutoff = currentMatch?.t ? parseTime(currentMatch.t) : Infinity;
@@ -228,7 +231,8 @@ export function computeHeadToHead(team1, team2, allFixtures = fixtures, currentM
 /**
  * 整合当前比赛双方的全部真实数据
  */
-export function computeMatchStats(match, allFixtures = fixtures) {
+export function computeMatchStats(match, allFixtures = null) {
+  allFixtures = allFixtures || getFixtures();
   if (!match) return null;
 
   return {

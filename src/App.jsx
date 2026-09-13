@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { fixtures } from './data/index.js';
+import { fixtures, setFixtures } from './data/index.js';
 import { countdown as engineCountdown, ts } from './core/engine.js';
 import { humanCountdown } from './core/format.js';
 import { loadPrefs, savePrefs } from './core/prefs.js';
@@ -97,20 +97,44 @@ export default function App() {
     });
   }, []);
 
+  // ---- 数据热更新 ----
+  // 打包后 fixtures 是构建期内联的快照，保鲜同步把新比分写到了 userData。
+  // 启动时（以及点「立即同步」后）从 /api/fixtures 拉最新数据替换掉它，
+  // dataRev 变化会让下面所有派生数据重算 —— 否则「刚结束的比赛」会一直显示待录比分。
+  const [dataRev, setDataRev] = useState(0);
+  const refreshData = useCallback(async () => {
+    try {
+      const r = await fetch('/api/fixtures');
+      if (!r.ok) return false;
+      const j = await r.json();
+      if (j?.fixtures?.length && setFixtures(j.fixtures)) {
+        setDataRev(v => v + 1);
+        return true;
+      }
+    } catch {
+      /* 服务不可用（纯静态预览）时静默沿用内置快照，不打扰用户 */
+    }
+    return false;
+  }, []);
+
+  useEffect(() => {
+    refreshData();
+  }, [refreshData]);
+
   // ---- 派生数据（分钟粒度重算，故意不依赖秒级 now）----
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const tonight = useMemo(() => computeTonight(Date.now(), prefs), [minuteKey, prefs]);
+  const tonight = useMemo(() => computeTonight(Date.now(), prefs), [minuteKey, prefs, dataRev]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const week = useMemo(
     () => (view === 'week' ? computeWeek(Date.now(), prefs) : null),
-    [view, minuteKey, prefs]
+    [view, minuteKey, prefs, dataRev]
   );
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const scheduleRows = useMemo(
     () => (view === 'schedule' ? computeScheduleRows(Date.now(), prefs, filters) : []),
-    [view, prefs, filters]
+    [view, prefs, filters, dataRev]
   );
 
   // ---- 顶栏「进行中」计数（随 30 秒时钟刷新）----
@@ -221,6 +245,7 @@ export default function App() {
         onPrefsChange={setPrefs}
         onClose={() => setSettingsOpen(false)}
         onRerunOnboarding={rerunOnboarding}
+        onDataRefresh={refreshData}
       />
 
       <Onboarding

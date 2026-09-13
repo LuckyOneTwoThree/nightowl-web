@@ -16,7 +16,6 @@
  */
 
 const { app, BrowserWindow, dialog } = require('electron');
-const path = require('node:path');
 
 const PORT_CANDIDATES = [3100, 3101, 3102, 3103, 3104];
 const HOST = '127.0.0.1';
@@ -33,6 +32,15 @@ let mainWindow = null;
  * 恰好命中 3100 时 listen 直接 EACCES。故做端口序列回退，而不是让用户处理端口。
  */
 async function startAppServer() {
+  // 把可写的数据目录交给服务端：安装目录（Program Files）只读，
+  // 保鲜同步必须写到 userData，否则「刚结束的比赛永远显示待录比分」。
+  // 必须在 import server 之前设置 —— 数据落点在模块加载时就解析。
+  try {
+    process.env.NIGHTOWL_USER_DATA = app.getPath('userData');
+  } catch (err) {
+    console.warn('[main] 无法取得 userData 路径，保鲜将只能预览：', err?.message || err);
+  }
+
   // server 是 ESM（项目 type:module），CJS 里用动态 import 复用。
   // 注意：createServer 在 server/index.js，loadRules 在 server/proxy.js —— 分开导入
   const [{ createServer }, { loadRules }] = await Promise.all([

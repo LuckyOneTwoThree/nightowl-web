@@ -97,3 +97,24 @@ export function crestUrl(id) {
   if (!TEAM_MAP[id]) return null;
   return `/crests/${CREST_FILE_OVERRIDES[id] ?? id}.png`;
 }
+
+/* ------------------------------------------------------------------ */
+/* 运行时数据源                                                        */
+/* ------------------------------------------------------------------ */
+/**
+ * 打包后 fixtures 是构建期内联的只读快照。保鲜同步把新数据写到 userData，
+ * 前端通过 /api/fixtures 拉取后调用 setFixtures 替换这里，
+ * 于是「刚结束的比赛显示待录比分」能在应用内被修好，而不必重启或重装。
+ */
+let _fixtures = fixtures;
+
+export function getFixtures() {
+  return _fixtures;
+}
+
+/** 返回是否真的替换成功（空数组 / 非数组一律拒绝，避免把界面清空） */
+export function setFixtures(next) {
+  if (!Array.isArray(next) || next.length === 0) return false;
+  _fixtures = next;
+  return true;
+}
