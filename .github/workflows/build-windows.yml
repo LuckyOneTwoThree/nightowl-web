@@ -56,43 +56,16 @@ jobs:
           npm run test:alias
           npm run test:stats
 
+      # 注入 tag 版本到包元数据：exe 文件名（artifactName 的 ${version}）随 tag 对齐，
+      # 否则 package.json 里的 version 不动，文件名会一直停在旧版本号
       - name: Package Windows (NSIS)
-        run: npx electron-builder --win --publish never
+        shell: bash
+        run: npx electron-builder --win --publish never -c.extraMetadata.version="${GITHUB_REF_NAME#v}"
 
-      # 打包后自检（两道）：
-      # ① 相对 import 扫描 —— 逐一解析产物内 server/electron 模块的相对 import，
-      #    目标文件必须存在。曾靠它本应抓到「scores.js → ../src/core/engine.js 未打包」，
-      #    人工枚举清单漏了这一条，导致安装包在用户机上才暴雷。
-      # ② 关键文件补充断言。
+      # 打包后自检（两道）：与本地共用同一份跨平台脚本 tools/verify-package.mjs ——
+      # 验证逻辑本身必须能在开发环境（mac）执行，否则自检的 bug 只能到 CI 才发现
       - name: Verify packaged files
-        shell: pwsh
-        run: |
-          $root = 'release/win-unpacked/resources/app'
-          $missing = @()
-          $scan = @(Get-ChildItem "$root/server" -Recurse -Filter *.js)
-          $scan += @(Get-ChildItem "$root/electron" -Filter *.cjs)
-          foreach ($f in $scan) {
-            $text = Get-Content $f.FullName -Raw
-            $refs = [regex]::Matches($text, "from '(\.[^']+)'")
-            $refs += [regex]::Matches($text, "import\('(\.[^']+)'\)")
-            foreach ($m in $refs) {
-              $rel = $m.Groups[1].Value
-              $target = [IO.Path]::GetFullPath((Join-Path $f.DirectoryName $rel))
-              if (-not (Test-Path $target)) {
-                $missing += ("{0} -> {1}" -f $f.FullName.Substring($root.Length + 1), $rel)
-              }
-            }
-          }
-          if ($missing.Count -gt 0) {
-            Write-Error ("相对 import 缺失目标:`n" + ($missing -join "`n"))
-            exit 1
-          }
-          # build/icon.ico 是打包的输入资源（生成 exe 图标），不会出现在产物内 —— 只在仓库中断言
-          if (-not (Test-Path 'build/icon.ico')) { Write-Error '缺失: build/icon.ico（打包输入）'; exit 1 }
-          foreach ($f in @('src/core/engine.js', 'src/data/fixtures.json', 'dist/index.html')) {
-            if (-not (Test-Path (Join-Path $root $f))) { Write-Error "缺失: $f"; exit 1 }
-          }
-          Write-Host ("OK 相对 import 全部可解析（扫描 {0} 个模块），关键文件齐全" -f $scan.Count)
+        run: node tools/verify-package.mjs release/win-unpacked/resources/app
 
       - name: Upload artifact
         uses: actions/upload-artifact@v5
