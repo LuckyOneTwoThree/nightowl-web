@@ -21,6 +21,29 @@ function byTs(a, b) {
   return E.ts(a.t) - E.ts(b.t);
 }
 
+/**
+ * 该场次能否进入算法候选池
+ *
+ * 三条同时成立：未开赛（st='sched'）、时间已确认（非 tbd）、**且尚未结束**。
+ *
+ * 为什么必须显式检查"尚未结束"（这是本轮修的一个真实缺陷）：
+ *   本产品是本地单机 + 手动保鲜，快照可能滞后数天；即便跑了保鲜，
+ *   也总有「刚终场、比分尚未同步」的窗口期。而算法原先只按 st === 'sched' 过滤，
+ *   于是这些场次以"未开赛"身份留在候选池，被当成可安排的场次。
+ *   实测（2026-09-13 快照）：本周窗口 66 场里有 57 场已过开球时间，
+ *   导致「本周精选」推荐了 2 场已踢完的比赛，13 条雷区预警也全是已结束的场次。
+ *
+ * 为什么放在应用层而不是 engine.js：
+ *   engine.js 是算法的唯一权威实现，且需与原版保持 0 处偏差（回归基线）。
+ *   时间有效性属于「应用层对数据的信任边界」，不是算法本身的一部分。
+ */
+function isPickable(m, nowTs) {
+  if (m.st !== 'sched' || m.tbd) return false;
+  const kick = E.ts(m.t);
+  if (isNaN(kick)) return false; // 时间不可解析 → 保守排除，不猜
+  return nowTs < kick + E.MATCH_DURATION_MS;
+}
+
 /* ------------------------------------------------------------------ */
 /* 今晚                                                                */
 /* ------------------------------------------------------------------ */
@@ -29,8 +52,11 @@ export function computeTonight(nowTs, prefs) {
   const night = E.nightOf(nowTs);
   const slice = fixtures.filter(m => E.owlDay(m.t) === night).sort(byTs);
 
+  // slice 供展示（含刚终场、待录比分的场次）；算法只吃尚未结束的
+  const pickable = slice.filter(m => isPickable(m, nowTs));
+
   const { hero, extras } = E.pickToday(
-    slice,
+    pickable,
     REC_MAP,
     rivalries,
     storylines,
@@ -46,7 +72,7 @@ export function computeTonight(nowTs, prefs) {
 
   // 今晚的雷区场次（复用引擎，避免界面自造判据）
   const minefieldIds = new Set(
-    E.minefield(slice, REC_MAP, rivalries, storylines, prefs.followedTeams, prefs.followedLeagues).map(e => e.m.id)
+    E.minefield(pickable, REC_MAP, rivalries, storylines, prefs.followedTeams, prefs.followedLeagues).map(e => e.m.id)
   );
 
   return { night, slice, hero, extras, focal, minefieldIds };
@@ -92,8 +118,12 @@ export function computeWeek(nowTs, prefs) {
     })
     .sort(byTs);
 
+  // 本周窗口内"尚未结束"的场次才进算法；
+  // 已踢完但状态未同步的场次（本地单机 + 手动保鲜下很常见）不参与背包与雷区
+  const pickable = matches.filter(m => isPickable(m, nowTs));
+
   const plan = E.planWeek(
-    matches,
+    pickable,
     REC_MAP,
     rivalries,
     storylines,
@@ -103,9 +133,14 @@ export function computeWeek(nowTs, prefs) {
     E.PRODUCT_PLAN_OPTS
   );
 
-  const mine = E.minefield(matches, REC_MAP, rivalries, storylines, prefs.followedTeams, prefs.followedLeagues);
+  const mine = E.minefield(pickable, REC_MAP, rivalries, storylines, prefs.followedTeams, prefs.followedLeagues);
   const days = buildWeekDays(ws.str, matches);
-  const advice = weekDistributionAdvice(days.filter(d => d.count > 0));
+
+  // 周度建议只基于「还能安排」的场次。
+  // 若沿用全周场次，会出现"建议本周注意 09-10 的重度档"而那天早已过去的情况 ——
+  // 背包看未来、建议却看全周，两者口径不一致会让人怀疑结论。柱状图仍展示全周（历史视角）。
+  const upcomingDays = buildWeekDays(ws.str, pickable);
+  const advice = weekDistributionAdvice(upcomingDays.filter(d => d.count > 0));
 
   return { weekStartStr: ws.str, matches, plan, minefield: mine, days, advice };
 }
