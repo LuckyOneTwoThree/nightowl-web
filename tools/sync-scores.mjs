@@ -58,8 +58,22 @@ console.log(`  开球时间回填      ${result.stats.timeUpdated}`);
 console.log(`  解除 tbd          ${result.stats.tbdCleared}`);
 console.log(`  标记改期(pp)      ${result.stats.pp}`);
 console.log(`  跳过进行中(不落库) ${result.stats.skippedLive}`);
+console.log(`  跳过比分不全的完赛事件 ${result.stats.skippedIncompleteScore}`);
 console.log(`  本地无对应场次    ${result.stats.noCounterpart}`);
 console.log(`  补丁总数          ${result.patches.size}`);
+
+// 这类事件此前会产出 { st:'done' } 的半套补丁 → 写盘校验失败 → 整批中止。
+// 现在改为单条跳过并在此列出，批量中止不再发生。
+if (result.incompleteScore && result.incompleteScore.length) {
+  console.log('');
+  console.log(`⚠️  ${result.incompleteScore.length} 条「声称完赛但比分不全」的事件已跳过（不再拖垮整批）：`);
+  result.incompleteScore.slice(0, 8).forEach(x => {
+    console.log(`  ${x.league}  ${x.h} vs ${x.a}  @${x.at}  ${x.got}  [${(x.sources || []).join('+')}]`);
+  });
+  if (result.incompleteScore.length > 8) {
+    console.log(`  … 另有 ${result.incompleteScore.length - 8} 条`);
+  }
+}
 
 if (result.conflicts.length) {
   console.log('');

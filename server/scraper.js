@@ -313,31 +313,80 @@ export async function probeChannels(force = false) {
   return results;
 }
 
+/** "HH:mm" → 当日分钟数；无法解析返回 NaN */
+function minutesOf(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || '').trim());
+  if (!m) return NaN;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
 /**
- * 依据赛事信息（主队代码、客队代码、时间）自动查找匹配的直播线路
+ * 为本场比赛在聚合站赛程中找出对应房间
+ *
+ * 两条纪律：
+ *   ① **只做双方全等匹配，禁止单队兜底。** 单队兜底实测 329/329 全部误配
+ *      （本地「曼联 vs 萨巴赫」→ 播「曼联 vs 曼城」）。静默错配比匹配不到危险得多。
+ *   ② **多候选时必须按开球时刻做邻近度排序。** 聚合站同一对阵可能同时存在多个房间
+ *      （实测当日 48 条匹配里就有 2 组重复对阵，如「科莫 vs 帕尔马」同时挂着 21:00 与 00:30
+ *      两个房间）。原先直接用 find 取第一条，一周双赛 / 杯赛场景会静默播错场 ——
+ *      而且界面显示的队名与用户要的一模一样，肉眼看不出来。
+ *
+ * 导出本函数是为了让 tools/check-scraper.mjs 能直接测**真实逻辑**；
+ * 此前测试自己重写了一遍同样的匹配，结构上不可能发现这里的缺陷。
+ *
+ * @param {Array} schedule fetchSchedule() 的结果
+ * @param {{h:string, a:string, t?:string}} match h/a 为球队 id，t 为本场北京墙钟时间
  */
-export async function getLiveSourcesForMatch({ matchId, h, a, date }) {
-  let matchedGame = null;
+export function findRoomFor(schedule, { h, a, t }) {
+  const cands = (schedule || []).filter(
+    g =>
+      g.homeId &&
+      g.awayId &&
+      ((g.homeId === h && g.awayId === a) || (g.homeId === a && g.awayId === h))
+  );
+
+  if (!cands.length) return { room: null, candidates: 0, ambiguous: false, pickedBy: 'none' };
+  if (cands.length === 1) return { room: cands[0], candidates: 1, ambiguous: false, pickedBy: 'only' };
+
+  const targetMin = minutesOf(t ? String(t).split('T')[1] : '');
+  if (Number.isNaN(targetMin)) {
+    // 拿不到本场时刻就没法排序 —— 保持旧行为但显式标记，交由上层决定是否提示
+    return { room: cands[0], candidates: cands.length, ambiguous: true, pickedBy: 'first' };
+  }
+
+  const scored = cands
+    .map(room => {
+      const rm = minutesOf(room.time);
+      const diff = Number.isNaN(rm)
+        ? Infinity
+        : Math.min(Math.abs(rm - targetMin), 1440 - Math.abs(rm - targetMin)); // 跨零点环绕
+      return { room, diff };
+    })
+    .sort((x, y) => x.diff - y.diff);
+
+  return {
+    room: scored[0].room,
+    candidates: cands.length,
+    // 两个候选一样近（或都无法解析时刻）→ 结果不可信，上层应降低置信度
+    ambiguous: scored.length > 1 && !(scored[0].diff < scored[1].diff),
+    pickedBy: 'time-proximity'
+  };
+}
+
+/**
+ * 依据赛事信息（主队代码、客队代码、开球时刻）自动查找匹配的直播线路
+ */
+export async function getLiveSourcesForMatch({ matchId, h, a, date, t }) {
+  let matched = { room: null, candidates: 0, ambiguous: false, pickedBy: 'none' };
   let lines = [];
   let unmatchedTeams = [];
+  let scrapeError = null;
 
   try {
     const schedule = await fetchSchedule();
 
-    // ⚠️ 只做【双方全等匹配】，不做单队兜底。
-    //
-    // 这里原本有一步「只要主队或客队对上一个就算命中」的兜底，实测在真实数据上
-    // **329 场全部误配（100%）**：
-    //     本地 MUN vs SAB（曼联 vs 萨巴赫）  → 命中「曼联 vs 曼城」
-    //     本地 FCB vs BOD（拜仁 vs 博多）    → 命中「拜仁 vs 柏林联合」
-    //     本地 SEV vs VAL（塞维利亚 vs 瓦伦西亚）→ 命中「阿拉维斯 vs 瓦伦西亚」
-    // 后果是给用户播一场完全不相干的比赛，且界面毫无异常提示。
-    // 静默错配比匹配不到危险得多：匹配不到只是没有直链，用户还能走官方平台直达；
-    // 配错则是把错误内容当成正确结果交付。
-    matchedGame = schedule.find(g => {
-      if (!g.homeId || !g.awayId) return false;
-      return (g.homeId === h && g.awayId === a) || (g.homeId === a && g.awayId === h);
-    });
+    // 匹配规则见 findRoomFor：双方全等 + 开球时刻邻近度
+    matched = findRoomFor(schedule, { h, a, t });
 
     // 未匹配到的队名一并回报，供 tools/check-scraper.mjs 持续发现别名缺口
     // （聚合站是综合体育站，MLB / NBA 等本就该匹配不到，这是预期内的噪声）
@@ -345,11 +394,14 @@ export async function getLiveSourcesForMatch({ matchId, h, a, date }) {
       .filter(g => !g.homeId || !g.awayId)
       .map(g => `${g.homeRaw} / ${g.awayRaw}`);
 
-    if (matchedGame?.gameId) {
-      const rawLines = await fetchGameSources(matchedGame.gameId);
+    if (matched.room?.gameId) {
+      const rawLines = await fetchGameSources(matched.room.gameId);
       lines.push(...rawLines);
     }
   } catch (err) {
+    // 不再吞成「成功但没匹配到」：抓取失败（镜像全挂）与「今天确实没这场」是两件事，
+    // 前者是环境问题、后者是事实，界面必须能区分，否则用户只会看到「暂未匹配到直链」。
+    scrapeError = err.message;
     console.warn("[scraper] 获取聚合信号出错:", err.message);
   }
 
@@ -384,13 +436,20 @@ export async function getLiveSourcesForMatch({ matchId, h, a, date }) {
 
   deduped.sort((a, b) => scoreLine(b) - scoreLine(a));
 
+  const room = matched.room;
   return {
     ok: true,
-    matched: Boolean(matchedGame),
-    gameId: matchedGame?.gameId || null,
-    gameTitle: matchedGame ? (matchedGame.homeRaw + " vs " + matchedGame.awayRaw) : null,
-    statusText: matchedGame?.statusText || null,
-    isLive: matchedGame?.isLive || false,
+    matched: Boolean(room),
+    // 匹配质量：多候选时是否已按开球时刻选定、结果是否可信
+    matchCandidates: matched.candidates,
+    matchAmbiguous: matched.ambiguous,
+    matchPickedBy: matched.pickedBy,
+    gameId: room?.gameId || null,
+    gameTitle: room ? room.homeRaw + " vs " + room.awayRaw : null,
+    statusText: room?.statusText || null,
+    isLive: room?.isLive || false,
+    // 抓取环节失败（如四个镜像全挂）。非 null 时界面应与「今天确实没这场」区分开
+    scrapeError,
     // 保底源失效清单（签名过期等）。非空时界面应明确提示，而不是让用户点了没反应
     tvChannelsDown: tvDown,
     // 聚合站里没能匹配到球队的条目，用于持续补别名（含 MLB/NBA 等非足球噪声）

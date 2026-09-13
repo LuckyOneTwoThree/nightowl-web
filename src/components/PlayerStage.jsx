@@ -136,7 +136,9 @@ export default function PlayerStage({ match, state, now, countdown, isOverlayOpe
       matchId: match.id || '',
       h: match.h || '',
       a: match.a || '',
-      date: d || ''
+      date: d || '',
+      // 开球时刻：聚合站同一对阵可能有多个房间，需要用时刻做邻近度排序
+      t: match.t || ''
     });
 
     fetch(`/api/live-sources?${query}`)
@@ -341,7 +343,11 @@ export default function PlayerStage({ match, state, now, countdown, isOverlayOpe
           </div>
         ) : (
           <div className="py-4 text-center font-mono text-[11px] text-text-muted">
-            {loadingLines ? '正在连接体育信号节点…' : '暂未匹配到直链，可直达官方平台'}
+            {loadingLines
+              ? '正在连接体育信号节点…'
+              : liveInfo?.scrapeError
+                ? '聚合站不可达，仅保底频道可用'
+                : '暂未匹配到直链，可直达官方平台'}
           </div>
         )}
 
@@ -358,6 +364,22 @@ export default function PlayerStage({ match, state, now, countdown, isOverlayOpe
                 切下一路
               </button>
             )}
+          </div>
+        )}
+
+        {/* 抓取环节失败：与「今天确实没这场」是两回事，必须分开说 */}
+        {liveInfo?.scrapeError && (
+          <div className="rounded-lg bg-warning-amber/10 p-2 text-[10px] leading-tight text-warning-amber">
+            聚合站不可达
+            <span className="mt-0.5 block opacity-80">已降级为保底频道，稍后重试可能恢复</span>
+          </div>
+        )}
+
+        {/* 同名对阵存在多个房间：已按开球时刻选，但结果不保证正确，提示用户确认 */}
+        {liveInfo?.matchAmbiguous && (
+          <div className="rounded-lg bg-warning-amber/10 p-2 text-[10px] leading-tight text-warning-amber">
+            检测到多个同名对阵，已按开球时间选择
+            <span className="mt-0.5 block opacity-80">请确认画面无误后再观看</span>
           </div>
         )}
 

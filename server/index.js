@@ -120,6 +120,7 @@ export function createServer(rules = loadRules(), log = console) {
             allowedHosts: rules.proxy?.allowedHosts?.length || 0,
             allowedHostSuffixes: rules.proxy?.allowedHostSuffixes?.length || 0,
             sessionAllowedHosts: proxy.sessionAllowed.size,
+            session: proxy.sessionStats,
             activeRequests: proxy.gate.active,
             queuedRequests: proxy.gate.queued,
             maxConcurrent: rules.proxy?.maxConcurrent
@@ -147,8 +148,30 @@ export function createServer(rules = loadRules(), log = console) {
             ok: result.every(r => r.ok),
             results: result,
             sessionCount: proxy.sessionAllowed.size,
-            note: '自定义请求头仅存于本机会话内存，不写盘、重启失效'
+            note: `自定义请求头仅存于本机会话内存，不写盘、重启失效；授权 ${Math.round(
+              proxy.sessionStats.ttlMs / 3600000
+            )} 小时后自动回收`
           });
+        } catch (err) {
+          sendJSON(res, 400, { error: `解析请求体失败：${err.message}` });
+        }
+        return;
+      }
+
+      /* ---------------- 会话授权回收 ---------------- */
+      if (pathname === '/api/proxy/revoke' && req.method === 'POST') {
+        try {
+          const body = await readJsonBody(req);
+          if (body.all === true) {
+            const r = proxy.revokeAll();
+            sendJSON(res, 200, { ok: true, ...r, sessionCount: proxy.sessionAllowed.size });
+          } else if (body.host) {
+            const r = proxy.revokeHost(body.host);
+            sendJSON(res, 200, { ok: true, ...r, sessionCount: proxy.sessionAllowed.size });
+          } else {
+            const pruned = proxy.pruneSessions();
+            sendJSON(res, 200, { ok: true, pruned, sessionCount: proxy.sessionAllowed.size });
+          }
         } catch (err) {
           sendJSON(res, 400, { error: `解析请求体失败：${err.message}` });
         }
@@ -197,6 +220,7 @@ export function createServer(rules = loadRules(), log = console) {
             note: '本接口只做预览，不写盘。落盘请执行 `node tools/sync-scores.mjs --apply`',
             summary: lastSync,
             conflicts: result.conflicts.slice(0, 20),
+            incompleteScore: (result.incompleteScore || []).slice(0, 20),
             unmatchedCount: result.unmatched.length,
             patches: [...result.patches.entries()].slice(0, 50).map(([id, p]) => ({ id, ...p }))
           });
@@ -228,9 +252,10 @@ export function createServer(rules = loadRules(), log = console) {
         const h = searchParams.get('h') || '';
         const a = searchParams.get('a') || '';
         const date = searchParams.get('date') || '';
+        const t = searchParams.get('t') || '';
 
         try {
-          const result = await getLiveSourcesForMatch({ matchId, h, a, date });
+          const result = await getLiveSourcesForMatch({ matchId, h, a, date, t });
 
           // 自动将抓取到的各线路域名授权给当前代理会话，无需用户手动登记
           for (const line of result.lines || []) {

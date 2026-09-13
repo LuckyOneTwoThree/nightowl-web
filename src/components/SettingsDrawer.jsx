@@ -51,7 +51,7 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
   const leagueCount = prefs.followedLeagues.length;
   const bonusActive = leagueCount > 0 && leagueCount < 6;
 
-  const health = useServiceHealth();
+  const { health, refresh } = useServiceHealth();
   const range = useMemo(() => {
     const days = fixtures.map(m => m.t.slice(0, 10)).sort();
     return days.length ? `${days[0]} ~ ${days[days.length - 1]}` : '—';
@@ -321,8 +321,32 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
                   </p>
                   <p>
                     流代理：静态白名单 {health.proxy.allowedHosts + health.proxy.allowedHostSuffixes} 条 ·
-                    会话授权 {health.proxy.sessionAllowedHosts} 个 · 并发 {health.proxy.activeRequests}/{health.proxy.maxConcurrent}
+                    会话授权 {health.proxy.sessionAllowedHosts} 个 · 并发 {health.proxy.activeRequests}/
+                    {health.proxy.maxConcurrent}
+                    {health.proxy.queuedRequests > 0 ? ` · 排队 ${health.proxy.queuedRequests}` : ''}
                   </p>
+                  {health.proxy.sessionAllowedHosts > 0 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await fetch('/api/proxy/revoke', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ all: true })
+                          });
+                        } finally {
+                          refresh();
+                        }
+                      }}
+                      title={`会话授权会在 ${Math.round(
+                        (health.proxy.session?.ttlMs || 0) / 3600000
+                      )} 小时后自动回收；也可在此手动清空`}
+                      className="rounded bg-surface-elevated px-2 py-0.5 font-mono text-[10px] text-text-secondary transition-colors hover:text-primary-gold"
+                    >
+                      清空会话授权
+                    </button>
+                  )}
                   <p>
                     保鲜同步：{health.scores.enabled ? '已启用' : '已禁用'}
                     {health.scores.lastSync
@@ -383,6 +407,7 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
  */
 function useServiceHealth() {
   const [health, setHealth] = useState(null);
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     let alive = true;
     fetch('/api/health')
@@ -396,8 +421,8 @@ function useServiceHealth() {
     return () => {
       alive = false;
     };
-  }, []);
-  return health;
+  }, [tick]);
+  return { health, refresh: () => setTick(t => t + 1) };
 }
 
 function SwitchRow({ label, on, onChange, note }) {

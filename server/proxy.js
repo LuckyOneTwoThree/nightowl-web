@@ -148,15 +148,68 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
     rules.proxy?.queueTimeoutMs ?? 30000
   );
   const MAX_SESSION_HOSTS = 50;
+
+  /**
+   * 会话授权有效期
+   *
+   * 为什么必须有：会话白名单**只进不出**曾是真实缺陷 ——
+   * index.js 每次拉直播源都会把抓到的线路域名批量授权，而全仓没有任何回收路径。
+   * 50 个名额被历史域名占满后，用户连手动授权自己那条流都做不到，只能重启进程；
+   * 同时也架空了「显式授权」的设计意图（自动授权本不该长期驻留）。
+   */
+  const SESSION_TTL_MS = rules.proxy?.sessionTtlMs ?? 6 * 3600 * 1000;
   const sessionHeaders = new Map(); // host -> { Referer?, Cookie? }
+  const sessionGrantedAt = new Map(); // host -> 最近一次授权/复用的时间戳
+
+  /** 回收超过 TTL 的授权，返回回收数量 */
+  const pruneSessions = () => {
+    if (!(SESSION_TTL_MS > 0)) return 0;
+    const now = Date.now();
+    let removed = 0;
+    for (const [host, at] of [...sessionGrantedAt]) {
+      if (now - at > SESSION_TTL_MS) {
+        sessionAllowed.delete(host);
+        sessionHeaders.delete(host);
+        sessionGrantedAt.delete(host);
+        removed++;
+      }
+    }
+    return removed;
+  };
+
+  /** 显式撤销某个域名的会话授权 */
+  const revokeHost = host => {
+    const had = sessionAllowed.has(host);
+    sessionAllowed.delete(host);
+    sessionHeaders.delete(host);
+    sessionGrantedAt.delete(host);
+    return { ok: true, removed: had };
+  };
+
+  /** 清空全部会话授权 */
+  const revokeAll = () => {
+    const n = sessionAllowed.size;
+    sessionAllowed.clear();
+    sessionHeaders.clear();
+    sessionGrantedAt.clear();
+    return { ok: true, removed: n };
+  };
 
   const allowHost = (host, headers = null) => {
+    pruneSessions();
     if (!isValidHost(host)) return { ok: false, reason: '非法主机名' };
-    if (sessionAllowed.has(host) && !headers) return { ok: true, already: true };
+    if (sessionAllowed.has(host) && !headers) {
+      sessionGrantedAt.set(host, Date.now()); // 复用即续期
+      return { ok: true, already: true };
+    }
     if (!sessionAllowed.has(host) && sessionAllowed.size >= MAX_SESSION_HOSTS) {
-      return { ok: false, reason: `会话白名单已达上限（${MAX_SESSION_HOSTS}）` };
+      return {
+        ok: false,
+        reason: `会话白名单已达上限（${MAX_SESSION_HOSTS}），可等待过期回收或调用 /api/proxy/revoke 清空`
+      };
     }
     sessionAllowed.add(host);
+    sessionGrantedAt.set(host, Date.now());
 
     if (headers && typeof headers === 'object') {
       const clean = {};
@@ -201,6 +254,7 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
    * @param {URLSearchParams} query 形如 { url: 'https://...' }
    */
   async function handle(query, req, res) {
+    pruneSessions(); // 每次请求前顺手回收过期授权，避免白名单只进不出
     const raw = query.get('url');
     if (!raw) throw new ProxyError('bad-request', '缺少 url 参数', 400);
 
@@ -354,7 +408,18 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
     gate,
     rules,
     allowHost,
+    revokeHost,
+    revokeAll,
+    pruneSessions,
     sessionAllowed,
+    get sessionStats() {
+      return {
+        count: sessionAllowed.size,
+        max: MAX_SESSION_HOSTS,
+        ttlMs: SESSION_TTL_MS,
+        oldestGrantedAt: sessionGrantedAt.size ? Math.min(...sessionGrantedAt.values()) : null
+      };
+    },
     isAllowed: h => isHostAllowed(h, rules, sessionAllowed)
   };
 }

@@ -54,9 +54,11 @@ export function seasonMonths(now = new Date()) {
 export function planPatches(merged, fixtures, conflicts = []) {
   const patches = new Map();
   const unmatched = [];
+  const incompleteScore = [];
   const stats = {
     done: 0, timeUpdated: 0, tbdCleared: 0, pp: 0,
-    skippedLive: 0, noCounterpart: 0, scoreFromSecondary: 0
+    skippedLive: 0, noCounterpart: 0, scoreFromSecondary: 0,
+    skippedIncompleteScore: 0
   };
 
   // 按 (联赛, 主队-客队) 建索引，避免每次全表扫描
@@ -102,17 +104,36 @@ export function planPatches(merged, fixtures, conflicts = []) {
       continue;
     }
 
+    /**
+     * 前置校验：声称「完赛」就必须带完整比分
+     *
+     * 否则会产出一条 { st: 'done' } 的半套补丁，让 fixtures 出现「已完赛却无比分」，
+     * 于是写盘前校验失败、sync-scores --apply 整批中止 —— 其余完全合法的补丁一起丢，
+     * 而唯一"解法"是手工改数据文件，违反本仓「数据只走脚本」的铁律。
+     * 这里改为：**整条事件跳过**（连开球时间也不更新，避免留下半套补丁），并计入统计。
+     */
+    const scoreStr = `${e.homeScore}-${e.awayScore}`;
+    const hasFullScore = e.homeScore != null && e.awayScore != null && /^\d+-\d+$/.test(scoreStr);
+    if (e.state === 'done' && !hasFullScore) {
+      stats.skippedIncompleteScore++;
+      incompleteScore.push({
+        league: e.league,
+        h: e.homeId,
+        a: e.awayId,
+        at: e.kickoff,
+        got: `homeScore=${e.homeScore} awayScore=${e.awayScore}`,
+        sources: e.sources
+      });
+      continue;
+    }
+
     const patch = {};
 
     /* 比分：只对完赛且两比分齐全的场次写入，格式必须 H-A */
     if (e.state === 'done') {
       stats.done++;
-      const hs = e.homeScore, as = e.awayScore;
-      if (hs != null && as != null) {
-        const sc = `${hs}-${as}`;
-        if (/^\d+-\d+$/.test(sc) && sc !== best.sc) patch.sc = sc;
-        if (e.scoreSource && e.scoreSource !== 'espn') stats.scoreFromSecondary++;
-      }
+      if (scoreStr !== best.sc) patch.sc = scoreStr;
+      if (e.scoreSource && e.scoreSource !== 'espn') stats.scoreFromSecondary++;
     }
 
     /* 开球时间：**只信 kickoffTrusted 的源**（副源给的是当地墙钟，直接用会整体偏移） */
@@ -144,7 +165,7 @@ export function planPatches(merged, fixtures, conflicts = []) {
     if (Object.keys(patch).length) patches.set(best.id, patch);
   }
 
-  return { patches, stats, unmatched, conflicts };
+  return { patches, stats, unmatched, conflicts, incompleteScore };
 }
 
 /* ------------------------------------------------------------------ */
@@ -171,10 +192,10 @@ export async function syncScores({ fixtures, rules, months, sources, log = conso
   });
 
   const { merged, conflicts } = mergeEvents(events, order);
-  const { patches, stats, unmatched } = planPatches(merged, fixtures, conflicts);
+  const { patches, stats, unmatched, incompleteScore } = planPatches(merged, fixtures, conflicts);
 
   return {
-    patches, merged, conflicts, unmatched,
+    patches, merged, conflicts, unmatched, incompleteScore,
     bySource, errors,
     stats,
     months: list,
@@ -194,16 +215,30 @@ export function applyPatches(fixtures, patches) {
   return { fixtures: next, changed };
 }
 
-/** 写盘前校验：st 取值域 + done 必有比分 */
+/**
+ * 写盘前校验：st 取值域 + done 必有比分
+ *
+ * 列出**具体 offender**（最多 10 个），而不是只给第一个样本 ——
+ * 否则排错只能靠猜，而这个校验一旦触发就是整批中止，代价很高。
+ */
 export function validateFixtures(fixtures) {
   const issues = [];
+
   const badSt = fixtures.filter(m => !ALLOWED_ST.includes(m.st));
   if (badSt.length) {
-    issues.push(`${badSt.length} 场次的 st 不在取值域 ${ALLOWED_ST.join('/')} 内（如 ${badSt[0].id}=${badSt[0].st}）`);
+    const sample = badSt.slice(0, 10).map(m => `${m.id}=${m.st}`).join('、');
+    issues.push(
+      `${badSt.length} 场次的 st 不在取值域 ${ALLOWED_ST.join('/')} 内：${sample}${badSt.length > 10 ? ` … 共 ${badSt.length} 场` : ''}`
+    );
   }
+
   const doneNoScore = fixtures.filter(m => m.st === 'done' && !m.sc);
   if (doneNoScore.length) {
-    issues.push(`${doneNoScore.length} 场次 st=done 但无比分（如 ${doneNoScore[0].id}）`);
+    const sample = doneNoScore.slice(0, 10).map(m => m.id).join('、');
+    issues.push(
+      `${doneNoScore.length} 场次 st=done 但无比分：${sample}${doneNoScore.length > 10 ? ` … 共 ${doneNoScore.length} 场` : ''}`
+    );
   }
+
   return issues;
 }

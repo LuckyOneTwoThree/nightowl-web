@@ -395,7 +395,10 @@ export function planWeek(matches, recMap, rivalries, storylines, followed, budge
   const maxPicks = opts.maxPicks == null ? Infinity : opts.maxPicks;   // D8：数量上限
   const separateZero = !!opts.separateZeroCost;                        // D8：S0 场次分离
 
-  budget = budget || 4.0;
+  // ⚠️ 不能用 `budget || 4.0`：0 是**合法意图**（"本周一点都不熬"），但它 falsy，
+  //    会被静默改成 4.0 —— 结果是滑杆拖到 0 又弹回 4，而偏好里存的其实还是 0，
+  //    界面与存储各说各话。只对「非有限数」回落默认值。
+  budget = typeof budget === 'number' && Number.isFinite(budget) ? budget : 4.0;
 
   const eligible = matches.filter(m => m.st === 'sched' && !m.tbd);
   const isZero = (m) => tierOf(m).cost === 0;

@@ -14,7 +14,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { fetchSchedule, probeChannels, TV_SPORTS_CHANNELS } from '../server/scraper.js';
+import { fetchSchedule, probeChannels, TV_SPORTS_CHANNELS, findRoomFor, getLiveSourcesForMatch } from '../server/scraper.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -59,33 +59,44 @@ if (unmatched.length) {
 console.log('');
 console.log('二、P0 回归：禁止单队兜底式误配');
 
-// 只按「双方全等」匹配，逐一核对命中的确实就是该场
+// 直接调用 scraper 的**真实**匹配函数。
+// 此前这里自己重写了一遍匹配规则（与实现同款写法）—— 结构上不可能发现
+// 「多候选时永远取第一条」之类的缺陷；离线单测见 tools/test-scraper-match.mjs。
 const future = fixtures.filter(m => m.st === 'sched' && !m.tbd);
 let hits = 0;
 let wrong = 0;
+let multiCand = 0;
 const wrongSamples = [];
 for (const f of future) {
-  const g = matched.find(
-    x => (x.homeId === f.h && x.awayId === f.a) || (x.homeId === f.a && x.awayId === f.h)
-  );
-  if (!g) continue;
+  const res = findRoomFor(games, { h: f.h, a: f.a, t: f.t });
+  if (!res.room) continue;
   hits++;
-  // 全等匹配下本不该错；这里显式再验一次，防止将来有人把兜底逻辑加回来
-  const okPair =
-    (g.homeId === f.h && g.awayId === f.a) || (g.homeId === f.a && g.awayId === f.h);
+  if (res.candidates > 1) multiCand++;
+  const g = res.room;
+  // 全等匹配下本不该错；显式再验一次，防止将来有人把兜底逻辑加回来
+  const okPair = (g.homeId === f.h && g.awayId === f.a) || (g.homeId === f.a && g.awayId === f.h);
   if (!okPair) {
     wrong++;
-    if (wrongSamples.length < 5) {
-      wrongSamples.push(`${f.h} vs ${f.a} → ${g.homeRaw} vs ${g.awayRaw}`);
-    }
+    if (wrongSamples.length < 5) wrongSamples.push(`${f.h} vs ${f.a} → ${g.homeRaw} vs ${g.awayRaw}`);
   }
 }
-console.log(`     命中 ${hits} 场`);
+console.log(`     命中 ${hits} 场（其中同一对阵多候选 ${multiCand} 场）`);
 wrongSamples.forEach(s => console.log(`       ✗ ${s}`));
 ok('无任何错误匹配', wrong === 0, `${wrong} 场误配`);
 
 console.log('');
-console.log('三、保底源健康探测（签名 URL 会过期，失效须可见）');
+console.log('三、失败语义（抓取失败须与「今天没这场」区分）');
+{
+  const res = await getLiveSourcesForMatch({ matchId: 'PROBE', h: 'ARS', a: 'CHE', t: '2026-09-13T23:30' });
+  ok('正常到达聚合站时 scrapeError 为 null', res.scrapeError === null, String(res.scrapeError));
+  ok('返回匹配质量字段（候选数 / 歧义标记）',
+    typeof res.matchCandidates === 'number' && typeof res.matchAmbiguous === 'boolean',
+    `candidates=${res.matchCandidates} ambiguous=${res.matchAmbiguous}`);
+  ok('返回保底频道失效清单字段', Array.isArray(res.tvChannelsDown));
+}
+
+console.log('');
+console.log('四、保底源健康探测（签名 URL 会过期，失效须可见）');
 const probe = await probeChannels(true);
 for (const ch of TV_SPORTS_CHANNELS) {
   const alive = probe.get(ch.id);
