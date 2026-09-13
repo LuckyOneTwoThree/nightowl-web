@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { teams, FOLLOWABLE_LEAGUES, LEAGUE_NAMES, TEAM_MAP } from '../data/index.js';
+import { useEffect, useMemo, useState } from 'react';
+import { fixtures, teams, FOLLOWABLE_LEAGUES, LEAGUE_NAMES, TEAM_MAP } from '../data/index.js';
 import { Crest, Pill, SectionLabel } from './atoms.jsx';
 import { defaultPrefs, toggleIn } from '../core/prefs.js';
 
@@ -50,6 +50,12 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
 
   const leagueCount = prefs.followedLeagues.length;
   const bonusActive = leagueCount > 0 && leagueCount < 6;
+
+  const health = useServiceHealth();
+  const range = useMemo(() => {
+    const days = fixtures.map(m => m.t.slice(0, 10)).sort();
+    return days.length ? `${days[0]} ~ ${days[days.length - 1]}` : '—';
+  }, []);
 
   const patch = p => onPrefsChange({ ...prefs, ...p });
 
@@ -302,13 +308,34 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
             </div>
           </section>
 
-          {/* 数据状态 */}
+          {/* 数据状态：一律显示真实状态，不得写「未接入」这类与实现脱节的固定文案 */}
           <section>
             <SectionLabel>数据与服务状态</SectionLabel>
             <div className="mt-2 space-y-1.5 rounded-lg bg-bg-app/60 px-3 py-2.5 font-mono text-[10px] leading-relaxed text-text-secondary">
-              <p>赛程数据：本地快照 1,897 场（2026-08-16 ~ 2027-05-31）</p>
-              <p>保鲜同步：未接入（P4）· 当前比分来自快照</p>
-              <p>本地流代理：未接入（P3）</p>
+              <p>赛程数据：本地快照 {fixtures.length.toLocaleString()} 场（{range}）</p>
+
+              {health ? (
+                <>
+                  <p className="text-emerald-600 dark:text-emerald-400">
+                    本地服务：已启动 · {health.listening}
+                  </p>
+                  <p>
+                    流代理：静态白名单 {health.proxy.allowedHosts + health.proxy.allowedHostSuffixes} 条 ·
+                    会话授权 {health.proxy.sessionAllowedHosts} 个 · 并发 {health.proxy.activeRequests}/{health.proxy.maxConcurrent}
+                  </p>
+                  <p>
+                    保鲜同步：{health.scores.enabled ? '已启用' : '已禁用'}
+                    {health.scores.lastSync
+                      ? ` · 上次预览 ${health.scores.lastSync.patches} 条补丁 / ${health.scores.lastSync.errors} 错`
+                      : ' · 本次启动后未跑过（POST /api/scores/sync）'}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-warning-amber">本地服务：未启动（npm run server）</p>
+                  <p>未启动时赛程与算法照常可用，播放与保鲜不可用</p>
+                </>
+              )}
             </div>
           </section>
         </div>
@@ -344,6 +371,33 @@ export default function SettingsDrawer({ open, prefs, onPrefsChange, onClose, on
       </aside>
     </>
   );
+}
+
+/**
+ * 拉取本地服务真实状态
+ *
+ * 为什么不写死文案：本产品的一条核心纪律是「界面不说谎」。
+ * 设置面板曾显示「保鲜同步：未接入（P4）· 本地流代理：未接入（P3）」，
+ * 而两者其实早已实现 —— 这类与实现脱节的固定文案，会让用户对系统能力产生错误判断，
+ * 也会让开发者误以为功能缺失。因此改为直接问服务要状态，取不到就如实说未启动。
+ */
+function useServiceHealth() {
+  const [health, setHealth] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/health')
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then(j => {
+        if (alive) setHealth(j);
+      })
+      .catch(() => {
+        if (alive) setHealth(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return health;
 }
 
 function SwitchRow({ label, on, onChange, note }) {

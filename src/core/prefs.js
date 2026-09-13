@@ -46,7 +46,12 @@ function readJSON(key, fallback) {
 }
 
 function readNumber(key, fallback) {
-  const v = Number(localStorage.getItem(key));
+  const raw = localStorage.getItem(key);
+  // ⚠️ 必须先判 null/空串：Number(null) === 0，而 0 是有限数，
+  //    直接 Number.isFinite 会让 fallback 永远不生效 —— 默认周预算 4.0h 曾因此形同虚设，
+  //    首启用户的「本周规划」在预算 0 下永远选不出场次。
+  if (raw == null || raw === '') return fallback;
+  const v = Number(raw);
   return Number.isFinite(v) ? v : fallback;
 }
 

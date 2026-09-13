@@ -183,11 +183,21 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
     const timeoutMs = rules.proxy?.timeoutMs || 15000;
     await gate.acquire();
 
+    // 释放必须幂等：一条请求存在多条退出路径（上游失败 / 空 body / M3U8 写回 / 流结束 / 异常），
+    // 直接各处调 gate.release() 会重复扣减。实测 health 里 active 变成了 -12，
+    // 一旦为负，`active < max` 恒成立，并发闸门等于失效。
+    let released = false;
+    const releaseOnce = () => {
+      if (released) return;
+      released = true;
+      gate.release();
+    };
+
     let upstream;
     try {
       upstream = await fetchUpstream(target.toString(), pickHeaders(req.headers, rules), timeoutMs);
     } catch (err) {
-      gate.release();
+      releaseOnce();
       const msg = err?.name === 'AbortError' ? `上游超时（${timeoutMs}ms）` : `连接上游失败：${err?.message || err}`;
       // 网络失败不缓存、不闩锁 —— 下次请求照常重试
       throw new ProxyError('network', msg, 504);
@@ -198,7 +208,7 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
 
       /* ---- 上游无源：明确区别于网络失败 ---- */
       if (!upstream.ok) {
-        gate.release();
+        releaseOnce();
         const kind = upstream.status === 404 || upstream.status === 410 ? 'upstream-absent' : 'network';
         throw new ProxyError(kind, `上游返回 ${upstream.status}`, upstream.status === 404 ? 404 : 502);
       }
@@ -217,7 +227,7 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
           'Content-Length': Buffer.byteLength(text)
         });
         res.end(text);
-        gate.release();
+        releaseOnce();
         return;
       }
 
@@ -237,7 +247,7 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
 
       if (!upstream.body) {
         res.end();
-        gate.release();
+        releaseOnce();
         return;
       }
 
@@ -248,12 +258,12 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
       });
       res.on('close', () => {
         nodeStream.destroy();
-        gate.release();
+        releaseOnce();
       });
 
       nodeStream.pipe(res);
     } catch (err) {
-      gate.release();
+      releaseOnce();
       if (err instanceof ProxyError) throw err;
       throw new ProxyError('network', `转发失败：${err?.message || err}`, 502);
     }
