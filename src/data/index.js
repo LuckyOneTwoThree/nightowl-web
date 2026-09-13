@@ -62,7 +62,17 @@ export function leagueName(code) {
   return LEAGUE_NAMES[code] || code;
 }
 
+/**
+ * 文件名特殊映射。
+ * `AUX` 是 Windows 保留设备名（CON/PRN/AUX/NUL…），`AUX.png` 这个文件
+ * 在 Windows 上无法被 git 检出 —— GitHub Actions 的 Checkout 一步因此失败过。
+ * 文件改名为 `AUX_.png`，数据 id 保持 AUX 不动（避免波及 fixtures 等外键），
+ * 在此集中映射，而不是在组件里散落特判。
+ */
+const CREST_FILE_OVERRIDES = { AUX: 'AUX_' };
+
 /** 队徽：本地 111 张 PNG（public/crests/）。未收录时返回 null，由调用方回退纯色圆标 */
 export function crestUrl(id) {
-  return TEAM_MAP[id] ? `/crests/${id}.png` : null;
+  if (!TEAM_MAP[id]) return null;
+  return `/crests/${CREST_FILE_OVERRIDES[id] ?? id}.png`;
 }
