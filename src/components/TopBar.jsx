@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { bjClock, bjDate } from '../core/format.js';
 import { teamName, leagueName } from '../data/index.js';
 import { Crest } from './atoms.jsx';
@@ -26,11 +27,18 @@ function OwlMark() {
 export default function TopBar({
   view,
   onViewChange,
-  now,
   liveCount,
   prefs,
   onOpenSettings
 }) {
+  // 时钟是全应用唯一需要秒级显示的地方，把 tick 隔离在本地：
+  // 否则 App 每秒重渲染会连带重建赛程视图的 2000+ 列表元素（实测约 9% CPU）。
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
   const primaryTeam = prefs.followedTeams[0];
 
   return (

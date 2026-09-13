@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { hm, zhDate, weekdayOf, datePart, liveMinute } from '../core/format.js';
+import { hm, zhDate, weekdayOf, datePart, liveMinute, humanCountdown } from '../core/format.js';
 import { teamName, leagueName } from '../data/index.js';
-import { ts } from '../core/engine.js';
+import { ts, countdown as engineCountdown } from '../core/engine.js';
 import { Crest, Pill, LiveDot } from './atoms.jsx';
 
 /**
@@ -63,13 +63,24 @@ export function sourceUrlFor(src, match) {
 export default function PlayerStage({
   match,
   state,
-  now,
-  countdown,
   isOverlayOpen = false,
   spoilerFree = true,
   revealed = false,
   onReveal
 }) {
+  // 秒级刷新只存在于本组件（倒计时文本与进行中的分钟数）。
+  // 若由 App 供秒级 now，每秒重渲染会波及整个视图树 —— 赛程视图会每秒
+  // 重建 2000+ 列表元素（见 App.jsx 的时间基准注释）。
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const stageCountdown = useMemo(() => {
+    if (!match) return '--';
+    return humanCountdown(engineCountdown(ts(match.t), now));
+  }, [match, now]);
   const sources = useWatchSources();
   const [theaterMode, setTheaterMode] = useState(false);
   const [theaterLinesExpanded, setTheaterLinesExpanded] = useState(false);
@@ -252,7 +263,7 @@ export default function PlayerStage({
               <div className="text-center">
                 <p className="font-mono text-[10px] tracking-wider uppercase text-slate-400">距开球</p>
                 <p className="font-mono text-[28px] font-extrabold tabular-nums text-primary-gold drop-shadow-sm">
-                  {countdown}
+                  {stageCountdown}
                 </p>
                 <p className="mt-0.5 font-mono text-[10px] text-slate-400">
                   {zhDate(datePart(match.t))} {weekdayOf(datePart(match.t))} {hm(match.t)} 北京时间

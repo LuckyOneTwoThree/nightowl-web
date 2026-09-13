@@ -44,13 +44,21 @@ function initialFromUrl() {
 }
 
 export default function App() {
-  // ---- 时间：秒级 tick 只驱动时钟与倒计时，算法按分钟粒度重算 ----
-  const [now, setNow] = useState(() => Date.now());
+  /**
+   * 时间基准：这里**只保留 30 秒粒度**。
+   *
+   * 秒级刷新被下沉到真正需要它的两个组件（TopBar 的时钟、PlayerStage 的倒计时）。
+   * 原因：App 每秒重渲染会连带重渲染当前视图 —— 赛程视图的 rows.map 会因此
+   * 每秒重建 2000+ 个 React 元素（含 1897 次 evalOne 调用）。
+   * 实测静置 10 秒主线程占用 89ms（约 9% CPU，今晚视图 3.5%），
+   * 对一个常驻的桌面应用就是持续发热与耗电。
+   */
+  const [clockTs, setClockTs] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
+    const t = setInterval(() => setClockTs(Date.now()), 30000);
     return () => clearInterval(t);
   }, []);
-  const minuteKey = Math.floor(now / 60000);
+  const minuteKey = Math.floor(clockTs / 60000);
 
   // ---- 偏好（本地存储）----
   const [prefs, setPrefsState] = useState(() => loadPrefs());
@@ -110,10 +118,9 @@ export default function App() {
     [view, prefs, filters]
   );
 
-  // ---- 顶栏"进行中"计数（30 秒粒度即可）----
-  const halfMinute = Math.floor(now / 30000);
+  // ---- 顶栏「进行中」计数（随 30 秒时钟刷新）----
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const liveCount = useMemo(() => liveCountAt(Date.now()), [halfMinute]);
+  const liveCount = useMemo(() => liveCountAt(Date.now()), [clockTs]);
 
   // ---- 首屏自动锁定今晚之选（用户零点击即有内容）----
   useEffect(() => {
@@ -124,17 +131,13 @@ export default function App() {
 
   const activeMatch = activeMatchId ? MATCH_MAP[activeMatchId] : null;
 
-  // 倒计时（每秒刷新）
+  // 无球日的「下一场焦点战」倒计时：只在降级状态下出现，30 秒时钟足够。
+  // 主舞台的倒计时不在这里 —— 它由 PlayerStage 自己按秒刷新（见该组件），
+  // 免得一个次要文本把整个 App 拖进秒级重渲染。
   const countdownText = useMemo(() => {
     if (!tonight.focal) return '--';
-    const cd = engineCountdown(ts(tonight.focal.m.t), now);
-    return humanCountdown(cd);
-  }, [tonight.focal, now]);
-
-  const stageCountdown = useMemo(() => {
-    if (!activeMatch) return '--';
-    return humanCountdown(engineCountdown(ts(activeMatch.t), now));
-  }, [activeMatch, now]);
+    return humanCountdown(engineCountdown(ts(tonight.focal.m.t), clockTs));
+  }, [tonight.focal, clockTs]);
 
   const select = useCallback(id => setActiveMatchId(id), []);
 
@@ -148,10 +151,10 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg-app">
+      {/* TopBar 的时钟、PlayerStage 的倒计时各自内部按秒刷新，不走这里 */}
       <TopBar
         view={view}
         onViewChange={setView}
-        now={now}
         liveCount={liveCount}
         prefs={prefs}
         onPrefsChange={setPrefs}
@@ -165,7 +168,7 @@ export default function App() {
           {view === 'tonight' && (
             <TonightView
               tonight={tonight}
-              now={now}
+              now={clockTs}
               activeMatchId={activeMatchId}
               onSelect={select}
               prefs={prefs}
@@ -179,7 +182,7 @@ export default function App() {
             <WeekView
               week={week}
               prefs={prefs}
-              now={now}
+              now={clockTs}
               activeMatchId={activeMatchId}
               onSelect={select}
               onBudgetChange={v => setPrefs({ ...prefs, weeklyBudget: v })}
@@ -195,7 +198,7 @@ export default function App() {
               onFiltersChange={setFilters}
               prefs={prefs}
               onPrefsChange={setPrefs}
-              now={now}
+              now={clockTs}
               activeMatchId={activeMatchId}
               onSelect={select}
               revealed={revealed}
@@ -208,9 +211,7 @@ export default function App() {
         <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto scrollbar-thin bg-stage-bg p-4 transition-colors">
           <PlayerStage
             match={activeMatch}
-            state={activeMatch ? stateOf(activeMatch, now) : 'sched'}
-            now={now}
-            countdown={stageCountdown}
+            state={activeMatch ? stateOf(activeMatch, clockTs) : 'sched'}
             isOverlayOpen={settingsOpen || onboardingOpen}
             spoilerFree={prefs.spoilerFree}
             revealed={activeMatch ? revealed.has(activeMatch.id) : false}

@@ -135,11 +135,14 @@ export default function ScheduleView({
             desc="试着放宽筛选条件，或清空搜索关键词。"
           />
         ) : (
-          <VList style={{ height: '100%' }} className="scrollbar-thin">
-            {rows.map(row => {
+          /* data 模式：渲染函数只对**可见行**执行。
+             children 模式下 rows.map 会先创建全部 2000+ 个 React 元素 ——
+             本组件每次重渲染都要付这笔钱（此前 App 每秒 tick 时实测持续 ~9% CPU）。 */
+          <VList data={rows} style={{ height: '100%' }} className="scrollbar-thin">
+            {row => {
               if (row.type === 'date') {
                 return (
-                  <div key={row.key} className="pt-2.5 pb-1.5 px-0.5 transition-colors">
+                  <div className="pt-2.5 pb-1.5 px-0.5 transition-colors">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-[11px] font-bold tracking-tight text-text-primary">
@@ -157,7 +160,7 @@ export default function ScheduleView({
               const m = row.m;
               const { ev } = evalOne(m, prefs);
               return (
-                <div key={row.key} className="pb-2">
+                <div className="pb-2">
                   <MatchRow
                     m={m}
                     state={stateOf(m, now)}
@@ -172,7 +175,7 @@ export default function ScheduleView({
                   />
                 </div>
               );
-            })}
+            }}
           </VList>
         )}
       </div>
