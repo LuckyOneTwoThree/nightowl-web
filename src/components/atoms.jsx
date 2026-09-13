@@ -119,7 +119,7 @@ export function LiveDot({ className = '' }) {
 }
 
 /** 比分 / 状态文本（受防剧透控制） */
-export function ScoreText({ match, state, revealed, onReveal, spoilerFree }) {
+export function ScoreText({ match, state, revealed, onReveal, spoilerFree, stalePending = false }) {
   if (match.st === 'done') {
     if (spoilerFree && !revealed) {
       return (
@@ -138,7 +138,16 @@ export function ScoreText({ match, state, revealed, onReveal, spoilerFree }) {
   }
 
   if (state === 'live') return <LiveDot />;
-  if (state === 'ended_pending') return <Meta>待录比分</Meta>;
+  if (state === 'ended_pending') {
+    // 区分两种「没比分」，否则用户会以为应用坏了：
+    //   · 刚终场（< 24h）—— 上游还没更新，正常等待
+    //   · 超过 24h 仍无 —— 上游压根没提供这场（如某些联赛的冷门场次）
+    return stalePending ? (
+      <Meta title="上游数据源未提供该场比分（已超过 24 小时），可尝试在设置中重新同步">上游未提供</Meta>
+    ) : (
+      <Meta title="比赛刚结束，等待上游更新比分">待录比分</Meta>
+    );
+  }
   if (state === 'pp') return <Meta>延期</Meta>;
   return <Meta>未开赛</Meta>;
 }

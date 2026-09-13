@@ -1,6 +1,6 @@
 import { hm, liveMinute } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
-import { ts } from '../core/engine.js';
+import { ts, MATCH_DURATION_MS } from '../core/engine.js';
 import { Crest, Chip, LiveDot, ScoreText, SleepBadge, Stars } from './atoms.jsx';
 import { IconDerby, IconWarn } from './icons.jsx';
 
@@ -106,6 +106,7 @@ export default function MatchRow({
               ) : (
                 <ScoreText
                   match={m}
+                  stalePending={state === 'ended_pending' && !!now && Date.now() - (ts(m.t) + MATCH_DURATION_MS) > 24 * 3600000}
                   state={state}
                   revealed={revealed}
                   spoilerFree={spoilerFree}

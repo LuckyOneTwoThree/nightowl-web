@@ -129,6 +129,44 @@ export default function App() {
     refreshData();
   }, [refreshData]);
 
+  /**
+   * 自动保鲜：启动跑一次，之后每 30 分钟检查
+   *
+   * 为什么必须自动化：这是「本地单机 + 手动保鲜」的产品，用户不会记得点按钮 ——
+   * 实测快照曾停在 4 天前，46 场已结束的比赛全部显示「待录比分」，
+   * 用户的第一反应是「应用坏了」。只在存在「已结束但无比分」的场次时才真正拉取，
+   * 平时不做无谓请求；没有可写目录（纯预览环境）时完全跳过。
+   */
+  useEffect(() => {
+    let alive = true;
+    let firstRun = true;
+    const tick = async () => {
+      try {
+        const st = await fetch('/api/scores/status').then(r => (r.ok ? r.json() : null));
+        if (!alive || !st?.freshness?.writable) return;
+        // 首次无条件同步（补上停机期间积累的缺口）；之后只在确有缺口时才拉
+        if (!firstRun && st.freshness.pendingCount === 0) return;
+        firstRun = false;
+        const r = await fetch('/api/scores/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apply: true })
+        });
+        if (!alive || !r.ok) return;
+        const j = await r.json();
+        if ((j?.summary?.written?.changed ?? 0) > 0) await refreshData();
+      } catch {
+        /* 离线或服务未就绪：静默跳过，不影响其他功能 */
+      }
+    };
+    tick();
+    const timer = setInterval(tick, 30 * 60 * 1000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [refreshData]);
+
   // ---- 派生数据（分钟粒度重算，故意不依赖秒级 now）----
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const tonight = useMemo(() => computeTonight(Date.now(), prefs), [minuteKey, prefs, dataRev]);
