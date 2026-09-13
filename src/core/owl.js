@@ -250,6 +250,32 @@ export function stateOf(m, nowTs) {
 }
 
 /**
+ * 双方球队在「本场之后」的赛程（右栏时间轴用）
+ *
+ * 直接服务核心决策：如果主队/客队几天后还有更值得看的比赛，
+ * 这场就不必熬夜。排除本场自身与 tbd；只取本场开球之后的；每队最多 limit 场。
+ */
+export function upcomingForTeams(m, all = getFixtures(), limit = 4) {
+  const kick = E.ts(m.t);
+  const pickFor = teamId =>
+    all
+      .filter(
+        x =>
+          x.id !== m.id &&
+          !x.tbd &&
+          x.st === 'sched' &&
+          (x.h === teamId || x.a === teamId)
+      )
+      .filter(x => {
+        const t = E.ts(x.t);
+        return !Number.isNaN(t) && t > kick;
+      })
+      .sort(byTs)
+      .slice(0, limit);
+  return { home: pickFor(m.h), away: pickFor(m.a) };
+}
+
+/**
  * 今晚切片按状态分区
  *
  * 界面此前把「进行中 / 未开赛 / 已结束」混在一个列表里 —— 用户分不清当前状态，

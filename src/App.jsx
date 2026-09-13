@@ -18,6 +18,7 @@ import WeekView from './components/WeekView.jsx';
 import ScheduleView from './components/ScheduleView.jsx';
 import IntelPanel from './components/IntelPanel.jsx';
 import PlayerStage from './components/PlayerStage.jsx';
+import UpcomingFixtures from './components/UpcomingFixtures.jsx';
 import SettingsDrawer from './components/SettingsDrawer.jsx';
 import Onboarding, { shouldShowOnboarding } from './components/Onboarding.jsx';
 
@@ -225,7 +226,9 @@ export default function App() {
           )}
         </section>
 
-        {/* 右栏：观赛大屏 + 情报与数据 */}
+        {/* 右栏：观赛大屏 + 情报与数据。
+            宽屏时决策情报与「双方后续赛程」并排两列 —— 全屏不再下方大片空白；
+            窄屏自动堆叠。 */}
         <section className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto bg-stage-bg p-4">
           <PlayerStage
             match={activeMatch}
@@ -235,7 +238,10 @@ export default function App() {
             revealed={activeMatch ? revealed.has(activeMatch.id) : false}
             onReveal={reveal}
           />
-          <IntelPanel match={activeMatch} prefs={prefs} indexHint={INDEX_HINT} />
+          <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+            <IntelPanel match={activeMatch} prefs={prefs} indexHint={INDEX_HINT} />
+            <UpcomingFixtures match={activeMatch} prefs={prefs} />
+          </div>
         </section>
       </main>
 
