@@ -19,6 +19,9 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    # GITHUB_TOKEN 默认只读；创建 Release / 上传附件需要 contents 的写权限
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v5
