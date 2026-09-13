@@ -2,7 +2,55 @@ import { useEffect, useState } from 'react';
 import { bjClock, bjDate } from '../core/format.js';
 import { teamName } from '../data/index.js';
 import { Crest, LiveDot, Segmented } from './atoms.jsx';
-import { IconSchedule, IconSettings, IconTonight, IconWeek } from './icons.jsx';
+import { IconSchedule, IconSettings, IconTonight, IconWeek, IconWinClose, IconWinMax, IconWinMin, IconWinRestore } from './icons.jsx';
+
+/**
+ * 自绘窗口按钮（仅桌面版的 Windows/Linux —— macOS 用系统交通灯）
+ *
+ * 无边框窗口（frame:false）下系统不提供任何窗口控件，必须自绘。
+ * 细线风图标，与全站 lucide 图标层保持一致。
+ */
+function WindowControls() {
+  const [maximized, setMaximized] = useState(false);
+  useEffect(() => {
+    const off = window.desktop?.onMaximizeChange?.(setMaximized);
+    return () => off?.();
+  }, []);
+
+  const base =
+    'no-drag inline-flex h-[52px] w-11 items-center justify-center text-text-muted transition-colors';
+  return (
+    <div className="-mr-5 ml-1 flex items-center">
+      <button
+        type="button"
+        onClick={() => window.desktop?.minimize()}
+        className={`${base} hover:bg-surface-raised hover:text-text-primary`}
+        aria-label="最小化"
+        title="最小化"
+      >
+        <IconWinMin />
+      </button>
+      <button
+        type="button"
+        onClick={() => window.desktop?.toggleMaximize()}
+        className={`${base} hover:bg-surface-raised hover:text-text-primary`}
+        aria-label={maximized ? '还原' : '最大化'}
+        title={maximized ? '还原' : '最大化'}
+      >
+        {maximized ? <IconWinRestore /> : <IconWinMax />}
+      </button>
+      <button
+        type="button"
+        onClick={() => window.desktop?.close()}
+        className={`${base} hover:bg-rose-500/85 hover:text-white`}
+        aria-label="关闭"
+        title="关闭"
+      >
+        <IconWinClose />
+      </button>
+    </div>
+  );
+}
 
 const VIEWS = [
   { id: 'tonight', label: '今晚观赛', icon: <IconTonight /> },
@@ -46,12 +94,19 @@ export default function TopBar({ view, onViewChange, liveCount, prefs, onOpenSet
     return () => clearInterval(t);
   }, []);
 
+  // 平台感知：macOS 的 hiddenInset 需要给交通灯留位；Windows/Linux 走自绘按钮，不留白。
+  // （此前无条件 paddingLeft:80 是给 macOS 交通灯让位的，在 Windows 上凭空留白，
+  //   把图标与名称整体推右 —— 这就是顶栏「不靠左」的根因。）
+  const isDesktop = typeof window !== 'undefined' && !!window.desktop;
+  const isMacDesktop = isDesktop && window.desktop.platform === 'darwin';
+  const showSelfDrawnControls = isDesktop && !isMacDesktop;
+
   const primaryTeam = prefs.followedTeams[0];
 
   return (
     <header
       className="drag-region flex h-[52px] min-h-[52px] select-none items-center justify-between border-b border-line-hairline bg-bg-app px-5"
-      style={{ paddingLeft: 80 /* macOS 交通灯避让 */ }}
+      style={{ paddingLeft: isMacDesktop ? 80 : undefined }}
     >
       <div className="flex items-center gap-5">
         <div className="flex items-center gap-2">
@@ -113,6 +168,10 @@ export default function TopBar({ view, onViewChange, liveCount, prefs, onOpenSet
           <IconSettings />
           偏好与数据
         </button>
+
+        {/* 窗口按钮放在右侧容器内 —— 若作为 header 的第 4 个直接子元素，
+            justify-between 会把左侧的品牌区推离边缘 */}
+        {showSelfDrawnControls && <WindowControls />}
       </div>
     </header>
   );

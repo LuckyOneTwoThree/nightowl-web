@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronUp,
   CircleStop,
+  Copy,
   ExternalLink,
   Eye,
   History,
@@ -25,6 +26,7 @@ import {
   Keyboard,
   Maximize2,
   Minimize2,
+  Minus,
   Moon,
   MoonStar,
   Play,
@@ -35,6 +37,7 @@ import {
   Settings,
   Shield,
   Signal,
+  Square,
   Star,
   Swords,
   Timer,
@@ -78,6 +81,12 @@ export const IconExternal = mk(ExternalLink, 12);
 export const IconReveal = mk(Eye, 13);
 export const IconPlay = mk(Play, 13);
 export const IconStop = mk(CircleStop, 13);
+
+/* ---- 自绘标题栏的窗口按钮（Windows/Linux；macOS 用系统交通灯）---- */
+export const IconWinMin = mk(Minus, 12);
+export const IconWinMax = mk(Square, 10);
+export const IconWinRestore = mk(Copy, 10);
+export const IconWinClose = mk(X, 12);
 export const IconTheaterOn = mk(Maximize2, 13);
 export const IconTheaterOff = mk(Minimize2, 13);
 export const IconSwitchLine = mk(ArrowLeftRight, 12);

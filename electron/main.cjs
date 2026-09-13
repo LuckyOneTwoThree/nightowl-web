@@ -15,7 +15,8 @@
  *   注意 .cjs 后缀是必须的 —— 否则会被 "type":"module" 当成 ESM。
  */
 
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const path = require('node:path');
 
 const PORT_CANDIDATES = [3100, 3101, 3102, 3103, 3104];
 const HOST = '127.0.0.1';
@@ -71,16 +72,20 @@ async function startAppServer() {
 }
 
 function createWindow() {
+  const isMac = process.platform === 'darwin';
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 1120,
     minHeight: 700,
     backgroundColor: '#0b0e13', // 与 UI 底色一致，避免启动白闪
-    autoHideMenuBar: true,
+    // 无边框窗口：外圈系统边框与标题栏去掉，由渲染层自绘（VS Code / Discord 同款做法）
+    // macOS 用 hiddenInset 保留交通灯（红黄绿），Windows/Linux 完全自绘
+    ...(isMac ? { titleBarStyle: 'hiddenInset' } : { frame: false }),
     title: '夜猫看台',
     webPreferences: {
       // 渲染层是纯 Web（React + ArtPlayer），不需要任何 Node 能力
+      preload: path.join(__dirname, 'preload.cjs'), // 只暴露三个窗口动作
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
@@ -89,8 +94,23 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+  // 最大化状态变化 → 通知渲染层切换按钮图标
+  const pushMaximized = () => {
+    mainWindow?.webContents.send('win:maximized', mainWindow.isMaximized());
+  };
+  mainWindow.on('maximize', pushMaximized);
+  mainWindow.on('unmaximize', pushMaximized);
   return mainWindow;
 }
+
+/* 自绘标题栏的窗口动作（渲染层 → 主进程） */
+ipcMain.on('win:minimize', () => mainWindow?.minimize());
+ipcMain.on('win:toggle-maximize', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMaximized()) mainWindow.unmaximize();
+  else mainWindow.maximize();
+});
+ipcMain.on('win:close', () => mainWindow?.close());
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
