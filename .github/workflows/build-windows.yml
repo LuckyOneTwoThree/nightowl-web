@@ -87,7 +87,9 @@ jobs:
             Write-Error ("相对 import 缺失目标:`n" + ($missing -join "`n"))
             exit 1
           }
-          foreach ($f in @('src/core/engine.js', 'src/data/fixtures.json', 'dist/index.html', 'build')) {
+          # build/icon.ico 是打包的输入资源（生成 exe 图标），不会出现在产物内 —— 只在仓库中断言
+          if (-not (Test-Path 'build/icon.ico')) { Write-Error '缺失: build/icon.ico（打包输入）'; exit 1 }
+          foreach ($f in @('src/core/engine.js', 'src/data/fixtures.json', 'dist/index.html')) {
             if (-not (Test-Path (Join-Path $root $f))) { Write-Error "缺失: $f"; exit 1 }
           }
           Write-Host ("OK 相对 import 全部可解析（扫描 {0} 个模块），关键文件齐全" -f $scan.Count)
