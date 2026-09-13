@@ -69,26 +69,56 @@ function pickHeaders(incoming, rules) {
   return out;
 }
 
-/** 并发闸门 */
-function createSemaphore(max) {
+/**
+ * 并发闸门
+ *
+ * 两个方向都必须有超时，否则是两条独立的死路：
+ *   · 持有 slot 的请求不释放 → 由 handle 里的 idle 计时器兜住
+ *   · 排队的请求永远等不到 slot → 由这里的 queueTimeoutMs 兜住
+ * 缺任何一条，上游僵住都能把播放链路拖死。
+ */
+function createSemaphore(max, queueTimeoutMs = 0) {
   let active = 0;
   const queue = [];
+
   return {
     async acquire() {
       if (active < max) {
         active++;
         return;
       }
-      await new Promise(r => queue.push(r));
+      await new Promise((resolve, reject) => {
+        const entry = { resolve, timer: null };
+        if (queueTimeoutMs > 0) {
+          entry.timer = setTimeout(() => {
+            const i = queue.indexOf(entry);
+            if (i >= 0) queue.splice(i, 1);
+            reject(
+              new ProxyError(
+                'network',
+                `等待并发槽位超时（${queueTimeoutMs}ms）—— 并发 ${active}/${max}，排队 ${queue.length}`,
+                503
+              )
+            );
+          }, queueTimeoutMs);
+        }
+        queue.push(entry);
+      });
       active++;
     },
     release() {
       active--;
       const next = queue.shift();
-      if (next) next();
+      if (next) {
+        if (next.timer) clearTimeout(next.timer);
+        next.resolve();
+      }
     },
     get active() {
       return active;
+    },
+    get queued() {
+      return queue.length;
     }
   };
 }
@@ -113,7 +143,10 @@ function createSemaphore(max) {
  *   ⚠️ 用户提交的是**自己的**会话信息，仅发往其指定的域名，不落盘、不外发。
  */
 export function createProxy(rules = loadRules(), log = console, sessionAllowed = new Set()) {
-  const gate = createSemaphore(rules.proxy?.maxConcurrent || 16);
+  const gate = createSemaphore(
+    rules.proxy?.maxConcurrent || 16,
+    rules.proxy?.queueTimeoutMs ?? 30000
+  );
   const MAX_SESSION_HOSTS = 50;
   const sessionHeaders = new Map(); // host -> { Referer?, Cookie? }
 
@@ -136,9 +169,15 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
     return { ok: true };
   };
 
-  /** 拉取上游（带超时）；命中重定向时跟随（fetch 默认 follow） */
-  async function fetchUpstream(target, incomingHeaders, timeoutMs) {
-    const ac = new AbortController();
+  /**
+   * 拉取上游
+   *
+   * ⚠️ 这里的 timeoutMs **只负责「等到响应头」这一段**；头一到就 clearTimeout，
+   *    之后的 body 阶段交给调用方的 idle 计时器（见 handle）。
+   *    早期实现把 AbortController 建在本函数内部、头一到就彻底失效，
+   *    于是 body 阶段完全没有时间约束 —— 上游 TCP 僵住即永久占住并发槽位。
+   */
+  async function fetchUpstream(target, incomingHeaders, timeoutMs, ac) {
     const timer = setTimeout(() => ac.abort(), timeoutMs);
     try {
       // 优先级：用户会话头 > 请求自带（白名单内）> rules 里的上游头
@@ -181,6 +220,7 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
     }
 
     const timeoutMs = rules.proxy?.timeoutMs || 15000;
+    const idleMs = rules.proxy?.streamIdleTimeoutMs ?? 30000;
     await gate.acquire();
 
     // 释放必须幂等：一条请求存在多条退出路径（上游失败 / 空 body / M3U8 写回 / 流结束 / 异常），
@@ -193,10 +233,39 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
       gate.release();
     };
 
+    // AbortController 建在 handle 作用域：必须能覆盖「等到响应头」之后的 body 阶段
+    const ac = new AbortController();
+
+    /**
+     * body 阶段的静默超时
+     *
+     * 用 idle（长时间无数据）而不是总时长：直播流本就该持续数小时，
+     * 用总时长会误杀正常播放；而「长时间一个字节都没有」才是真异常
+     * （上游僵住、中间设备黑洞）。触发时 abort 上游并销毁响应，slot 由 releaseOnce 归还。
+     */
+    let idleTimer = null;
+    const armIdle = () => {
+      if (!(idleMs > 0)) return;
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        log.warn?.(`[proxy] 上游静默超过 ${idleMs}ms，中断连接：${target.hostname}`);
+        ac.abort();
+        res.destroy();
+        releaseOnce();
+      }, idleMs);
+    };
+    const disarmIdle = () => {
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
+      }
+    };
+
     let upstream;
     try {
-      upstream = await fetchUpstream(target.toString(), pickHeaders(req.headers, rules), timeoutMs);
+      upstream = await fetchUpstream(target.toString(), pickHeaders(req.headers, rules), timeoutMs, ac);
     } catch (err) {
+      disarmIdle();
       releaseOnce();
       const msg = err?.name === 'AbortError' ? `上游超时（${timeoutMs}ms）` : `连接上游失败：${err?.message || err}`;
       // 网络失败不缓存、不闩锁 —— 下次请求照常重试
@@ -215,7 +284,10 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
 
       /* ---- M3U8：必须整体读出并重写 ---- */
       if (isPlaylistResponse(contentType, target.pathname + target.search)) {
+        // readLimited 同样会无限期等待上游 —— 一并纳入 idle 保护
+        armIdle();
         const buf = await readLimited(upstream, rules.proxy?.maxPlaylistBytes || 4194304);
+        disarmIdle();
         const raw = Buffer.from(buf).toString('utf8');
         const finalBaseUrl = upstream.url || target.toString();
         const { text } = rewritePlaylist(raw, finalBaseUrl);
@@ -246,23 +318,31 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
       res.writeHead(upstream.status, headers);
 
       if (!upstream.body) {
+        disarmIdle();
         res.end();
         releaseOnce();
         return;
       }
 
       const nodeStream = Readable.fromWeb(upstream.body);
+      // 每收到一段数据就重置静默计时；结束 / 出错 / 断开时解除
+      nodeStream.on('data', armIdle);
+      nodeStream.on('end', disarmIdle);
       nodeStream.on('error', err => {
+        disarmIdle();
         log.warn?.(`[proxy] 流转发中断：${err.message}（${target.hostname}）`);
         res.destroy();
       });
       res.on('close', () => {
+        disarmIdle();
         nodeStream.destroy();
         releaseOnce();
       });
 
+      armIdle(); // 启动静默计时：若首段数据迟迟不来，同样要被中断
       nodeStream.pipe(res);
     } catch (err) {
+      disarmIdle();
       releaseOnce();
       if (err instanceof ProxyError) throw err;
       throw new ProxyError('network', `转发失败：${err?.message || err}`, 502);

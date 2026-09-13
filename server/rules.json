@@ -1,5 +1,5 @@
 {
-  "_readme": "本地服务配置。改这里不需要重新构建。proxy.allowedHosts 必须显式列出目标直播域名——留空时 /api/proxy 一律拒绝（安全默认）。",
+  "_readme": "本地服务配置。改这里不需要重新构建。proxy.allowedHosts 必须显式列出目标直播域名——留空时 /api/proxy 一律拒绝（安全默认）。timeoutMs 只管「等到响应头」，streamIdleTimeoutMs 管 body 阶段「静默无数据」，两者缺一不可（上游僵住会永久占住并发槽位）。",
 
   "listen": {
     "host": "127.0.0.1",
@@ -35,10 +35,10 @@
       "Origin": ""
     },
     "timeoutMs": 15000,
+    "streamIdleTimeoutMs": 30000,
+    "queueTimeoutMs": 30000,
     "maxConcurrent": 16,
-    "maxRedirects": 3,
-    "maxPlaylistBytes": 4194304,
-    "allowInsecureTls": false
+    "maxPlaylistBytes": 4194304
   },
 
   "scores": {

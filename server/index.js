@@ -121,6 +121,7 @@ export function createServer(rules = loadRules(), log = console) {
             allowedHostSuffixes: rules.proxy?.allowedHostSuffixes?.length || 0,
             sessionAllowedHosts: proxy.sessionAllowed.size,
             activeRequests: proxy.gate.active,
+            queuedRequests: proxy.gate.queued,
             maxConcurrent: rules.proxy?.maxConcurrent
           },
           scores: {

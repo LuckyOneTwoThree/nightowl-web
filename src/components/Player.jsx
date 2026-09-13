@@ -1,21 +1,22 @@
 import { useEffect, useRef } from 'react';
 import Artplayer from 'artplayer';
 import Hls from 'hls.js';
-
-function isHlsUrl(url) {
-  return /\.m3u8(\?|$)/i.test(String(url || ''));
-}
+import { inferMediaType } from '../core/media.js';
 
 /**
  * 播放器（ArtPlayer + hls.js）
  *
  * 约定：
  *   · 传入的 src 应为**本地代理地址**（/api/proxy?url=...），由代理剥防盗链并重写 M3U8
+ *   · kind 为数据源给出的显式类型，**优先于 URL 嗅探**。
+ *     原因：代理地址形如 /api/proxy?url=<encodeURIComponent(直链)>，encode 会把直链里的
+ *     `?` 变成 `%3F`，单靠 URL 嗅探会把「带 query 的 m3u8」判成 mp4，结果是黑屏。
+ *     线路对象本来就带正确的 kind（scraper 产出），没有理由丢掉它去猜。
  *   · 默认 50% 音量非静音起播
  *   · 切换线路时保留时间轴（FR-P-07）——销毁前记录 currentTime，新实例 ready 后 seek 回去
  *   · 只支持 m3u8 与 mp4；FLV 需 mpegts.js，本版不承诺（PRD：仅 Chromium 增强，非跨浏览器承诺）
  */
-export default function Player({ src, onError, onLoadStart, theme = '#FFB800' }) {
+export default function Player({ src, kind = null, onError, onLoadStart, theme = '#FFB800' }) {
   const boxRef = useRef(null);
   const artRef = useRef(null);
   const hlsRef = useRef(null);
@@ -26,13 +27,14 @@ export default function Player({ src, onError, onLoadStart, theme = '#FFB800' })
     if (!box || !src) return undefined;
 
     const resume = resumeAtRef.current;
+    const type = inferMediaType(src, kind);
     let art = null;
 
     try {
       art = new Artplayer({
         container: box,
         url: src,
-        type: isHlsUrl(src) ? 'm3u8' : 'mp4',
+        type,
         theme,
         volume: 0.5,
         muted: false,
@@ -104,7 +106,7 @@ export default function Player({ src, onError, onLoadStart, theme = '#FFB800' })
       }
       artRef.current = null;
     };
-  }, [src]);
+  }, [src, kind]);
 
   return <div ref={boxRef} className="h-full w-full [&_.art-video-player]:!bg-black" />;
 }

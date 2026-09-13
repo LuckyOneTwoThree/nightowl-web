@@ -65,6 +65,7 @@ export default function PlayerStage({ match, state, now, countdown, isOverlayOpe
   const [theaterMode, setTheaterMode] = useState(false);
   const [theaterLinesExpanded, setTheaterLinesExpanded] = useState(false);
   const [streamUrl, setStreamUrl] = useState(null);
+  const [streamKind, setStreamKind] = useState(null);
   const [error, setError] = useState(null);
   const [authorizing, setAuthorizing] = useState(false);
 
@@ -104,6 +105,7 @@ export default function PlayerStage({ match, state, now, countdown, isOverlayOpe
           body: JSON.stringify({ host: u.hostname })
         });
         setStreamUrl(line.url);
+        setStreamKind(line.kind || null);
       } catch (e) {
         setError(`线路起播失败：${e.message}`);
       } finally {
@@ -117,6 +119,7 @@ export default function PlayerStage({ match, state, now, countdown, isOverlayOpe
   // 切换场次时重置并拉取最新聚合与广播信号
   useEffect(() => {
     setStreamUrl(null);
+    setStreamKind(null);
     setError(null);
     setActiveLineId(null);
     setLines([]);
@@ -204,7 +207,7 @@ export default function PlayerStage({ match, state, now, countdown, isOverlayOpe
             </div>
           }
         >
-          <Player src={proxyUrl} onError={setError} />
+          <Player src={proxyUrl} kind={streamKind} onError={setError} />
         </Suspense>
       ) : (
         <>
@@ -394,6 +397,7 @@ export default function PlayerStage({ match, state, now, countdown, isOverlayOpe
             type="button"
             onClick={() => {
               setStreamUrl(null);
+              setStreamKind(null);
               setActiveLineId(null);
               setError(null);
             }}
