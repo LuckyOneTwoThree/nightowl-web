@@ -47,10 +47,10 @@ export default function ScheduleView({
 
   const dayStrip = useMemo(() => {
     const counts = dayCounts();
-    // 今天前 3 天 ~ 后 30 天；有比赛的日期带圆点
+    // 今天排第一（用户要求），只向后看 34 天；「全部」按钮移到日期条末尾
     return Array.from({ length: 34 }, (_, i) => {
-      const d = owlDayOffset(i - 3, now);
-      return { date: d, count: counts[d] || 0, isToday: i === 3 };
+      const d = owlDayOffset(i, now);
+      return { date: d, count: counts[d] || 0, isToday: i === 0 };
     });
   }, [now]);
 
@@ -124,21 +124,9 @@ export default function ScheduleView({
         )}
       </div>
 
-      {/* 日期导航条：默认定位今天。参照 FotMob / 懂球帝的赛程页形态 ——
-          有比赛的日期带圆点，点击切换当日；「全部」回到全季列表（规划视图） */}
+      {/* 日期导航条：默认选中今天且**今天排第一**（此前今天落在第 4 位，视线先落在过去几天上）；
+          「全部」（全季列表）移到末尾，不抢首位 */}
       <div className="scrollbar-thin -mx-0.5 flex items-stretch gap-1 overflow-x-auto pb-0.5">
-        <button
-          type="button"
-          onClick={() => setDate('all')}
-          aria-pressed={showAll}
-          className={`shrink-0 rounded-md border px-2.5 py-1 font-ui text-2xs transition-colors ${
-            showAll
-              ? 'border-accent/60 bg-accent/15 text-accent'
-              : 'border-line-hairline bg-surface-card text-text-secondary hover:border-accent/40'
-          }`}
-        >
-          全部
-        </button>
         {dayStrip.map(({ date, count, isToday }) => {
           const active = !showAll && date === selDate;
           return (
@@ -166,6 +154,20 @@ export default function ScheduleView({
             </button>
           );
         })}
+
+        {/* 「全部」放末尾：全季列表是规划视图，不该抢日期条的首位 */}
+        <button
+          type="button"
+          onClick={() => setDate('all')}
+          aria-pressed={showAll}
+          className={`ml-1 shrink-0 rounded-md border px-2.5 py-1 font-ui text-2xs transition-colors ${
+            showAll
+              ? 'border-accent/60 bg-accent/15 text-accent'
+              : 'border-line-hairline bg-surface-card text-text-secondary hover:border-accent/40'
+          }`}
+        >
+          全部
+        </button>
       </div>
 
       {/* 联赛筛选：色条即 MatchRow 的联赛身份条，两处同一颜色即同一联赛 */}
