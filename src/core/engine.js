@@ -10,7 +10,8 @@
  *      —— 保留兜底会让 Web 端恒定落成「6 个联赛全选」，铁律一（+8）永远为 0
  *   3. 档位唯一入口改为运行时计算：tierOf(m) → sleepTier(m.t)，数据层已删除烘焙字段 s
  *   4. 权重与背包策略参数化；DEFAULT_* 供回归比对，PRODUCT_* 是交付口径
- *   5. 未移植 settlePred（盲评结算判据）—— 互动玩法已在桌面版彻底删除
+ *   5. 未移植 settlePred（盲评结算判据）与 replays（补番推荐）—— 互动玩法与补番
+ *      入口已在桌面版彻底删除，留着只是死代码（replays 确认零调用后已删）。
  *
  * ⚠️ 本文件是算法的唯一权威实现。spike/algo-baseline/ 的验证脚本直接引用本文件，
  *    不得另存副本（避免判据漂移）。
@@ -481,24 +482,6 @@ export function minefield(matches, recMap, rivalries, storylines, followed, foll
       }
       return e;
     });
-}
-
-// ---------- 补番推荐 ----------
-
-export function replays(matches, recMap, limit) {
-  limit = limit || 3;
-  const safe = recMap || {};
-  return matches
-    .filter(isFinished)
-    .map(m => {
-      const rec = safe[m.id];
-      return { m, star: rec ? rec.star : 1, replay: rec ? !!rec.replay : false };
-    })
-    .sort((a, b) => {
-      if (a.replay !== b.replay) return b.replay ? 1 : -1;
-      return b.star - a.star;
-    })
-    .slice(0, limit);
 }
 
 // ---------- 下一场焦点战 ----------

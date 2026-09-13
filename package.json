@@ -28,7 +28,8 @@
     "test:scraper-match": "node tools/test-scraper-match.mjs",
     "test:session": "node tools/test-session.mjs",
     "test:scores": "node tools/test-scores.mjs",
-    "test:all": "npm run verify:algo && npm run test:m3u8 && npm run test:proxy && npm run test:proxy-timeout && npm run test:playback && npm run test:media && npm run test:scraper-match && npm run test:session && npm run test:scores && npm run test:alias && npm run test:sources && npm run test:stats && npm run check:scraper"
+    "test:owl": "node tools/test-owl.mjs",
+    "test:all": "npm run verify:algo && npm run test:m3u8 && npm run test:proxy && npm run test:proxy-timeout && npm run test:playback && npm run test:media && npm run test:scraper-match && npm run test:session && npm run test:scores && npm run test:owl && npm run test:alias && npm run test:sources && npm run test:stats && npm run check:scraper"
   },
   "dependencies": {
     "artplayer": "^5.4.0",

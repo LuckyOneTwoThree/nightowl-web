@@ -60,7 +60,16 @@ export function sourceUrlFor(src, match) {
  *   3. 移除冗余的手动换源输入框，纯净专业
  *   4. isolate 层叠上下文隔离，彻底防止穿模
  */
-export default function PlayerStage({ match, state, now, countdown, isOverlayOpen = false }) {
+export default function PlayerStage({
+  match,
+  state,
+  now,
+  countdown,
+  isOverlayOpen = false,
+  spoilerFree = true,
+  revealed = false,
+  onReveal
+}) {
   const sources = useWatchSources();
   const [theaterMode, setTheaterMode] = useState(false);
   const [theaterLinesExpanded, setTheaterLinesExpanded] = useState(false);
@@ -217,9 +226,25 @@ export default function PlayerStage({ match, state, now, countdown, isOverlayOpe
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
             <div className="flex items-center gap-4">
               <Crest id={match.h} size={52} />
-              <span className="font-mono text-[24px] font-extrabold tabular-nums text-slate-200">
-                {finished ? match.sc || '—' : '—'}
-              </span>
+              {/* 已完赛的比分同样受防剧透开关控制（此前这里直读 match.sc，绕过了开关） */}
+              {finished ? (
+                spoilerFree && !revealed ? (
+                  <button
+                    type="button"
+                    onClick={() => onReveal?.(match.id)}
+                    title="已赛场次默认隐藏比分（可在设置中关闭防剧透）"
+                    className="rounded-md bg-surface-elevated/80 px-2.5 py-1 font-mono text-[12px] font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary active:scale-95"
+                  >
+                    👁️ 揭晓比分
+                  </button>
+                ) : (
+                  <span className="font-mono text-[24px] font-extrabold tabular-nums text-slate-200">
+                    {match.sc || '—'}
+                  </span>
+                )
+              ) : (
+                <span className="font-mono text-[24px] font-extrabold tabular-nums text-slate-200">—</span>
+              )}
               <Crest id={match.a} size={52} />
             </div>
 
@@ -469,7 +494,7 @@ export default function PlayerStage({ match, state, now, countdown, isOverlayOpe
                       {isActive && <span className="h-1.5 w-1.5 rounded-full bg-primary-gold animate-ping" />}
                       <span>{l.name}</span>
                       <span className="rounded bg-surface-base/80 px-1 py-0.2 text-[8px] text-text-muted">
-                        {l.type === 'embed' ? '内嵌' : '直链'}
+                        {l.kind === 'embed' ? '内嵌' : '直链'}
                       </span>
                     </button>
                   );
@@ -577,7 +602,7 @@ export default function PlayerStage({ match, state, now, countdown, isOverlayOpe
                       {isActive && <span className="h-1.5 w-1.5 rounded-full bg-primary-gold animate-ping" />}
                       <span>{l.name}</span>
                       <span className="rounded bg-surface-base/80 px-1 py-0.2 text-[8px] text-text-muted">
-                        {l.type === 'embed' ? '内嵌' : '直链'}
+                        {l.kind === 'embed' ? '内嵌' : '直链'}
                       </span>
                     </button>
                   );

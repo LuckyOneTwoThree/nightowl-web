@@ -212,6 +212,9 @@ export default function App() {
             now={now}
             countdown={stageCountdown}
             isOverlayOpen={settingsOpen || onboardingOpen}
+            spoilerFree={prefs.spoilerFree}
+            revealed={activeMatch ? revealed.has(activeMatch.id) : false}
+            onReveal={reveal}
           />
           <IntelPanel match={activeMatch} prefs={prefs} />
         </section>

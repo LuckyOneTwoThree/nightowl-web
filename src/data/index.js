@@ -5,14 +5,19 @@
  *   fixtures / teams / rivalries / storylines / recommendations / crests
  *
  * ⚠️ 数据文件不得手工编辑，一律走迁移脚本或后续的保鲜脚本。
+ *
+ * ⚠️ JSON 导入必须带 `with { type: 'json' }`（与 src/core/stats.js 保持一致）。
+ *    少了它，本模块只能在打包器里工作，Node 直接 import 会抛
+ *    ERR_IMPORT_ATTRIBUTE_MISSING —— 于是依赖它的 src/core/owl.js 整层
+ *    都进不了 Node 测试，只能靠浏览器端验证，这是实打实的测试盲区。
  */
 
-import fixtures from './fixtures.json';
-import teams from './teams.json';
-import rivalries from './rivalries.json';
-import storylines from './storylines.json';
-import recommendations from './recommendations.json';
-import quips from './quips.json';
+import fixtures from './fixtures.json' with { type: 'json' };
+import teams from './teams.json' with { type: 'json' };
+import rivalries from './rivalries.json' with { type: 'json' };
+import storylines from './storylines.json' with { type: 'json' };
+import recommendations from './recommendations.json' with { type: 'json' };
+import quips from './quips.json' with { type: 'json' };
 
 export { fixtures, teams, rivalries, storylines, recommendations, quips };
 

@@ -101,7 +101,9 @@ function buildWeekDays(weekStartStr, matches) {
       date,
       count: dayMatches.length,
       cost,
-      tier: dayMatches.length ? E.sleepTier(dayMatches[0].t) : null,
+      // 注意：不产出 tier 字段。曾有个 `tier: sleepTier(dayMatches[0].t)`，
+      // 它取的是「当天第一场」的档位，而 cost 取的是「当天最高档位」——
+      // 两个口径不一致，且界面从未消费过它，属死数据兼语义陷阱。
       matches: dayMatches.sort(byTs)
     });
   }

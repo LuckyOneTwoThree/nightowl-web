@@ -13,7 +13,7 @@
  */
 
 import { createRequire } from 'module';
-import { writeFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import * as E from '../../src/core/engine.js';
@@ -327,5 +327,20 @@ log(`| 6 | 背包策略差异 | 见第六章 |`);
 log(`| 7 | L3 兜底占比 | ${pct(l3, F.length)} |`);
 
 const report = out.join('\n');
-writeFileSync(resolve(__dirname, 'BASELINE.md'), report, 'utf8');
-console.log('\n报告已写入 spike/algo-baseline/BASELINE.md');
+const outPath = resolve(__dirname, 'BASELINE.md');
+// 内容没变就不写盘。
+// 本脚本每次运行都会生成新的时间戳，若不加判断，每跑一次测试 git status 就脏一次 ——
+// 报告内容其实一字未改，却反复出现在改动列表里，会掩盖真正需要留意的变化。
+const stripStamp = s => s.replace(/^生成时间：.*$/m, '');
+let changed = true;
+try {
+  changed = stripStamp(readFileSync(outPath, 'utf8')) !== stripStamp(report);
+} catch {
+  changed = true; // 首次生成
+}
+if (changed) {
+  writeFileSync(outPath, report, 'utf8');
+  console.log('\n报告已写入 spike/algo-baseline/BASELINE.md');
+} else {
+  console.log('\n报告内容与现有 BASELINE.md 一致（仅生成时间不同），未改写文件');
+}
