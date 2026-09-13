@@ -1,0 +1,26 @@
+{
+  "_readme": [
+    "保底直播频道【模板】—— 复制为 server/tv-channels.local.json 后填入真实直链。",
+    "",
+    "为什么外置：这些直链带着会话级签名参数（含客户端 IP、会话标识等个人数据），",
+    "且源站强校验 timestamp / encrypt —— 实测改 timestamp 返回 605、去掉 encrypt 返回 403，",
+    "因此必然在某个时刻整体失效。放在源码里有两重问题：",
+    "  ① 个人标识随版本库外泄；",
+    "  ② 每次失效都得改代码、重新构建。",
+    "",
+    "失效表现：/api/live-sources 会回报 tvChannelsDown，界面显式提示「保底频道已失效」，",
+    "不再让用户点了没反应。检查命令：node tools/check-scraper.mjs",
+    "",
+    "字段：id 唯一标识 / name 展示名 / url 直链 / kind 固定 m3u8 / isDirect 是否可代理播放 / tag 短标签"
+  ],
+  "channels": [
+    {
+      "id": "tv-example",
+      "name": "示例 · 某体育频道",
+      "url": "http://example.com/live/index.m3u8?token=请填入你自己的签名直链",
+      "kind": "m3u8",
+      "isDirect": true,
+      "tag": "示例"
+    }
+  ]
+}

@@ -29,5 +29,8 @@ logs/
 # 本地数据快照（由保鲜模块生成，不入库）
 server/cache/
 
+# 本地保底频道直链（含会话级签名与个人标识，不入库；模板见 tv-channels.example.json）
+server/tv-channels.local.json
+
 # 验证用截图（可再生）
 .shots/

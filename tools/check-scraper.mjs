@@ -104,7 +104,8 @@ for (const ch of TV_SPORTS_CHANNELS) {
 }
 const deadCount = TV_SPORTS_CHANNELS.filter(c => probe.get(c.id) === false).length;
 if (deadCount > 0) {
-  console.log(`     ⚠️  ${deadCount} 条保底源已失效：签名过期，需刷新 TV_SPORTS_CHANNELS 配置`);
+  console.log(`     ⚠️  ${deadCount} 条保底频道已失效：签名过期，请更新 server/tv-channels.local.json`);
+  console.log('         （模板见 server/tv-channels.example.json；该文件不入库）');
 }
 ok('探测结果与源数量一致', probe.size === TV_SPORTS_CHANNELS.length);
 

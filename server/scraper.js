@@ -15,33 +15,30 @@ import { dirname, resolve } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 
-/** 常驻高画质公共体育广播频道（免登录、无广告、纯净直播） */
-export const TV_SPORTS_CHANNELS = [
-  {
-    id: "tv-cctv5",
-    name: "电视 · CCTV-5 体育高清",
-    url: "http://hlsztemgsplive.miguvideo.com:8080/wd_r2/cctv/cctv5hdnew/600/index.m3u8?msisdn=2026091222030405c6b5797ee84634bd30d2189ba77b45&mdspid=&spid=699004&netType=0&sid=5500516171&pid=2028597139&timestamp=20260912220304&Channel_ID=0116_2600000900-99000-201600010010027&ProgramID=641886683&ParentNodeID=-99&assertID=5500516171&client_ip=171.8.79.254&SecurityKey=20260912220304&promotionId=&mvid=5102048712&mcid=500020&playurlVersion=ZQ-A1-9.9.1-SNAPSHOT&userid=&jmhm=&videocodec=h264&appCode=miguvideo_android&bean=mgspad&tid=android&conFee=0&encrypt=631a4f53d881a710a1d1337d44c4b6d3",
-    kind: "m3u8",
-    isDirect: true,
-    tag: "CCTV5"
-  },
-  {
-    id: "tv-cctv5plus",
-    name: "电视 · CCTV-5+ 赛事高清",
-    url: "http://hlsztemgsplive.miguvideo.com:8080/wd_r2/cctv/cctv5plusnew/600/index.m3u8?msisdn=202609122203041345009cd3774d7fa72ab9f38c1f448c&mdspid=&spid=699004&netType=0&sid=5500516288&pid=2028597139&timestamp=20260912220304&Channel_ID=0116_2600000900-99000-201600010010027&ProgramID=641886773&ParentNodeID=-99&assertID=5500516288&client_ip=171.8.79.254&SecurityKey=20260912220304&promotionId=&mvid=5102048803&mcid=500020&playurlVersion=ZQ-A1-9.9.1-SNAPSHOT&userid=&jmhm=&videocodec=h264&appCode=miguvideo_android&bean=mgspad&tid=android&conFee=0&encrypt=05d6725a4f1f435b37fe9ad846252b10",
-    kind: "m3u8",
-    isDirect: true,
-    tag: "CCTV5+"
-  },
-  {
-    id: "tv-migu4k",
-    name: "频道 · 咪咕 4K 体育超清",
-    url: "http://gslbserv.itv.cmvideo.cn/index.m3u8?channel-id=FifastbLive&Contentid=3000000010000005180&livemode=1&stbId=YanG-1989",
-    kind: "m3u8",
-    isDirect: true,
-    tag: "咪咕"
+/**
+ * 保底直播频道（**外置，不入库**）
+ *
+ * 这些直链带会话级签名参数（含客户端 IP、会话标识一类个人数据），且源站强校验
+ * timestamp / encrypt —— 实测改 timestamp 返回 605、去掉 encrypt 返回 403，
+ * 因此必然在某个时刻整体失效。放在源码里有两重问题：
+ *   ① 个人标识随版本库外泄；② 每次失效都要改代码并重新构建。
+ *
+ * 现在改为运行时从 server/tv-channels.local.json 读取（已 .gitignore），
+ * 仓库只保留 server/tv-channels.example.json 作模板。
+ * 文件缺失时返回空数组 —— 保底能力自然降级，不影响聚合站线路。
+ */
+function loadTvChannels() {
+  try {
+    const raw = readFileSync(resolve(ROOT, "server/tv-channels.local.json"), "utf8");
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed) ? parsed : parsed.channels;
+    return Array.isArray(list) ? list.filter(c => c && c.id && c.url) : [];
+  } catch {
+    return [];
   }
-];
+}
+
+export const TV_SPORTS_CHANNELS = loadTvChannels();
 
 /**
  * 加载球队字典
@@ -308,7 +305,9 @@ export async function probeChannels(force = false) {
 
   const dead = TV_SPORTS_CHANNELS.filter(c => results.get(c.id) === false).map(c => c.tag);
   if (dead.length) {
-    console.warn(`[scraper] 保底源已失效（签名可能过期，请刷新 server/tv-channels.json）: ${dead.join('、')}`);
+    console.warn(
+      `[scraper] 保底频道已失效（签名过期），请更新 server/tv-channels.local.json：${dead.join('、')}`
+    );
   }
   return results;
 }
