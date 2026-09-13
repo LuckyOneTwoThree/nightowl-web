@@ -16,23 +16,17 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-  CircleAlert,
   CircleStop,
-  Clock,
   ExternalLink,
   Eye,
-  Gauge,
-  Handshake,
   History,
   Inbox,
   Info,
   Keyboard,
-  ListFilter,
   Maximize2,
   Minimize2,
   Moon,
   MoonStar,
-  PictureInPicture,
   Play,
   Radio,
   RotateCcw,
@@ -43,9 +37,7 @@ import {
   Signal,
   Star,
   Swords,
-  Tag,
   Timer,
-  Trophy,
   TriangleAlert,
   X
 } from 'lucide-react';
@@ -81,7 +73,6 @@ export const IconClose = mk(X, 14);
 export const IconCheck = mk(Check, 12);
 export const IconChevronDown = mk(ChevronDown, 12);
 export const IconChevronUp = mk(ChevronUp, 12);
-export const IconFilter = mk(ListFilter, 14);
 export const IconReset = mk(RotateCcw, 13);
 export const IconExternal = mk(ExternalLink, 12);
 export const IconReveal = mk(Eye, 13);
@@ -89,14 +80,12 @@ export const IconPlay = mk(Play, 13);
 export const IconStop = mk(CircleStop, 13);
 export const IconTheaterOn = mk(Maximize2, 13);
 export const IconTheaterOff = mk(Minimize2, 13);
-export const IconPiP = mk(PictureInPicture, 13);
 export const IconSwitchLine = mk(ArrowLeftRight, 12);
 
 /* ---- 状态与提示 ---- */
 export const IconLive = mk(Radio, 13);
 export const IconSignal = mk(Signal, 13);
 export const IconWarn = mk(TriangleAlert, 13);
-export const IconAlert = mk(CircleAlert, 13);
 export const IconInfo = mk(Info, 13);
 export const IconKeyboard = mk(Keyboard, 13);
 export const IconEmpty = mk(Inbox, 22);
@@ -104,16 +93,11 @@ export const IconEmpty = mk(Inbox, 22);
 /* ---- 情报语义 ---- */
 export const IconTier = mk(MoonStar, 13);
 export const IconCost = mk(Timer, 13);
-export const IconBudget = mk(Gauge, 13);
 export const IconDerby = mk(Swords, 13);
 export const IconIdentity = mk(Shield, 13);
-export const IconHonor = mk(Trophy, 13);
 export const IconForm = mk(Activity, 13);
 export const IconCompare = mk(Scale, 13);
 export const IconH2H = mk(History, 13);
-export const IconNoH2H = mk(Handshake, 22);
-export const IconTime = mk(Clock, 13);
-export const IconTag = mk(Tag, 13);
 
 /**
  * 星级：看点权重是**排序依据**而非装饰，所以保留实心星，

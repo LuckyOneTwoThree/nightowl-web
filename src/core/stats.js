@@ -160,16 +160,27 @@ export function computeSeasonStats(teamId, leagueCode, allFixtures = fixtures) {
 
 /**
  * 计算两队在数据集中的直接交手记录（Head to Head）
+ *
+ * 口径与 computeTeamForm 一致：传入 currentMatch 时，只算它**开球之前**、
+ * 且不含它自身的交手。此前这里把数据集里所有 done 场次都收进来，
+ * 意味着查看一场已完赛的比赛时，可能把它之后才踢的那场结果剧透出来。
+ *
+ * @param {object|null} currentMatch 当前查看的比赛；为空表示不限时间
+ * @param {number} limit 最多返回几场（按时间倒序）
  */
-export function computeHeadToHead(team1, team2, allFixtures = fixtures, limit = 5) {
+export function computeHeadToHead(team1, team2, allFixtures = fixtures, currentMatch = null, limit = 5) {
   if (!team1 || !team2) return { meetings: [], summary: { t1Wins: 0, draws: 0, t2Wins: 0, total: 0 } };
+
+  const cutoff = currentMatch?.t ? parseTime(currentMatch.t) : Infinity;
 
   const meetings = allFixtures
     .filter(
       m =>
         ((m.h === team1 && m.a === team2) || (m.h === team2 && m.a === team1)) &&
         m.st === 'done' &&
-        m.sc
+        m.sc &&
+        m.id !== currentMatch?.id &&
+        parseTime(m.t) < cutoff
     )
     .sort((a, b) => parseTime(b.t) - parseTime(a.t));
 
@@ -231,6 +242,6 @@ export function computeMatchStats(match, allFixtures = fixtures) {
       form: computeTeamForm(match.a, match, allFixtures),
       season: computeSeasonStats(match.a, match.l, allFixtures)
     },
-    h2h: computeHeadToHead(match.h, match.a, allFixtures)
+    h2h: computeHeadToHead(match.h, match.a, allFixtures, match)
   };
 }

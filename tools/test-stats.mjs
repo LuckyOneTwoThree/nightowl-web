@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { computeMatchStats } from '../src/core/stats.js';
+import { computeMatchStats, computeHeadToHead } from '../src/core/stats.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixtures = JSON.parse(readFileSync(resolve(__dirname, '../src/data/fixtures.json'), 'utf8'));
@@ -96,6 +96,27 @@ ok(
   h2h.summary.t1Wins + h2h.summary.draws + h2h.summary.t2Wins === h2h.summary.total,
   `${h2h.summary.t1Wins}+${h2h.summary.draws}+${h2h.summary.t2Wins} ≠ ${h2h.summary.total}`
 );
+
+/* ================================================================== */
+console.log('');
+console.log('六、历史交锋的时间边界（防剧透：不能出现当前场次之后的比赛）');
+{
+  // 传 currentMatch 时，交锋只应包含「开球更早且不含自身」的场次。
+  // 否则查看一场已完赛的比赛，会把之后才踢的那场结果当历史交锋显示出来。
+  // 沿用上面的动态样本（不硬编码场次 ID，数据会被保鲜模块更新）
+  const cur = sample;
+  const bounded = computeHeadToHead(cur.h, cur.a, fixtures, cur);
+  const later = bounded.meetings.filter(m => E.ts(m.t) >= E.ts(cur.t));
+  ok('★ 不含当前场次自身', !bounded.meetings.some(m => m.id === cur.id));
+  ok('★ 不含开球时间不早于当前场次的交锋', later.length === 0, later.map(m => `${m.id} ${m.t}`).join('、'));
+  ok('交锋场次按时间倒序', bounded.meetings.every((m, i) => i === 0 || E.ts(bounded.meetings[i - 1].t) >= E.ts(m.t)));
+
+  // 对照：不传 currentMatch 时是「全量」口径（历史视图），应 >= 受限口径
+  const unbounded = computeHeadToHead(cur.h, cur.a, fixtures);
+  ok('不限时间时应多于或等于限时间的结果', unbounded.summary.total >= bounded.summary.total,
+    `${unbounded.summary.total} vs ${bounded.summary.total}`);
+  ok('限时间后仍是合法的交锋结构', typeof bounded.summary.total === 'number' && bounded.summary.total >= 0);
+}
 
 console.log('────────────────────────────────────────────────────');
 console.log(`通过 ${pass} 项，失败 ${fail} 项`);

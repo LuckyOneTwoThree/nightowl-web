@@ -20,7 +20,6 @@ import {
   IconForm,
   IconH2H,
   IconIdentity,
-  IconNoH2H,
   IconTier
 } from './icons.jsx';
 
@@ -86,12 +85,12 @@ export default function IntelPanel({ match, prefs, indexHint }) {
       </div>
 
       {tab === 'decision' ? (
-        <div className="grid grid-cols-1 gap-x-6 gap-y-0 p-3.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="grid grid-cols-1 gap-x-0 gap-y-0 p-3.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <div className="space-y-3 lg:pr-6 lg:border-r lg:border-line-hairline">
             <SleepCostSection tier={tier} match={match} />
             <NarrativeSection narrative={narrative} stories={stories} ev={ev} />
           </div>
-          <div className="space-y-3 pt-3 lg:pt-0 lg:pl-1">
+          <div className="space-y-3 pt-3 lg:pt-0 lg:pl-6">
             <IdentitySection match={match} identity={identity} />
             <AttributionSection
               ev={ev}
@@ -104,13 +103,25 @@ export default function IntelPanel({ match, prefs, indexHint }) {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-x-6 p-3.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <div className="space-y-3 lg:pr-6 lg:border-r lg:border-line-hairline">
-            <FormSection match={match} stats={stats} />
-            <SeasonSection match={match} stats={stats} />
+        /* 分栏依据是实测排版尺寸，不是"看起来对称"（1440 窗口下面板内容宽 1047px）：
+           此前两等分 → 走势列 437px，而对手名实测只有 50-94px 宽，
+           比分被 justify-between 甩到 315px 之外，行内两个元素不再成组。
+           攻防对比能撑住 527px 是因为下面有双向条把两端连起来，走势列表没有这种结构。
+           所以走势给固定的 300px（刚好容下 16rem 的内容收口 + 一点余量），
+           剩下的宽度全部让给对比条。
+           历史交锋则降级为整幅横条：快照里 1,738 场未开赛有 91.5% 交锋为 0 场，
+           其余也只有 1 场（快照只含一个赛季，同联赛一对最多两回合）。 */
+        <div className="p-3.5">
+          <div className="grid grid-cols-1 gap-x-0 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
+            <div className="lg:pr-6 lg:border-r lg:border-line-hairline">
+              <FormSection match={match} stats={stats} />
+            </div>
+            <div className="pt-3 lg:pt-0 lg:pl-6">
+              <SeasonSection match={match} stats={stats} />
+            </div>
           </div>
-          <div className="pt-3 lg:pt-0 lg:pl-1">
-            <H2HSection match={match} stats={stats} />
+          <div className="mt-3 border-t border-line-hairline pt-2.5">
+            <H2HSection stats={stats} />
           </div>
         </div>
       )}
@@ -203,6 +214,10 @@ function NarrativeSection({ narrative, stories, ev }) {
   const fromStories = new Set(stories.map(s => `${s.name}：${s.desc}`));
   const lines = narrative.lines.filter(l => !fromStories.has(l));
   const rivalryShown = ev.rivalry && !narrative.headline.includes(ev.rivalry);
+  /* 反向去重：L2 的 headline 常常就是第一条故事线（`${name}：${desc}`），
+     而下面的列表又把同一条按 name / desc 渲染一遍 —— 整句原样出现两遍。
+     同样只在渲染层处理：headline 与 lines 的候选池关系见上面的注释。 */
+  const shownStories = stories.filter(s => `${s.name}：${s.desc}` !== narrative.headline);
 
   return (
     <Block
@@ -234,9 +249,9 @@ function NarrativeSection({ narrative, stories, ev }) {
         </ul>
       )}
 
-      {stories.length > 0 && (
+      {shownStories.length > 0 && (
         <dl className="mt-2.5 space-y-1.5">
-          {stories.map(s => (
+          {shownStories.map(s => (
             <div key={s.id} className="flex gap-2.5">
               <dt className="w-24 shrink-0 truncate text-xs font-medium text-text-primary" title={s.name}>
                 {s.name}
@@ -274,12 +289,16 @@ function IdentitySection({ match, identity }) {
               <Crest id={id} size={16} />
               <span className="min-w-0 flex-1 truncate text-xs text-text-primary">{teamName(id)}</span>
               <Meta>{side}</Meta>
-              {tag ? <Chip tone="accent">{tag}</Chip> : <Meta>常规</Meta>}
+              {/* 身份是事实不是选中态，所以用中性 chip：
+                  一屏之内金色只留给当前 tab、夜猫指数与主行动 */}
+              {tag ? <Chip tone="neutral">{tag}</Chip> : <Meta>常规</Meta>}
             </li>
           );
         })}
       </ul>
-      {!identity.fallback && (
+      {/* 有标签时身份已经在每行的 chip 上，不再用散文把同样的话复述一遍；
+          只有两队都无标签（94/111 队如此）才回落显示联赛 + 轮次 —— D5 约定 */}
+      {identity.fallback && (
         <p className="mt-2 text-xs leading-relaxed text-text-muted">{identity.lines.join(' · ')}</p>
       )}
     </Block>
@@ -315,7 +334,11 @@ function AttributionSection({ ev, tier, index, storyB, followedB, leagueB }) {
         })}
         <div className="mt-1 flex items-baseline justify-between gap-2 border-t border-line-hairline pt-1">
           <dt className="text-2xs font-medium text-text-secondary">综合指数</dt>
-          <dd className="font-num text-xs font-semibold tabular-nums text-accent">{index.toFixed(1)}</dd>
+          {/* 与面板头部的「夜猫指数」是同一个数：金色只给头部那一个，
+              这里的合计行留在表内闭合分解，不再重复强调 */}
+          <dd className="font-num text-xs font-semibold tabular-nums text-text-primary">
+            {index.toFixed(1)}
+          </dd>
         </div>
       </dl>
     </Block>
@@ -329,46 +352,51 @@ function AttributionSection({ ev, tier, index, storyB, followedB, leagueB }) {
 function FormSection({ match, stats }) {
   return (
     <Block icon={<IconForm />} title="近 5 场走势">
-      {[
-        { id: match.h, form: stats?.home?.form || [] },
-        { id: match.a, form: stats?.away?.form || [] }
-      ].map(({ id, form }) => (
-        <div key={id} className="mb-2 last:mb-0">
-          <div className="flex items-center gap-2">
-            <Crest id={id} size={16} />
-            <span className="min-w-0 flex-1 truncate text-xs font-medium text-text-primary">{teamName(id)}</span>
-            {form.length === 0 ? (
-              <Meta>暂无完赛记录</Meta>
-            ) : (
-              <span className="flex gap-0.5">
-                {form.map((f, i) => (
-                  <span
-                    key={i}
-                    title={`${f.date.slice(0, 10)} vs ${teamName(f.opponent)} ${f.score}`}
-                    className={`inline-flex h-4 w-4 items-center justify-center rounded-sm text-2xs font-semibold text-bg-app ${
-                      f.result === 'W' ? 'bg-result-win' : f.result === 'D' ? 'bg-result-draw' : 'bg-result-loss'
-                    }`}
-                  >
-                    {f.result === 'W' ? '胜' : f.result === 'D' ? '平' : '负'}
-                  </span>
+      {/* 16rem 的收口：让两队的比分列与队名行右缘对齐。
+          实测放到 20rem 时"对手名 → 比分"仍有 177-221px 空隙，比分不像在说这一行；
+          收到 16rem 后空隙约 115-160px，比分成一列，可竖着扫。 */}
+      <div className="max-w-[16rem]">
+        {[
+          { id: match.h, form: stats?.home?.form || [] },
+          { id: match.a, form: stats?.away?.form || [] }
+        ].map(({ id, form }) => (
+          <div key={id} className="mb-2 last:mb-0">
+            <div className="flex items-center gap-2">
+              <Crest id={id} size={16} />
+              <span className="min-w-0 flex-1 truncate text-xs font-medium text-text-primary">{teamName(id)}</span>
+              {form.length === 0 ? (
+                <Meta>暂无完赛记录</Meta>
+              ) : (
+                <span className="flex gap-0.5">
+                  {form.map((f, i) => (
+                    <span
+                      key={i}
+                      title={`${f.date.slice(0, 10)} vs ${teamName(f.opponent)} ${f.score}`}
+                      className={`inline-flex h-4 w-4 items-center justify-center rounded-sm text-2xs font-semibold text-bg-app ${
+                        f.result === 'W' ? 'bg-result-win' : f.result === 'D' ? 'bg-result-draw' : 'bg-result-loss'
+                      }`}
+                    >
+                      {f.result === 'W' ? '胜' : f.result === 'D' ? '平' : '负'}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </div>
+            {form.length > 0 && (
+              <ul className="mt-1 space-y-0.5 pl-6">
+                {form.slice(0, 3).map(f => (
+                  <li key={f.matchId} className="flex items-baseline justify-between gap-2">
+                    <span className="min-w-0 truncate text-2xs text-text-muted">
+                      {f.isHome ? '主' : '客'} vs {teamName(f.opponent)}
+                    </span>
+                    <span className="font-num text-2xs tabular-nums text-text-secondary">{f.score}</span>
+                  </li>
                 ))}
-              </span>
+              </ul>
             )}
           </div>
-          {form.length > 0 && (
-            <ul className="mt-1 space-y-0.5 pl-6">
-              {form.slice(0, 3).map(f => (
-                <li key={f.matchId} className="flex items-baseline justify-between gap-2">
-                  <span className="min-w-0 truncate text-2xs text-text-muted">
-                    {f.isHome ? '主' : '客'} vs {teamName(f.opponent)}
-                  </span>
-                  <span className="font-num text-2xs tabular-nums text-text-secondary">{f.score}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ))}
+        ))}
+      </div>
     </Block>
   );
 }
@@ -423,17 +451,20 @@ function SeasonSection({ match, stats }) {
                   {v2}
                 </span>
               </div>
-              {/* 双向条：各自从中心向外生长，占优一侧用品牌色 */}
+              {/* 双向条：各自从中心向外生长。占优一侧用中性亮色而非品牌金 ——
+                  一屏五行同时金色等于把 accent 当成"胜负"语义色，
+                  而它按规范只表示品牌与主行动；明度差足够表达谁占优，
+                  与上方数值的字重处理是同一套口径。 */}
               <div className="mt-1 flex h-1 gap-px">
                 <div className="flex h-full flex-1 justify-end overflow-hidden rounded-full bg-line-hairline">
                   <div
-                    className={`h-full rounded-full ${homeBetter ? 'bg-accent' : 'bg-line-control'}`}
+                    className={`h-full rounded-full ${homeBetter ? 'bg-text-secondary' : 'bg-line-control'}`}
                     style={{ width: `${r1}%` }}
                   />
                 </div>
                 <div className="flex h-full flex-1 overflow-hidden rounded-full bg-line-hairline">
                   <div
-                    className={`h-full rounded-full ${awayBetter ? 'bg-accent' : 'bg-line-control'}`}
+                    className={`h-full rounded-full ${awayBetter ? 'bg-text-secondary' : 'bg-line-control'}`}
                     style={{ width: `${100 - r1}%` }}
                   />
                 </div>
@@ -462,42 +493,42 @@ function fmtDiff(n) {
   return v > 0 ? `+${v}` : `${v}`;
 }
 
-function H2HSection({ match, stats }) {
+/**
+ * 历史交锋：整幅横条。
+ *
+ * 快照里 91.5% 的场次走到空态，而空态此前是「标题行 + 一行弱文字」= 实测 51px 纯空白，
+ * 所以空态压成一行：图标 + 分区名 + 说明，同一基线，实测 16px。
+ * 有交锋时逐条横向排开 —— 一个赛季里同联赛一对最多两回合，不需要滚动条，
+ * 也不再单列胜/平/负汇总：最多 1-2 场时比分自证，
+ * 而此前把客队胜场涂成 result-loss 红，是把"赛果三态"当成了"敌我"。
+ */
+function H2HSection({ stats }) {
   const meetings = stats?.h2h?.meetings || [];
-  const summary = stats?.h2h?.summary;
+
+  if (meetings.length === 0) {
+    return (
+      <div className="flex items-center gap-1.5 text-2xs text-text-faint">
+        <IconH2H size={12} />
+        <span className="text-text-muted">历史交锋</span>
+        <span aria-hidden="true">·</span>
+        <span>两队本赛季尚未直接交锋</span>
+      </div>
+    );
+  }
+
   return (
-    <Block icon={<IconH2H />} title="历史交锋" right={summary ? <Meta num>共 {summary.total} 战</Meta> : null}>
-      {meetings.length === 0 ? (
-        <div className="flex flex-col items-center gap-1.5 py-4 text-center">
-          <span className="text-text-faint">
-            <IconNoH2H />
-          </span>
-          <p className="text-xs text-text-muted">两队本赛季尚未直接交锋</p>
-        </div>
-      ) : (
-        <>
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="font-num text-2xs tabular-nums text-result-win">
-              {teamName(match.h)} {summary.t1Wins} 胜
+    <Block icon={<IconH2H />} title="历史交锋" right={<Meta num>共 {meetings.length} 战</Meta>}>
+      <ul className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+        {meetings.map(m => (
+          <li key={m.id} className="flex items-baseline gap-1.5 text-xs">
+            <Meta num>{datePart(m.date).slice(5)}</Meta>
+            <span className="text-text-secondary">
+              {teamName(m.home)} <span className="text-text-faint">vs</span> {teamName(m.away)}
             </span>
-            <span className="font-num text-2xs tabular-nums text-result-draw">{summary.draws} 平</span>
-            <span className="font-num text-2xs tabular-nums text-result-loss">
-              {summary.t2Wins} 胜 {teamName(match.a)}
-            </span>
-          </div>
-          <ul className="scrollbar-thin max-h-[150px] space-y-0.5 overflow-y-auto pr-1">
-            {meetings.map(m => (
-              <li key={m.id} className="flex items-baseline justify-between gap-2">
-                <Meta num className="w-12 shrink-0">{datePart(m.date).slice(5)}</Meta>
-                <span className="min-w-0 flex-1 truncate text-2xs text-text-secondary">
-                  {teamName(m.home)} vs {teamName(m.away)}
-                </span>
-                <span className="font-num text-2xs font-semibold tabular-nums text-text-primary">{m.score}</span>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+            <span className="font-num font-semibold tabular-nums text-text-primary">{m.score}</span>
+          </li>
+        ))}
+      </ul>
     </Block>
   );
 }
