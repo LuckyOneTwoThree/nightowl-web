@@ -43,7 +43,14 @@ export const TV_SPORTS_CHANNELS = [
   }
 ];
 
-/** 加载球队字典与别名 */
+/**
+ * 加载球队字典
+ *
+ * 分两层，避免同一份数据两处维护（漂移是这类映射最常见的失效方式）：
+ *   ① teams.json 自动派生：zh 全称 / en 全称 / id —— teams 改了自动跟随
+ *   ② server/scraper-alias.json 手工补充：中文简称、粤语译名、惯用别称
+ *      （这些机器推不出来，只能人工维护；缺失项由 tools/check-scraper.mjs 持续发现）
+ */
 function loadTeamDictionary() {
   const map = new Map();
   try {
@@ -54,28 +61,16 @@ function loadTeamDictionary() {
       map.set(t.id, t.id);
     }
   } catch (e) {
-    console.warn("[scraper] 无法加载 teams.json，使用基础别名表:", e.message);
+    console.warn("[scraper] 无法加载 teams.json:", e.message);
   }
 
-  // 常见中文别名 / 简称拓展
-  const aliases = {
-    "曼城": "MCI", "曼彻斯特城": "MCI", "曼联": "MUN", "曼彻斯特联": "MUN",
-    "阿森纳": "ARS", "兵工厂": "ARS", "切尔西": "CHE", "蓝军": "CHE",
-    "利物浦": "LIV", "热刺": "TOT", "托特纳姆热刺": "TOT", "纽卡斯尔": "NEW", "纽卡斯尔联": "NEW",
-    "维拉": "AVL", "阿斯顿维拉": "AVL", "埃弗顿": "EVE", "狼队": "WOL",
-    "皇马": "RMA", "皇家马德里": "RMA", "巴萨": "BAR", "巴塞罗那": "BAR",
-    "马竞": "ATM", "马德里竞技": "ATM", "毕尔巴鄂": "ATH", "毕尔巴鄂竞技": "ATH",
-    "皇家社会": "RSO", "塞维利亚": "SEV", "贝蒂斯": "BET", "皇家贝蒂斯": "BET",
-    "拜仁": "FCB", "拜仁慕尼黑": "FCB", "多特": "BVB", "多特蒙德": "BVB",
-    "勒沃库森": "B04", "莱比锡": "RBL", "RB莱比锡": "RBL", "莱比锡红牛": "RBL",
-    "法兰克福": "SGE", "斯图加特": "VFB",
-    "国米": "INT", "国际米兰": "INT", "AC米兰": "MIL", "米兰": "MIL",
-    "尤文": "JUV", "尤文图斯": "JUV", "那不勒斯": "NAP", "罗马": "ROM", "拉齐奥": "LAZ",
-    "巴黎": "PSG", "巴黎圣日耳曼": "PSG", "摩纳哥": "MCO", "马赛": "OM", "里尔": "LIL"
-  };
-
-  for (const [name, id] of Object.entries(aliases)) {
-    map.set(name, id);
+  try {
+    const alias = JSON.parse(readFileSync(resolve(ROOT, "server/scraper-alias.json"), "utf8"));
+    for (const [name, id] of Object.entries(alias.map || {})) {
+      map.set(name, id);
+    }
+  } catch (e) {
+    console.warn("[scraper] 无法加载 scraper-alias.json，仅用 teams 全称匹配:", e.message);
   }
 
   return map;
@@ -91,6 +86,9 @@ const cache = {
 
 const SCHEDULE_TTL_MS = 60 * 1000;
 const SOURCE_TTL_MS = 90 * 1000;
+
+/** 线路缓存条目上限：按 gameId 累积，长时间运行必须封顶（简单 FIFO 淘汰） */
+const MAX_SOURCE_CACHE = 200;
 
 const MIRROR_BASES = [
   "https://www.88kanqiu.net",
@@ -263,7 +261,56 @@ export async function fetchGameSources(gameId, force = false) {
   }
 
   cache.sources.set(gameId, { time: now, data: lines });
+  // FIFO 淘汰：Map 保持插入顺序，超限时删最旧的一条
+  if (cache.sources.size > MAX_SOURCE_CACHE) {
+    const oldest = cache.sources.keys().next().value;
+    if (oldest !== undefined) cache.sources.delete(oldest);
+  }
   return lines;
+}
+
+/**
+ * 保底源健康探测
+ *
+ * 为什么需要：TV_SPORTS_CHANNELS 是带签名的 URL。实测服务端**强校验** timestamp 与 encrypt
+ * （改 timestamp → 605，去掉 encrypt → 403），因此必然在某个时刻整体失效。
+ * 失效后如果照旧返回，用户点下去就是一片黑 —— 属于「静默失败」。
+ * 这里做带 TTL 的探测：失效的源不进入线路列表，并在响应里回报，由界面明确提示。
+ */
+const channelProbe = { time: 0, results: new Map() };
+const CHANNEL_PROBE_TTL_MS = 10 * 60 * 1000;
+
+export async function probeChannels(force = false) {
+  const now = Date.now();
+  if (!force && channelProbe.time && now - channelProbe.time < CHANNEL_PROBE_TTL_MS) {
+    return channelProbe.results;
+  }
+
+  const results = new Map();
+  await Promise.all(
+    TV_SPORTS_CHANNELS.map(async ch => {
+      let ok = false;
+      try {
+        const ac = new AbortController();
+        const timer = setTimeout(() => ac.abort(), 6000);
+        const r = await fetch(ch.url, { signal: ac.signal });
+        clearTimeout(timer);
+        ok = r.ok;
+      } catch {
+        ok = false;
+      }
+      results.set(ch.id, ok);
+    })
+  );
+
+  channelProbe.time = now;
+  channelProbe.results = results;
+
+  const dead = TV_SPORTS_CHANNELS.filter(c => results.get(c.id) === false).map(c => c.tag);
+  if (dead.length) {
+    console.warn(`[scraper] 保底源已失效（签名可能过期，请刷新 server/tv-channels.json）: ${dead.join('、')}`);
+  }
+  return results;
 }
 
 /**
@@ -272,26 +319,32 @@ export async function fetchGameSources(gameId, force = false) {
 export async function getLiveSourcesForMatch({ matchId, h, a, date }) {
   let matchedGame = null;
   let lines = [];
+  let unmatchedTeams = [];
 
   try {
     const schedule = await fetchSchedule();
 
-    // 1. 精确匹配双方队伍 ID
+    // ⚠️ 只做【双方全等匹配】，不做单队兜底。
+    //
+    // 这里原本有一步「只要主队或客队对上一个就算命中」的兜底，实测在真实数据上
+    // **329 场全部误配（100%）**：
+    //     本地 MUN vs SAB（曼联 vs 萨巴赫）  → 命中「曼联 vs 曼城」
+    //     本地 FCB vs BOD（拜仁 vs 博多）    → 命中「拜仁 vs 柏林联合」
+    //     本地 SEV vs VAL（塞维利亚 vs 瓦伦西亚）→ 命中「阿拉维斯 vs 瓦伦西亚」
+    // 后果是给用户播一场完全不相干的比赛，且界面毫无异常提示。
+    // 静默错配比匹配不到危险得多：匹配不到只是没有直链，用户还能走官方平台直达；
+    // 配错则是把错误内容当成正确结果交付。
     matchedGame = schedule.find(g => {
-      if (g.homeId && g.awayId) {
-        return (g.homeId === h && g.awayId === a) || (g.homeId === a && g.awayId === h);
-      }
-      return false;
+      if (!g.homeId || !g.awayId) return false;
+      return (g.homeId === h && g.awayId === a) || (g.homeId === a && g.awayId === h);
     });
 
-    // 2. 若双方无法完全匹配，尝试单队匹配
-    if (!matchedGame) {
-      matchedGame = schedule.find(g => {
-        return (g.homeId === h || g.awayId === a);
-      });
-    }
+    // 未匹配到的队名一并回报，供 tools/check-scraper.mjs 持续发现别名缺口
+    // （聚合站是综合体育站，MLB / NBA 等本就该匹配不到，这是预期内的噪声）
+    unmatchedTeams = schedule
+      .filter(g => !g.homeId || !g.awayId)
+      .map(g => `${g.homeRaw} / ${g.awayRaw}`);
 
-    // 3. 若找到房间，拉取实时解密线路
     if (matchedGame?.gameId) {
       const rawLines = await fetchGameSources(matchedGame.gameId);
       lines.push(...rawLines);
@@ -300,8 +353,14 @@ export async function getLiveSourcesForMatch({ matchId, h, a, date }) {
     console.warn("[scraper] 获取聚合信号出错:", err.message);
   }
 
-  // 4. 追加常驻高可用电视与广电体育源 (CCTV5 / CCTV5+ / 咪咕4K)
+  // 追加常驻保底源（CCTV5 / CCTV5+ / 咪咕）：探测失效的直接剔除，不给死线路
+  const probe = await probeChannels();
+  const tvDown = [];
   for (const tv of TV_SPORTS_CHANNELS) {
+    if (probe.get(tv.id) === false) {
+      tvDown.push(tv.tag);
+      continue;
+    }
     lines.push(tv);
   }
 
@@ -332,6 +391,10 @@ export async function getLiveSourcesForMatch({ matchId, h, a, date }) {
     gameTitle: matchedGame ? (matchedGame.homeRaw + " vs " + matchedGame.awayRaw) : null,
     statusText: matchedGame?.statusText || null,
     isLive: matchedGame?.isLive || false,
+    // 保底源失效清单（签名过期等）。非空时界面应明确提示，而不是让用户点了没反应
+    tvChannelsDown: tvDown,
+    // 聚合站里没能匹配到球队的条目，用于持续补别名（含 MLB/NBA 等非足球噪声）
+    unmatchedTeams: unmatchedTeams.slice(0, 30),
     lines: deduped
   };
 }

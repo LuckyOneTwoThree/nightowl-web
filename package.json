@@ -22,7 +22,8 @@
     "test:sources": "node tools/check-sources.mjs",
     "test:playback": "node tools/test-playback.mjs",
     "test:stats": "node tools/test-stats.mjs",
-    "test:all": "npm run verify:algo && npm run test:m3u8 && npm run test:proxy && npm run test:playback && npm run test:alias && npm run test:sources && npm run test:stats"
+    "check:scraper": "node tools/check-scraper.mjs",
+    "test:all": "npm run verify:algo && npm run test:m3u8 && npm run test:proxy && npm run test:playback && npm run test:alias && npm run test:sources && npm run test:stats && npm run check:scraper"
   },
   "dependencies": {
     "artplayer": "^5.4.0",
