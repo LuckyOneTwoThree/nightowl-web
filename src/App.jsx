@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { fixtures, setFixtures } from './data/index.js';
+import { getFixtures, setFixtures } from './data/index.js';
 import { countdown as engineCountdown, ts } from './core/engine.js';
 import { humanCountdown } from './core/format.js';
 import { loadPrefs, savePrefs } from './core/prefs.js';
@@ -23,11 +23,19 @@ import SameNightPicks from './components/SameNightPicks.jsx';
 import SettingsDrawer from './components/SettingsDrawer.jsx';
 import Onboarding, { shouldShowOnboarding } from './components/Onboarding.jsx';
 
-/** 比赛 id → 记录（O(1) 取用） */
-const MATCH_MAP = fixtures.reduce((acc, m) => {
-  acc[m.id] = m;
-  return acc;
-}, {});
+/**
+ * 比赛 id → 记录（O(1) 取用）
+ *
+ * ⚠️ 必须在组件内按 dataRev 重建，不能做成模块级常量：
+ * 模块级会被锁定在「构建期内联的快照」上，于是出现「左栏列表已显示比分，
+ * 右栏却在说『等待比分录入』」的自相矛盾 —— 因为右栏的 activeMatch 取自这里。
+ * （这是热更新改造时漏掉的一处，实测截图暴露。）
+ */
+function buildMatchMap() {
+  const map = {};
+  for (const m of getFixtures()) map[m.id] = m;
+  return map;
+}
 
 const VALID_VIEWS = ['tonight', 'week', 'schedule'];
 
@@ -72,9 +80,7 @@ export default function App() {
   // ---- 视图与选中 ----
   const boot = useMemo(initialFromUrl, []);
   const [view, setView] = useState(boot.view);
-  const [activeMatchId, setActiveMatchId] = useState(
-    boot.matchId && MATCH_MAP[boot.matchId] ? boot.matchId : null
-  );
+  const [activeMatchId, setActiveMatchId] = useState(boot.matchId || null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [revealed, setRevealed] = useState(() => new Set());
   const [filters, setFilters] = useState(() => defaultScheduleFilters());
@@ -150,7 +156,10 @@ export default function App() {
     else if (tonight.focal) setActiveMatchId(tonight.focal.m.id);
   }, [tonight, activeMatchId]);
 
-  const activeMatch = activeMatchId ? MATCH_MAP[activeMatchId] : null;
+  // 按 dataRev 重建：保鲜同步后右栏也要拿到新记录（含比分），不能停在构建期快照
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const matchMap = useMemo(buildMatchMap, [dataRev]);
+  const activeMatch = activeMatchId ? matchMap[activeMatchId] || null : null;
 
   // 无球日的「下一场焦点战」倒计时：只在降级状态下出现，30 秒时钟足够。
   // 主舞台的倒计时不在这里 —— 它由 PlayerStage 自己按秒刷新（见该组件），
