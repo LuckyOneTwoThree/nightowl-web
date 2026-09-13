@@ -1,0 +1,64 @@
+name: build-windows
+
+# 夜猫看台 · Windows 桌面包
+#
+# 触发方式：
+#   1. Actions 页面手动 Run workflow（workflow_dispatch）
+#   2. 推送 v* 标签（正式发版）
+#
+# 产物：NSIS 安装包（NightOwl-Terace-Setup-<version>.exe），在 Artifact 里下载。
+# 说明：本地单机应用、不对外分发，**不做代码签名** —— Windows SmartScreen 会提示
+#       「未知发布者」，属预期行为；给用户的话术是「仍要运行」。
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Run tests
+        # 打包前先证明代码是好的；scraper 两项依赖外网，
+        # 在 CI 环境不稳定，单独放行（test:all 里它们排最后，失败不影响前面的验证）
+        shell: bash
+        run: |
+          npm run verify:algo
+          npm run test:m3u8
+          npm run test:proxy
+          npm run test:proxy-timeout
+          npm run test:playback
+          npm run test:media
+          npm run test:scraper-match
+          npm run test:session
+          npm run test:scores
+          npm run test:owl
+          npm run test:alias
+          npm run test:stats
+
+      - name: Package Windows (NSIS)
+        run: npx electron-builder --win --publish never
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightowl-windows-setup
+          path: release/*.exe
+          if-no-files-found: error
