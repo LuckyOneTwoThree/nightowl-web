@@ -204,7 +204,25 @@ export function computeScheduleRows(nowTs, prefs, filters) {
 
 /** 赛程筛选的默认值 */
 export function defaultScheduleFilters() {
-  return { leagues: [...LEAGUE_ORDER], onlyFollowed: false, query: '' };
+  // date: null 表示「今天」（视图层动态解析，跨天自动跟随）；'all' 保留全季列表；
+  // 其他值为具体夜猫日字符串。⚠️ 不要用 'today' 这类语义值 —— 它会被当成日期去匹配。
+  return { leagues: [...LEAGUE_ORDER], onlyFollowed: false, query: '', date: null };
+}
+
+/** 每个「夜猫日」的场次统计 —— 日期条上的圆点标记用 */
+export function dayCounts() {
+  const counts = {};
+  for (const m of getFixtures()) {
+    if (m.tbd) continue;
+    const d = E.owlDay(m.t);
+    counts[d] = (counts[d] || 0) + 1;
+  }
+  return counts;
+}
+
+/** 相对今天偏移 n 天的夜猫日（n=0 即今天；夜猫日口径与 nightOf 一致） */
+export function owlDayOffset(n, nowTs = Date.now()) {
+  return E.nightOf(nowTs + n * 86400000);
 }
 
 /**
