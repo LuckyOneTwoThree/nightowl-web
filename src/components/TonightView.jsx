@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { zhDate, weekdayOf } from '../core/format.js';
 import { narrativeOf } from '../core/narrative.js';
-import { evalOne, stateOf, heroTier } from '../core/owl.js';
+import { evalOne, stateOf, heroTier, groupTonight } from '../core/owl.js';
 import { storylines } from '../data/index.js';
 import HeroCard, { NoMatchCard } from './HeroCard.jsx';
 import MatchRow from './MatchRow.jsx';
@@ -39,17 +39,44 @@ export default function TonightView({
 
   const tier = heroTier(hero);
 
-  // 直播场次整体置顶，不再另起容器
-  const ordered = useMemo(() => {
-    const live = [];
-    const rest = [];
-    for (const m of slice) {
-      (stateOf(m, now) === 'live' ? live : rest).push(m);
-    }
-    return [...live, ...rest];
-  }, [slice, now]);
+  // 按状态分区：进行中置顶（最该看）、未开赛按时间、已结束默认折叠不占屏。
+  // 此前三类混在一个列表里 —— 用户分不清当前状态，刚终场还显示待录比分的
+  // 场次会和真正未开赛的排在一起。
+  const groups = useMemo(() => groupTonight(slice, now), [slice, now]);
+  const [showFinished, setShowFinished] = useState(false);
 
-  const liveCount = ordered.filter(m => stateOf(m, now) === 'live').length;
+  const renderRow = m => {
+    const { ev } = evalOne(m, prefs);
+    const st = stateOf(m, now);
+    return (
+      <MatchRow
+        key={m.id}
+        m={m}
+        state={st}
+        active={m.id === activeMatchId}
+        now={now}
+        onSelect={onSelect}
+        spoilerFree={prefs.spoilerFree}
+        revealed={revealed.has(m.id)}
+        onReveal={onReveal}
+        star={ev.star}
+        rivalry={ev.rivalry}
+        minefield={minefieldIds.has(m.id)}
+      />
+    );
+  };
+
+  const SectionHead = ({ label, count, live }) => (
+    <div className="flex items-center gap-1.5 pt-2 pb-1">
+      {live && <LiveDot />}
+      <span className={`text-2xs font-semibold tracking-wide ${live ? 'text-live' : 'text-text-faint'}`}>
+        {label}
+      </span>
+      <span className="font-num text-2xs tabular-nums text-text-faint">· {count}</span>
+    </div>
+  );
+
+  const total = groups.live.length + groups.upcoming.length + groups.finished.length;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -69,13 +96,13 @@ export default function TonightView({
 
       <SectionLabel
         right={
-          liveCount > 0 ? (
+          groups.live.length > 0 ? (
             <span className="inline-flex items-center gap-1.5 text-2xs text-live">
               <LiveDot />
-              {liveCount} 场进行中
+              {groups.live.length} 场进行中
             </span>
           ) : (
-            <span className="font-num text-2xs tabular-nums text-text-faint">{slice.length} 场</span>
+            <span className="font-num text-2xs tabular-nums text-text-faint">{total} 场</span>
           )
         }
       >
@@ -83,33 +110,48 @@ export default function TonightView({
       </SectionLabel>
 
       <div className="scrollbar-thin -mr-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1">
-        {ordered.length === 0 ? (
+        {total === 0 ? (
           <EmptyState
             icon={<IconEmpty size={24} />}
             title="今晚没有比赛"
             desc="赛程已排至 2027 年 5 月，但当夜无排期。"
           />
         ) : (
-          ordered.map(m => {
-            const { ev } = evalOne(m, prefs);
-            const st = stateOf(m, now);
-            return (
-              <MatchRow
-                key={m.id}
-                m={m}
-                state={st}
-                active={m.id === activeMatchId}
-                now={now}
-                onSelect={onSelect}
-                spoilerFree={prefs.spoilerFree}
-                revealed={revealed.has(m.id)}
-                onReveal={onReveal}
-                star={ev.star}
-                rivalry={ev.rivalry}
-                minefield={minefieldIds.has(m.id)}
-              />
-            );
-          })
+          <>
+            {groups.live.length > 0 && (
+              <>
+                <SectionHead label="进行中" count={groups.live.length} live />
+                {groups.live.map(renderRow)}
+              </>
+            )}
+            {groups.upcoming.length > 0 && (
+              <>
+                <SectionHead label="未开赛" count={groups.upcoming.length} />
+                {groups.upcoming.map(renderRow)}
+              </>
+            )}
+            {groups.finished.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowFinished(v => !v)}
+                  className="flex w-full items-center gap-1.5 pt-2 pb-1 text-left"
+                  aria-expanded={showFinished}
+                >
+                  <span className="text-2xs font-semibold tracking-wide text-text-faint">
+                    已结束
+                  </span>
+                  <span className="font-num text-2xs tabular-nums text-text-faint">
+                    · {groups.finished.length}
+                  </span>
+                  <span className="text-2xs text-text-faint underline underline-offset-2">
+                    {showFinished ? '收起' : '展开'}
+                  </span>
+                </button>
+                {showFinished && groups.finished.map(renderRow)}
+              </>
+            )}
+          </>
         )}
       </div>
     </div>

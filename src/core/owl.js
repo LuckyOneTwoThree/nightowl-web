@@ -231,5 +231,28 @@ export function stateOf(m, nowTs) {
   return E.matchState(m, nowTs);
 }
 
+/**
+ * 今晚切片按状态分区
+ *
+ * 界面此前把「进行中 / 未开赛 / 已结束」混在一个列表里 —— 用户分不清当前状态，
+ * 尤其刚终场、比分还没同步的那些（ended_pending）会和真正未开赛的排在一起。
+ * 分区后：进行中置顶（最该看）、未开赛按时间、已结束默认折叠不占屏。
+ */
+export function groupTonight(slice, nowTs) {
+  const live = [];
+  const upcoming = [];
+  const finished = [];
+  for (const m of slice) {
+    const s = E.matchState(m, nowTs);
+    if (s === 'live') live.push(m);
+    else if (s === 'ended_pending' || s === 'done') finished.push(m);
+    else upcoming.push(m);
+  }
+  live.sort(byTs);
+  upcoming.sort(byTs);
+  finished.sort(byTs);
+  return { live, upcoming, finished };
+}
+
 export { E as engine };
 

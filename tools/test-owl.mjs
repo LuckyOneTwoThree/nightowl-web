@@ -17,7 +17,8 @@ import {
   computeScheduleRows,
   defaultScheduleFilters,
   stateOf,
-  liveCountAt
+  liveCountAt,
+  groupTonight
 } from '../src/core/owl.js';
 import * as E from '../src/core/engine.js';
 
@@ -72,6 +73,18 @@ console.log('一、今晚视图');
   console.log(`     （今晚切片 ${t.slice.length} 场，其中已结束 ${endedInSlice.length} 场 —— 展示保留、算法剔除）`);
 
   ok('无 Hero 时给出下一场焦点战或空', t.hero ? t.focal === null : (t.focal === null || !!t.focal.m));
+
+  // 状态分区（界面据此分三段展示：进行中置顶 / 未开赛 / 已结束折叠）
+  const g = groupTonight(t.slice, NOW);
+  const gTotal = g.live.length + g.upcoming.length + g.finished.length;
+  ok('★ 分区总数与切片一致（不丢不重）', gTotal === t.slice.length, `${gTotal} vs ${t.slice.length}`);
+  ok('★ live 组只含进行中的场次', g.live.every(m => stateOf(m, NOW) === 'live'),
+    g.live.filter(m => stateOf(m, NOW) !== 'live').map(m => m.id).join('、'));
+  ok('★ finished 组只含已结束（done / ended_pending）',
+    g.finished.every(m => ['done', 'ended_pending'].includes(stateOf(m, NOW))));
+  ok('★ upcoming 组不含已结束场次', g.upcoming.every(m => !isEnded(m) && stateOf(m, NOW) !== 'live'));
+  const sortedByTs = arr => arr.every((m, i) => i === 0 || E.ts(arr[i - 1].t) <= E.ts(m.t));
+  ok('三组内均按时间升序', sortedByTs(g.live) && sortedByTs(g.upcoming) && sortedByTs(g.finished));
 }
 
 /* ================================================================== */
