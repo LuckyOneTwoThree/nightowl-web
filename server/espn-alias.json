@@ -74,7 +74,7 @@
       "FIO": "FIO"
     },
     "BL": {
-      "MUN": "MUN",
+      "MUN": "FCB",
       "VFB": "VFB",
       "FCU": "FCU",
       "SGE": "SGE",
@@ -152,5 +152,6 @@
       "RCL": "LEN"
     }
   },
-  "unresolved": []
+  "unresolved": [],
+  "_note_leagueScope": "同一缩略码在不同联赛含义不同：MUN 英超=曼联(MUN)、德甲=拜仁(FCB)。解析按 byLeague[league][abbr] 精确匹配，不要合并成全局映射。"
 }
