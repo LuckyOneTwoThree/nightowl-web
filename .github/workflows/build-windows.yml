@@ -56,6 +56,33 @@ jobs:
       - name: Package Windows (NSIS)
         run: npx electron-builder --win --publish never
 
+      # 打包后自检：关键服务文件必须都在 resources/app 里。
+      # 曾出现过「安装后 scores.js 消失」（疑似杀软隔离）—— 若打包环节就缺文件，
+      # 在这里立刻失败，而不是让用户装完才发现。
+      - name: Verify packaged files
+        shell: pwsh
+        run: |
+          $required = @(
+            'resources/app/electron/main.cjs',
+            'resources/app/server/index.js',
+            'resources/app/server/proxy.js',
+            'resources/app/server/scores.js',
+            'resources/app/server/scraper.js',
+            'resources/app/server/m3u8.js',
+            'resources/app/server/rules.json',
+            'resources/app/src/data/fixtures.json',
+            'resources/app/dist/index.html'
+          )
+          $missing = @()
+          foreach ($f in $required) {
+            if (-not (Test-Path "release/win-unpacked/$f")) { $missing += $f }
+          }
+          if ($missing.Count -gt 0) {
+            Write-Error "打包产物缺失: $($missing -join ', ')"
+            exit 1
+          }
+          Write-Host "✓ 打包产物完整（$($required.Count) 个关键文件齐全）"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v5
         with:

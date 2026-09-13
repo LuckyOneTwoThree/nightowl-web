@@ -18,14 +18,20 @@
 const { app, BrowserWindow, dialog } = require('electron');
 const path = require('node:path');
 
-const PORT = 3100;
-const URL_BASE = `http://127.0.0.1:${PORT}`;
-const ROOT = path.join(__dirname, '..');
+const PORT_CANDIDATES = [3100, 3101, 3102, 3103, 3104];
+const HOST = '127.0.0.1';
 
 let httpServer = null;
+let appPort = PORT_CANDIDATES[0];
 let mainWindow = null;
 
-/** 启动本地服务。端口被占（多半是已有实例）时 reject，由调用方提示 */
+/**
+ * 启动本地服务。端口被占（多半是已有实例）时 reject，由调用方提示
+ *
+ * Windows 特有坑：装过 WSL / Hyper-V / Docker 的机器，winnat 会保留大段端口
+ * （`netsh interface ipv4 show excludedportrange protocol=tcp` 可查），
+ * 恰好命中 3100 时 listen 直接 EACCES。故做端口序列回退，而不是让用户处理端口。
+ */
 async function startAppServer() {
   // server 是 ESM（项目 type:module），CJS 里用动态 import 复用。
   // 注意：createServer 在 server/index.js，loadRules 在 server/proxy.js —— 分开导入
@@ -34,12 +40,26 @@ async function startAppServer() {
     import('../server/proxy.js')
   ]);
   const rules = loadRules();
-  const server = createServer(rules);
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(PORT, '127.0.0.1', resolve);
-  });
-  return server;
+  const errors = [];
+  for (const port of PORT_CANDIDATES) {
+    const server = createServer(rules);
+    try {
+      await new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(port, HOST, resolve);
+      });
+      appPort = port;
+      return server;
+    } catch (err) {
+      errors.push(`${port} → ${err.code || err.message}`);
+      try {
+        server.close();
+      } catch {
+        /* 未监听成功则忽略 */
+      }
+    }
+  }
+  throw new Error(`以下端口全部无法监听：${errors.join('；')}`);
 }
 
 function createWindow() {
@@ -80,16 +100,20 @@ if (!gotLock) {
     try {
       httpServer = await startAppServer();
     } catch (err) {
+      // 显示完整堆栈：远程排障时，「无法找到 xxx」到底发生在哪一层
+      // （动态 import / loadRules / listen），只有 stack 能说清
       dialog.showErrorBox(
         '夜猫看台 · 本地服务启动失败',
-        `无法在 127.0.0.1:${PORT} 启动本地服务（可能端口已被占用）。\n\n${err?.message || err}`
+        `无法在 ${HOST}:${appPort} 启动本地服务。\n` +
+          `常见原因：端口被占用或被 Windows 保留；杀毒软件隔离了 server/ 下的脚本文件。\n\n` +
+          `${err?.message || err}\n\n${err?.stack || ''}`
       );
       app.exit(1);
       return;
     }
 
     const win = createWindow();
-    await win.loadURL(`${URL_BASE}/`);
+    await win.loadURL(`http://${HOST}:${appPort}/`);
   });
 
   app.on('window-all-closed', () => {

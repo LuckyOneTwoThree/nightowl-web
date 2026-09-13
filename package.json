@@ -56,10 +56,10 @@
     "asar": false,
     "directories": { "output": "release" },
     "files": [
-      "dist/**",
-      "electron/**",
-      "server/**",
-      "src/data/**",
+      "dist/**/*",
+      "electron/**/*",
+      "server/**/*",
+      "src/data/**/*",
       "package.json"
     ],
     "win": {
