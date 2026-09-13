@@ -4,11 +4,14 @@
   "version": "0.1.0",
   "type": "module",
   "description": "夜猫看台 · 纯净观赛桌面版（本地单机）",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server/index.js",
+    "electron:dev": "electron .",
+    "dist:win": "npm run build && electron-builder --win --publish never",
     "migrate:data": "node tools/migrate-data.mjs",
     "sync:scores": "node tools/sync-scores.mjs",
     "sync:scores:apply": "node tools/sync-scores.mjs --apply",
@@ -41,8 +44,31 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.1",
     "autoprefixer": "^10.5.6",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
     "postcss": "^8.5.28",
     "tailwindcss": "^3.4.19",
     "vite": "^8.3.0"
+  },
+  "build": {
+    "appId": "com.nightowl.terrace",
+    "productName": "NightOwl Terrace",
+    "asar": false,
+    "directories": { "output": "release" },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "server/**",
+      "src/data/**",
+      "package.json"
+    ],
+    "win": {
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "NightOwl-Terrace-Setup-${version}.${ext}"
+    }
   }
 }

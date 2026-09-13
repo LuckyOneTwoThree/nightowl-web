@@ -32,5 +32,8 @@ server/cache/
 # 本地保底频道直链（含会话级签名与个人标识，不入库；模板见 tv-channels.example.json）
 server/tv-channels.local.json
 
+# electron-builder 打包产物
+release/
+
 # 验证用截图（可再生）
 .shots/
