@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { hm, zhDate, weekdayOf, datePart, liveMinute } from '../core/format.js';
 import { teamName, leagueName } from '../data/index.js';
 import { ts } from '../core/engine.js';
@@ -84,6 +84,36 @@ export default function PlayerStage({ match, state, now, countdown, isOverlayOpe
     return [...lines.slice(0, 2), lines[activeIdx]];
   }, [lines, theaterLinesExpanded, activeLineId]);
 
+  /**
+   * 选中线路切换播放
+   *
+   * 必须定义在下面的 useEffect 之前并进入其依赖数组：原实现定义在 effect 之后，
+   * 靠「effect 回调异步执行时 const 已初始化」侥幸可用，属于隐式闭包依赖。
+   */
+  const selectLine = useCallback(async line => {
+    setActiveLineId(line.id);
+    setError(null);
+
+    if (line.isDirect && line.url) {
+      setAuthorizing(true);
+      try {
+        const u = new URL(line.url);
+        await fetch('/api/proxy/allow', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ host: u.hostname })
+        });
+        setStreamUrl(line.url);
+      } catch (e) {
+        setError(`线路起播失败：${e.message}`);
+      } finally {
+        setAuthorizing(false);
+      }
+    } else if (line.url) {
+      window.open(line.url, '_blank', 'noopener,noreferrer');
+    }
+  }, []);
+
   // 切换场次时重置并拉取最新聚合与广播信号
   useEffect(() => {
     setStreamUrl(null);
@@ -133,34 +163,9 @@ export default function PlayerStage({ match, state, now, countdown, isOverlayOpe
     return () => {
       alive = false;
     };
-  }, [match?.id, match?.h, match?.a, match?.t, state]);
+  }, [match?.id, match?.h, match?.a, match?.t, state, selectLine]);
 
   const proxyUrl = streamUrl ? `/api/proxy?url=${encodeURIComponent(streamUrl)}` : null;
-
-  /** 选中线路切换播放 */
-  const selectLine = async line => {
-    setActiveLineId(line.id);
-    setError(null);
-
-    if (line.isDirect && line.url) {
-      setAuthorizing(true);
-      try {
-        const u = new URL(line.url);
-        await fetch('/api/proxy/allow', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ host: u.hostname })
-        });
-        setStreamUrl(line.url);
-      } catch (e) {
-        setError(`线路起播失败：${e.message}`);
-      } finally {
-        setAuthorizing(false);
-      }
-    } else if (line.url) {
-      window.open(line.url, '_blank', 'noopener,noreferrer');
-    }
-  };
 
   /** 快速切到下一个可用直链 */
   const nextLine = () => {
@@ -350,6 +355,14 @@ export default function PlayerStage({ match, state, now, countdown, isOverlayOpe
                 切下一路
               </button>
             )}
+          </div>
+        )}
+
+        {/* 保底频道失效提示：签名过期是必然事件，必须让用户看见，而不是点了没反应 */}
+        {liveInfo?.tvChannelsDown?.length > 0 && (
+          <div className="rounded-lg bg-warning-amber/10 p-2 text-[10px] leading-tight text-warning-amber">
+            保底频道已失效：{liveInfo.tvChannelsDown.join('、')}
+            <span className="mt-0.5 block opacity-80">签名过期，需刷新线路配置</span>
           </div>
         )}
 
