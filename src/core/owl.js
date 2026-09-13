@@ -245,6 +245,36 @@ export function liveCountAt(nowTs) {
 }
 
 /** 单场状态（对界面隐藏引擎细节） */
+/**
+ * 同夜其他推荐（右栏模块区用）
+ *
+ * 今晚另外几场值得看的 —— 与「双方后续赛程」互补：
+ * 一个回答「这场之后还有什么」，一个回答「今晚还有什么」。
+ * 排除当前场次、tbd、已结束；按夜猫指数降序取前 limit 场。
+ */
+export function sameNightPicks(m, prefs, limit = 3, nowTs = Date.now()) {
+  const night = E.owlDay(m.t);
+  return getFixtures()
+    .filter(
+      x =>
+        x.id !== m.id &&
+        !x.tbd &&
+        E.owlDay(x.t) === night &&
+        isPickable(x, nowTs)
+    )
+    .map(x => {
+      const { ev } = evalOne(x, prefs);
+      return {
+        m: x,
+        ev,
+        index: E.owlIndex(ev, x, E.PRODUCT_WEIGHTS),
+        tier: E.tierOf(x)
+      };
+    })
+    .sort((a, b) => b.index - a.index)
+    .slice(0, Math.max(0, limit));
+}
+
 export function stateOf(m, nowTs) {
   return E.matchState(m, nowTs);
 }

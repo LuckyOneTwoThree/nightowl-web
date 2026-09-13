@@ -18,8 +18,14 @@ import {
   defaultScheduleFilters,
   stateOf,
   liveCountAt,
-  groupTonight
+  groupTonight,
+  sameNightPicks,
+  upcomingForTeams
 } from '../src/core/owl.js';
+import { getFixtures } from '../src/data/index.js';
+
+/** 运行时数据源（与界面一致：保鲜同步后可替换） */
+const fixtures = getFixtures();
 import * as E from '../src/core/engine.js';
 
 let pass = 0;
@@ -196,6 +202,31 @@ console.log('五、状态推导与实时计数');
     if (m.st === 'sched' && E.matchState(m, NOW) === 'live') manual++;
   }
   ok('★ liveCountAt 与逐场推导结果一致', live === manual, `${live} vs ${manual}`);
+}
+
+console.log('');
+console.log('六、右栏模块区（后续赛程 / 同夜推荐）');
+{
+  const anchor = fixtures.find(m => m.id === 'PL-4-MUN-MCI') || fixtures.find(m => m.st === 'sched' && !m.tbd);
+
+  // 双方后续赛程
+  const up = upcomingForTeams(anchor, fixtures, 4);
+  const allUp = [...up.home, ...up.away];
+  ok('后续赛程不含锚点自身', !allUp.some(x => x.id === anchor.id));
+  ok('★ 后续赛程全部晚于锚点开球', allUp.every(x => E.ts(x.t) > E.ts(anchor.t)),
+    allUp.filter(x => E.ts(x.t) <= E.ts(anchor.t)).map(x => x.id).join('、'));
+  ok('后续赛程只含已排期场次（非 tbd / sched）', allUp.every(x => !x.tbd && x.st === 'sched'));
+  ok('每队不超过 4 场', up.home.length <= 4 && up.away.length <= 4);
+  ok('每队场次均涉及该队', up.home.every(x => x.h === anchor.h || x.a === anchor.h));
+
+  // 同夜推荐
+  const picks = sameNightPicks(anchor, prefs, 3, NOW);
+  ok('同夜推荐不含锚点自身', !picks.some(p => p.m.id === anchor.id));
+  ok('★ 同夜推荐只含未开赛场次', picks.every(p => p.m.st === 'sched' && !p.m.tbd && !isEnded(p.m)),
+    picks.filter(p => isEnded(p.m) || p.m.st !== 'sched').map(p => p.m.id).join('、'));
+  ok('★ 同夜推荐按夜猫指数降序', picks.every((p, i) => i === 0 || picks[i - 1].index >= p.index));
+  ok('同夜推荐不超过 3 条', picks.length <= 3);
+  ok('同夜推荐与锚点同一夜猫日', picks.every(p => E.owlDay(p.m.t) === E.owlDay(anchor.t)));
 }
 
 console.log('');
