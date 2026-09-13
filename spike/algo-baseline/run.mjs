@@ -13,13 +13,24 @@
  */
 
 import { createRequire } from 'module';
-import { readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import * as E from '../../src/core/engine.js';
-import { loadRefData, loadOrigEngine } from './load-ref.mjs';
+import { REF_ROOT, loadRefData, loadOrigEngine } from './load-ref.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/* ---- 参考项目缺失时优雅降级（CI 环境 / 参考项目解耦后）----
+ * 基线比对是「移植期一次性验证」：交叉比对结论（0 处偏差）早已完成并冻结在
+ * BASELINE.md。参考项目不入库（gitignore），故缺失时直接放行，不阻塞构建；
+ * 日常算法回归由 test:all 的其余测试（含 test-owl 应用层 31 项）覆盖。 */
+if (!existsSync(resolve(REF_ROOT, 'data/fixtures.full.js'))) {
+  console.warn('⚠️ 未找到参考项目（参考项目/nightowl-terrace）—— 算法基线比对已随解耦退役。');
+  console.warn('   移植一致性结论（与原版 0 处偏差）冻结在 spike/algo-baseline/BASELINE.md；');
+  console.warn('   日常回归由 test:all 其余测试覆盖。本步骤放行（exit 0）。');
+  process.exit(0);
+}
 
 const F = loadRefData('fixtures.full.js');
 const T = loadRefData('teams.js');
