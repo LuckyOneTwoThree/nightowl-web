@@ -63,6 +63,27 @@ export function leagueName(code) {
 }
 
 /**
+ * 联赛识别色 —— 与 src/index.css 的 --league-* token 一一对应。
+ *
+ * 用途单一：赛程列表左侧 2px 色条。饱和度刻意压低，因为它是**辅助扫描的
+ * 身份标记**，不是强调元素；真正的强调只留给品牌金。
+ * 色条之外仍保留联赛文字标签，不依赖颜色作为唯一信息通道。
+ */
+export const LEAGUE_COLORS = {
+  PL: '#A8559F',
+  PD: '#E07A45',
+  SA: '#4FA97F',
+  BL: '#D05561',
+  FL: '#5B8AD0',
+  UCL: '#7C8FE8',
+  SCG: '#6B7686'
+};
+
+export function leagueColor(code) {
+  return LEAGUE_COLORS[code] || LEAGUE_COLORS.SCG;
+}
+
+/**
  * 文件名特殊映射。
  * `AUX` 是 Windows 保留设备名（CON/PRN/AUX/NUL…），`AUX.png` 这个文件
  * 在 Windows 上无法被 git 检出 —— GitHub Actions 的 Checkout 一步因此失败过。

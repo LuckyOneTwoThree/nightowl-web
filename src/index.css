@@ -86,47 +86,105 @@
   src: url('/fonts/jetbrainsmono-700.woff2') format('woff2');
 }
 
+/* ====================================================================
+ * 设计 token —— 界面视觉的唯一事实来源
+ *
+ * 三条纪律（违反即视为回归，改动前请先读《UI 设计规范与视觉设计系统》§二）：
+ *   1. 组件不得出现 Tailwind 原生色（emerald-500 / purple-300 / slate-400 …）。
+ *      需要新色就在此处加 token 并说明语义，不要在 className 里发明。
+ *   2. 颜色只表达**语义**（品牌 / 直播 / 额度 / 警告 / 档位 / 赛果 / 联赛），
+ *      不做装饰性上色。一屏之内强调元素不超过一个。
+ *   3. 字号只允许 tailwind.config.js `theme.fontSize` 里的 8 档（2xs…3xl）；
+ *      禁止 text-[Npx] 任意值。
+ *      可读性下限是 11px —— 中文回退 PingFang SC 后 10px 以下会糊。
+ * ==================================================================== */
 :root,
 .dark {
   color-scheme: dark;
-  --bg-app: #0A0D14;
-  --bg-app-rgb: 10 13 20;
-  --surface-panel: #0E121B;
-  --surface-panel-rgb: 14 18 27;
-  --surface-card: #131722;
-  --surface-card-rgb: 19 23 34;
-  --surface-hover: #1A2030;
-  --surface-hover-rgb: 26 32 48;
-  --surface-elevated: #1E2538;
-  --surface-elevated-rgb: 30 37 56;
-  --surface-highlight: #1A2133;
-  --surface-highlight-rgb: 26 33 51;
-  --border-subtle: #19202E;
-  --border-subtle-rgb: 25 32 46;
-  --border-strong: #273347;
-  --border-strong-rgb: 39 51 71;
-  --stage-bg: #080B10;
-  --stage-bg-rgb: 8 11 16;
 
-  --text-primary: #F8FAFC;
-  --text-primary-rgb: 248 250 252;
-  --text-secondary: #CBD5E1;
-  --text-secondary-rgb: 203 213 225;
-  --text-muted: #8492A6;
-  --text-muted-rgb: 132 146 166;
-  --text-dim: #505C72;
-  --text-dim-rgb: 80 92 114;
+  /* ---- 表面层级：四级递进 + 播放器舞台，不允许组件自造中间色 ---- */
+  --bg-app: #0b0e15;
+  --bg-app-rgb: 11 14 21;
+  --surface-panel: #0f131c;
+  --surface-panel-rgb: 15 19 28;
+  --surface-card: #141924;
+  --surface-card-rgb: 20 25 36;
+  --surface-raised: #1a202e;
+  --surface-raised-rgb: 26 32 46;
+  --surface-press: #232b3b; /* raised 之上的悬停/按下档，避免组件借用描边色 */
+  --surface-press-rgb: 35 43 59;
+  --stage-bg: #070a10;
+  --stage-bg-rgb: 7 10 16;
 
-  --primary-gold: #FFB800;
-  --primary-gold-rgb: 255 184 0;
-  --primary-gold-dim: rgba(255, 184, 0, 0.12);
+  /* ---- 描边：两档。hairline 分隔，control 给可交互控件 ---- */
+  --line-hairline: #1c2331;
+  --line-hairline-rgb: 28 35 49;
+  --line-control: #2a3444;
+  --line-control-rgb: 42 52 68;
 
-  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.35), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
-  --shadow-card-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.45), 0 2px 4px -2px rgba(0, 0, 0, 0.35);
-  --shadow-elevated: 0 10px 15px -3px rgba(0, 0, 0, 0.55), 0 4px 6px -4px rgba(0, 0, 0, 0.45);
+  /* ---- 文本：四档 ---- */
+  --text-primary: #f2f5f9;
+  --text-primary-rgb: 242 245 249;
+  --text-secondary: #bfc8d6;
+  --text-secondary-rgb: 191 200 214;
+  --text-muted: #7d8899;
+  --text-muted-rgb: 125 136 153;
+  --text-faint: #55606f;
+  --text-faint-rgb: 85 96 111;
 
-  --scrollbar-thumb: #232a3b;
-  --scrollbar-thumb-hover: #333e56;
+  /* ---- 品牌：全站唯一强调色。--accent-ink 是其上的文字色 ---- */
+  --accent: #f5b942;
+  --accent-rgb: 245 185 66;
+  --accent-ink: #1a1204;
+  --accent-soft: #1f1a10;
+  --accent-soft-rgb: 31 26 16;
+
+  /* ---- 语义状态：各司其职，禁止挪作装饰 ---- */
+  --live: #e2564f;
+  --live-rgb: 226 86 79;
+  --resource: #45bfae; /* 睡眠额度 / 预算 —— 全应用只有"额度"用它 */
+  --resource-rgb: 69 191 174;
+  --warn: #e0a82e;
+  --warn-rgb: 224 168 46;
+  --danger: #e8703a;
+  --danger-rgb: 232 112 58;
+
+  /* ---- 睡眠档位 S0→S4：单一连续色阶，从"无代价"到"高代价" ----
+     取代此前 emerald/teal/amber/orange/purple 五种互不相干的 Tailwind 色。 */
+  --tier-0: #35a06f;
+  --tier-0-rgb: 53 160 111;
+  --tier-1: #6bb37a;
+  --tier-1-rgb: 107 179 122;
+  --tier-2: #e0a82e;
+  --tier-2-rgb: 224 168 46;
+  --tier-3: #e8703a;
+  --tier-3-rgb: 232 112 58;
+  --tier-4: #d8503f;
+  --tier-4-rgb: 216 80 63;
+
+  /* ---- 赛果三态：平局用中性灰而非琥珀色（琥珀与"警告"抢语义） ---- */
+  --result-win: #35a06f;
+  --result-win-rgb: 53 160 111;
+  --result-draw: #6b7686;
+  --result-draw-rgb: 107 118 134;
+  --result-loss: #c9524c;
+  --result-loss-rgb: 201 82 76;
+
+  /* ---- 联赛识别色：仅用于列表左色条，饱和度刻意压低 ---- */
+  --league-pl: #a8559f;
+  --league-pd: #e07a45;
+  --league-sa: #4fa97f;
+  --league-bl: #d05561;
+  --league-fl: #5b8ad0;
+  --league-ucl: #7c8fe8;
+  --league-scg: #6b7686;
+
+  /* ---- 阴影：两档。此前带金色发光的 shadow-gold-glow 已删除 ---- */
+  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-pop: 0 10px 28px -8px rgba(0, 0, 0, 0.65), 0 2px 6px -2px rgba(0, 0, 0, 0.45);
+
+  --scrollbar-thumb: #222a38;
+  --scrollbar-thumb-hover: #33405a;
 }
 
 @layer base {
@@ -142,7 +200,12 @@
   }
 
   body {
-    @apply bg-bg-app text-text-primary font-body antialiased transition-colors duration-200;
+    @apply bg-bg-app text-text-primary font-body antialiased;
+  }
+
+  /* 数字一律等宽对齐，避免倒计时跳动造成视觉抖动 */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
   }
 
   /* 桌面端可拖拽窗口（Electron 外壳复用）；交互元素需声明 no-drag */
@@ -155,30 +218,23 @@
 }
 
 @layer utilities {
-  /* 极细滚动条，自动随主题变色 */
-  .scrollbar-thin::-webkit-scrollbar,
-  .scrollbar-thin-dark::-webkit-scrollbar {
+  /* 极细滚动条，颜色随 token */
+  .scrollbar-thin::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
-  .scrollbar-thin::-webkit-scrollbar-track,
-  .scrollbar-thin-dark::-webkit-scrollbar-track {
+  .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
   }
-  .scrollbar-thin::-webkit-scrollbar-thumb,
-  .scrollbar-thin-dark::-webkit-scrollbar-thumb {
+  .scrollbar-thin::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb);
     border-radius: 4px;
   }
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover,
-  .scrollbar-thin-dark::-webkit-scrollbar-thumb:hover {
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background: var(--scrollbar-thumb-hover);
   }
-
-  /* 防剧透：比分毛玻璃 */
-  .spoiler-mask {
-    filter: blur(7px);
-    user-select: none;
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 
   /* 播放器穿模防护：强行限制 ArtPlayer 内部极端 1,000,000 z-index，锁定在局部层叠范围 */
@@ -187,4 +243,3 @@
     z-index: 45 !important;
   }
 }
-

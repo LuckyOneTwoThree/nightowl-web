@@ -37,6 +37,7 @@
   "dependencies": {
     "artplayer": "^5.4.0",
     "hls.js": "^1.7.3",
+    "lucide-react": "^1.45.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "virtua": "^0.51.3"

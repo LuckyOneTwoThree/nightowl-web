@@ -26,14 +26,32 @@ export const TIER_ADVICE = {
   S4: '极限档 · 熬夜代价较高'
 };
 
-/** 档位 → 视觉色（对齐 UI 规范 §三，支持明暗高对比度） */
-export const TIER_STYLE = {
-  S0: 'text-emerald-400 bg-emerald-500/15',
-  S1: 'text-teal-400 bg-teal-500/15',
-  S2: 'text-amber-400 bg-amber-500/15',
-  S3: 'text-orange-400 bg-orange-500/15',
-  S4: 'text-purple-400 bg-purple-500/15'
-};
+/**
+ * 档位 → 视觉（对齐 UI 规范 §三）
+ *
+ * 此前这里是 emerald / teal / amber / orange / purple 五种互不相干的
+ * Tailwind 原生色 —— 五个色相让人无法一眼看出"S4 比 S1 严重"，
+ * 紫色还额外抢走了"特殊"的注意力。
+ * 现在改为 index.css 里 --tier-0..4 的**单条连续色阶**（绿→琥珀→红橙），
+ * 色相沿"代价从低到高"单调推进，扫一眼就能排序。
+ */
+export const TIERS = [
+  { label: 'S0', text: 'text-tier-0', soft: 'bg-tier-0/12', solid: 'bg-tier-0' },
+  { label: 'S1', text: 'text-tier-1', soft: 'bg-tier-1/12', solid: 'bg-tier-1' },
+  { label: 'S2', text: 'text-tier-2', soft: 'bg-tier-2/12', solid: 'bg-tier-2' },
+  { label: 'S3', text: 'text-tier-3', soft: 'bg-tier-3/12', solid: 'bg-tier-3' },
+  { label: 'S4', text: 'text-tier-4', soft: 'bg-tier-4/12', solid: 'bg-tier-4' }
+];
+
+export const TIER_MAP = TIERS.reduce((acc, t) => {
+  acc[t.label] = t;
+  return acc;
+}, {});
+
+/** 兼容旧引用名：从 TIER_MAP 派生，不再单独维护一份色值 */
+export const TIER_STYLE = Object.fromEntries(
+  TIERS.map(t => [t.label, `${t.text} ${t.soft}`])
+);
 
 export function tierAdviceOf(match) {
   return TIER_ADVICE[sleepTier(match.t).label] || '';

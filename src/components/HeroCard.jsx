@@ -1,145 +1,126 @@
-import { hm, liveMinute, zhDate, weekdayOf, datePart } from '../core/format.js';
+import { hm, zhDate, weekdayOf, datePart, liveMinute } from '../core/format.js';
 import { teamName, leagueName } from '../data/index.js';
-import { ts } from '../core/engine.js';
-import { Crest, SleepBadge, Stars, Pill, LiveDot } from './atoms.jsx';
+import { ts, sleepTier } from '../core/engine.js';
+import { Button, Chip, Crest, Hint, LiveDot, Meta, SleepBadge, Stars } from './atoms.jsx';
+import { IconPlay, IconWarn } from './icons.jsx';
 
+/**
+ * 三档措辞。指数 < 5 时不吹不硬推 —— 这是产品纪律，不是样式分支。
+ * `ctaVariant: primary` 意味着它是本屏唯一的实心强调按钮。
+ */
 const TIER_COPY = {
-  highlight: { badge: '今晚唯一焦点', tone: 'gold', cta: '立即观赛' },
-  standard: { badge: '今晚可看', tone: 'slate', cta: '开始观赛' },
-  weak: { badge: '今夜无必看', tone: 'slate', cta: '仍要观看' }
+  highlight: { label: '今晚焦点', cta: '开始观赛', ctaVariant: 'primary' },
+  standard: { label: '今晚可看', cta: '开始观赛', ctaVariant: 'default' },
+  weak: { label: '今夜无必看', cta: '仍要观看', ctaVariant: 'ghost' }
 };
 
 /**
  * 今晚之选 Hero 卡（D9 分档）
  *
- * highlight  指数 ≥ 15  完整高光态
- * standard   5 ≤ 指数 < 15  去"唯一焦点"措辞，ROI 弱化
- * weak       指数 < 5   不吹不硬推
+ * 降噪要点：
+ *   · 高亮档此前用 `bg-gradient-to-b from-amber-500/8`，与卡片本身的金边、
+ *     金色 CTA、金色指数叠加成四层强调。现在卡内的品牌金只剩两个角色：
+ *     描边 = 这张卡是今晚之选，实心 CTA = 这里点下去。档位措辞与指数回归中性
+ *     ——同一个指数在下方情报面板表头已经用 accent 标过一次，重复上色不增加信息。
+ *   · 「L2 看点」是内容供给层级的内部编号，对用户没有决策价值，降为 Hint。
+ *   · 冷知识此前是紫色斜体底块 —— 一个装饰性色块抢走了主看点的注意力，
+ *     改为正文下方的一行弱文字。
+ *   · 卡片不渲染 narrative.lines / trivia：默认选中的就是今晚之选，这两块会与下方
+ *     情报面板的「看点与故事线」逐字重复三行。卡片只留一句推荐语，展开内容
+ *     归面板这个唯一事实来源，省下的竖向空间还给赛程列表。
  */
-export default function HeroCard({ hero, tier, narrative, state, now, onWatch }) {
+export default function HeroCard({ hero, tier, narrative, state, now, onWatch, indexHint }) {
   const m = hero.m;
   const ev = hero.ev;
   const copy = TIER_COPY[tier] || TIER_COPY.standard;
   const isHighlight = tier === 'highlight';
   const isWeak = tier === 'weak';
 
-  const kickTs = ts(m.t);
   const live = state === 'live';
-  const minute = live ? liveMinute(kickTs, now) : 0;
+  const minute = live ? liveMinute(ts(m.t), now) : 0;
+  const tierCost = sleepTier(m.t).cost;
 
   return (
     <article
-      className={`no-drag rounded-xl p-4 transition-all duration-200 shadow-card ${
-        isHighlight
-          ? 'bg-gradient-to-b from-amber-500/[0.08] via-surface-card to-surface-card'
-          : isWeak
-            ? 'bg-surface-card/60 shadow-xs'
-            : 'bg-surface-card'
-      }`}
+      className={`no-drag rounded-lg bg-surface-card p-3.5 shadow-card transition-colors ${
+        isHighlight ? 'border border-accent/25' : 'border border-line-hairline'
+      } ${isWeak ? 'opacity-90' : ''}`}
     >
-      {/* 头部：徽章 + 指数 + 直播态 */}
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <Pill tone={copy.tone}>{copy.badge}</Pill>
+      {/* 标题行：档位措辞 + 夜猫指数 */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={`text-2xs font-semibold ${isHighlight ? 'text-text-secondary' : 'text-text-muted'}`}
+          >
+            {copy.label}
+          </span>
           <Stars star={ev.star} />
+          {ev.isFollowed && <Chip tone="accent">主队</Chip>}
         </div>
-        <div className="flex items-center gap-2">
-          {live && (
-            <Pill tone="red">
-              <LiveDot />
-              LIVE {minute}′
-            </Pill>
-          )}
-          {!isWeak && (
-            <span
-              className={`font-mono text-[13px] font-bold tabular-nums ${
-                isHighlight ? 'text-primary-gold' : 'text-text-muted'
-              }`}
-              title="夜猫指数 = 看点权重 ÷（1 + 睡眠成本 + 观看占用）"
-            >
-              指数 {hero.index.toFixed(1)}
-            </span>
-          )}
+        <div className="flex shrink-0 items-baseline gap-1">
+          <Hint content={indexHint} align="end" />
+          <span className="text-2xs text-text-faint">夜猫指数</span>
+          <span
+            className={`font-num text-sm font-semibold tabular-nums ${
+              isHighlight ? 'text-text-primary' : 'text-text-secondary'
+            }`}
+          >
+            {hero.index.toFixed(1)}
+          </span>
         </div>
       </div>
 
-      {/* 对阵区：采用垂直对称网格，给主客队分配充分宽度，根除单字截断 */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl bg-surface-elevated/50 px-3 py-3 transition-colors">
-        {/* 主队 */}
-        <div className="flex flex-col items-center text-center min-w-0">
-          <Crest id={m.h} size={36} />
-          <span
-            className="mt-1.5 font-headline text-[13px] font-bold text-text-primary leading-tight line-clamp-1"
-            title={teamName(m.h)}
-          >
+      {/* 对阵 */}
+      <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+        <div className="flex min-w-0 items-center justify-end gap-2">
+          <span className="truncate text-sm font-semibold text-text-primary" title={teamName(m.h)}>
             {teamName(m.h)}
           </span>
-          <span className="font-mono text-[10px] text-text-muted mt-0.5">主场</span>
+          <Crest id={m.h} size={26} />
         </div>
-
-        {/* 中间开球 / 比分（D3/FR-T-10：直播中不显示实时比分，比分位为 —，仅显示进行分钟） */}
-        <div className="flex flex-col items-center px-1 shrink-0">
-          <span className={`font-mono text-[20px] font-extrabold tabular-nums ${live ? 'text-live-red' : 'text-text-primary'}`}>
-            {live ? '—' : 'VS'}
-          </span>
-          <span className={`font-mono text-[11px] font-semibold mt-0.5 whitespace-nowrap ${live ? 'text-live-red' : 'text-primary-gold'}`}>
-            {live ? `LIVE ${minute}′` : `${hm(m.t)} 开球`}
-          </span>
-        </div>
-
-        {/* 客队 */}
-        <div className="flex flex-col items-center text-center min-w-0">
-          <Crest id={m.a} size={36} />
-          <span
-            className="mt-1.5 font-headline text-[13px] font-bold text-text-primary leading-tight line-clamp-1"
-            title={teamName(m.a)}
-          >
+        <span className="px-1 font-num text-2xs text-text-faint">vs</span>
+        <div className="flex min-w-0 items-center gap-2">
+          <Crest id={m.a} size={26} />
+          <span className="truncate text-sm font-semibold text-text-primary" title={teamName(m.a)}>
             {teamName(m.a)}
           </span>
-          <span className="font-mono text-[10px] text-text-muted mt-0.5">客场</span>
         </div>
       </div>
 
-      {/* 看点：采用微光底衬，移除多余线框 */}
-      <div className="mt-3 space-y-1.5 rounded-xl bg-surface-elevated/35 p-3 transition-colors">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Pill tone={narrative.level === 'L1' ? 'gold' : 'slate'}>{narrative.level} 看点</Pill>
-            <span className="font-mono text-[10px] text-text-muted">
-              {leagueName(m.l)} · 第 {m.r} 轮
-            </span>
-          </div>
-        </div>
-        <p className="text-[12px] font-semibold leading-snug text-text-primary">{narrative.headline}</p>
-        {narrative.lines.slice(0, 2).map((line, i) => (
-          <p key={i} className="text-[11px] leading-snug text-text-secondary">
-            · {line}
-          </p>
-        ))}
-        {narrative.trivia && (
-          <p className="mt-1.5 rounded-lg bg-purple-500/10 px-2.5 py-1 text-[11px] italic leading-snug text-purple-700 dark:text-purple-300">
-            💡 冷知识：{narrative.trivia}
-          </p>
+      {/* 时刻行 */}
+      <div className="mt-1.5 flex items-center justify-center gap-2">
+        {live ? (
+          <span className="inline-flex items-center gap-1.5">
+            <LiveDot />
+            <span className="font-num text-2xs font-medium text-live">进行中 {minute}′</span>
+          </span>
+        ) : (
+          <Meta num>
+            {m.tbd ? '时间待定' : `${hm(m.t)} 开球`} · {zhDate(datePart(m.t))} {weekdayOf(datePart(m.t))}
+          </Meta>
         )}
+        <Meta>{leagueName(m.l)} 第 {m.r} 轮</Meta>
       </div>
 
-      {/* 底部：档位 + CTA */}
-      <div className="mt-3.5 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
+      {/* 主看点：只给一句话推荐语，展开内容在下方情报面板 */}
+      <div className="mt-3 border-t border-line-hairline pt-2.5">
+        <p className="text-xs font-medium leading-relaxed text-text-primary">{narrative.headline}</p>
+      </div>
+
+      {/* 底部：睡眠代价 + CTA */}
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <SleepBadge match={m} />
-          <span className="font-mono text-[10px] text-text-muted">{datePart(m.t)} {weekdayOf(datePart(m.t))}</span>
+          {tierCost >= 3.5 && (
+            <span className="inline-flex items-center gap-1 text-2xs text-danger">
+              <IconWarn size={11} />
+              熬夜代价高
+            </span>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={() => onWatch(m.id)}
-          className={`rounded-md px-4 py-1.5 font-mono text-[11px] font-bold tracking-wide transition-all shadow-xs active:scale-95 ${
-            isHighlight
-              ? 'bg-primary-gold text-black hover:opacity-90 shadow-md shadow-primary-gold/20'
-              : 'bg-surface-elevated text-text-primary hover:bg-surface-hover hover:text-primary-gold'
-          }`}
-        >
+        <Button variant={copy.ctaVariant} size="md" icon={<IconPlay />} onClick={() => onWatch(m.id)}>
           {copy.cta}
-        </button>
+        </Button>
       </div>
     </article>
   );
@@ -149,50 +130,44 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch })
 export function NoMatchCard({ focal, countdown, onSelect }) {
   if (!focal) {
     return (
-      <article className="rounded-xl bg-surface-card/60 p-5 text-center shadow-card">
-        <p className="font-headline text-sm font-semibold text-text-primary">近期没有可安排的比赛</p>
-        <p className="mt-1 text-[11px] text-text-muted">赛程数据可能尚未同步，可在设置中手动同步</p>
+      <article className="no-drag rounded-lg border border-line-hairline bg-surface-card p-4 text-center shadow-card">
+        <p className="text-sm font-medium text-text-primary">近期没有可安排的比赛</p>
+        <p className="mt-1 text-2xs text-text-muted">赛程数据可能尚未同步，可在「偏好与数据」中手动同步。</p>
       </article>
     );
   }
 
   const m = focal.m;
   return (
-    <article className="rounded-xl bg-gradient-to-b from-purple-500/[0.08] via-surface-card to-surface-card p-4 shadow-card">
-      <div className="mb-3 flex items-center justify-between">
-        <Pill tone="purple">今夜无球 · 下一场焦点战</Pill>
+    <article className="no-drag rounded-lg border border-line-hairline bg-surface-card p-3.5 shadow-card">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-2xs font-semibold text-text-muted">今夜无球 · 下一场焦点</span>
         <Stars star={focal.ev.star} />
       </div>
 
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl bg-surface-elevated/40 p-2.5">
-        <div className="flex flex-col items-center text-center min-w-0">
-          <Crest id={m.h} size={30} />
-          <span className="mt-1 font-headline text-[12px] font-bold text-text-primary truncate w-full">{teamName(m.h)}</span>
+      <div className="mt-3 flex items-center justify-center gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Crest id={m.h} size={22} />
+          <span className="truncate text-sm font-semibold text-text-primary">{teamName(m.h)}</span>
         </div>
-        <span className="font-mono text-[12px] font-bold text-text-dim px-1">VS</span>
-        <div className="flex flex-col items-center text-center min-w-0">
-          <Crest id={m.a} size={30} />
-          <span className="mt-1 font-headline text-[12px] font-bold text-text-primary truncate w-full">{teamName(m.a)}</span>
+        <span className="font-num text-2xs text-text-faint">vs</span>
+        <div className="flex min-w-0 items-center gap-2">
+          <Crest id={m.a} size={22} />
+          <span className="truncate text-sm font-semibold text-text-primary">{teamName(m.a)}</span>
         </div>
       </div>
 
-      <div className="mt-3 flex flex-col items-center rounded-xl bg-surface-elevated/40 p-3">
-        <span className="font-mono text-[10px] tracking-wider text-text-muted uppercase">距开球</span>
-        <span className="font-mono text-[28px] font-extrabold tabular-nums text-primary-gold drop-shadow-xs">
-          {countdown}
-        </span>
-        <span className="mt-0.5 font-mono text-[10px] text-text-muted">
-          {zhDate(datePart(m.t))} {hm(m.t)} · {leagueName(m.l)}
-        </span>
+      <div className="mt-3 flex flex-col items-center border-t border-line-hairline pt-2.5">
+        <span className="text-2xs text-text-faint">距开球</span>
+        <span className="font-num text-xl font-semibold tabular-nums text-accent">{countdown}</span>
+        <Meta num className="mt-0.5">
+          {zhDate(datePart(m.t))} {weekdayOf(datePart(m.t))} {hm(m.t)} · {leagueName(m.l)}
+        </Meta>
       </div>
 
-      <button
-        type="button"
-        onClick={() => onSelect(m.id)}
-        className="mt-3 w-full rounded-md bg-surface-elevated py-2 font-mono text-[11px] font-semibold text-text-primary transition-all hover:bg-surface-hover hover:text-primary-gold shadow-xs active:scale-98"
-      >
-        查看这场赛前情报
-      </button>
+      <Button variant="default" size="md" className="mt-3 w-full" onClick={() => onSelect(m.id)}>
+        查看赛前情报
+      </Button>
     </article>
   );
 }

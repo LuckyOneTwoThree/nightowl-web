@@ -2,7 +2,21 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { hm, zhDate, weekdayOf, datePart, liveMinute, humanCountdown } from '../core/format.js';
 import { teamName, leagueName } from '../data/index.js';
 import { ts, countdown as engineCountdown } from '../core/engine.js';
-import { Crest, Pill, LiveDot } from './atoms.jsx';
+import { Button, Hint, LiveDot, Meta, SectionLabel } from './atoms.jsx';
+import {
+  IconChevronDown,
+  IconChevronUp,
+  IconExternal,
+  IconKeyboard,
+  IconLive,
+  IconReveal,
+  IconSignal,
+  IconStop,
+  IconSwitchLine,
+  IconTheaterOff,
+  IconTheaterOn,
+  IconWarn
+} from './icons.jsx';
 
 /**
  * 播放器懒加载：ArtPlayer + hls.js 约 700KB，只在用户真正点播放时拉取 chunk
@@ -49,16 +63,20 @@ export function sourceUrlFor(src, match) {
   return src.homeUrl;
 }
 
+const SHORTCUT_HINT =
+  '播放中可用：F 全屏 · P 画中画 · 空格 暂停 · ← → 快退快进 · 1–9 切换线路。快捷键在视频画面获得焦点时生效。';
+
 /**
  * 主舞台播放大屏
  *
- * 优化特性：
- *   1. 适中模式下采用主流平台（B站/YouTube）双列协同布局：
- *      - 左侧：16:9 视频视窗
- *      - 右侧：多线路切换 + 官方直达 + 关键速递
- *   2. 宽屏模式下一键扩展为 100% 满屏剧场视口
- *   3. 移除冗余的手动换源输入框，纯净专业
- *   4. isolate 层叠上下文隔离，彻底防止穿模
+ * 版式：B 站 / YouTube 式「左视窗 + 右协同栏」，宽屏模式一键扩展为满屏剧场。
+ *
+ * 降噪要点：
+ *   · 视窗中央此前又摆了一对大队徽 + 队名，与顶部常驻条、左栏 Hero 卡三处重复
+ *     同一场对阵。现在对阵命名只保留顶部常驻条一处，中央只留状态与倒计时。
+ *   · 移除金色径向光晕、LIVE 的 animate-ping 与线路激活点的 ping。
+ *   · 「直播链路待接入 · 本地流代理与抓取对齐属 P3，尚未实现」是开发排期注释，
+ *     且与实际实现脱节（代理早已可用，见设置抽屉的服务状态）。改为按真实状态说话。
  */
 export default function PlayerStage({
   match,
@@ -81,29 +99,33 @@ export default function PlayerStage({
     if (!match) return '--';
     return humanCountdown(engineCountdown(ts(match.t), now));
   }, [match, now]);
+
   const sources = useWatchSources();
   const [theaterMode, setTheaterMode] = useState(false);
   const [theaterLinesExpanded, setTheaterLinesExpanded] = useState(false);
   const [streamUrl, setStreamUrl] = useState(null);
   const [streamKind, setStreamKind] = useState(null);
   const [error, setError] = useState(null);
-  const [authorizing, setAuthorizing] = useState(false);
 
-  // 自动获取的线路列表
   const [lines, setLines] = useState([]);
   const [loadingLines, setLoadingLines] = useState(false);
   const [activeLineId, setActiveLineId] = useState(null);
   const [liveInfo, setLiveInfo] = useState(null);
 
-  // 宽屏模式下紧凑单行精选线路（保证激活线路必在视野内，且最多展示 3 条以确保严格单行不换行）
+  // 宽屏模式下紧凑单行精选线路（激活线路必在视野内，最多 3 条以确保严格单行不换行）
   const visibleTheaterLines = useMemo(() => {
     if (theaterLinesExpanded || lines.length <= 3) return lines;
     const activeIdx = lines.findIndex(l => l.id === activeLineId);
-    if (activeIdx < 0 || activeIdx < 3) {
-      return lines.slice(0, 3);
-    }
+    if (activeIdx < 0 || activeIdx < 3) return lines.slice(0, 3);
     return [...lines.slice(0, 2), lines[activeIdx]];
   }, [lines, theaterLinesExpanded, activeLineId]);
+
+  const stopPlayback = useCallback(() => {
+    setStreamUrl(null);
+    setStreamKind(null);
+    setActiveLineId(null);
+    setError(null);
+  }, []);
 
   /**
    * 选中线路切换播放
@@ -116,7 +138,6 @@ export default function PlayerStage({
     setError(null);
 
     if (line.isDirect && line.url) {
-      setAuthorizing(true);
       try {
         const u = new URL(line.url);
         await fetch('/api/proxy/allow', {
@@ -127,9 +148,7 @@ export default function PlayerStage({
         setStreamUrl(line.url);
         setStreamKind(line.kind || null);
       } catch (e) {
-        setError(`线路起播失败：${e.message}`);
-      } finally {
-        setAuthorizing(false);
+        setError(`起播失败：${e.message}`);
       }
     } else if (line.url) {
       window.open(line.url, '_blank', 'noopener,noreferrer');
@@ -138,10 +157,7 @@ export default function PlayerStage({
 
   // 切换场次时重置并拉取最新聚合与广播信号
   useEffect(() => {
-    setStreamUrl(null);
-    setStreamKind(null);
-    setError(null);
-    setActiveLineId(null);
+    stopPlayback();
     setLines([]);
     setLiveInfo(null);
     setTheaterLinesExpanded(false);
@@ -151,12 +167,11 @@ export default function PlayerStage({
     let alive = true;
     setLoadingLines(true);
 
-    const d = datePart(match.t);
     const query = new URLSearchParams({
       matchId: match.id || '',
       h: match.h || '',
       a: match.a || '',
-      date: d || '',
+      date: datePart(match.t) || '',
       // 开球时刻：聚合站同一对阵可能有多个房间，需要用时刻做邻近度排序
       t: match.t || ''
     });
@@ -169,12 +184,10 @@ export default function PlayerStage({
         const available = data.lines || [];
         setLines(available);
 
-        // 如果比赛处于进行中（live）且有可用直链，自动选中第一条线路起播
+        // 进行中的比赛若有可用直链，自动选中第一条起播
         if (state === 'live' && available.length > 0) {
           const direct = available.find(l => l.isDirect && l.url);
-          if (direct) {
-            selectLine(direct);
-          }
+          if (direct) selectLine(direct);
         }
       })
       .catch(err => {
@@ -188,7 +201,7 @@ export default function PlayerStage({
     return () => {
       alive = false;
     };
-  }, [match?.id, match?.h, match?.a, match?.t, state, selectLine]);
+  }, [match?.id, match?.h, match?.a, match?.t, state, selectLine, stopPlayback]);
 
   const proxyUrl = streamUrl ? `/api/proxy?url=${encodeURIComponent(streamUrl)}` : null;
 
@@ -197,14 +210,13 @@ export default function PlayerStage({
     const directLines = lines.filter(l => l.isDirect && l.url);
     if (!directLines.length) return;
     const currIdx = directLines.findIndex(l => l.id === activeLineId);
-    const nextIdx = (currIdx + 1) % directLines.length;
-    selectLine(directLines[nextIdx]);
+    selectLine(directLines[(currIdx + 1) % directLines.length]);
   };
 
   if (!match) {
     return (
-      <div className="flex aspect-video max-h-[46vh] w-full items-center justify-center rounded-2xl bg-black/80 shadow-card">
-        <p className="font-mono text-[11px] text-text-muted">从左侧选择一场比赛</p>
+      <div className="flex aspect-video max-h-[46vh] w-full items-center justify-center rounded-lg bg-stage-bg">
+        <p className="text-xs text-text-muted">从左侧选择一场比赛</p>
       </div>
     );
   }
@@ -213,11 +225,57 @@ export default function PlayerStage({
   const live = state === 'live';
   const minute = live ? liveMinute(kickTs, now) : 0;
   const finished = state === 'finished';
+  const directLines = lines.filter(l => l.isDirect && l.url);
 
-  /* 视频播放核心屏（纯净剧场大屏，无突兀外框） */
+  /* ---------------- 状态提示：按真实状态说话，不写死排期文案 ---------------- */
+  const notices = [];
+  if (error) {
+    notices.push({
+      tone: 'danger',
+      text: error,
+      action: directLines.length > 1 ? { label: '换一条线路', onClick: nextLine } : null
+    });
+  }
+  if (liveInfo?.scrapeError) {
+    notices.push({ tone: 'warn', text: '聚合站未响应，已回退到官方平台直达', action: null });
+  }
+  if (liveInfo?.matchAmbiguous) {
+    notices.push({ tone: 'warn', text: '同一对阵存在多个房间，已按开球时间选择，请确认画面', action: null });
+  }
+  if (liveInfo?.tvChannelsDown?.length) {
+    notices.push({
+      tone: 'warn',
+      text: `官方直达失效：${liveInfo.tvChannelsDown.join('、')}（签名过期，刷新线路配置可恢复）`,
+      action: null
+    });
+  }
+
+  const Notice = ({ n }) => (
+    <div
+      className={`flex items-start justify-between gap-2 rounded-md px-2.5 py-1.5 text-2xs leading-relaxed ${
+        n.tone === 'danger' ? 'bg-danger/10 text-danger' : 'bg-warn/10 text-warn'
+      }`}
+    >
+      <span className="inline-flex min-w-0 items-start gap-1.5">
+        <IconWarn size={12} className="mt-0.5" />
+        <span className="min-w-0">{n.text}</span>
+      </span>
+      {n.action && (
+        <button
+          type="button"
+          onClick={n.action.onClick}
+          className="shrink-0 font-medium underline underline-offset-2 hover:opacity-80"
+        >
+          {n.action.label}
+        </button>
+      )}
+    </div>
+  );
+
+  /* ---------------- 视频核心屏 ---------------- */
   const VideoScreen = (
     <div
-      className={`relative isolate z-0 aspect-video w-full overflow-hidden rounded-2xl bg-black shadow-2xl transition-all duration-200 ${
+      className={`relative isolate z-0 aspect-video w-full overflow-hidden rounded-lg bg-black transition-all duration-200 ${
         theaterMode ? 'max-h-[580px]' : 'max-h-[440px] xl:max-h-[480px]'
       } ${isOverlayOpen ? 'pointer-events-none select-none' : ''}`}
     >
@@ -225,399 +283,237 @@ export default function PlayerStage({
         <Suspense
           fallback={
             <div className="flex h-full w-full items-center justify-center bg-black">
-              <span className="font-mono text-[11px] text-slate-400 animate-pulse">正在载入播放器引擎…</span>
+              <span className="text-xs text-text-muted">正在载入播放器…</span>
             </div>
           }
         >
           <Player src={proxyUrl} kind={streamKind} onError={setError} />
         </Suspense>
       ) : (
-        <>
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_120%,rgba(255,184,0,0.12),transparent_65%)]" />
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <div className="flex items-center gap-4">
-              <Crest id={match.h} size={52} />
-              {/* 已完赛的比分同样受防剧透开关控制（此前这里直读 match.sc，绕过了开关） */}
-              {finished ? (
-                spoilerFree && !revealed ? (
-                  <button
-                    type="button"
-                    onClick={() => onReveal?.(match.id)}
-                    title="已赛场次默认隐藏比分（可在设置中关闭防剧透）"
-                    className="rounded-md bg-surface-elevated/80 px-2.5 py-1 font-mono text-[12px] font-medium text-text-secondary transition-all hover:bg-surface-hover hover:text-text-primary active:scale-95"
-                  >
-                    👁️ 揭晓比分
-                  </button>
-                ) : (
-                  <span className="font-mono text-[24px] font-extrabold tabular-nums text-slate-200">
-                    {match.sc || '—'}
-                  </span>
-                )
-              ) : (
-                <span className="font-mono text-[24px] font-extrabold tabular-nums text-slate-200">—</span>
-              )}
-              <Crest id={match.a} size={52} />
-            </div>
-
-            {state === 'sched' && (
-              <div className="text-center">
-                <p className="font-mono text-[10px] tracking-wider uppercase text-slate-400">距开球</p>
-                <p className="font-mono text-[28px] font-extrabold tabular-nums text-primary-gold drop-shadow-sm">
-                  {stageCountdown}
-                </p>
-                <p className="mt-0.5 font-mono text-[10px] text-slate-400">
-                  {zhDate(datePart(match.t))} {weekdayOf(datePart(match.t))} {hm(match.t)} 北京时间
-                </p>
-              </div>
-            )}
-            {live && (
-              <div className="flex items-center gap-2 rounded-full bg-live-red/15 px-3 py-1">
-                <span className="h-2 w-2 rounded-full bg-live-red animate-ping" />
-                <p className="font-mono text-[12px] font-extrabold text-live-red">
-                  比赛进行中 · 第 {minute} 分钟
-                </p>
-              </div>
-            )}
-            {state === 'ended_pending' && <p className="text-[11px] text-slate-300">比赛已结束，等待比分录入</p>}
-            {finished && <p className="font-mono text-[10px] text-slate-400">终场结束</p>}
-            {state === 'pp' && <p className="text-[11px] text-slate-300">本场延期，日历将原位提示</p>}
-          </div>
-        </>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5">
+          {state === 'sched' && (
+            <>
+              <span className="text-2xs text-text-faint">距开球</span>
+              <span className="font-num text-2xl font-semibold tabular-nums text-accent">
+                {stageCountdown}
+              </span>
+              <Meta num>
+                {zhDate(datePart(match.t))} {weekdayOf(datePart(match.t))} {hm(match.t)}
+              </Meta>
+            </>
+          )}
+          {live && (
+            <span className="inline-flex items-center gap-2 rounded-full bg-live/12 px-3 py-1">
+              <LiveDot />
+              <span className="font-num text-xs font-medium tabular-nums text-live">
+                进行中 {minute}′
+              </span>
+            </span>
+          )}
+          {state === 'ended_pending' && <span className="text-xs text-text-muted">已终场，等待比分录入</span>}
+          {finished &&
+            (spoilerFree && !revealed ? (
+              <Button variant="default" icon={<IconReveal />} onClick={() => onReveal?.(match.id)}>
+                揭晓比分
+              </Button>
+            ) : (
+              <span className="font-num text-2xl font-semibold tabular-nums text-text-primary">
+                {match.sc || '—'}
+              </span>
+            ))}
+          {state === 'pp' && <span className="text-xs text-text-muted">本场延期</span>}
+          {!live && !finished && state !== 'ended_pending' && state !== 'pp' && state !== 'sched' && (
+            <span className="text-xs text-text-muted">未开播</span>
+          )}
+        </div>
       )}
 
-      {/* 顶部对阵常驻条 */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between gap-2 bg-gradient-to-b from-black/85 via-black/40 to-transparent px-4 py-2.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-headline text-[13px] font-bold text-white drop-shadow-xs">
+      {/* 顶部对阵常驻条 —— 全应用唯一的对阵命名处 */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-overlay flex items-center justify-between gap-2 bg-gradient-to-b from-black/80 via-black/35 to-transparent px-3.5 py-2.5">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate text-sm font-semibold text-text-primary">
             {teamName(match.h)} vs {teamName(match.a)}
           </span>
-          <Pill>
+          <span className="shrink-0 text-2xs text-text-muted">
             {leagueName(match.l)} 第 {match.r} 轮
-          </Pill>
+          </span>
         </div>
-        <div className="pointer-events-auto flex items-center gap-2">
+        <div className="pointer-events-auto flex shrink-0 items-center gap-2">
           {live && (
-            <Pill tone="red">
+            <span className="inline-flex items-center gap-1.5">
               <LiveDot />
-              LIVE {minute}′
-            </Pill>
+              <span className="font-num text-2xs font-medium tabular-nums text-live">{minute}′</span>
+            </span>
           )}
           <button
             type="button"
             onClick={() => setTheaterMode(v => !v)}
-            title={theaterMode ? '切换为适中协同模式' : '切换为宽屏剧场模式'}
-            className="rounded-md bg-black/60 hover:bg-black/80 px-2.5 py-1 font-mono text-[10px] font-semibold text-white/90 hover:text-white transition-all active:scale-95 shadow-xs backdrop-blur-xs"
+            title={theaterMode ? '切换为协同模式' : '切换为宽屏剧场'}
+            aria-label={theaterMode ? '切换为协同模式' : '切换为宽屏剧场'}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-white/[0.08] text-text-secondary transition-colors hover:bg-white/[0.14] hover:text-text-primary"
           >
-            {theaterMode ? '适中 ⇱' : '宽屏 ⇲'}
+            {theaterMode ? <IconTheaterOff /> : <IconTheaterOn />}
           </button>
         </div>
       </div>
     </div>
   );
 
-  /* 右侧多线路与官方导航协同面板（适中模式使用） */
+  /* ---------------- 线路按钮（两种模式共用） ---------------- */
+  const LineButton = ({ l, compact = false }) => {
+    const isActive = activeLineId === l.id;
+    return (
+      <button
+        type="button"
+        onClick={() => selectLine(l)}
+        aria-pressed={isActive}
+        className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1 text-2xs transition-colors ${
+          isActive ? 'bg-surface-accent font-semibold text-accent' : 'text-text-secondary hover:bg-surface-raised'
+        }`}
+      >
+        {isActive && <IconSignal size={11} />}
+        <span className="max-w-[120px] truncate">{l.name}</span>
+        {!compact && <Meta>{l.isDirect ? '直链' : '内嵌'}</Meta>}
+      </button>
+    );
+  };
+
+  const OfficialLinks = ({ limit = 99 }) => (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {sources.slice(0, limit).map(s => (
+        <a
+          key={s.id}
+          href={sourceUrlFor(s, match)}
+          target="_blank"
+          rel="noreferrer noopener"
+          title={s.note || s.homeUrl}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-2xs text-text-secondary transition-colors hover:bg-surface-raised hover:text-text-primary"
+        >
+          <IconExternal size={11} />
+          {s.name}
+        </a>
+      ))}
+    </div>
+  );
+
+  /* ---------------- 右侧协同栏 ---------------- */
   const ControlSidebar = (
-    <div className="flex w-full lg:w-[290px] xl:w-[320px] shrink-0 flex-col justify-between rounded-xl bg-surface-card p-3 shadow-card">
-      <div className="space-y-3">
-        {/* 顶栏：多线路状态与切线 */}
-        <div className="flex items-center justify-between border-b border-white/[0.04] pb-2">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span
-              className={`inline-block h-2 w-2 rounded-full shrink-0 ${live ? 'bg-live-red animate-pulse' : 'bg-primary-gold'}`}
-            />
-            <span className="font-headline text-[12px] font-bold text-text-primary truncate">多线路直连</span>
-            {liveInfo?.matched && (
-              <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[9px] font-bold text-emerald-400 shrink-0">
-                🔴 信号对齐
-              </span>
-            )}
-          </div>
-          {lines.length > 1 && (
-            <button
-              type="button"
-              onClick={nextLine}
-              className="rounded bg-surface-panel px-2 py-0.5 font-mono text-[10px] font-medium text-text-muted hover:text-primary-gold transition-all active:scale-95 shrink-0"
-              title="切换下一条可用线路"
-            >
-              切线 ⇋
-            </button>
-          )}
+    <div className="flex w-full shrink-0 flex-col gap-3 rounded-lg border border-line-hairline bg-surface-card p-3 shadow-card lg:w-[290px] xl:w-[320px]">
+      <div className="flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-2">
+          <IconLive className={live ? 'text-live' : 'text-text-faint'} />
+          <span className="text-xs font-medium text-text-primary">直播线路</span>
+          <Meta num>{lines.length} 条</Meta>
+        </span>
+        {directLines.length > 1 && (
+          <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
+            换线
+          </Button>
+        )}
+      </div>
+
+      {lines.length > 0 ? (
+        <div className="scrollbar-thin -mr-1 max-h-[190px] space-y-0.5 overflow-y-auto pr-1">
+          {lines.map(l => (
+            <LineButton key={l.id} l={l} />
+          ))}
         </div>
+      ) : (
+        <p className="py-3 text-center text-2xs text-text-muted">
+          {loadingLines ? '正在检索线路…' : liveInfo?.scrapeError ? '未检索到线路' : '本场暂无直播线路，可用下方官方平台'}
+        </p>
+      )}
 
-        {/* 线路列表 */}
-        {lines.length > 0 ? (
-          <div className="space-y-1.5 max-h-[190px] overflow-y-auto pr-1 scrollbar-thin">
-            {lines.map(l => {
-              const isActive = activeLineId === l.id;
-              return (
-                <button
-                  key={l.id}
-                  type="button"
-                  onClick={() => selectLine(l)}
-                  className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 font-mono text-[11px] font-semibold transition-all active:scale-98 ${
-                    isActive
-                      ? 'bg-primary-gold/20 text-primary-gold shadow-xs font-bold'
-                      : 'bg-surface-panel/70 text-text-secondary hover:bg-surface-hover hover:text-text-primary'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    {isActive && <span className="h-1.5 w-1.5 rounded-full bg-primary-gold animate-ping shrink-0" />}
-                    <span className="truncate text-left">{l.name}</span>
-                  </div>
-                  <span
-                    className={`rounded px-1.5 py-0.2 text-[9px] shrink-0 font-bold ${
-                      l.isDirect
-                        ? 'bg-emerald-500/15 text-emerald-400'
-                        : 'bg-white/10 text-text-dim'
-                    }`}
-                  >
-                    {l.isDirect ? '直链' : '内嵌'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="py-4 text-center font-mono text-[11px] text-text-muted">
-            {loadingLines
-              ? '正在连接体育信号节点…'
-              : liveInfo?.scrapeError
-                ? '聚合站不可达，仅保底频道可用'
-                : '暂未匹配到直链，可直达官方平台'}
-          </div>
-        )}
+      {notices.length > 0 && (
+        <div className="space-y-1.5">
+          {notices.map((n, i) => (
+            <Notice key={i} n={n} />
+          ))}
+        </div>
+      )}
 
-        {/* 错误提示 */}
-        {error && (
-          <div className="flex items-center justify-between gap-1.5 rounded-lg bg-danger-orange/10 p-2 text-[10px] text-danger-orange leading-tight">
-            <span className="truncate">{error}</span>
-            {lines.filter(l => l.isDirect).length > 1 && (
-              <button
-                type="button"
-                onClick={nextLine}
-                className="shrink-0 font-bold underline hover:opacity-80"
-              >
-                切下一路
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* 抓取环节失败：与「今天确实没这场」是两回事，必须分开说 */}
-        {liveInfo?.scrapeError && (
-          <div className="rounded-lg bg-warning-amber/10 p-2 text-[10px] leading-tight text-warning-amber">
-            聚合站不可达
-            <span className="mt-0.5 block opacity-80">已降级为保底频道，稍后重试可能恢复</span>
-          </div>
-        )}
-
-        {/* 同名对阵存在多个房间：已按开球时刻选，但结果不保证正确，提示用户确认 */}
-        {liveInfo?.matchAmbiguous && (
-          <div className="rounded-lg bg-warning-amber/10 p-2 text-[10px] leading-tight text-warning-amber">
-            检测到多个同名对阵，已按开球时间选择
-            <span className="mt-0.5 block opacity-80">请确认画面无误后再观看</span>
-          </div>
-        )}
-
-        {/* 保底频道失效提示：签名过期是必然事件，必须让用户看见，而不是点了没反应 */}
-        {liveInfo?.tvChannelsDown?.length > 0 && (
-          <div className="rounded-lg bg-warning-amber/10 p-2 text-[10px] leading-tight text-warning-amber">
-            保底频道已失效：{liveInfo.tvChannelsDown.join('、')}
-            <span className="mt-0.5 block opacity-80">签名过期，需刷新线路配置</span>
-          </div>
-        )}
-
-        {/* 官方正版平台直达 */}
-        <div className="space-y-1.5 border-t border-white/[0.04] pt-2.5">
-          <span className="font-mono text-[10px] font-semibold text-text-muted">↗ 官方平台直达:</span>
-          <div className="flex flex-wrap gap-1.5">
-            {sources.map(s => (
-              <a
-                key={s.id}
-                href={sourceUrlFor(s, match)}
-                target="_blank"
-                rel="noreferrer noopener"
-                title={s.note || s.homeUrl}
-                className="rounded-md bg-surface-panel/80 px-2.5 py-1 font-mono text-[10px] font-semibold text-text-primary transition-all hover:bg-surface-hover shadow-2xs active:scale-95"
-              >
-                {s.name}
-              </a>
-            ))}
-          </div>
+      <div className="border-t border-line-hairline pt-2.5">
+        <SectionLabel>官方平台</SectionLabel>
+        <div className="mt-1.5">
+          <OfficialLinks />
         </div>
       </div>
 
-      {/* 底部快捷键与停止控制 */}
-      <div className="border-t border-white/[0.04] pt-2 mt-2 flex items-center justify-between text-[10px] text-text-dim font-mono">
-        <span>[F] 全屏 · [P] 画中画</span>
+      <div className="mt-auto flex items-center justify-between border-t border-line-hairline pt-2.5">
+        <span className="inline-flex items-center gap-1.5">
+          <Hint content={SHORTCUT_HINT} align="start">
+            <IconKeyboard size={12} />
+          </Hint>
+          <Meta>快捷键</Meta>
+        </span>
         {streamUrl && (
-          <button
-            type="button"
-            onClick={() => {
-              setStreamUrl(null);
-              setStreamKind(null);
-              setActiveLineId(null);
-              setError(null);
-            }}
-            className="text-text-muted hover:text-danger-orange font-semibold transition-colors"
-          >
-            停止播放
-          </button>
+          <Button variant="danger" icon={<IconStop />} onClick={stopPlayback}>
+            停止
+          </Button>
         )}
       </div>
     </div>
   );
 
   return (
-    <div className="flex flex-col gap-2.5 transition-all duration-300 w-full">
-      {/* 适中协同布局：左视窗 + 右控制栏 */}
+    <div className="flex w-full flex-col gap-2.5">
       {!theaterMode ? (
-        <div className="flex flex-col lg:flex-row items-stretch gap-3 w-full">
-          <div className="flex-1 min-w-0">{VideoScreen}</div>
+        <div className="flex w-full flex-col items-stretch gap-3 lg:flex-row">
+          <div className="min-w-0 flex-1">{VideoScreen}</div>
           {ControlSidebar}
         </div>
       ) : (
-        /* 宽屏剧场模式：满屏视窗 + 紧凑单行下栏（可展开） */
-        <div className="flex flex-col gap-2.5 w-full">
+        <div className="flex w-full flex-col gap-2.5">
           {VideoScreen}
+
           {!theaterLinesExpanded ? (
-            /* 紧凑单行模式：严格只占一行，右侧附带展开按钮 */
-            <div className="flex items-center justify-between gap-2.5 rounded-xl bg-surface-card px-3.5 py-2.5 shadow-card overflow-hidden">
-              {/* 左侧：信号点 + 状态 + 精选单行线路 + 展开胶囊 */}
-              <div className="flex items-center gap-1.5 min-w-0 overflow-x-auto no-scrollbar py-0.5">
-                <span className="font-headline text-[12px] font-bold text-text-primary flex items-center gap-1.5 shrink-0 mr-1">
-                  <span className={`inline-block h-2 w-2 rounded-full ${live ? 'bg-live-red animate-pulse' : 'bg-primary-gold'}`} />
-                  多线路直连
+            <div className="flex items-center justify-between gap-2.5 rounded-lg border border-line-hairline bg-surface-card px-3 py-2 shadow-card">
+              <div className="no-scrollbar flex min-w-0 items-center gap-1.5 overflow-x-auto py-0.5">
+                <span className="mr-1 inline-flex shrink-0 items-center gap-1.5">
+                  <IconLive className={live ? 'text-live' : 'text-text-faint'} />
+                  <span className="text-xs font-medium text-text-primary">线路</span>
                 </span>
-                {visibleTheaterLines.map(l => {
-                  const isActive = activeLineId === l.id;
-                  return (
-                    <button
-                      key={l.id}
-                      type="button"
-                      onClick={() => selectLine(l)}
-                      className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-mono text-[10px] font-semibold transition-all active:scale-95 shrink-0 whitespace-nowrap ${
-                        isActive
-                          ? 'bg-primary-gold/20 text-primary-gold shadow-xs font-bold'
-                          : 'bg-surface-panel/70 text-text-secondary hover:bg-surface-hover hover:text-text-primary'
-                      }`}
-                    >
-                      {isActive && <span className="h-1.5 w-1.5 rounded-full bg-primary-gold animate-ping" />}
-                      <span>{l.name}</span>
-                      <span className="rounded bg-surface-base/80 px-1 py-0.2 text-[8px] text-text-muted">
-                        {l.kind === 'embed' ? '内嵌' : '直链'}
-                      </span>
-                    </button>
-                  );
-                })}
-                {/* 线路过多时的展开按钮 */}
+                {visibleTheaterLines.map(l => (
+                  <LineButton key={l.id} l={l} compact />
+                ))}
                 {lines.length > 3 && (
-                  <button
-                    type="button"
-                    onClick={() => setTheaterLinesExpanded(true)}
-                    className="flex items-center gap-1 rounded-lg bg-surface-panel/90 px-2.5 py-1 font-mono text-[10px] font-bold text-primary-gold hover:bg-surface-hover transition-all shrink-0 active:scale-95 shadow-xs whitespace-nowrap"
-                    title="展开查看全部线路"
-                  >
-                    <span>全部 {lines.length} 线</span>
-                    <span className="text-[9px]">▾</span>
-                  </button>
+                  <Button variant="ghost" icon={<IconChevronDown />} onClick={() => setTheaterLinesExpanded(true)}>
+                    全部 {lines.length}
+                  </Button>
                 )}
-                {lines.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={nextLine}
-                    className="rounded-lg bg-surface-panel/80 px-2 py-1 font-mono text-[10px] text-text-muted hover:text-primary-gold transition-all shrink-0 active:scale-95 whitespace-nowrap"
-                    title="切换至下一线路"
-                  >
-                    切线 ⇋
-                  </button>
+                {directLines.length > 1 && (
+                  <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
+                    换线
+                  </Button>
                 )}
               </div>
-
-              {/* 右侧：官方直达快捷平台 */}
-              <div className="flex items-center gap-1.5 shrink-0 pl-2">
-                <span className="font-mono text-[10px] font-semibold text-text-muted hidden md:inline">↗ 官方平台:</span>
-                {sources.slice(0, 4).map(s => (
-                  <a
-                    key={s.id}
-                    href={sourceUrlFor(s, match)}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="rounded-md bg-surface-panel/80 px-2.5 py-1 font-mono text-[10px] font-semibold text-text-primary hover:bg-surface-hover hover:text-primary-gold transition-colors shrink-0 whitespace-nowrap"
-                  >
-                    {s.name}
-                  </a>
-                ))}
+              <div className="shrink-0">
+                <OfficialLinks limit={4} />
               </div>
             </div>
           ) : (
-            /* 展开模式：完整列出全部线路并提供收起按钮 */
-            <div className="flex flex-col gap-2 rounded-xl bg-surface-card p-3 shadow-card transition-all">
+            <div className="rounded-lg border border-line-hairline bg-surface-card p-3 shadow-card">
               <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-headline text-[12px] font-bold text-text-primary flex items-center gap-1.5">
-                    <span className={`inline-block h-2 w-2 rounded-full ${live ? 'bg-live-red animate-pulse' : 'bg-primary-gold'}`} />
-                    全部可用线路 ({lines.length})
-                  </span>
-                  {lines.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={nextLine}
-                      className="rounded-lg bg-surface-panel/80 px-2 py-0.5 font-mono text-[10px] text-text-muted hover:text-primary-gold transition-all active:scale-95"
-                    >
-                      切线 ⇋
-                    </button>
+                <span className="inline-flex items-center gap-2">
+                  <span className="text-xs font-medium text-text-primary">全部线路</span>
+                  <Meta num>{lines.length} 条</Meta>
+                  {directLines.length > 1 && (
+                    <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
+                      换线
+                    </Button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setTheaterLinesExpanded(false)}
-                    className="flex items-center gap-1 rounded-lg bg-surface-panel px-2.5 py-0.5 font-mono text-[10px] font-bold text-primary-gold hover:bg-surface-hover transition-all active:scale-95 shadow-xs"
-                    title="收起为单行显示"
-                  >
-                    <span>收起</span>
-                    <span className="text-[9px]">▴</span>
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <span className="font-mono text-[10px] font-semibold text-text-muted hidden md:inline">↗ 官方平台:</span>
-                  {sources.map(s => (
-                    <a
-                      key={s.id}
-                      href={sourceUrlFor(s, match)}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="rounded-md bg-surface-panel/80 px-2 py-0.5 font-mono text-[10px] font-semibold text-text-primary hover:bg-surface-hover hover:text-primary-gold transition-colors"
-                    >
-                      {s.name}
-                    </a>
-                  ))}
-                </div>
+                </span>
+                <span className="flex items-center gap-3">
+                  <OfficialLinks />
+                  <Button variant="ghost" icon={<IconChevronUp />} onClick={() => setTheaterLinesExpanded(false)}>
+                    收起
+                  </Button>
+                </span>
               </div>
-
-              {/* 全部线路网格 */}
-              <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                {lines.map(l => {
-                  const isActive = activeLineId === l.id;
-                  return (
-                    <button
-                      key={l.id}
-                      type="button"
-                      onClick={() => selectLine(l)}
-                      className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-mono text-[10px] font-semibold transition-all active:scale-95 ${
-                        isActive
-                          ? 'bg-primary-gold/20 text-primary-gold shadow-xs font-bold'
-                          : 'bg-surface-panel/70 text-text-secondary hover:bg-surface-hover hover:text-text-primary'
-                      }`}
-                    >
-                      {isActive && <span className="h-1.5 w-1.5 rounded-full bg-primary-gold animate-ping" />}
-                      <span>{l.name}</span>
-                      <span className="rounded bg-surface-base/80 px-1 py-0.2 text-[8px] text-text-muted">
-                        {l.kind === 'embed' ? '内嵌' : '直链'}
-                      </span>
-                    </button>
-                  );
-                })}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {lines.map(l => (
+                  <LineButton key={l.id} l={l} />
+                ))}
               </div>
             </div>
           )}

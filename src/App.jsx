@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fixtures } from './data/index.js';
 import { countdown as engineCountdown, ts } from './core/engine.js';
 import { humanCountdown } from './core/format.js';
-import { loadPrefs, savePrefs, applyTheme } from './core/prefs.js';
+import { loadPrefs, savePrefs } from './core/prefs.js';
 import {
   computeTonight,
   computeWeek,
@@ -13,7 +13,7 @@ import {
 } from './core/owl.js';
 
 import TopBar from './components/TopBar.jsx';
-import TonightView from './components/TonightView.jsx';
+import TonightView, { INDEX_HINT } from './components/TonightView.jsx';
 import WeekView from './components/WeekView.jsx';
 import ScheduleView from './components/ScheduleView.jsx';
 import IntelPanel from './components/IntelPanel.jsx';
@@ -66,11 +66,6 @@ export default function App() {
     setPrefsState(next);
     savePrefs(next);
   }, []);
-
-  // 外观主题同步（支持浅色、暗色与跟随系统）
-  useEffect(() => {
-    applyTheme(prefs.theme);
-  }, [prefs.theme]);
 
   // ---- 视图与选中 ----
   const boot = useMemo(initialFromUrl, []);
@@ -157,14 +152,13 @@ export default function App() {
         onViewChange={setView}
         liveCount={liveCount}
         prefs={prefs}
-        onPrefsChange={setPrefs}
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
       {/* 主工作区：左栏黄金比例（320-340px） + 右栏核心主舞台（~75%） */}
       <main className="flex min-h-0 flex-1 overflow-hidden">
         {/* 左栏：决策与列表 */}
-        <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] shrink-0 flex-col overflow-hidden border-r border-white/[0.04] bg-surface-panel p-3.5">
+        <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] shrink-0 flex-col overflow-hidden border-r border-line-hairline bg-surface-panel p-3.5">
           {view === 'tonight' && (
             <TonightView
               tonight={tonight}
@@ -208,7 +202,7 @@ export default function App() {
         </section>
 
         {/* 右栏：观赛大屏 + 情报与数据 */}
-        <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto scrollbar-thin bg-stage-bg p-4 transition-colors">
+        <section className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto bg-stage-bg p-4">
           <PlayerStage
             match={activeMatch}
             state={activeMatch ? stateOf(activeMatch, clockTs) : 'sched'}
@@ -217,7 +211,7 @@ export default function App() {
             revealed={activeMatch ? revealed.has(activeMatch.id) : false}
             onReveal={reveal}
           />
-          <IntelPanel match={activeMatch} prefs={prefs} />
+          <IntelPanel match={activeMatch} prefs={prefs} indexHint={INDEX_HINT} />
         </section>
       </main>
 

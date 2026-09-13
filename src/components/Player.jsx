@@ -3,6 +3,19 @@ import Artplayer from 'artplayer';
 import Hls from 'hls.js';
 import { inferMediaType } from '../core/media.js';
 
+/** 主题色兜底值：与 index.css 的 --accent 保持一致，仅在读取变量失败时使用 */
+const FALLBACK_THEME = '#F5B942';
+
+/** 从 CSS token 取色，避免播放器与界面各写一份品牌色 */
+function tokenColor(name) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v.startsWith('#') ? v : FALLBACK_THEME;
+  } catch {
+    return FALLBACK_THEME;
+  }
+}
+
 /**
  * 播放器（ArtPlayer + hls.js）
  *
@@ -16,7 +29,7 @@ import { inferMediaType } from '../core/media.js';
  *   · 切换线路时保留时间轴（FR-P-07）——销毁前记录 currentTime，新实例 ready 后 seek 回去
  *   · 只支持 m3u8 与 mp4；FLV 需 mpegts.js，本版不承诺（PRD：仅 Chromium 增强，非跨浏览器承诺）
  */
-export default function Player({ src, kind = null, onError, onLoadStart, theme = '#FFB800' }) {
+export default function Player({ src, kind = null, onError, onLoadStart, theme = null }) {
   const boxRef = useRef(null);
   const artRef = useRef(null);
   const hlsRef = useRef(null);
@@ -35,7 +48,7 @@ export default function Player({ src, kind = null, onError, onLoadStart, theme =
         container: box,
         url: src,
         type,
-        theme,
+        theme: theme || tokenColor('--accent'),
         volume: 0.5,
         muted: false,
         autoplay: true,
