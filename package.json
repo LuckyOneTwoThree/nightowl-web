@@ -59,6 +59,7 @@
       "dist/**/*",
       "electron/**/*",
       "server/**/*",
+      "src/core/**/*",
       "src/data/**/*",
       "package.json"
     ],

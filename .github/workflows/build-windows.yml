@@ -59,32 +59,38 @@ jobs:
       - name: Package Windows (NSIS)
         run: npx electron-builder --win --publish never
 
-      # 打包后自检：关键服务文件必须都在 resources/app 里。
-      # 曾出现过「安装后 scores.js 消失」（疑似杀软隔离）—— 若打包环节就缺文件，
-      # 在这里立刻失败，而不是让用户装完才发现。
+      # 打包后自检（两道）：
+      # ① 相对 import 扫描 —— 逐一解析产物内 server/electron 模块的相对 import，
+      #    目标文件必须存在。曾靠它本应抓到「scores.js → ../src/core/engine.js 未打包」，
+      #    人工枚举清单漏了这一条，导致安装包在用户机上才暴雷。
+      # ② 关键文件补充断言。
       - name: Verify packaged files
         shell: pwsh
         run: |
-          $required = @(
-            'resources/app/electron/main.cjs',
-            'resources/app/server/index.js',
-            'resources/app/server/proxy.js',
-            'resources/app/server/scores.js',
-            'resources/app/server/scraper.js',
-            'resources/app/server/m3u8.js',
-            'resources/app/server/rules.json',
-            'resources/app/src/data/fixtures.json',
-            'resources/app/dist/index.html'
-          )
+          $root = 'release/win-unpacked/resources/app'
           $missing = @()
-          foreach ($f in $required) {
-            if (-not (Test-Path "release/win-unpacked/$f")) { $missing += $f }
+          $scan = @(Get-ChildItem "$root/server" -Recurse -Filter *.js)
+          $scan += @(Get-ChildItem "$root/electron" -Filter *.cjs)
+          foreach ($f in $scan) {
+            $text = Get-Content $f.FullName -Raw
+            $refs = [regex]::Matches($text, "from '(\.[^']+)'")
+            $refs += [regex]::Matches($text, "import\('(\.[^']+)'\)")
+            foreach ($m in $refs) {
+              $rel = $m.Groups[1].Value
+              $target = [IO.Path]::GetFullPath((Join-Path $f.DirectoryName $rel))
+              if (-not (Test-Path $target)) {
+                $missing += ("{0} -> {1}" -f $f.FullName.Substring($root.Length + 1), $rel)
+              }
+            }
           }
           if ($missing.Count -gt 0) {
-            Write-Error "打包产物缺失: $($missing -join ', ')"
+            Write-Error ("相对 import 缺失目标:`n" + ($missing -join "`n"))
             exit 1
           }
-          Write-Host "✓ 打包产物完整（$($required.Count) 个关键文件齐全）"
+          foreach ($f in @('src/core/engine.js', 'src/data/fixtures.json', 'dist/index.html', 'build')) {
+            if (-not (Test-Path (Join-Path $root $f))) { Write-Error "缺失: $f"; exit 1 }
+          }
+          Write-Host ("OK 相对 import 全部可解析（扫描 {0} 个模块），关键文件齐全" -f $scan.Count)
 
       - name: Upload artifact
         uses: actions/upload-artifact@v5
