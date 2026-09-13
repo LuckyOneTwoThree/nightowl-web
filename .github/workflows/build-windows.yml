@@ -62,3 +62,22 @@ jobs:
           name: nightowl-windows-setup
           path: release/*.exe
           if-no-files-found: error
+
+      # tag 触发时把安装包发布成 **GitHub Release**：
+      # Artifact 只有登录且有权的人能下载，Release 附件任何人（免登录）都能下 ——
+      # 「其他用户拿安装包」必须走这里，Artifact 只作为构建产物备份。
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.exe
+          body: |
+            ## 夜猫看台 · Windows 安装包
+
+            ### 安装
+            1. 下载下方 `NightOwl-Terrace-Setup-*.exe`，双击安装（可自选目录）
+            2. 首次运行如出现 SmartScreen「已保护你的电脑」：点 **更多信息 → 仍要运行**（未做代码签名，属预期行为）
+
+            ### 内置能力
+            - 观赛决策（今晚之选 / 本周规划 / 睡眠档位 / 雷区预警，内置赛季快照）
+            - 直播源自动抓取 + 本地流代理；官方平台直达；粘贴直链播放
