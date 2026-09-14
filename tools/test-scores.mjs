@@ -72,9 +72,9 @@ console.log('一、前置校验：声称完赛必须带完整比分');
 console.log('');
 console.log('二、对照：旧行为确实会让整批失败');
 {
-  const dirty = pick('PL-4-MUN-MCI');
+  const dirty = fixtures.find(m => m.st === 'sched' && !m.sc) || pick('PL-4-MUN-MCI');
   // 手工构造旧行为会产出的半套补丁
-  const legacyPatches = new Map([[dirty.id, { st: 'done' }]]);
+  const legacyPatches = new Map([[dirty.id, { st: 'done', sc: undefined }]]);
   const { fixtures: legacyNext } = applyPatches(fixtures, legacyPatches);
   const legacyIssues = validateFixtures(legacyNext);
 

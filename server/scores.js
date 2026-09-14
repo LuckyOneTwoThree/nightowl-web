@@ -40,6 +40,45 @@ export function seasonMonths(now = new Date()) {
   return out;
 }
 
+/**
+ * 智能活跃同步月份：
+ * 完赛比分与即时改期主要发生于「历史已开球但未录入」或「当前/近期 7 天内」的比赛月份。
+ * 避免盲目扫描全季 9 个月（54 次请求），将常态同步请求压缩至 1~2 个月（8 秒极速完成）。
+ */
+export function activeSyncMonths(fixtures = [], nowTs = Date.now()) {
+  const months = new Set();
+  const d = new Date(nowTs);
+  const curY = d.getUTCFullYear();
+  const curM = d.getUTCMonth() + 1;
+  const pad = n => String(n).padStart(2, '0');
+
+  // 当前月
+  months.add(`${curY}${pad(curM)}`);
+
+  // 上个月
+  let prevY = curY;
+  let prevM = curM - 1;
+  if (prevM < 1) {
+    prevM = 12;
+    prevY--;
+  }
+  months.add(`${prevY}${pad(prevM)}`);
+
+  // 扫描 fixtures 中确有过去未完赛或近期 7 天开球的场次所属月份
+  const future7Days = nowTs + 7 * 86400000;
+  for (const m of fixtures) {
+    const t = ts(m.t);
+    if (Number.isNaN(t)) continue;
+    if (m.st === 'sched' && (t < nowTs || t <= future7Days)) {
+      const matchDate = new Date(t);
+      const ym = `${matchDate.getUTCFullYear()}${pad(matchDate.getUTCMonth() + 1)}`;
+      months.add(ym);
+    }
+  }
+
+  return Array.from(months).sort();
+}
+
 /* ------------------------------------------------------------------ */
 /* 折算补丁                                                            */
 /* ------------------------------------------------------------------ */
@@ -180,11 +219,19 @@ export function planPatches(merged, fixtures, conflicts = []) {
  * @param {string[]} [opts.months] 限定月份（仅对按月分块的源生效）
  * @param {string[]} [opts.sources] 指定启用的源，默认全部
  */
-export async function syncScores({ fixtures, rules, months, sources, log = console }) {
+export async function syncScores({ fixtures, rules, months, allMonths = false, sources, log = console }) {
   const cfg = rules.scores || {};
   const leagues = Object.keys(cfg.leagues || {});
   const order = (sources && sources.length ? sources : DEFAULT_ORDER).filter(s => DEFAULT_ORDER.includes(s));
-  const list = months && months.length ? months : seasonMonths();
+  
+  let list;
+  if (months && months.length && months !== 'all') {
+    list = Array.isArray(months) ? months : [months];
+  } else if (allMonths || months === 'all') {
+    list = seasonMonths();
+  } else {
+    list = activeSyncMonths(fixtures);
+  }
 
   const { events, bySource, errors } = await fetchAllEvents({
     leagues, months: list, order, log,

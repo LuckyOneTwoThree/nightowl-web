@@ -246,8 +246,10 @@ export function createServer(rules = loadRules(), log = console) {
           const body = await readJsonBody(req).catch(() => ({}));
           // apply=true 时写回用户数据目录；否则只预览（保持旧行为）
           const apply = body?.apply === true || searchParams.get('apply') === '1';
+          const allMonths = body?.allMonths === true || searchParams.get('all') === '1';
+          const months = body?.months || (searchParams.get('months') ? searchParams.get('months').split(',') : null);
           const fixtures = await loadFixtures();
-          const result = await syncScores({ fixtures, rules, log });
+          const result = await syncScores({ fixtures, rules, months, allMonths, log });
 
           let written = null;
           if (apply && result.patches.size > 0) {
@@ -346,6 +348,46 @@ export function createServer(rules = loadRules(), log = console) {
       if (!res.headersSent) sendJSON(res, 500, { error: String(err?.message || err) });
       else res.destroy();
     }
+  });
+
+  // 自动化后台常态保鲜：服务启动 3 秒后执行首次增量自检，随后每 30 分钟自检一次
+  const runBackgroundSync = async () => {
+    if (rules.scores?.enabled === false || syncing) return;
+    try {
+      syncing = true;
+      const startedAt = Date.now();
+      const fixtures = await loadFixtures();
+      const result = await syncScores({ fixtures, rules, log });
+      if (result.patches.size > 0) {
+        const { fixtures: next, changed } = applyPatches(fixtures, result.patches);
+        const issues = validateFixtures(next);
+        if (!issues.length) {
+          const saved = saveFixtures(next);
+          log.log?.(`[scores] 后台自动保鲜完成：写入 ${changed} 场新完赛比分 (${Date.now() - startedAt}ms)`);
+          lastSync = {
+            at: new Date().toISOString(),
+            ms: Date.now() - startedAt,
+            patches: result.patches.size,
+            applied: true,
+            written: { ...saved, changed },
+            errors: result.errors.length,
+            stats: result.stats
+          };
+        }
+      }
+    } catch (err) {
+      log.warn?.(`[scores] 后台保鲜异常: ${err?.message || err}`);
+    } finally {
+      syncing = false;
+    }
+  };
+
+  const startupTimer = setTimeout(runBackgroundSync, 3000);
+  const cronTimer = setInterval(runBackgroundSync, 30 * 60 * 1000);
+
+  server.on('close', () => {
+    clearTimeout(startupTimer);
+    clearInterval(cronTimer);
   });
 
   return server;

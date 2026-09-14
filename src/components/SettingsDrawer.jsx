@@ -31,6 +31,7 @@ export default function SettingsDrawer({
   onPrefsChange,
   onClose,
   onRerunOnboarding,
+  onReplaySplash,
   onDataRefresh
 }) {
   const leagueCount = prefs.followedLeagues.length;
@@ -329,6 +330,11 @@ export default function SettingsDrawer({
             {onRerunOnboarding && (
               <Button variant="ghost" onClick={onRerunOnboarding}>
                 重新引导
+              </Button>
+            )}
+            {onReplaySplash && (
+              <Button variant="ghost" onClick={onReplaySplash}>
+                开屏动画
               </Button>
             )}
           </div>

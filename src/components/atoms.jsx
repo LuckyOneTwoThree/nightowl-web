@@ -68,16 +68,16 @@ export function Meta({ children, className = '', num = false }) {
 /** 状态标签：只用于**有语义**的状态（档位 / 直播 / 主队 / 警告） */
 export function Chip({ tone = 'neutral', children, className = '' }) {
   const tones = {
-    neutral: 'bg-surface-raised text-text-muted',
-    accent: 'bg-accent/12 text-accent',
-    live: 'bg-live/12 text-live',
-    warn: 'bg-warn/12 text-warn',
-    danger: 'bg-danger/12 text-danger',
-    resource: 'bg-resource/12 text-resource'
+    neutral: 'bg-white/[0.04] border border-white/[0.06] text-text-muted',
+    accent: 'bg-accent/15 border border-accent/30 text-accent shadow-[0_0_8px_rgba(245,185,66,0.15)]',
+    live: 'bg-live/15 border border-live/30 text-live shadow-[0_0_8px_rgba(226,86,79,0.15)]',
+    warn: 'bg-warn/15 border border-warn/30 text-warn',
+    danger: 'bg-danger/15 border border-danger/30 text-danger',
+    resource: 'bg-resource/15 border border-resource/30 text-resource'
   };
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded px-1.5 py-px text-2xs font-medium leading-snug ${
+      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs font-medium leading-snug ${
         tones[tone] || tones.neutral
       } ${className}`}
     >
@@ -173,10 +173,10 @@ export function Button({
   ...rest
 }) {
   const variants = {
-    primary: 'bg-accent text-accent-ink hover:bg-accent/90 font-semibold',
-    default: 'bg-surface-raised text-text-primary hover:bg-surface-press',
-    ghost: 'text-text-muted hover:bg-surface-raised hover:text-text-primary',
-    danger: 'text-danger hover:bg-danger/12'
+    primary: 'bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 text-accent-ink hover:brightness-105 font-semibold shadow-[0_0_16px_rgba(245,185,66,0.25)]',
+    default: 'bg-gradient-to-b from-[#1c2436] to-[#121722] border border-white/[0.08] text-text-primary hover:border-white/20 hover:from-[#222c42] hover:to-[#161c2b] shadow-sm',
+    ghost: 'border border-white/[0.08] bg-white/[0.03] text-text-secondary hover:bg-white/[0.08] hover:border-white/20 hover:text-text-primary transition-all',
+    danger: 'border border-danger/30 bg-danger/10 text-danger hover:bg-danger/20'
   };
   const sizes = {
     sm: 'px-2.5 py-1 text-2xs',
@@ -236,7 +236,7 @@ export function Switch({ on, onChange, label }) {
 /** 分段选择器（视图切换 / 线路切换 / 联赛筛选共用） */
 export function Segmented({ items, value, onChange, className = '' }) {
   return (
-    <div className={`inline-flex items-center gap-0.5 ${className}`} role="tablist">
+    <div className={`inline-flex items-center gap-1 rounded-lg border border-white/[0.06] bg-[#101522]/70 p-0.5 shadow-inner backdrop-blur-sm ${className}`} role="tablist">
       {items.map(it => {
         const active = it.id === value;
         return (
@@ -246,10 +246,10 @@ export function Segmented({ items, value, onChange, className = '' }) {
             role="tab"
             aria-selected={active}
             onClick={() => onChange(it.id)}
-            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs transition-all ${
               active
-                ? 'bg-surface-accent text-accent font-semibold'
-                : 'text-text-muted hover:bg-surface-raised hover:text-text-primary'
+                ? 'border border-accent/40 bg-gradient-to-r from-accent/25 via-accent/15 to-accent/10 font-semibold text-accent shadow-[0_0_12px_rgba(245,185,66,0.2)]'
+                : 'border border-transparent text-text-muted hover:border-white/[0.06] hover:bg-white/[0.04] hover:text-text-primary'
             }`}
           >
             {it.icon}
@@ -312,14 +312,30 @@ export function TogglePill({
  * 悬浮说明：把"界面在解释自己"的长句收进这里。
  *
  * 算法公式、口径规则、实现状态这类内容**不是决策信息**，不该常驻版面；
- * 但它们又确实需要被查到，所以给一个稳定的入口而不是删掉。
+/**
+ * 口径说明（Hint）
+ *
+ * 界面只展示事实，不解释自己。但口径确实需要可查，所以给一个稳定的入口。
+ * 默认向上展示，当处于顶部容器时可指定 side="bottom"，避免被顶栏或外层截断。
  */
-export function Hint({ content, children = null, align = 'center', className = '' }) {
-  const pos = {
+export function Hint({
+  content,
+  title = null,
+  children = null,
+  align = 'center',
+  side = 'top',
+  className = ''
+}) {
+  const posAlign = {
     center: 'left-1/2 -translate-x-1/2',
     start: 'left-0',
     end: 'right-0'
-  }[align];
+  }[align] || 'left-1/2 -translate-x-1/2';
+
+  const posSide = side === 'bottom'
+    ? 'top-full mt-2'
+    : 'bottom-full mb-2';
+
   return (
     <span className={`group/hint relative inline-flex items-center ${className}`}>
       {children ? (
@@ -343,8 +359,9 @@ export function Hint({ content, children = null, align = 'center', className = '
       )}
       <span
         role="tooltip"
-        className={`pointer-events-none absolute bottom-full z-pop mb-1.5 hidden w-max max-w-[260px] rounded-md border border-line-hairline bg-surface-press px-2.5 py-1.5 text-left text-2xs font-normal leading-relaxed text-text-secondary shadow-pop group-hover/hint:block group-focus-within/hint:block ${pos}`}
+        className={`pointer-events-none absolute z-50 ${posSide} ${posAlign} hidden w-max max-w-[240px] rounded-lg border border-white/15 bg-[#1a2336] p-2.5 text-left text-2xs font-normal leading-relaxed text-text-secondary shadow-[0_12px_32px_rgba(0,0,0,0.85)] group-hover/hint:block group-focus-within/hint:block`}
       >
+        {title && <div className="mb-1 font-semibold text-accent text-2xs">{title}</div>}
         {content}
       </span>
     </span>

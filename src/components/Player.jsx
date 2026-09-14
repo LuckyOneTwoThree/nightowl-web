@@ -29,7 +29,7 @@ function tokenColor(name) {
  *   · 切换线路时保留时间轴（FR-P-07）——销毁前记录 currentTime，新实例 ready 后 seek 回去
  *   · 只支持 m3u8 与 mp4；FLV 需 mpegts.js，本版不承诺（PRD：仅 Chromium 增强，非跨浏览器承诺）
  */
-export default function Player({ src, kind = null, onError, onLoadStart, theme = null }) {
+export default function Player({ src, kind = null, onError, onLoadStart, theme = null, onAspectRatio = null }) {
   const boxRef = useRef(null);
   const artRef = useRef(null);
   const hlsRef = useRef(null);
@@ -83,7 +83,23 @@ export default function Player({ src, kind = null, onError, onLoadStart, theme =
       artRef.current = art;
       onLoadStart?.();
 
+      art.on('video:loadedmetadata', () => {
+        if (art.video?.videoWidth && art.video?.videoHeight) {
+          const r = art.video.videoWidth / art.video.videoHeight;
+          if (r > 0.5 && r < 3) {
+            onAspectRatio?.(r);
+          }
+        }
+      });
+
       art.on('ready', () => {
+        // 视频就绪时如果已有元数据也尝试上报
+        if (art.video?.videoWidth && art.video?.videoHeight) {
+          const r = art.video.videoWidth / art.video.videoHeight;
+          if (r > 0.5 && r < 3) {
+            onAspectRatio?.(r);
+          }
+        }
         // 切线路保留时间轴
         if (resume > 0) {
           try {

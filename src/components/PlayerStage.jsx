@@ -103,6 +103,14 @@ export default function PlayerStage({
   const sources = useWatchSources();
   const [theaterMode, setTheaterMode] = useState(false);
   const [theaterLinesExpanded, setTheaterLinesExpanded] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState(16 / 9);
+  useEffect(() => {
+    setAspectRatio(16 / 9);
+  }, [match?.id]);
+
+  // 方案 B：满宽流线型物理比例自适应，杜绝横向拉伸黑边，并与下方卡片 100% 满宽严格对齐
+  const maxH = theaterMode ? 'min(760px, 75vh)' : 'min(500px, 58vh)';
+
   const [streamUrl, setStreamUrl] = useState(null);
   const [streamKind, setStreamKind] = useState(null);
   const [error, setError] = useState(null);
@@ -151,7 +159,11 @@ export default function PlayerStage({
         setError(`起播失败：${e.message}`);
       }
     } else if (line.url) {
-      window.open(line.url, '_blank', 'noopener,noreferrer');
+      if (window.desktop?.openExternal) {
+        window.desktop.openExternal(line.url);
+      } else {
+        window.open(line.url, '_blank', 'noopener,noreferrer');
+      }
     }
   }, []);
 
@@ -275,9 +287,13 @@ export default function PlayerStage({
   /* ---------------- 视频核心屏 ---------------- */
   const VideoScreen = (
     <div
-      className={`relative isolate z-0 aspect-video w-full overflow-hidden rounded-lg bg-black transition-all duration-200 ${
-        theaterMode ? 'max-h-[580px]' : 'max-h-[440px] xl:max-h-[480px]'
-      } ${isOverlayOpen ? 'pointer-events-none select-none' : ''}`}
+      style={{
+        maxHeight: maxH,
+        aspectRatio: `${aspectRatio}`
+      }}
+      className={`relative isolate z-0 w-full overflow-hidden rounded-xl bg-black shadow-2xl transition-all duration-200 ${
+        isOverlayOpen ? 'pointer-events-none select-none' : ''
+      }`}
     >
       {streamUrl ? (
         <Suspense
@@ -287,14 +303,14 @@ export default function PlayerStage({
             </div>
           }
         >
-          <Player src={proxyUrl} kind={streamKind} onError={setError} />
+          <Player src={proxyUrl} kind={streamKind} onError={setError} onAspectRatio={setAspectRatio} />
         </Suspense>
       ) : (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#182133] via-[#0d121c] to-black">
           {state === 'sched' && (
             <>
               <span className="text-2xs text-text-faint">距开球</span>
-              <span className="font-num text-2xl font-semibold tabular-nums text-accent">
+              <span className="font-num text-3xl font-semibold tabular-nums bg-gradient-to-r from-amber-200 via-amber-400 to-amber-300 bg-clip-text text-transparent sm:text-4xl">
                 {stageCountdown}
               </span>
               <Meta num>
@@ -303,9 +319,9 @@ export default function PlayerStage({
             </>
           )}
           {live && (
-            <span className="inline-flex items-center gap-2 rounded-full bg-live/12 px-3 py-1">
+            <span className="inline-flex items-center gap-2 rounded-full border border-live/30 bg-gradient-to-r from-live/20 to-live/5 px-3.5 py-1">
               <LiveDot />
-              <span className="font-num text-xs font-medium tabular-nums text-live">
+              <span className="font-num text-xs font-semibold tabular-nums text-live">
                 进行中 {minute}′
               </span>
             </span>
@@ -317,7 +333,7 @@ export default function PlayerStage({
                 揭晓比分
               </Button>
             ) : (
-              <span className="font-num text-2xl font-semibold tabular-nums text-text-primary">
+              <span className="font-num text-3xl font-semibold tabular-nums text-text-primary">
                 {match.sc || '—'}
               </span>
             ))}
@@ -380,19 +396,28 @@ export default function PlayerStage({
 
   const OfficialLinks = ({ limit = 99 }) => (
     <div className="flex flex-wrap items-center gap-1.5">
-      {sources.slice(0, limit).map(s => (
-        <a
-          key={s.id}
-          href={sourceUrlFor(s, match)}
-          target="_blank"
-          rel="noreferrer noopener"
-          title={s.note || s.homeUrl}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-2xs text-text-secondary transition-colors hover:bg-surface-raised hover:text-text-primary"
-        >
-          <IconExternal size={11} />
-          {s.name}
-        </a>
-      ))}
+      {sources.slice(0, limit).map(s => {
+        const url = sourceUrlFor(s, match);
+        return (
+          <a
+            key={s.id}
+            href={url}
+            target="_blank"
+            rel="noreferrer noopener"
+            title={s.note || s.homeUrl}
+            onClick={e => {
+              if (window.desktop?.openExternal && url) {
+                e.preventDefault();
+                window.desktop.openExternal(url);
+              }
+            }}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-2xs text-text-secondary transition-colors hover:bg-surface-raised hover:text-text-primary"
+          >
+            <IconExternal size={11} />
+            {s.name}
+          </a>
+        );
+      })}
     </div>
   );
 
@@ -459,15 +484,21 @@ export default function PlayerStage({
     <div className="flex w-full flex-col gap-2.5">
       {!theaterMode ? (
         <div className="flex w-full flex-col items-stretch gap-3 lg:flex-row">
-          <div className="min-w-0 flex-1">{VideoScreen}</div>
+          <div className="flex min-w-0 flex-1 items-start justify-center">
+            {VideoScreen}
+          </div>
           {ControlSidebar}
         </div>
       ) : (
         <div className="flex w-full flex-col gap-2.5">
-          {VideoScreen}
+          <div className="w-full">
+            {VideoScreen}
+          </div>
 
           {!theaterLinesExpanded ? (
-            <div className="flex items-center justify-between gap-2.5 rounded-lg border border-line-hairline bg-surface-card px-3 py-2 shadow-card">
+            <div
+              className="flex w-full items-center justify-between gap-2.5 rounded-lg border border-line-hairline bg-surface-card px-3 py-2 shadow-card"
+            >
               <div className="no-scrollbar flex min-w-0 items-center gap-1.5 overflow-x-auto py-0.5">
                 <span className="mr-1 inline-flex shrink-0 items-center gap-1.5">
                   <IconLive className={live ? 'text-live' : 'text-text-faint'} />
@@ -492,7 +523,9 @@ export default function PlayerStage({
               </div>
             </div>
           ) : (
-            <div className="rounded-lg border border-line-hairline bg-surface-card p-3 shadow-card">
+            <div
+              className="w-full rounded-lg border border-line-hairline bg-surface-card p-3 shadow-card"
+            >
               <div className="flex items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-2">
                   <span className="text-xs font-medium text-text-primary">全部线路</span>

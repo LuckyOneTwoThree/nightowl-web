@@ -15,6 +15,8 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   CircleStop,
   Copy,
@@ -76,6 +78,9 @@ export const IconClose = mk(X, 14);
 export const IconCheck = mk(Check, 12);
 export const IconChevronDown = mk(ChevronDown, 12);
 export const IconChevronUp = mk(ChevronUp, 12);
+export const IconChevronLeft = mk(ChevronLeft, 13);
+export const IconChevronRight = mk(ChevronRight, 13);
+export const IconCalendar = mk(CalendarDays, 13);
 export const IconReset = mk(RotateCcw, 13);
 export const IconExternal = mk(ExternalLink, 12);
 export const IconReveal = mk(Eye, 13);

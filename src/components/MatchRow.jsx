@@ -38,10 +38,10 @@ export default function MatchRow({
   const minute = live ? liveMinute(ts(m.t), now) : 0;
 
   const rowBg = live
-    ? 'bg-live/[0.07] hover:bg-live/[0.10]'
+    ? 'bg-gradient-to-r from-live/[0.16] via-live/[0.08] to-transparent border border-live/30 shadow-[0_0_12px_rgba(226,86,79,0.12)]'
     : active
-      ? 'bg-surface-accent'
-      : 'hover:bg-surface-raised';
+      ? 'bg-gradient-to-r from-accent/[0.22] via-accent/[0.10] to-[#121824]/40 border border-accent/40 shadow-[0_0_16px_-4px_rgba(245,185,66,0.2)]'
+      : 'border border-transparent hover:border-white/[0.06] hover:bg-gradient-to-r hover:from-white/[0.06] hover:to-transparent';
 
   return (
     <div
@@ -55,7 +55,7 @@ export default function MatchRow({
         }
       }}
       aria-current={active ? 'true' : undefined}
-      className={`relative w-full cursor-pointer select-none overflow-hidden rounded-md py-2 pr-2.5 pl-3 text-left transition-colors ${rowBg}`}
+      className={`relative w-full cursor-pointer select-none overflow-hidden rounded-lg py-2 pr-2.5 pl-3 text-left transition-all ${rowBg}`}
     >
       {/* 联赛身份条 */}
       <span

@@ -22,6 +22,7 @@ import UpcomingFixtures from './components/UpcomingFixtures.jsx';
 import SameNightPicks from './components/SameNightPicks.jsx';
 import SettingsDrawer from './components/SettingsDrawer.jsx';
 import Onboarding, { shouldShowOnboarding } from './components/Onboarding.jsx';
+import SplashScreen from './components/SplashScreen.jsx';
 
 /**
  * 比赛 id → 记录（O(1) 取用）
@@ -80,7 +81,15 @@ export default function App() {
   // ---- 视图与选中 ----
   const boot = useMemo(initialFromUrl, []);
   const [view, setView] = useState(boot.view);
-  const [activeMatchId, setActiveMatchId] = useState(boot.matchId || null);
+  const [activeMatchId, setActiveMatchId] = useState(() => {
+    if (boot.matchId) return boot.matchId;
+    try {
+      const initTonight = computeTonight(Date.now(), prefs);
+      return initTonight.hero?.m?.id || initTonight.focal?.m?.id || null;
+    } catch {
+      return null;
+    }
+  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [revealed, setRevealed] = useState(() => new Set());
   const [filters, setFilters] = useState(() => defaultScheduleFilters());
@@ -91,6 +100,27 @@ export default function App() {
     setSettingsOpen(false);
     setOnboardingOpen(true);
   };
+
+  // 开屏动画：首次会话展示（避免每次刷新都强行阻断），并支持在设置中主动回放
+  const [splashOpen, setSplashOpen] = useState(() => {
+    try {
+      return sessionStorage.getItem('nightowl:splash_shown') !== '1';
+    } catch {
+      return true;
+    }
+  });
+
+  const handleCloseSplash = useCallback(() => {
+    setSplashOpen(false);
+    try {
+      sessionStorage.setItem('nightowl:splash_shown', '1');
+    } catch {}
+  }, []);
+
+  const replaySplash = useCallback(() => {
+    setSettingsOpen(false);
+    setSplashOpen(true);
+  }, []);
 
   // 防剧透开关变化时清空已揭晓状态，避免"关掉又打开还留着旧揭晓"
   useEffect(() => {
@@ -132,39 +162,20 @@ export default function App() {
   /**
    * 自动保鲜：启动跑一次，之后每 30 分钟检查
    *
-   * 为什么必须自动化：这是「本地单机 + 手动保鲜」的产品，用户不会记得点按钮 ——
-   * 实测快照曾停在 4 天前，46 场已结束的比赛全部显示「待录比分」，
-   * 用户的第一反应是「应用坏了」。只在存在「已结束但无比分」的场次时才真正拉取，
-   * 平时不做无谓请求；没有可写目录（纯预览环境）时完全跳过。
+   * 自动保鲜改由**服务端**负责（server/index.js 的 runBackgroundSync：
+   * 启动 3 秒后首次自检，之后每 30 分钟一次，且用 activeSyncMonths 只扫 1~2 个月，
+   * 几秒完成）。渲染层不再自行定时同步 —— 否则与服务端各跑一套定时器，
+   * 互相触发 409「已有同步任务进行中」，纯属重复。
+   *
+   * 渲染层只保留两件事：
+   *   ① 读取（refreshData 拉 /api/fixtures，把服务端数据热替换进内存）
+   *   ② 手动兜底（设置面板的「立即同步比分」按钮）
    */
   useEffect(() => {
-    let alive = true;
-    let firstRun = true;
-    const tick = async () => {
-      try {
-        const st = await fetch('/api/scores/status').then(r => (r.ok ? r.json() : null));
-        if (!alive || !st?.freshness?.writable) return;
-        // 首次无条件同步（补上停机期间积累的缺口）；之后只在确有缺口时才拉
-        if (!firstRun && st.freshness.pendingCount === 0) return;
-        firstRun = false;
-        const r = await fetch('/api/scores/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apply: true })
-        });
-        if (!alive || !r.ok) return;
-        const j = await r.json();
-        if ((j?.summary?.written?.changed ?? 0) > 0) await refreshData();
-      } catch {
-        /* 离线或服务未就绪：静默跳过，不影响其他功能 */
-      }
-    };
-    tick();
-    const timer = setInterval(tick, 30 * 60 * 1000);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
+    // 服务端后台同步完成后数据会变；页面聚焦时轻量校准一次（不做定时轮询）
+    const onFocus = () => refreshData();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, [refreshData]);
 
   // ---- 派生数据（分钟粒度重算，故意不依赖秒级 now）----
@@ -218,7 +229,7 @@ export default function App() {
   }, [view, activeMatchId]);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg-app">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#08090e] bg-[radial-gradient(ellipse_75%_55%_at_85%_5%,_rgba(124,58,237,0.16),_transparent_65%),radial-gradient(ellipse_60%_50%_at_12%_15%,_rgba(37,99,235,0.14),_transparent_65%),radial-gradient(ellipse_110%_70%_at_50%_-10%,_rgba(30,42,75,0.35),_rgba(8,10,16,0.95)_70%,_#05060a_100%)] text-text-primary">
       {/* TopBar 的时钟、PlayerStage 的倒计时各自内部按秒刷新，不走这里 */}
       <TopBar
         view={view}
@@ -231,7 +242,7 @@ export default function App() {
       {/* 主工作区：左栏黄金比例（320-340px） + 右栏核心主舞台（~75%） */}
       <main className="flex min-h-0 flex-1 overflow-hidden">
         {/* 左栏：决策与列表 */}
-        <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] shrink-0 flex-col overflow-hidden border-r border-line-hairline bg-surface-panel p-3.5">
+        <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] shrink-0 flex-col overflow-hidden border-r border-white/[0.06] bg-gradient-to-b from-[#111322]/90 via-[#0c0e17]/95 to-[#07080f] p-3.5 shadow-[4px_0_24px_rgba(0,0,0,0.35)]">
           {view === 'tonight' && (
             <TonightView
               tonight={tonight}
@@ -278,19 +289,21 @@ export default function App() {
             上半（播放器 + 熬夜看点/双方数据）保持原有纵向排布；
             下半新增模块区：双方后续赛程 & 同夜推荐 —— 宽屏并排两列、窄屏堆叠，
             把全屏时下方的空白用真正有决策价值的信息填满。 */}
-        <section className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto bg-stage-bg p-4">
-          <PlayerStage
-            match={activeMatch}
-            state={activeMatch ? stateOf(activeMatch, clockTs) : 'sched'}
-            isOverlayOpen={settingsOpen || onboardingOpen}
-            spoilerFree={prefs.spoilerFree}
-            revealed={activeMatch ? revealed.has(activeMatch.id) : false}
-            onReveal={reveal}
-          />
-          <IntelPanel match={activeMatch} prefs={prefs} indexHint={INDEX_HINT} />
-          <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
-            <UpcomingFixtures match={activeMatch} prefs={prefs} />
-            <SameNightPicks match={activeMatch} prefs={prefs} onSelect={select} />
+        <section className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto bg-gradient-to-b from-[#0e101f]/60 via-[#080912]/80 to-[#040508]/95 p-4">
+          <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3">
+            <PlayerStage
+              match={activeMatch}
+              state={activeMatch ? stateOf(activeMatch, clockTs) : 'sched'}
+              isOverlayOpen={settingsOpen || onboardingOpen}
+              spoilerFree={prefs.spoilerFree}
+              revealed={activeMatch ? revealed.has(activeMatch.id) : false}
+              onReveal={reveal}
+            />
+            <IntelPanel match={activeMatch} prefs={prefs} indexHint={INDEX_HINT} />
+            <div className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-2">
+              <UpcomingFixtures match={activeMatch} prefs={prefs} />
+              <SameNightPicks match={activeMatch} prefs={prefs} onSelect={select} />
+            </div>
           </div>
         </section>
       </main>
@@ -301,6 +314,7 @@ export default function App() {
         onPrefsChange={setPrefs}
         onClose={() => setSettingsOpen(false)}
         onRerunOnboarding={rerunOnboarding}
+        onReplaySplash={replaySplash}
         onDataRefresh={refreshData}
       />
 
@@ -310,6 +324,8 @@ export default function App() {
         onPrefsChange={setPrefs}
         onClose={() => setOnboardingOpen(false)}
       />
+
+      {splashOpen && <SplashScreen onClose={handleCloseSplash} />}
     </div>
   );
 }

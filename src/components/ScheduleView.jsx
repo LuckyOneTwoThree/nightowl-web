@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { VList } from 'virtua';
 import { weekdayOf } from '../core/format.js';
 import { fixtures, LEAGUE_ORDER, LEAGUE_NAMES, leagueColor } from '../data/index.js';
@@ -6,7 +6,7 @@ import { evalOne, stateOf, defaultScheduleFilters, dayCounts, owlDayOffset } fro
 import * as E from '../core/engine.js';
 import MatchRow from './MatchRow.jsx';
 import { EmptyState, Meta, TogglePill } from './atoms.jsx';
-import { IconClose, IconSearch } from './icons.jsx';
+import { IconCalendar, IconChevronLeft, IconChevronRight, IconClose, IconSearch } from './icons.jsx';
 
 /** 各联赛场次总数（静态，算一次） */
 const LEAGUE_TOTALS = fixtures.reduce((acc, m) => {
@@ -41,17 +41,42 @@ export default function ScheduleView({
   /* ---- 日期导航 ----
      主流产品（FotMob / 懂球帝）的赛程页都是「日期条 + 当日比赛」，
      而不是 1897 场的瀑布流。date=null 表示今天；'all' 保留全季列表（规划视图）。 */
+  const todayDate = useMemo(() => owlDayOffset(0, now), [now]);
   const [showAll, setShowAll] = useState(filters.date === 'all');
 
-  const selDate = filters.date && filters.date !== 'all' ? filters.date : owlDayOffset(0, now);
+  const selDate = filters.date && filters.date !== 'all' ? filters.date : todayDate;
+
+  const datePickerRef = useRef(null);
+  const activeBtnRef = useRef(null);
+  const stripRef = useRef(null);
+
+  // 滚动聚焦当前选中或今天
+  useEffect(() => {
+    if (activeBtnRef.current) {
+      activeBtnRef.current.scrollIntoView({
+        behavior: 'smooth',
+        inline: 'center',
+        block: 'nearest'
+      });
+    }
+  }, [selDate, showAll]);
 
   const dayStrip = useMemo(() => {
     const counts = dayCounts();
-    // 今天排第一（用户要求），只向后看 34 天；「全部」按钮移到日期条末尾
-    return Array.from({ length: 34 }, (_, i) => {
+    // 覆盖过去 14 天到未来 28 天（支持翻阅历史赛程与昨日、前天比分）
+    const list = [];
+    for (let i = -14; i <= 28; i++) {
       const d = owlDayOffset(i, now);
-      return { date: d, count: counts[d] || 0, isToday: i === 0 };
-    });
+      list.push({
+        offset: i,
+        date: d,
+        count: counts[d] || 0,
+        isToday: i === 0,
+        isYesterday: i === -1,
+        isBeforeYesterday: i === -2
+      });
+    }
+    return list;
   }, [now]);
 
   // 当日比赛按联赛分组（date 模式不用虚拟滚动 —— 一天就十几场）
@@ -87,6 +112,15 @@ export default function ScheduleView({
     }
   };
 
+  const stepDate = direction => {
+    const base = selDate || todayDate;
+    const [y, m, d] = base.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() + direction);
+    const nextD = dt.toISOString().slice(0, 10);
+    setDate(nextD);
+  };
+
   const toggleLeague = code => {
     if (allSelected) {
       // 全选状态下，点击任一联赛即单选该联赛（符合主流体验）
@@ -109,7 +143,7 @@ export default function ScheduleView({
           value={filters.query}
           onChange={e => set({ query: e.target.value })}
           placeholder="搜索球队 / 联赛 / 场次 ID"
-          className="w-full rounded-md border border-line-hairline bg-surface-card py-1.5 pl-8 pr-8 text-xs text-text-primary placeholder:text-text-faint focus:border-accent/50 focus:outline-none"
+          className="w-full rounded-lg border border-white/[0.08] bg-[#111724]/80 py-1.5 pl-8 pr-8 text-xs text-text-primary placeholder:text-text-faint focus:border-accent/50 focus:bg-[#151d2d] focus:outline-none transition-all shadow-inner"
         />
         {filters.query && (
           <button
@@ -117,52 +151,123 @@ export default function ScheduleView({
             onClick={() => set({ query: '' })}
             aria-label="清空搜索"
             title="清空搜索"
-            className="absolute right-2 inline-flex h-5 w-5 items-center justify-center rounded text-text-faint transition-colors hover:bg-surface-raised hover:text-text-primary"
+            className="absolute right-2 inline-flex h-5 w-5 items-center justify-center rounded text-text-faint transition-colors hover:bg-white/[0.08] hover:text-text-primary"
           >
             <IconClose size={12} />
           </button>
         )}
       </div>
 
-      {/* 日期导航条：默认选中今天且**今天排第一**（此前今天落在第 4 位，视线先落在过去几天上）；
-          「全部」（全季列表）移到末尾，不抢首位 */}
-      <div className="scrollbar-thin -mx-0.5 flex items-stretch gap-1 overflow-x-auto pb-0.5">
-        {dayStrip.map(({ date, count, isToday }) => {
-          const active = !showAll && date === selDate;
+      {/* 日期导航控制条：前一天 / 选中日期 / 后一天 / 回到今天 / 日历选择 */}
+      <div className="flex items-center justify-between gap-1.5 px-0.5">
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => stepDate(-1)}
+            title="前一天"
+            className="inline-flex h-6.5 w-6.5 items-center justify-center rounded-md border border-white/[0.08] bg-gradient-to-b from-[#182030] to-[#101520] text-text-secondary transition-all hover:border-accent/40 hover:text-text-primary shadow-sm"
+          >
+            <IconChevronLeft size={12} />
+          </button>
+          <span className="font-ui text-2xs font-semibold text-text-primary">
+            {showAll ? '全季赛程' : `${selDate} (${weekdayOf(selDate)})`}
+          </span>
+          <button
+            type="button"
+            onClick={() => stepDate(1)}
+            title="后一天"
+            className="inline-flex h-6.5 w-6.5 items-center justify-center rounded-md border border-white/[0.08] bg-gradient-to-b from-[#182030] to-[#101520] text-text-secondary transition-all hover:border-accent/40 hover:text-text-primary shadow-sm"
+          >
+            <IconChevronRight size={12} />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          {!showAll && selDate !== todayDate && (
+            <button
+              type="button"
+              onClick={() => setDate(todayDate)}
+              className="rounded-md border border-accent/40 bg-gradient-to-r from-accent/20 to-accent/10 px-2 py-0.5 font-ui text-2xs font-medium text-accent transition-all hover:border-accent/60 hover:from-accent/30 hover:to-accent/20 shadow-sm"
+            >
+              回到今天
+            </button>
+          )}
+          <input
+            ref={datePickerRef}
+            type="date"
+            value={showAll ? '' : selDate}
+            onChange={e => e.target.value && setDate(e.target.value)}
+            className="sr-only"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                datePickerRef.current?.showPicker();
+              } catch {
+                datePickerRef.current?.focus();
+              }
+            }}
+            title="按日历选择日期"
+            className="inline-flex h-6.5 w-6.5 items-center justify-center rounded-md border border-white/[0.08] bg-gradient-to-b from-[#182030] to-[#101520] text-text-muted transition-all hover:border-accent/40 hover:text-text-primary shadow-sm"
+          >
+            <IconCalendar size={12} />
+          </button>
+        </div>
+      </div>
+
+      {/* 日期横向滚动导航条（过去 14 天到未来 28 天，安全内边距杜绝边缘裁剪，自动居中当前日期） */}
+      <div
+        ref={stripRef}
+        className="scrollbar-thin flex items-stretch gap-1.5 overflow-x-auto rounded-lg border border-white/[0.05] bg-[#0c1017]/70 p-1.5 backdrop-blur-sm shadow-inner"
+      >
+        {dayStrip.map(item => {
+          const active = !showAll && item.date === selDate;
+          const label = item.isToday
+            ? '今天'
+            : item.isYesterday
+              ? '昨天'
+              : item.isBeforeYesterday
+                ? '前天'
+                : item.date.slice(5).replace('-', '/');
           return (
             <button
-              key={date}
+              key={item.date}
+              ref={active ? activeBtnRef : null}
               type="button"
-              onClick={() => setDate(date)}
+              onClick={() => setDate(item.date)}
               aria-pressed={active}
-              className={`relative shrink-0 rounded-md border px-2 py-1 text-center transition-colors ${
+              className={`relative shrink-0 rounded-md border px-2.5 py-1 text-center transition-all ${
                 active
-                  ? 'border-accent/60 bg-accent/15'
-                  : 'border-line-hairline bg-surface-card hover:border-accent/40'
+                  ? 'border-accent/60 bg-gradient-to-b from-accent/30 via-accent/15 to-accent/5 shadow-[0_0_14px_rgba(245,185,66,0.22)]'
+                  : item.isToday
+                    ? 'border-accent/30 bg-gradient-to-b from-[#1a2233] to-[#111722] hover:border-accent/50'
+                    : 'border-white/[0.06] bg-gradient-to-b from-[#151c2a] to-[#0e121a] hover:border-white/20 hover:from-[#1a2334] hover:to-[#111620]'
               }`}
             >
               <div
                 className={`font-num text-2xs font-semibold tabular-nums ${
-                  active ? 'text-accent' : isToday ? 'text-text-primary' : 'text-text-secondary'
+                  active ? 'text-accent' : item.isToday ? 'text-amber-300' : 'text-text-secondary'
                 }`}
               >
-                {isToday ? '今天' : date.slice(5).replace('-', '/')}
+                {label}
               </div>
               <div className="text-2xs text-text-faint">
-                {count > 0 ? `${count} 场` : '—'}
+                {item.count > 0 ? `${item.count} 场` : '—'}
               </div>
             </button>
           );
         })}
 
-        {/* 「全部」放末尾：全季列表是规划视图，不该抢日期条的首位 */}
+        {/* 「全部」按钮 */}
         <button
           type="button"
+          ref={showAll ? activeBtnRef : null}
           onClick={() => setDate('all')}
           aria-pressed={showAll}
-          className={`ml-1 shrink-0 rounded-md border px-2.5 py-1 font-ui text-2xs transition-colors ${
+          className={`shrink-0 rounded-md border px-2.5 py-1 font-ui text-2xs transition-all ${
             showAll
-              ? 'border-accent/60 bg-accent/15 text-accent'
+              ? 'border-accent/60 bg-gradient-to-b from-accent/25 to-accent/10 text-accent font-semibold shadow-sm'
               : 'border-line-hairline bg-surface-card text-text-secondary hover:border-accent/40'
           }`}
         >

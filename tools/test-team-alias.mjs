@@ -83,10 +83,12 @@ const espnAlias = JSON.parse(readFileSync(resolve(ROOT, 'server/espn-alias.json'
   const bad = [];
   for (const [lg, map] of Object.entries(espnAlias.byLeague || {})) {
     for (const [abbr, id] of Object.entries(map)) {
-      if (!byId.has(id)) bad.push(`${lg} ${abbr} → ${id}（id 不存在）`);
+      const t = byId.get(id);
+      if (!t) bad.push(`${lg} ${abbr} → ${id}（id 不存在）`);
+      else if (lg !== 'UCL' && t.league !== lg) bad.push(`${lg} ${abbr} → ${id}（该队属于 ${t.league}）`);
     }
   }
-  ok('ESPN 别名表的每个目标 id 都存在', bad.length === 0, bad.slice(0, 6).join('; '));
+  ok('ESPN 别名表的每个目标 id 都存在且联赛一致', bad.length === 0, bad.slice(0, 6).join('; '));
   ok('ESPN 别名表无未解析项', (espnAlias.unresolved || []).length === 0,
     `未解析 ${(espnAlias.unresolved || []).length} 条`);
 }

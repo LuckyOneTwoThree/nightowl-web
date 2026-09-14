@@ -23,10 +23,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const BUILT_IN = resolve(ROOT, 'src/data/fixtures.json');
 
-/** 用户可写目录（桌面端注入；未注入时为 null，表示只能读内置） */
+/** 用户可写目录（桌面端注入；未注入时自动回落到本地 server/cache/user-data） */
 export function userDataDir() {
   const d = process.env.NIGHTOWL_USER_DATA;
-  return d && String(d).trim() ? String(d).trim() : null;
+  if (d && String(d).trim()) return String(d).trim();
+  // 本地服务/开发模式自动回落至 server/cache/user-data，确保保鲜写入能力在全环境生效
+  return resolve(ROOT, 'server/cache/user-data');
 }
 
 export function userFixturesPath() {

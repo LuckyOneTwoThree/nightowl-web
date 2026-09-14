@@ -15,7 +15,7 @@
  *   注意 .cjs 后缀是必须的 —— 否则会被 "type":"module" 当成 ESM。
  */
 
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const path = require('node:path');
 
 const PORT_CANDIDATES = [3100, 3101, 3102, 3103, 3104];
@@ -100,6 +100,25 @@ function createWindow() {
   };
   mainWindow.on('maximize', pushMaximized);
   mainWindow.on('unmaximize', pushMaximized);
+
+  // 拦截所有新窗口请求（如 target="_blank" 或 window.open）：
+  // 严禁打开内部无地址栏、无登录态的 Electron 裸窗口，一律直接唤起用户的系统默认浏览器（Chrome / Safari / Edge 等）
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+
+  // 拦截主窗口非本地服务的页面跳转，防止桌面应用内部被意外导航到外部网站
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const appOrigin = `http://${HOST}:${appPort}`;
+    if (!url.startsWith(appOrigin)) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+
   return mainWindow;
 }
 
@@ -111,6 +130,11 @@ ipcMain.on('win:toggle-maximize', () => {
   else mainWindow.maximize();
 });
 ipcMain.on('win:close', () => mainWindow?.close());
+ipcMain.on('win:open-external', (_event, url) => {
+  if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
+    shell.openExternal(url);
+  }
+});
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {

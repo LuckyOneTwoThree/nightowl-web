@@ -61,7 +61,7 @@ function TeamColumn({ teamId, list, side }) {
 export default function UpcomingFixtures({ match, prefs }) {
   if (!match) {
     return (
-      <section className="rounded-lg border border-line-hairline bg-surface-panel p-3.5">
+      <section className="flex h-full flex-col justify-center rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#14162a] via-[#0f111f] to-[#0a0c16] p-4 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
         <EmptyState
           icon={null}
           title="选中一场比赛，查看双方后续赛程"
@@ -74,19 +74,25 @@ export default function UpcomingFixtures({ match, prefs }) {
   const { home, away } = upcomingForTeams(match);
 
   return (
-    <section className="rounded-lg border border-line-hairline bg-surface-panel p-3.5">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="font-ui text-2xs font-semibold tracking-wide text-text-secondary">
-          双方后续赛程
-        </h3>
-        <span className="font-ui text-2xs text-text-faint">
-          各取最近 4 场 · 档位越高熬夜代价越大
-        </span>
+    <section className="flex h-full flex-col justify-between rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#14162a] via-[#0f111f] to-[#0a0c16] p-4 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+      <div>
+        <div className="mb-2.5 flex items-center justify-between">
+          <h3 className="font-ui text-2xs font-semibold tracking-wide text-text-primary">
+            双方后续赛程
+          </h3>
+          <span className="font-ui text-2xs text-text-muted">
+            各取最近 4 场 · 档位越高熬夜代价越大
+          </span>
+        </div>
+        <div className="flex gap-4">
+          <TeamColumn teamId={match.h} list={home} side="主队" />
+          <div className="w-px shrink-0 bg-white/[0.08]" />
+          <TeamColumn teamId={match.a} list={away} side="客队" />
+        </div>
       </div>
-      <div className="flex gap-4">
-        <TeamColumn teamId={match.h} list={home} side="主队" />
-        <div className="w-px shrink-0 bg-line-hairline" />
-        <TeamColumn teamId={match.a} list={away} side="客队" />
+      <div className="mt-3 flex items-center justify-between border-t border-white/[0.06] pt-2 font-ui text-2xs text-text-faint">
+        <span>对阵排期 · 关联评估</span>
+        <span>主客各至多 4 轮</span>
       </div>
     </section>
   );

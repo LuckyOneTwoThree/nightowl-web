@@ -64,10 +64,10 @@ export default function IntelPanel({ match, prefs, indexHint }) {
   const leagueB = leagueBonus(ev, PRODUCT_WEIGHTS);
 
   return (
-    <section className="rounded-lg border border-line-hairline bg-surface-card shadow-card">
+    <section className="rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#14162a] via-[#0f111f] to-[#0a0c16] shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
       {/* 面板头：只放视图切换，不放对阵信息 */}
-      <div className="flex items-center justify-between gap-3 border-b border-line-hairline px-3.5 py-2">
-        <div className="flex items-center gap-0.5" role="tablist" aria-label="情报视图">
+      <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-[#181a32]/50 px-3.5 py-2.5">
+        <div className="flex items-center gap-1" role="tablist" aria-label="情报视图">
           <PanelTab active={tab === 'decision'} onClick={() => setTab('decision')} icon={<IconCost />}>
             熬夜代价与看点
           </PanelTab>
@@ -75,12 +75,12 @@ export default function IntelPanel({ match, prefs, indexHint }) {
             双方数据
           </PanelTab>
         </div>
-        <div className="flex shrink-0 items-baseline gap-1.5">
-          <Hint content={indexHint} align="end" />
+        <div className="flex shrink-0 items-center gap-1.5">
           <Meta>夜猫指数</Meta>
           <span className="font-num text-sm font-semibold tabular-nums text-accent">
             {index.toFixed(1)}
           </span>
+          <Hint content={indexHint} side="bottom" align="end" />
         </div>
       </div>
 
@@ -140,10 +140,10 @@ function PanelTab({ active, onClick, icon, children }) {
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs transition-colors ${
+      className={`inline-flex items-center rounded-lg px-3 py-1.5 text-xs transition-all ${
         active
-          ? 'bg-surface-accent font-semibold text-accent'
-          : 'text-text-muted hover:bg-surface-raised hover:text-text-primary'
+          ? 'bg-gradient-to-r from-accent/25 via-accent/15 to-accent/10 border border-accent/40 font-semibold text-accent shadow-[0_0_12px_rgba(245,185,66,0.18)]'
+          : 'border border-transparent text-text-muted hover:border-white/[0.08] hover:bg-white/[0.04] hover:text-text-primary'
       }`}
     >
       {icon}

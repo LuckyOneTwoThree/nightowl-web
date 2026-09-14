@@ -122,9 +122,9 @@ for (const [key, c] of uniq) {
   if (ourById.has(abbr) && ourById.get(abbr).league === league) {
     ourId = abbr;
     how = 'abbr';
-  } else if (ourById.has(abbr)) {
+  } else if (league === 'UCL' && ourById.has(abbr)) {
     ourId = abbr;
-    how = 'abbr-跨联赛';
+    how = 'abbr-跨联赛(UCL)';
   } else {
     // ② displayName 归一化对齐 teams.en
     const cand = ourByName.get(norm(c.displayName)) || ourByName.get(norm(c.name)) || ourByName.get(norm(c.shortName));

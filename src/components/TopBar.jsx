@@ -61,7 +61,7 @@ const VIEWS = [
 /** 夜猫看台标记（纯 SVG，跟随品牌色变量） */
 function OwlMark() {
   return (
-    <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true" className="shrink-0">
+    <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true" className="shrink-0 drop-shadow-[0_0_8px_rgba(245,185,66,0.35)]">
       <path d="M8 10.5 L13 6.5 L13 13 Z" fill="var(--accent)" opacity="0.9" />
       <path d="M24 10.5 L19 6.5 L19 13 Z" fill="var(--accent)" opacity="0.9" />
       <circle cx="12" cy="17" r="4.2" fill="none" stroke="var(--accent)" strokeWidth="1.6" />
@@ -105,13 +105,21 @@ export default function TopBar({ view, onViewChange, liveCount, prefs, onOpenSet
 
   return (
     <header
-      className="drag-region flex h-[52px] min-h-[52px] select-none items-center justify-between border-b border-line-hairline bg-bg-app px-5"
+      className="drag-region relative flex h-[52px] min-h-[52px] select-none items-center justify-between bg-gradient-to-r from-[#0d1226]/95 via-[#090b14]/90 to-[#190e30]/95 px-5 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.5)]"
       style={{ paddingLeft: isMacDesktop ? 80 : undefined }}
     >
+      {/* 底部极光微流光边线：左侧星空蓝 -> 中段低调冰霜 -> 右侧极光紫 */}
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-blue-500/30 via-white/[0.08] to-purple-500/40"
+        aria-hidden="true"
+      />
+
       <div className="flex items-center gap-5">
         <div className="flex items-center gap-2">
           <OwlMark />
-          <span className="text-sm font-semibold tracking-tight text-text-primary">夜猫看台</span>
+          <span className="bg-gradient-to-r from-amber-200 via-amber-400 to-amber-300 bg-clip-text text-sm font-bold tracking-tight text-transparent drop-shadow-[0_0_12px_rgba(245,185,66,0.35)]">
+            夜猫看台
+          </span>
         </div>
 
         <nav className="no-drag" aria-label="视图切换">

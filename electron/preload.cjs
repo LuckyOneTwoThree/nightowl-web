@@ -15,6 +15,8 @@ try {
     minimize: () => ipcRenderer.send('win:minimize'),
     toggleMaximize: () => ipcRenderer.send('win:toggle-maximize'),
     close: () => ipcRenderer.send('win:close'),
+    /** 在系统默认浏览器中打开外部链接（央视频、咪咕等官方平台） */
+    openExternal: url => ipcRenderer.send('win:open-external', url),
     /** 订阅最大化状态变化（自绘按钮据此切换图标），返回取消订阅函数 */
     onMaximizeChange: cb => {
       const handler = (_e, isMaximized) => cb(isMaximized);
