@@ -12,6 +12,44 @@ import { IconClose, IconEmpty, IconInfo, IconReveal, IconStars } from './icons.j
 /* 拼一个圆角盒子 —— 此前每个组件各自发明按钮与胶囊，是视觉发散的根源。 */
 /* ================================================================== */
 
+/**
+ * 官方品牌图标：严格遵循圆角阶梯、微光描边与高保真防溢出
+ * @param {number} size - 图标像素尺寸（如 24, 26, 30, 36, 88）
+ * @param {'sm'|'md'|'lg'|'xl'|'2xl'|'3xl'} rounded - 圆角规格（严格受 tailwind.config 约束）
+ * @param {boolean} withGlow - 是否带有琥珀微光光晕与金边高光
+ * @param {string} className - 额外容器类
+ */
+export function BrandLogo({ size = 26, rounded = 'md', className = '', withGlow = false }) {
+  const roundCls = {
+    sm: 'rounded-sm',
+    md: 'rounded-md',
+    lg: 'rounded-lg',
+    xl: 'rounded-xl',
+    '2xl': 'rounded-2xl',
+    '3xl': 'rounded-3xl'
+  }[rounded] || 'rounded-md';
+
+  return (
+    <span
+      style={{ width: size, height: size }}
+      className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden border border-white/15 bg-[#0e121d] shadow-sm transition-transform duration-300 ${roundCls} ${
+        withGlow
+          ? 'border-accent/40 shadow-[0_0_14px_rgba(245,185,66,0.32)]'
+          : 'shadow-[0_2px_8px_rgba(0,0,0,0.5)]'
+      } ${className}`}
+    >
+      <img
+        src="/favicon.png"
+        alt="夜猫看台"
+        width={size}
+        height={size}
+        className="h-full w-full object-cover select-none pointer-events-none"
+        loading="eager"
+      />
+    </span>
+  );
+}
+
 /** 队徽：本地 PNG；未收录或加载失败时回退为队色圆标 + 三字码 */
 export function Crest({ id, size = 28, className = '' }) {
   const [failed, setFailed] = useState(false);

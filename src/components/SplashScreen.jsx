@@ -119,60 +119,16 @@ export default function SplashScreen({
           <div className="absolute h-28 w-28 rounded-full border border-accent/20 bg-accent/5 animate-ping opacity-25" />
           <div className="absolute h-36 w-36 rounded-full border border-purple-500/20 bg-purple-500/5 animate-pulse opacity-20" />
 
-          {/* 发光主体圆形座 */}
-          <div className="relative flex h-24 w-24 items-center justify-center rounded-3xl border border-white/15 bg-gradient-to-b from-[#1c2237] via-[#101424] to-[#0a0c16] shadow-[0_0_40px_rgba(245,185,66,0.22),inset_0_1px_0_0_rgba(255,255,255,0.2)]">
-            <svg
-              viewBox="0 0 32 32"
-              width="54"
-              height="54"
-              aria-hidden="true"
-              className="drop-shadow-[0_0_16px_rgba(245,185,66,0.5)] transition-transform duration-700 hover:scale-105"
-            >
-              {/* 猫耳 */}
-              <path d="M8 10.5 L13 6.5 L13 13 Z" fill="var(--accent)" opacity="0.95" />
-              <path d="M24 10.5 L19 6.5 L19 13 Z" fill="var(--accent)" opacity="0.95" />
-
-              {/* 眼眶 */}
-              <circle
-                cx="12"
-                cy="17"
-                r="4.2"
-                fill="none"
-                stroke="var(--accent)"
-                strokeWidth="1.6"
-                className="opacity-90"
-              />
-              <circle
-                cx="20"
-                cy="17"
-                r="4.2"
-                fill="none"
-                stroke="var(--accent)"
-                strokeWidth="1.6"
-                className="opacity-90"
-              />
-
-              {/* 瞳孔（高亮琥珀流光） */}
-              <circle
-                cx="12"
-                cy="17"
-                r="1.8"
-                fill="#fff"
-                className="animate-pulse"
-                style={{ filter: 'drop-shadow(0 0 4px #f5b942)' }}
-              />
-              <circle
-                cx="20"
-                cy="17"
-                r="1.8"
-                fill="#fff"
-                className="animate-pulse"
-                style={{ filter: 'drop-shadow(0 0 4px #f5b942)' }}
-              />
-
-              {/* 喙喙 */}
-              <path d="M14.6 22.4 L16 24.6 L17.4 22.4 Z" fill="var(--accent)" />
-            </svg>
+          {/* 发光主体圆角底座 */}
+          <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-b from-[#1c2237] via-[#101424] to-[#0a0c16] shadow-[0_0_40px_rgba(245,185,66,0.28),0_16px_36px_rgba(0,0,0,0.8),inset_0_1px_0_0_rgba(255,255,255,0.25)] transition-transform duration-700 hover:scale-105">
+            <img
+              src="/favicon.png"
+              alt="夜猫看台"
+              width="96"
+              height="96"
+              className="h-full w-full object-cover select-none pointer-events-none drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]"
+              loading="eager"
+            />
           </div>
         </div>
 

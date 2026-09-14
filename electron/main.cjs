@@ -83,6 +83,7 @@ function createWindow() {
     // macOS 用 hiddenInset 保留交通灯（红黄绿），Windows/Linux 完全自绘
     ...(isMac ? { titleBarStyle: 'hiddenInset' } : { frame: false }),
     title: '夜猫看台',
+    icon: path.join(__dirname, '../build/icon.png'),
     webPreferences: {
       // 渲染层是纯 Web（React + ArtPlayer），不需要任何 Node 能力
       preload: path.join(__dirname, 'preload.cjs'), // 只暴露三个窗口动作

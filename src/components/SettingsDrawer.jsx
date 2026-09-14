@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fixtures, FOLLOWABLE_LEAGUES, LEAGUE_NAMES, leagueColor } from '../data/index.js';
 import { defaultPrefs } from '../core/prefs.js';
-import { Button, Chip, Fieldset, Hint, Meta, Switch, TogglePill } from './atoms.jsx';
+import { BrandLogo, Button, Chip, Fieldset, Hint, Meta, Switch, TogglePill } from './atoms.jsx';
 import { IconClose, IconReset } from './icons.jsx';
 import TeamPicker from './TeamPicker.jsx';
 
@@ -141,9 +141,12 @@ export default function SettingsDrawer({
       >
         {/* 头部 */}
         <div className="flex items-center justify-between border-b border-line-hairline px-5 py-3.5">
-          <div>
-            <h2 className="font-headline text-base font-semibold text-text-primary">偏好与数据</h2>
-            <Meta className="mt-0.5 block">决定推荐排序与背包规划的输入</Meta>
+          <div className="flex items-center gap-2.5">
+            <BrandLogo size={24} rounded="md" />
+            <div>
+              <h2 className="font-headline text-base font-semibold text-text-primary">偏好与数据</h2>
+              <Meta className="mt-0.5 block">决定推荐排序与背包规划的输入</Meta>
+            </div>
           </div>
           <button
             type="button"

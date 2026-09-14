@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, Chip, Meta } from './atoms.jsx';
+import { BrandLogo, Button, Chip, Meta } from './atoms.jsx';
 import { IconClose, IconWarn } from './icons.jsx';
 
 const REPO_OWNER = 'LuckyOneTwoThree';
@@ -133,12 +133,7 @@ export default function UpdateModal({
         {/* 标题栏 */}
         <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-accent/30 bg-accent/15 text-accent shadow-[0_0_12px_rgba(245,185,66,0.3)]">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 2v8m0 0l3-3m-3 3l-3-3" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4" strokeLinecap="round" />
-              </svg>
-            </span>
+            <BrandLogo size={30} rounded="lg" withGlow />
             <div>
               <h2 className="text-sm font-semibold text-text-primary">夜猫看台 · 版本升级</h2>
               <p className="text-2xs text-text-muted">

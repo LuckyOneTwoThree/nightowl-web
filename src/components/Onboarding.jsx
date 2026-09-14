@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FOLLOWABLE_LEAGUES, LEAGUE_NAMES, leagueColor } from '../data/index.js';
-import { Button, Chip, Hint, Meta, TogglePill } from './atoms.jsx';
+import { BrandLogo, Button, Chip, Hint, Meta, TogglePill } from './atoms.jsx';
 import TeamPicker from './TeamPicker.jsx';
 
 const ONBOARDING_KEY = 'onboardingDone';
@@ -77,11 +77,14 @@ export default function Onboarding({ open, prefs, onPrefsChange, onClose }) {
       <div className="flex max-h-[86vh] w-[580px] flex-col overflow-hidden rounded-2xl border border-line-hairline bg-surface-panel shadow-pop">
         {/* 头部 */}
         <div className="flex items-center justify-between border-b border-line-hairline px-6 py-4">
-          <div>
-            <h2 className="font-headline text-lg font-semibold text-text-primary">欢迎来到夜猫看台</h2>
-            <Meta className="mt-1 block">
-              第 {step} / 2 步 · {step === 1 ? '选主队' : '选关注联赛与熬夜额度'}
-            </Meta>
+          <div className="flex items-center gap-3">
+            <BrandLogo size={36} rounded="xl" withGlow />
+            <div>
+              <h2 className="font-headline text-lg font-semibold text-text-primary">欢迎来到夜猫看台</h2>
+              <Meta className="mt-0.5 block">
+                第 {step} / 2 步 · {step === 1 ? '选主队' : '选关注联赛与熬夜额度'}
+              </Meta>
+            </div>
           </div>
           <div className="flex items-center gap-1.5" aria-hidden="true">
             {[1, 2].map(n => (

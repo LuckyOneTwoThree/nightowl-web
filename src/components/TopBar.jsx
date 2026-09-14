@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { bjClock, bjDate } from '../core/format.js';
 import { teamName } from '../data/index.js';
-import { Crest, LiveDot, Segmented } from './atoms.jsx';
+import { BrandLogo, Crest, LiveDot, Segmented } from './atoms.jsx';
 import { IconSchedule, IconSettings, IconTonight, IconWeek, IconWinClose, IconWinMax, IconWinMin, IconWinRestore } from './icons.jsx';
 
 /**
@@ -58,20 +58,7 @@ const VIEWS = [
   { id: 'schedule', label: '赛程日历', icon: <IconSchedule /> }
 ];
 
-/** 夜猫看台标记（纯 SVG，跟随品牌色变量） */
-function OwlMark() {
-  return (
-    <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true" className="shrink-0 drop-shadow-[0_0_8px_rgba(245,185,66,0.35)]">
-      <path d="M8 10.5 L13 6.5 L13 13 Z" fill="var(--accent)" opacity="0.9" />
-      <path d="M24 10.5 L19 6.5 L19 13 Z" fill="var(--accent)" opacity="0.9" />
-      <circle cx="12" cy="17" r="4.2" fill="none" stroke="var(--accent)" strokeWidth="1.6" />
-      <circle cx="20" cy="17" r="4.2" fill="none" stroke="var(--accent)" strokeWidth="1.6" />
-      <circle cx="12" cy="17" r="1.5" fill="var(--accent)" />
-      <circle cx="20" cy="17" r="1.5" fill="var(--accent)" />
-      <path d="M14.6 22.4 L16 24.6 L17.4 22.4 Z" fill="var(--accent)" />
-    </svg>
-  );
-}
+
 
 /**
  * 顶栏
@@ -115,8 +102,8 @@ export default function TopBar({ view, onViewChange, liveCount, prefs, onOpenSet
       />
 
       <div className="flex items-center gap-5">
-        <div className="flex items-center gap-2">
-          <OwlMark />
+        <div className="flex items-center gap-2.5">
+          <BrandLogo size={26} rounded="md" withGlow />
           <span className="bg-gradient-to-r from-amber-200 via-amber-400 to-amber-300 bg-clip-text text-sm font-bold tracking-tight text-transparent drop-shadow-[0_0_12px_rgba(245,185,66,0.35)]">
             夜猫看台
           </span>
