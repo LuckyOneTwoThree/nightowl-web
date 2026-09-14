@@ -17,6 +17,18 @@ try {
     close: () => ipcRenderer.send('win:close'),
     /** 在系统默认浏览器中打开外部链接（央视频、咪咕等官方平台） */
     openExternal: url => ipcRenderer.send('win:open-external', url),
+    /** 检查桌面端版本更新 */
+    checkForUpdates: () => ipcRenderer.send('updater:check'),
+    /** 开始下载新版本 */
+    downloadUpdate: () => ipcRenderer.send('updater:download'),
+    /** 退出并安装更新 */
+    quitAndInstall: () => ipcRenderer.send('updater:install'),
+    /** 订阅自动更新生命周期事件，返回取消订阅函数 */
+    onUpdaterEvent: cb => {
+      const handler = (_e, payload) => cb(payload);
+      ipcRenderer.on('updater:event', handler);
+      return () => ipcRenderer.removeListener('updater:event', handler);
+    },
     /** 订阅最大化状态变化（自绘按钮据此切换图标），返回取消订阅函数 */
     onMaximizeChange: cb => {
       const handler = (_e, isMaximized) => cb(isMaximized);

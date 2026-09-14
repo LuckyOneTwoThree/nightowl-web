@@ -136,6 +136,108 @@ ipcMain.on('win:open-external', (_event, url) => {
   }
 });
 
+/* ---------------- 自动更新守护（electron-updater） ---------------- */
+let autoUpdater = null;
+try {
+  ({ autoUpdater } = require('electron-updater'));
+} catch (err) {
+  console.warn('[main] 加载 electron-updater 提示:', err?.message || err);
+}
+
+function setupAutoUpdater(win) {
+  if (!autoUpdater) return;
+
+  // 尊重用户自决权：发现更新先弹窗提示日志，用户确认后再下载
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  const sendUpdate = (status, payload = {}) => {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('updater:event', { status, ...payload });
+    }
+  };
+
+  autoUpdater.on('checking-for-update', () => {
+    sendUpdate('checking');
+  });
+
+  autoUpdater.on('update-available', info => {
+    sendUpdate('available', {
+      version: info.version,
+      releaseDate: info.releaseDate,
+      releaseNotes: info.releaseNotes || '',
+      files: info.files || []
+    });
+  });
+
+  autoUpdater.on('update-not-available', info => {
+    sendUpdate('not-available', {
+      version: info?.version || app.getVersion()
+    });
+  });
+
+  autoUpdater.on('error', err => {
+    sendUpdate('error', {
+      message: err?.message || '检查或下载更新遇到网络异常'
+    });
+  });
+
+  autoUpdater.on('download-progress', progressObj => {
+    sendUpdate('downloading', {
+      percent: Math.round(progressObj.percent || 0),
+      bytesPerSecond: progressObj.bytesPerSecond || 0,
+      transferred: progressObj.transferred || 0,
+      total: progressObj.total || 0
+    });
+  });
+
+  autoUpdater.on('update-downloaded', info => {
+    sendUpdate('downloaded', {
+      version: info.version
+    });
+  });
+}
+
+ipcMain.on('updater:check', () => {
+  if (!app.isPackaged) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater:event', {
+        status: 'not-available',
+        version: app.getVersion(),
+        isDev: true,
+        message: '当前处于开发调试环境，自动更新将在打包生产版本后生效'
+      });
+    }
+    return;
+  }
+  if (!autoUpdater) return;
+  autoUpdater.checkForUpdates().catch(err => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater:event', {
+        status: 'error',
+        message: err?.message || '检查更新失败，请稍后重试'
+      });
+    }
+  });
+});
+
+ipcMain.on('updater:download', () => {
+  if (!app.isPackaged || !autoUpdater) return;
+  autoUpdater.downloadUpdate().catch(err => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater:event', {
+        status: 'error',
+        message: err?.message || '下载更新失败，可前往 GitHub 手动下载'
+      });
+    }
+  });
+});
+
+ipcMain.on('updater:install', () => {
+  if (!app.isPackaged || !autoUpdater) return;
+  autoUpdater.quitAndInstall(false, true);
+});
+
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   // 已有实例在跑：直接退出（second-instance 事件在既有实例里聚焦窗口）
@@ -165,7 +267,15 @@ if (!gotLock) {
     }
 
     const win = createWindow();
+    setupAutoUpdater(win);
     await win.loadURL(`http://${HOST}:${appPort}/`);
+
+    // 启动 10 秒后静默检测一次更新（后台比对，不打扰首屏）
+    setTimeout(() => {
+      if (app.isPackaged && autoUpdater) {
+        autoUpdater.checkForUpdates().catch(() => {});
+      }
+    }, 10000);
   });
 
   app.on('window-all-closed', () => {

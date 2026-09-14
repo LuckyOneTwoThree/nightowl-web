@@ -7,8 +7,8 @@
  * 约定：
  *   - 颜色一律走下方语义名，组件里出现 `emerald-500` 之类的 Tailwind 原生色即为回归。
  *   - 字号只有 fontSize 里这 8 档，`text-[13px]` 之类的任意值同理。
- *   - 圆角只有下方 borderRadius 里那五档：sm(2) 小方块 · rounded(4) · md(6) 控件 ·
- *     lg(8) 卡片 · full 只给队徽与状态点。Tailwind 默认的 xl/2xl/3xl 已被覆盖掉。
+ *   - 圆角规范：sm(2px) 柱条 · DEFAULT(4px) 小标签 · md(6px) 控件/按钮 ·
+ *     lg(8px) 列表条目 · xl(12px) 核心模块大卡 · 2xl(16px) 浮层弹窗 · 3xl(24px) 视觉徽章 · full(9999px) 队徽/圆环。
  *   - 阴影两档：shadow-card 卡片 · shadow-pop 浮层。发光类阴影已废除。
  *   - 层叠只用 zIndex 的命名档（overlay / pop / scrim / drawer / modal），
  *     组件里出现 `z-[999]` 之类的数字即为回归。
@@ -32,15 +32,21 @@ export default {
       '2xl': ['1.75rem', { lineHeight: '2rem' }], // 28px 倒计时
       '3xl': ['2.125rem', { lineHeight: '2.5rem' }] // 34px
     },
-    /* 覆盖默认圆角刻度：只留这五档，Tailwind 自带的 xl / 2xl / 3xl 不再生成。
-       圆角此前只写在注释里当纪律，谁都能顺手加一个 rounded-xl —— 锁进刻度才是机制。 */
+    /* 统一圆角设计规范刻度（从微控件到浮层弹窗的严格阶梯）：
+       sm(2px) 赛果块/微小条柱 · DEFAULT(4px) 小标签 · md(6px) 按钮/输入框/胶囊控件 ·
+       lg(8px) 列表条目/抽屉内嵌模块 · xl(12px) 核心卡片模块(Hero/播放器/情报/后续赛程) ·
+       2xl(16px) 浮层弹窗(UpdateModal/Onboarding) · 3xl(24px) 视觉徽章/开屏图腾 ·
+       full(9999px) 队徽/圆环/状态点/进度条 */
     borderRadius: {
       none: '0',
-      sm: '2px', // 16px 见方的赛果块、柱条
+      sm: '2px',
       DEFAULT: '4px',
-      md: '6px', // 按钮 / 输入框 / 胶囊等控件
-      lg: '8px', // 卡片 / 抽屉 / 弹窗
-      full: '9999px' // 只给队徽、状态点、进度条
+      md: '6px',
+      lg: '8px',
+      xl: '12px',
+      '2xl': '16px',
+      '3xl': '24px',
+      full: '9999px'
     },
     extend: {
       colors: {

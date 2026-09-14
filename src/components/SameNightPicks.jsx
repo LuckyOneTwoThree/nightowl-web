@@ -21,7 +21,7 @@ const TIER_TONE = {
 export default function SameNightPicks({ match, prefs, onSelect }) {
   if (!match) {
     return (
-      <section className="flex h-full flex-col justify-center rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#14162a] via-[#0f111f] to-[#0a0c16] p-4 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+      <section className="flex h-full flex-col justify-center overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#14162a] via-[#0f111f] to-[#0a0c16] p-4 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
         <EmptyState
           icon={null}
           title="选中一场比赛，查看同夜其他推荐"
@@ -34,7 +34,7 @@ export default function SameNightPicks({ match, prefs, onSelect }) {
   const picks = sameNightPicks(match, prefs, 3);
 
   return (
-    <section className="flex h-full flex-col justify-between rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#14162a] via-[#0f111f] to-[#0a0c16] p-4 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+    <section className="flex h-full flex-col justify-between overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#14162a] via-[#0f111f] to-[#0a0c16] p-4 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
       <div>
         <div className="mb-2.5 flex items-center justify-between">
           <h3 className="font-ui text-2xs font-semibold tracking-wide text-text-primary">

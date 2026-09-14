@@ -74,7 +74,7 @@ export default function Onboarding({ open, prefs, onPrefsChange, onClose }) {
 
   return (
     <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/70 p-6">
-      <div className="flex max-h-[86vh] w-[580px] flex-col overflow-hidden rounded-lg border border-line-hairline bg-surface-panel shadow-pop">
+      <div className="flex max-h-[86vh] w-[580px] flex-col overflow-hidden rounded-2xl border border-line-hairline bg-surface-panel shadow-pop">
         {/* 头部 */}
         <div className="flex items-center justify-between border-b border-line-hairline px-6 py-4">
           <div>

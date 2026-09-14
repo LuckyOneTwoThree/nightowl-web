@@ -58,6 +58,11 @@ jobs:
 
       # 注入 tag 版本到包元数据：exe 文件名（artifactName 的 ${version}）随 tag 对齐，
       # 否则 package.json 里的 version 不动，文件名会一直停在旧版本号
+      # 注入 tag 版本到包元数据：exe 文件名（artifactName 的 ${version}）随 tag 对齐。
+      # ⚠️ 必须保留 --publish never：本工作流的发布职责归下面的 softprops/action-gh-release。
+      #    若去掉它并注入 GH_TOKEN，electron-builder 会凭 package.json 的 publish 配置
+      #    自己再发一次 Release（同一 tag 双重发布、互相覆盖）。
+      #    latest.yml / blockmap 是构建产物，--publish never 下照样生成，由后续步骤一并上传。
       - name: Package Windows (NSIS)
         shell: bash
         run: npx electron-builder --win --publish never -c.extraMetadata.version="${GITHUB_REF_NAME#v}"
@@ -71,17 +76,23 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: nightowl-windows-setup
-          path: release/*.exe
+          path: |
+            release/*.exe
+            release/latest.yml
+            release/*.blockmap
           if-no-files-found: error
 
-      # tag 触发时把安装包发布成 **GitHub Release**：
+      # tag 触发时把安装包与自动更新元数据发布成 **GitHub Release**：
       # Artifact 只有登录且有权的人能下载，Release 附件任何人（免登录）都能下 ——
-      # 「其他用户拿安装包」必须走这里，Artifact 只作为构建产物备份。
+      # electron-updater 依赖 latest.yml 比对版本并拉取更新包与差量 blockmap。
       - name: Publish to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*.exe
+          files: |
+            release/*.exe
+            release/latest.yml
+            release/*.blockmap
           body: |
             ## 夜猫看台 · Windows 安装包
 

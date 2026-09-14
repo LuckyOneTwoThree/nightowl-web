@@ -58,7 +58,7 @@ export default function WeekView({
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden">
       {/* ---- 睡眠预算 ---- */}
-      <section className="rounded-lg border border-line-hairline bg-surface-card">
+      <section className="overflow-hidden rounded-xl border border-line-hairline bg-surface-card">
         <button
           type="button"
           onClick={() => setExpanded(v => !v)}
@@ -294,7 +294,7 @@ function PickRow({ e, active, onSelect }) {
       type="button"
       onClick={() => onSelect(m.id)}
       aria-current={active ? 'true' : undefined}
-      className={`relative w-full overflow-hidden rounded-md py-2 pr-2.5 pl-3 text-left transition-colors ${
+      className={`relative w-full overflow-hidden rounded-lg py-2 pr-2.5 pl-3 text-left transition-colors ${
         active ? 'bg-surface-accent' : 'hover:bg-surface-raised'
       }`}
     >

@@ -227,7 +227,7 @@ export default function PlayerStage({
 
   if (!match) {
     return (
-      <div className="flex aspect-video max-h-[46vh] w-full items-center justify-center rounded-lg bg-stage-bg">
+      <div className="flex aspect-video max-h-[46vh] w-full items-center justify-center rounded-xl bg-stage-bg">
         <p className="text-xs text-text-muted">从左侧选择一场比赛</p>
       </div>
     );
@@ -423,7 +423,7 @@ export default function PlayerStage({
 
   /* ---------------- 右侧协同栏 ---------------- */
   const ControlSidebar = (
-    <div className="flex w-full shrink-0 flex-col gap-3 rounded-lg border border-line-hairline bg-surface-card p-3 shadow-card lg:w-[290px] xl:w-[320px]">
+    <div className="flex w-full shrink-0 flex-col gap-3 rounded-xl border border-line-hairline bg-surface-card p-3 shadow-card lg:w-[290px] xl:w-[320px]">
       <div className="flex items-center justify-between gap-2">
         <span className="inline-flex items-center gap-2">
           <IconLive className={live ? 'text-live' : 'text-text-faint'} />
@@ -497,7 +497,7 @@ export default function PlayerStage({
 
           {!theaterLinesExpanded ? (
             <div
-              className="flex w-full items-center justify-between gap-2.5 rounded-lg border border-line-hairline bg-surface-card px-3 py-2 shadow-card"
+              className="flex w-full items-center justify-between gap-2.5 rounded-xl border border-line-hairline bg-surface-card px-3 py-2 shadow-card"
             >
               <div className="no-scrollbar flex min-w-0 items-center gap-1.5 overflow-x-auto py-0.5">
                 <span className="mr-1 inline-flex shrink-0 items-center gap-1.5">
@@ -524,7 +524,7 @@ export default function PlayerStage({
             </div>
           ) : (
             <div
-              className="w-full rounded-lg border border-line-hairline bg-surface-card p-3 shadow-card"
+              className="w-full rounded-xl border border-line-hairline bg-surface-card p-3 shadow-card"
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-2">

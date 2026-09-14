@@ -53,7 +53,7 @@ export default function IntelPanel({ match, prefs, indexHint }) {
 
   if (!match || !ev || !tier || !narrative || !identity) {
     return (
-      <section className="flex min-h-[200px] flex-1 items-center justify-center rounded-lg border border-line-hairline bg-surface-card">
+      <section className="flex min-h-[200px] flex-1 items-center justify-center rounded-xl border border-line-hairline bg-surface-card">
         <p className="text-xs text-text-muted">从左侧选择一场比赛，查看熬夜代价与赛前情报</p>
       </section>
     );
@@ -64,7 +64,7 @@ export default function IntelPanel({ match, prefs, indexHint }) {
   const leagueB = leagueBonus(ev, PRODUCT_WEIGHTS);
 
   return (
-    <section className="rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#14162a] via-[#0f111f] to-[#0a0c16] shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+    <section className="overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#14162a] via-[#0f111f] to-[#0a0c16] shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
       {/* 面板头：只放视图切换，不放对阵信息 */}
       <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-[#181a32]/50 px-3.5 py-2.5">
         <div className="flex items-center gap-1" role="tablist" aria-label="情报视图">

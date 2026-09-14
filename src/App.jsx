@@ -23,6 +23,7 @@ import SameNightPicks from './components/SameNightPicks.jsx';
 import SettingsDrawer from './components/SettingsDrawer.jsx';
 import Onboarding, { shouldShowOnboarding } from './components/Onboarding.jsx';
 import SplashScreen from './components/SplashScreen.jsx';
+import UpdateModal from './components/UpdateModal.jsx';
 
 /**
  * 比赛 id → 记录（O(1) 取用）
@@ -100,6 +101,47 @@ export default function App() {
     setSettingsOpen(false);
     setOnboardingOpen(true);
   };
+
+  // 桌面端自动更新状态
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [updateState, setUpdateState] = useState({
+    status: 'idle', // 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
+    info: null,
+    progress: null,
+    message: null
+  });
+
+  useEffect(() => {
+    if (!window.desktop?.onUpdaterEvent) return;
+    const unsub = window.desktop.onUpdaterEvent(payload => {
+      setUpdateState(prev => ({
+        ...prev,
+        ...payload,
+        info: payload.info || (payload.version ? { ...prev.info, version: payload.version } : prev.info)
+      }));
+    });
+    return unsub;
+  }, []);
+
+  const handleCheckUpdate = useCallback(() => {
+    if (window.desktop?.checkForUpdates) {
+      setUpdateState(prev => ({ ...prev, status: 'checking', message: null }));
+      window.desktop.checkForUpdates();
+    }
+  }, []);
+
+  const handleDownloadUpdate = useCallback(() => {
+    if (window.desktop?.downloadUpdate) {
+      setUpdateState(prev => ({ ...prev, status: 'downloading', message: null }));
+      window.desktop.downloadUpdate();
+    }
+  }, []);
+
+  const handleInstallUpdate = useCallback(() => {
+    if (window.desktop?.quitAndInstall) {
+      window.desktop.quitAndInstall();
+    }
+  }, []);
 
   // 开屏动画：首次会话展示（避免每次刷新都强行阻断），并支持在设置中主动回放
   const [splashOpen, setSplashOpen] = useState(() => {
@@ -316,6 +358,13 @@ export default function App() {
         onRerunOnboarding={rerunOnboarding}
         onReplaySplash={replaySplash}
         onDataRefresh={refreshData}
+        updateState={updateState}
+        onOpenUpdateModal={() => {
+          setUpdateModalOpen(true);
+          if (updateState.status === 'idle') {
+            handleCheckUpdate();
+          }
+        }}
       />
 
       <Onboarding
@@ -326,6 +375,16 @@ export default function App() {
       />
 
       {splashOpen && <SplashScreen onClose={handleCloseSplash} />}
+
+      <UpdateModal
+        open={updateModalOpen}
+        onClose={() => setUpdateModalOpen(false)}
+        currentVersion={__APP_VERSION__}
+        updateState={updateState}
+        onCheck={handleCheckUpdate}
+        onDownload={handleDownloadUpdate}
+        onInstall={handleInstallUpdate}
+      />
     </div>
   );
 }

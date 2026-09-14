@@ -32,7 +32,9 @@ export default function SettingsDrawer({
   onClose,
   onRerunOnboarding,
   onReplaySplash,
-  onDataRefresh
+  onDataRefresh,
+  updateState,
+  onOpenUpdateModal
 }) {
   const leagueCount = prefs.followedLeagues.length;
   const bonusActive = leagueCount > 0 && leagueCount < 6;
@@ -338,7 +340,26 @@ export default function SettingsDrawer({
               </Button>
             )}
           </div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
+            {updateState?.status === 'available' ? (
+              <button
+                type="button"
+                onClick={onOpenUpdateModal}
+                className="group flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/15 px-2.5 py-1 text-2xs font-medium text-accent shadow-[0_0_12px_rgba(245,185,66,0.25)] hover:bg-amber-500/25 transition-all cursor-pointer"
+                title={`发现新版本 v${updateState?.info?.version || ''}`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+                <span>发现新版</span>
+              </button>
+            ) : (
+              <Button
+                variant="ghost"
+                onClick={onOpenUpdateModal}
+                title="检查 GitHub 最新版本"
+              >
+                检查更新
+              </Button>
+            )}
             {/* 版本号构建期注入。此前顶栏手写「v1.0」而 package.json 是 0.1.3 */}
             <Meta num>v{__APP_VERSION__}</Meta>
             <Button variant="primary" onClick={onClose}>
