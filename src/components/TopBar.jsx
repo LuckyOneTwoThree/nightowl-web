@@ -72,7 +72,15 @@ const VIEWS = [
  *     强调色，再多一个金色文字，眼睛就不知道该看哪儿了。它保持 ghost 按钮形态，
  *     位置与「已关注」状态完全重合 —— 同一个槽位在等用户填。
  */
-export default function TopBar({ view, onViewChange, liveCount, prefs, onOpenSettings }) {
+export default function TopBar({
+  view,
+  onViewChange,
+  liveCount,
+  prefs,
+  onOpenSettings,
+  updateAvailable = false,
+  onOpenUpdate
+}) {
   // 时钟是全应用唯一需要秒级显示的地方，把 tick 隔离在本地：
   // 否则 App 每秒重渲染会连带重建赛程视图的 2000+ 列表元素（实测约 9% CPU）。
   const [now, setNow] = useState(() => Date.now());
@@ -155,13 +163,37 @@ export default function TopBar({ view, onViewChange, liveCount, prefs, onOpenSet
 
         <span className="mx-1 h-4 w-px bg-line-hairline" aria-hidden="true" />
 
+        {/* 版本更新气泡 —— 主流产品的做法：有新版本时在顶栏给出**可见**的入口，
+            而不是藏在设置面板里等用户自己发现 */}
+        {updateAvailable && (
+          <button
+            type="button"
+            onClick={onOpenUpdate}
+            title="有新版本可用，点击查看"
+            className="inline-flex items-center gap-1.5 rounded-full border border-accent/45 bg-accent/15 px-2.5 py-1 text-2xs font-medium text-accent shadow-[0_0_12px_rgba(245,185,66,0.28)] transition-colors hover:bg-accent/25"
+          >
+            <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-70" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
+            </span>
+            新版本
+          </button>
+        )}
+
         <button
           type="button"
           onClick={onOpenSettings}
-          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary"
+          className="relative inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary"
         >
           <IconSettings />
           偏好与数据
+          {/* 设置按钮上的角标：即使气泡被无视，点开设置也能看到入口 */}
+          {updateAvailable && (
+            <span
+              className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-accent ring-2 ring-bg-app"
+              aria-hidden="true"
+            />
+          )}
         </button>
 
         {/* 窗口按钮放在右侧容器内 —— 若作为 header 的第 4 个直接子元素，

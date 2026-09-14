@@ -123,6 +123,22 @@ export default function App() {
     return unsub;
   }, []);
 
+  /**
+   * 更新就绪 / 通知被点击 → 自动把更新面板弹出来
+   *
+   * 主流产品的做法：下载完成不是静默记一笔，而是**主动告诉用户并给出下一步**。
+   * main.cjs 在系统通知被点击时会带 focusModal:true —— 那是最明确的安装意图。
+   */
+  useEffect(() => {
+    if (updateState.status === 'downloaded' || updateState.focusModal) {
+      setUpdateModalOpen(true);
+    }
+  }, [updateState.status, updateState.focusModal]);
+
+  /** 顶栏气泡的显示条件：有新版本或有已下载待安装的版本 */
+  const updateAvailable =
+    updateState.status === 'available' || updateState.status === 'downloaded';
+
   const handleCheckUpdate = useCallback(() => {
     if (window.desktop?.checkForUpdates) {
       setUpdateState(prev => ({ ...prev, status: 'checking', message: null }));
@@ -279,6 +295,11 @@ export default function App() {
         liveCount={liveCount}
         prefs={prefs}
         onOpenSettings={() => setSettingsOpen(true)}
+        updateAvailable={updateAvailable}
+        onOpenUpdate={() => {
+          setUpdateModalOpen(true);
+          if (updateState.status === 'idle') handleCheckUpdate();
+        }}
       />
 
       {/* 主工作区：左栏黄金比例（320-340px） + 右栏核心主舞台（~75%） */}

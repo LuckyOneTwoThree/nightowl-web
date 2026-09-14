@@ -184,18 +184,52 @@ function setupAutoUpdater(win) {
   });
 
   autoUpdater.on('download-progress', progressObj => {
+    // ⚠️ 进度必须包在 progress 里：渲染层读的是 updateState.progress.percent。
+    // 此前发的是平铺字段（percent 直接在顶层），progress 恒为 undefined，
+    // 于是进度条永远停在 0% —— 用户看到的就是「下载没有进度提示」。
     sendUpdate('downloading', {
-      percent: Math.round(progressObj.percent || 0),
-      bytesPerSecond: progressObj.bytesPerSecond || 0,
-      transferred: progressObj.transferred || 0,
-      total: progressObj.total || 0
+      progress: {
+        percent: Math.round(progressObj.percent || 0),
+        bytesPerSecond: progressObj.bytesPerSecond || 0,
+        transferred: progressObj.transferred || 0,
+        total: progressObj.total || 0
+      }
     });
   });
 
   autoUpdater.on('update-downloaded', info => {
-    sendUpdate('downloaded', {
-      version: info.version
-    });
+    sendUpdate('downloaded', { version: info.version });
+
+    // 下载完成时补一条系统级通知：用户此刻很可能已切到别的窗口，
+    // 只有应用内弹窗会被完全错过 —— 更新就绪这种事必须让人知道。
+    try {
+      const { Notification } = require('electron');
+      if (Notification.isSupported()) {
+        const notice = new Notification({
+          title: '夜猫看台 · 更新已就绪',
+          body: `v${info.version} 已下载完成，点此回到应用完成安装`,
+          icon: path.join(__dirname, '../build/icon.png'),
+          silent: false
+        });
+        notice.on('click', () => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+            // 让渲染层把更新弹窗弹出来（用户点通知即是明确的安装意图）
+            mainWindow.webContents.send('updater:event', {
+              status: 'downloaded',
+              version: info.version,
+              focusModal: true
+            });
+          }
+        });
+        notice.show();
+      }
+    } catch (err) {
+      // 通知不可用（如系统关闭了通知权限）不能影响更新本身
+      console.warn('[main] 更新就绪通知发送失败:', err?.message || err);
+    }
   });
 }
 
