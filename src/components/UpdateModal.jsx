@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { compareSemver } from '../core/semver.js';
 import { BrandLogo, Button, Chip, Meta } from './atoms.jsx';
 import { IconClose, IconWarn } from './icons.jsx';
 
@@ -6,20 +7,6 @@ const REPO_OWNER = 'LuckyOneTwoThree';
 const REPO_NAME = 'nightowl-web';
 const RELEASES_PAGE_URL = `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases`;
 const GITHUB_API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest`;
-
-/**
- * 语义化版本比较：a > b 返回正数、相等 0、小于返回负数。
- * 只比较数字段（忽略预发布标记），用于判断线上版本是否真的比本地新。
- */
-function compareSemver(a, b) {
-  const pa = String(a).split('.').map(n => parseInt(n, 10) || 0);
-  const pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const diff = (pa[i] || 0) - (pb[i] || 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
-}
 
 function formatBytes(bytes) {
   if (!bytes || bytes <= 0) return '0 B';

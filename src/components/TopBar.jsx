@@ -79,6 +79,7 @@ export default function TopBar({
   prefs,
   onOpenSettings,
   updateAvailable = false,
+  updateVersion = null,
   onOpenUpdate
 }) {
   // 时钟是全应用唯一需要秒级显示的地方，把 tick 隔离在本地：
@@ -169,14 +170,14 @@ export default function TopBar({
           <button
             type="button"
             onClick={onOpenUpdate}
-            title="有新版本可用，点击查看"
-            className="inline-flex items-center gap-1.5 rounded-full border border-accent/45 bg-accent/15 px-2.5 py-1 text-2xs font-medium text-accent shadow-[0_0_12px_rgba(245,185,66,0.28)] transition-colors hover:bg-accent/25"
+            title={updateVersion ? `新版本 v${updateVersion} 可用，点击查看` : '有新版本可用，点击查看'}
+            className="inline-flex items-center gap-1.5 rounded-full border border-accent/45 bg-accent/15 px-2.5 py-1 text-2xs font-medium text-accent shadow-[0_0_12px_rgba(245,185,66,0.28)] transition-colors hover:bg-accent/25 cursor-pointer"
           >
             <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-70" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
             </span>
-            新版本
+            {updateVersion ? `新版本 v${updateVersion}` : '新版本'}
           </button>
         )}
 

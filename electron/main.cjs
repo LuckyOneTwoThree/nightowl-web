@@ -169,6 +169,34 @@ function setupAutoUpdater(win) {
       releaseNotes: info.releaseNotes || '',
       files: info.files || []
     });
+
+    // 发现更新时，如果窗口不在前台或已最小化，发出系统级提醒
+    try {
+      const { Notification } = require('electron');
+      if (Notification.isSupported() && mainWindow && (!mainWindow.isFocused() || mainWindow.isMinimized())) {
+        const notice = new Notification({
+          title: '夜猫看台 · 发现新版本',
+          body: `v${info.version} 已发布，点击查看更新详情`,
+          icon: path.join(__dirname, '../build/icon.png'),
+          silent: false
+        });
+        notice.on('click', () => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+            mainWindow.webContents.send('updater:event', {
+              status: 'available',
+              version: info.version,
+              focusModal: true
+            });
+          }
+        });
+        notice.show();
+      }
+    } catch (err) {
+      console.warn('[main] 发现更新通知发送失败:', err?.message || err);
+    }
   });
 
   autoUpdater.on('update-not-available', info => {
@@ -233,6 +261,20 @@ function setupAutoUpdater(win) {
   });
 }
 
+let lastUpdateCheckTime = 0;
+function triggerUpdateCheck(silent = true) {
+  if (!app.isPackaged || !autoUpdater) return;
+  lastUpdateCheckTime = Date.now();
+  autoUpdater.checkForUpdates().catch(err => {
+    if (!silent && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater:event', {
+        status: 'error',
+        message: err?.message || '检查更新失败，请稍后重试'
+      });
+    }
+  });
+}
+
 ipcMain.on('updater:check', () => {
   if (!app.isPackaged) {
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -245,15 +287,7 @@ ipcMain.on('updater:check', () => {
     }
     return;
   }
-  if (!autoUpdater) return;
-  autoUpdater.checkForUpdates().catch(err => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('updater:event', {
-        status: 'error',
-        message: err?.message || '检查更新失败，请稍后重试'
-      });
-    }
-  });
+  triggerUpdateCheck(false);
 });
 
 ipcMain.on('updater:download', () => {
@@ -305,12 +339,22 @@ if (!gotLock) {
     setupAutoUpdater(win);
     await win.loadURL(`http://${HOST}:${appPort}/`);
 
-    // 启动 10 秒后静默检测一次更新（后台比对，不打扰首屏）
+    // 启动 2 秒后静默检测一次更新（首屏渲染完毕即检，告别长时间盲区）
     setTimeout(() => {
-      if (app.isPackaged && autoUpdater) {
-        autoUpdater.checkForUpdates().catch(() => {});
+      triggerUpdateCheck(true);
+    }, 2000);
+
+    // 后台每 45 分钟自动轮询一次更新
+    setInterval(() => {
+      triggerUpdateCheck(true);
+    }, 45 * 60 * 1000);
+
+    // 窗口重新切回前台时，若距上次检测超过 30 分钟则静默补检
+    win.on('focus', () => {
+      if (Date.now() - lastUpdateCheckTime > 30 * 60 * 1000) {
+        triggerUpdateCheck(true);
       }
-    }, 10000);
+    });
   });
 
   app.on('window-all-closed', () => {

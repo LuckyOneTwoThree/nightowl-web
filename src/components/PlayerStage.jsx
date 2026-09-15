@@ -108,8 +108,8 @@ export default function PlayerStage({
     setAspectRatio(16 / 9);
   }, [match?.id]);
 
-  // 协同模式基准最大高度（520px，在全屏与常规窗口下均能自适应黄金比例），宽屏剧场模式扩展至 760px
-  const maxH = theaterMode ? 'min(760px, 75vh)' : 'min(520px, 58vh)';
+  // 协同模式基准最大高度（放宽至 700px/68vh，确保大屏下中间比赛画面最大化伸展）；宽屏剧场模式扩展至 860px/80vh，占满主舞台
+  const maxH = theaterMode ? 'min(860px, 80vh)' : 'min(700px, 68vh)';
 
   const [streamUrl, setStreamUrl] = useState(null);
   const [streamKind, setStreamKind] = useState(null);
@@ -289,7 +289,7 @@ export default function PlayerStage({
     <div
       style={{
         maxHeight: maxH,
-        maxWidth: `calc(${maxH} * ${aspectRatio})`,
+        maxWidth: theaterMode ? undefined : `calc(${maxH} * ${aspectRatio})`,
         aspectRatio: `${aspectRatio}`
       }}
       className={`relative isolate z-0 w-full overflow-hidden rounded-xl bg-black shadow-2xl transition-all duration-200 ${
@@ -430,7 +430,7 @@ export default function PlayerStage({
 
   /* ---------------- 右侧协同栏 ---------------- */
   const ControlSidebar = (
-    <div className="flex w-full min-w-[280px] flex-1 flex-col justify-between gap-3 rounded-xl border border-line-hairline bg-surface-card p-3.5 shadow-card transition-all">
+    <div className="flex w-full shrink-0 flex-col justify-between gap-3 rounded-xl border border-line-hairline bg-surface-card p-3.5 shadow-card transition-all lg:w-[285px] xl:w-[315px]">
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex items-center gap-2">
@@ -446,11 +446,8 @@ export default function PlayerStage({
         </div>
 
         {lines.length > 0 ? (
-          // 列数按**容器实际宽度**自适应（auto-fill，最小 150px）：
-          // 常规宽屏下侧栏约 300px → 单列；把窗口拉得很宽、侧栏变宽后才自动变两列。
-          // ⚠️ 不要用 min-[380px]:grid-cols-2 —— 那是**视口**断点，视口够宽而侧栏只有 300px 时
-          // 会硬塞两列，每条线路只剩 145px，线路名被截得看不清。
-          <div className="scrollbar-thin -mr-1 grid max-h-[220px] gap-1.5 overflow-y-auto pr-1 [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))]">
+          // 列数按容器实际宽度自适应
+          <div className="scrollbar-thin -mr-1 grid max-h-[220px] gap-1.5 overflow-y-auto pr-1 [grid-template-columns:repeat(auto-fill,minmax(135px,1fr))]">
             {lines.map(l => (
               <LineButton key={l.id} l={l} />
             ))}
@@ -495,29 +492,17 @@ export default function PlayerStage({
 
   return (
     <div className="flex w-full flex-col gap-2.5">
-      {/* 宽屏时侧栏与视频区**顶端对齐**（lg:items-start），不让它被拉伸到与视频区等高：
-          线路只有一两条时，等高 + justify-between 会把内容顶到两端、中间留出一大片空白 */}
+      {/* 宽屏时侧栏与视频区顶端对齐（lg:items-start），协同栏保持紧凑定宽，中间比赛画面 flex-1 占据绝大部分舞台 */}
       {!theaterMode ? (
         <div className="flex w-full flex-col items-stretch gap-3 lg:flex-row lg:items-start">
-          <div
-            className="player-adaptive-video flex min-w-0 shrink-0 items-start justify-center"
-            style={{
-              '--stage-max-h': maxH,
-              '--stage-aspect-ratio': `${aspectRatio}`
-            }}
-          >
+          <div className="player-adaptive-video flex min-w-0 flex-1 items-start justify-center">
             {VideoScreen}
           </div>
           {ControlSidebar}
         </div>
       ) : (
-        <div className="flex w-full flex-col items-center gap-2.5">
-          <div
-            className="flex w-full justify-center"
-            style={{
-              maxWidth: `calc(${maxH} * ${aspectRatio})`
-            }}
-          >
+        <div className="flex w-full flex-col gap-2.5">
+          <div className="w-full">
             {VideoScreen}
           </div>
 

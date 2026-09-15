@@ -23,6 +23,7 @@ import {
   upcomingForTeams
 } from '../src/core/owl.js';
 import { getFixtures } from '../src/data/index.js';
+import { compareSemver, isNewerVersion } from '../src/core/semver.js';
 
 /** 运行时数据源（与界面一致：保鲜同步后可替换） */
 const fixtures = getFixtures();
@@ -227,6 +228,29 @@ console.log('六、右栏模块区（后续赛程 / 同夜推荐）');
   ok('★ 同夜推荐按夜猫指数降序', picks.every((p, i) => i === 0 || picks[i - 1].index >= p.index));
   ok('同夜推荐不超过 3 条', picks.length <= 3);
   ok('同夜推荐与锚点同一夜猫日', picks.every(p => E.owlDay(p.m.t) === E.owlDay(anchor.t)));
+}
+
+console.log('');
+console.log('七、版本比较（更新提示的唯一判据）');
+{
+  ok('线上更高 → 提示更新', isNewerVersion('0.1.12', '0.1.11'));
+  ok('版本相同 → 不提示', !isNewerVersion('0.1.11', '0.1.11'));
+  ok('★ 线上更低 → 不提示（本地领先，如开发版 0.2.0 vs 线上 0.1.9）', !isNewerVersion('0.1.9', '0.2.0'));
+  ok('★ 多位数字正确：0.1.10 > 0.1.9（字符串比较会判反）', compareSemver('0.1.10', '0.1.9') > 0);
+  ok('主版本优先于次版本', compareSemver('1.0.0', '0.9.9') > 0);
+  ok('段数不等也能比较', compareSemver('0.2', '0.2.0') === 0);
+  ok(
+    '非法/空输入不抛异常',
+    (() => {
+      try {
+        compareSemver('', undefined);
+        isNewerVersion(null, '0.1.1');
+        return true;
+      } catch {
+        return false;
+      }
+    })()
+  );
 }
 
 console.log('');

@@ -24,6 +24,8 @@ import SettingsDrawer from './components/SettingsDrawer.jsx';
 import Onboarding, { shouldShowOnboarding } from './components/Onboarding.jsx';
 import SplashScreen from './components/SplashScreen.jsx';
 import UpdateModal from './components/UpdateModal.jsx';
+import { IconClose } from './components/icons.jsx';
+import { compareSemver } from './core/semver.js';
 
 /**
  * 比赛 id → 记录（O(1) 取用）
@@ -111,6 +113,22 @@ export default function App() {
     message: null
   });
 
+  // 用户本次会话是否已关闭过自动提醒 Toast
+  const [toastDismissed, setToastDismissed] = useState(() => {
+    try {
+      return sessionStorage.getItem('nightowl:update_toast_dismissed') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleDismissToast = useCallback(() => {
+    setToastDismissed(true);
+    try {
+      sessionStorage.setItem('nightowl:update_toast_dismissed', '1');
+    } catch {}
+  }, []);
+
   useEffect(() => {
     if (!window.desktop?.onUpdaterEvent) return;
     const unsub = window.desktop.onUpdaterEvent(payload => {
@@ -121,6 +139,39 @@ export default function App() {
       }));
     });
     return unsub;
+  }, []);
+
+  // 挂载后 1.5 秒自动发起静默更新检测（桌面端调 IPC，Web 端探 GitHub API）
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (window.desktop?.checkForUpdates) {
+        window.desktop.checkForUpdates();
+      } else {
+        // Web 浏览器环境静默探测
+        try {
+          const res = await fetch('https://api.github.com/repos/LuckyOneTwoThree/nightowl-web/releases/latest');
+          if (!res.ok) return;
+          const data = await res.json();
+          const latestTag = (data.tag_name || '').replace(/^v/, '');
+          if (latestTag && compareSemver(latestTag, __APP_VERSION__) > 0) {
+            setUpdateState({
+              status: 'available',
+              info: {
+                version: latestTag,
+                releaseDate: data.published_at ? data.published_at.slice(0, 10) : null,
+                releaseNotes: data.body || '',
+                downloadUrl: data.html_url
+              },
+              progress: null,
+              message: null
+            });
+          }
+        } catch {
+          // 静默探测网络异常不阻塞
+        }
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
   }, []);
 
   /**
@@ -296,6 +347,7 @@ export default function App() {
         prefs={prefs}
         onOpenSettings={() => setSettingsOpen(true)}
         updateAvailable={updateAvailable}
+        updateVersion={updateState.info?.version}
         onOpenUpdate={() => {
           setUpdateModalOpen(true);
           if (updateState.status === 'idle') handleCheckUpdate();
@@ -353,7 +405,7 @@ export default function App() {
             下半新增模块区：双方后续赛程 & 同夜推荐 —— 宽屏并排两列、窄屏堆叠，
             把全屏时下方的空白用真正有决策价值的信息填满。 */}
         <section className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto bg-gradient-to-b from-[#0e101f]/60 via-[#080912]/80 to-[#040508]/95 p-4">
-          <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3">
+          <div className="mx-auto flex w-full max-w-[1800px] 2xl:max-w-full flex-col gap-3">
             <PlayerStage
               match={activeMatch}
               state={activeMatch ? stateOf(activeMatch, clockTs) : 'sched'}
@@ -406,6 +458,45 @@ export default function App() {
         onDownload={handleDownloadUpdate}
         onInstall={handleInstallUpdate}
       />
+
+      {/* 发现新版本时的轻量主动浮动提醒（避免用户不知道有更新） */}
+      {updateAvailable && !toastDismissed && !updateModalOpen && (
+        <aside
+          aria-label="版本更新提醒"
+          className="fixed bottom-5 right-5 z-40 flex max-w-sm items-center gap-3 rounded-xl border border-accent/40 bg-surface-card/95 p-3.5 shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-xl animate-in fade-in slide-in-from-bottom-3 duration-300"
+        >
+          <div className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-text-primary">
+              发现新版本 {updateState.info?.version ? `v${updateState.info.version}` : ''}
+            </p>
+            <p className="mt-0.5 text-2xs text-text-secondary">
+              有最新功能与体验优化可用，建议更新
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setUpdateModalOpen(true)}
+              className="rounded-lg bg-accent px-2.5 py-1 text-2xs font-semibold text-black transition-transform hover:brightness-110 active:scale-95 cursor-pointer"
+            >
+              查看
+            </button>
+            <button
+              type="button"
+              onClick={handleDismissToast}
+              className="rounded-lg p-1 text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary cursor-pointer"
+              aria-label="关闭提醒"
+              title="稍后提醒"
+            >
+              <IconClose size={14} />
+            </button>
+          </div>
+        </aside>
+      )}
     </div>
   );
 }

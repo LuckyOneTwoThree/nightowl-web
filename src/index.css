@@ -243,15 +243,11 @@
     z-index: 45 !important;
   }
 
-  /* 协同模式下播放器视窗自适应容器：在全屏下锁定 16:9 比例消灭黑边，在较窄窗口下为协同栏预留呼吸空间 */
+  /* 协同模式下播放器视窗自适应容器：由 flex-1 接管自适应，确保比赛画面大屏下最大化 */
   .player-adaptive-video {
     width: 100%;
-    max-width: calc(var(--stage-max-h, 520px) * var(--stage-aspect-ratio, 1.7778));
-  }
-  @media (min-width: 1024px) {
-    .player-adaptive-video {
-      max-width: min(calc(100% - 310px), calc(var(--stage-max-h, 520px) * var(--stage-aspect-ratio, 1.7778)));
-    }
+    min-width: 0;
+    flex: 1 1 0%;
   }
 }
 
