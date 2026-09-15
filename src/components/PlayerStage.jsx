@@ -430,51 +430,72 @@ export default function PlayerStage({
 
   /* ---------------- 右侧协同栏 ---------------- */
   const ControlSidebar = (
-    <div className="flex w-full shrink-0 flex-col justify-between gap-3 rounded-xl border border-line-hairline bg-surface-card p-3.5 shadow-card transition-all lg:w-[285px] xl:w-[315px]">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-2">
-            <IconLive className={live ? 'text-live' : 'text-text-faint'} />
-            <span className="text-xs font-medium text-text-primary">直播线路</span>
-            <Meta num>{lines.length} 条</Meta>
-          </span>
-          {directLines.length > 1 && (
-            <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
-              换线
-            </Button>
-          )}
-        </div>
+    <div className="flex w-full shrink-0 flex-col rounded-xl border border-line-hairline bg-surface-card p-3.5 shadow-card transition-all lg:w-[285px] xl:w-[315px] lg:self-stretch min-h-0">
+      <div className="flex items-center justify-between gap-2 shrink-0">
+        <span className="inline-flex items-center gap-2">
+          <IconLive className={live ? 'text-live' : 'text-text-faint'} />
+          <span className="text-xs font-medium text-text-primary">直播线路</span>
+          <Meta num>{lines.length} 条</Meta>
+        </span>
+        {directLines.length > 1 && (
+          <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
+            换线
+          </Button>
+        )}
+      </div>
 
-        {lines.length > 0 ? (
-          // 列数按容器实际宽度自适应
-          <div className="scrollbar-thin -mr-1 grid max-h-[220px] gap-1.5 overflow-y-auto pr-1 [grid-template-columns:repeat(auto-fill,minmax(135px,1fr))]">
-            {lines.map(l => (
-              <LineButton key={l.id} l={l} />
-            ))}
-          </div>
-        ) : (
-          <p className="py-3 text-center text-2xs text-text-muted">
+      {lines.length > 0 ? (
+        // 列数按容器实际宽度自适应；在桌面端作为 flex-1 弹性填充高度并支持顺畅滚动
+        <div className="scrollbar-thin -mr-1 mt-2.5 grid min-h-[80px] max-h-[220px] lg:max-h-none lg:flex-1 content-start gap-1.5 overflow-y-auto pr-1 [grid-template-columns:repeat(auto-fill,minmax(135px,1fr))]">
+          {lines.map(l => (
+            <LineButton key={l.id} l={l} />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-1 min-h-[80px] items-center justify-center py-3">
+          <p className="text-center text-2xs text-text-muted">
             {loadingLines ? '正在检索线路…' : liveInfo?.scrapeError ? '未检索到线路' : '本场暂无直播线路，可用下方官方平台'}
           </p>
-        )}
+        </div>
+      )}
 
-        {notices.length > 0 && (
-          <div className="space-y-1.5">
-            {notices.map((n, i) => (
-              <Notice key={i} n={n} />
-            ))}
-          </div>
-        )}
+      {notices.length > 0 && (
+        <div className="mt-2.5 shrink-0 space-y-1.5">
+          {notices.map((n, i) => (
+            <Notice key={i} n={n} />
+          ))}
+        </div>
+      )}
 
-        <div className="border-t border-line-hairline pt-2.5">
-          <SectionLabel>官方平台</SectionLabel>
-          <div className="mt-1.5">
-            <OfficialLinks />
-          </div>
+      <div className="mt-2.5 shrink-0 border-t border-line-hairline pt-2.5">
+        <SectionLabel>官方平台</SectionLabel>
+        <div className="mt-1.5">
+          <OfficialLinks />
         </div>
       </div>
 
-      <div className="mt-auto flex items-center justify-between border-t border-line-hairline pt-2.5">
+      {/* 本场赛事轻量信息条：充实侧栏，给观赛提供上下文，消除与大屏画面等高时的腹部留白 */}
+      {match && (
+        <div className="mt-2.5 shrink-0 rounded-lg border border-line-hairline/60 bg-surface-raised/40 p-2.5 text-2xs">
+          <div className="flex items-center justify-between text-text-muted">
+            <span>{leagueName(match.l)} · 第 {match.r} 轮</span>
+            {live ? (
+              <span className="font-num font-medium text-live">进行中 {minute}′</span>
+            ) : finished ? (
+              <span className="font-num font-semibold text-text-primary">{match.sc || '已终场'}</span>
+            ) : (
+              <span className="font-num text-text-secondary">{zhDate(datePart(match.t))} {hm(match.t)}</span>
+            )}
+          </div>
+          <div className="mt-1.5 flex items-center justify-between font-medium text-text-primary">
+            <span className="truncate max-w-[45%]">{teamName(match.h)}</span>
+            <span className="text-text-faint font-normal">vs</span>
+            <span className="truncate max-w-[45%] text-right">{teamName(match.a)}</span>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-auto flex shrink-0 items-center justify-between border-t border-line-hairline pt-2.5">
         <span className="inline-flex items-center gap-1.5">
           <Hint content={SHORTCUT_HINT} align="start">
             <IconKeyboard size={12} />
@@ -492,9 +513,9 @@ export default function PlayerStage({
 
   return (
     <div className="flex w-full flex-col gap-2.5">
-      {/* 宽屏时侧栏与视频区顶端对齐（lg:items-start），协同栏保持紧凑定宽，中间比赛画面 flex-1 占据绝大部分舞台 */}
+      {/* 宽屏协同模式：父级 items-stretch，右侧侧栏严格与视频区等高，下端齐平 */}
       {!theaterMode ? (
-        <div className="flex w-full flex-col items-stretch gap-3 lg:flex-row lg:items-start">
+        <div className="flex w-full flex-col items-stretch gap-3 lg:flex-row lg:items-stretch">
           <div className="player-adaptive-video flex min-w-0 flex-1 items-start justify-center">
             {VideoScreen}
           </div>
