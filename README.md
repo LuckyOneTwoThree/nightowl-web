@@ -10,10 +10,10 @@
   <br />
 
   <img src="https://img.shields.io/badge/platform-Windows-2b6cb0?style=flat-square" alt="platform" />
-  <img src="https://img.shields.io/badge/release-v0.1.8-2f855a?style=flat-square" alt="release" />
+  <img src="https://img.shields.io/badge/release-v0.1.14-2f855a?style=flat-square" alt="release" />
   <img src="https://img.shields.io/badge/electron-33-47848f?style=flat-square" alt="electron" />
   <img src="https://img.shields.io/badge/react-19-149eca?style=flat-square" alt="react" />
-  <img src="https://img.shields.io/badge/tests-271%20passing-38a169?style=flat-square" alt="tests" />
+  <img src="https://img.shields.io/badge/tests-passing-38a169?style=flat-square" alt="tests" />
 
   <br />
 

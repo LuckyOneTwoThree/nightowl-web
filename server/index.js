@@ -251,6 +251,7 @@ export function createServer(rules = loadRules(), log = console) {
           const fixtures = await loadFixtures();
           const result = await syncScores({ fixtures, rules, months, allMonths, log });
 
+          let written = null;
           let nextFixtures = null;
           if (apply && result.patches.size > 0) {
             const { fixtures: next, changed } = applyPatches(fixtures, result.patches);

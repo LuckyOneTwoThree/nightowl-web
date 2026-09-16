@@ -13,6 +13,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { planPatches, applyPatches, validateFixtures, ALLOWED_ST, activeSyncTargets } from '../server/scores.js';
+import { createServer } from '../server/index.js';
+import { loadRules } from '../server/proxy.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixtures = JSON.parse(readFileSync(resolve(ROOT, 'src/data/fixtures.json'), 'utf8'));
@@ -158,6 +160,48 @@ console.log('五、增量定向同步（activeSyncTargets）');
   ok('近期未来比赛纳入目标', targets.get('PD')?.has('20260916'));
   ok('远期比赛不纳入目标', !targets.has('SA'));
   ok('无时间的改期比赛不纳入目标', !targets.has('BL'));
+}
+
+/* ================================================================== */
+console.log('');
+console.log('六、HTTP API 端点集成（防 written 变量未声明与 500 回归）');
+{
+  const rules = loadRules();
+  const server = createServer(rules, { log: () => {}, warn: () => {}, error: () => {} });
+  const port = await new Promise((res, rej) => {
+    server.listen(0, '127.0.0.1', () => res(server.address().port));
+    server.on('error', rej);
+  });
+
+  try {
+    // 1. GET /api/scores/status
+    const rStatus = await fetch(`http://127.0.0.1:${port}/api/scores/status`);
+    const jStatus = await rStatus.json();
+    ok('GET /api/scores/status 返回 200', rStatus.status === 200);
+    ok('状态包含 freshness 对象', !!jStatus.freshness);
+
+    // 2. POST /api/scores/sync（dryRun）
+    const rDry = await fetch(`http://127.0.0.1:${port}/api/scores/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apply: false })
+    });
+    const jDry = await rDry.json();
+    ok('POST /api/scores/sync (dryRun) 返回 200', rDry.status === 200);
+    ok('dryRun 标志为 true', jDry.dryRun === true);
+
+    // 3. POST /api/scores/sync (apply=true, 关键回归：written 未声明曾导致 ReferenceError 500)
+    const rApply = await fetch(`http://127.0.0.1:${port}/api/scores/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apply: true })
+    });
+    const jApply = await rApply.json();
+    ok('★ POST /api/scores/sync (apply=true) 返回 200 且无 500 ReferenceError', rApply.status === 200, jApply.error);
+    ok('落盘摘要 written 对象有效', !!jApply.summary?.written && jApply.summary.written.ok === true);
+  } finally {
+    await new Promise(r => server.close(r));
+  }
 }
 
 console.log('');
