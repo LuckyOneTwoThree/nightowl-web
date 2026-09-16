@@ -57,40 +57,50 @@ export function mapState(type) {
   return 'sched';
 }
 
-/** 拉取单个联赛某日期区间的比分板，返回统一事件数组 */
-export async function fetchLeague(league, dates, opts = {}) {
+/** 拉取单个联赛某单日或多日比分板，返回统一事件数组 */
+export async function fetchLeague(league, dateOrDates, opts = {}) {
   const espnCode = LEAGUES[league];
   if (!espnCode) return [];
 
-  const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/${espnCode}/scoreboard?dates=${dates}&limit=300`;
-  const j = await fetchJSON(url, { timeoutMs: opts.timeoutMs || 25000, log: opts.log });
+  const list = Array.isArray(dateOrDates)
+    ? dateOrDates
+    : (dateOrDates ? [String(dateOrDates)] : ['']);
 
   const out = [];
-  for (const e of j.events || []) {
-    const comp = e.competitions?.[0];
-    if (!comp) continue;
-    const home = comp.competitors?.find(c => c.homeAway === 'home');
-    const away = comp.competitors?.find(c => c.homeAway === 'away');
-    if (!home || !away) continue;
+  for (const d of list) {
+    const query = d ? `dates=${d}&` : '';
+    const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/${espnCode}/scoreboard?${query}limit=300`;
+    const j = await fetchJSON(url, { timeoutMs: opts.timeoutMs || 25000, log: opts.log });
+    if (j?.code >= 400 || j?.error) {
+      throw new Error(j.message || j.error || `ESPN 响应异常码 ${j?.code}`);
+    }
 
-    const kickoff = utcToBeijingWall(e.date);
-    if (!kickoff) continue;
+    for (const e of j.events || []) {
+      const comp = e.competitions?.[0];
+      if (!comp) continue;
+      const home = comp.competitors?.find(c => c.homeAway === 'home');
+      const away = comp.competitors?.find(c => c.homeAway === 'away');
+      if (!home || !away) continue;
 
-    const state = mapState(e.status?.type);
-    const ok = v => (v != null && v !== '' ? String(v) : null);
+      const kickoff = utcToBeijingWall(e.date);
+      if (!kickoff) continue;
 
-    out.push({
-      league,
-      homeId: toTeamId(league, home.team?.abbreviation),
-      awayId: toTeamId(league, away.team?.abbreviation),
-      kickoff,
-      kickoffTrusted: true, // ESPN 的 date 含时区，已换算为北京墙钟，可信
-      state,
-      homeScore: state === 'done' ? ok(home.score) : null,
-      awayScore: state === 'done' ? ok(away.score) : null,
-      source: id,
-      raw: { id: e.id, name: e.name }
-    });
+      const state = mapState(e.status?.type);
+      const ok = v => (v != null && v !== '' ? String(v) : null);
+
+      out.push({
+        league,
+        homeId: toTeamId(league, home.team?.abbreviation),
+        awayId: toTeamId(league, away.team?.abbreviation),
+        kickoff,
+        kickoffTrusted: true, // ESPN 的 date 含时区，已换算为北京墙钟，可信
+        state,
+        homeScore: state === 'done' ? ok(home.score) : null,
+        awayScore: state === 'done' ? ok(away.score) : null,
+        source: id,
+        raw: { id: e.id, name: e.name }
+      });
+    }
   }
   return out;
 }

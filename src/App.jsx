@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getFixtures, setFixtures } from './data/index.js';
-import { countdown as engineCountdown, ts } from './core/engine.js';
+import { countdown as engineCountdown, ts, MATCH_DURATION_MS } from './core/engine.js';
 import { humanCountdown } from './core/format.js';
 import { loadPrefs, savePrefs } from './core/prefs.js';
 import {
@@ -249,39 +249,76 @@ export default function App() {
   // 启动时（以及点「立即同步」后）从 /api/fixtures 拉最新数据替换掉它，
   // dataRev 变化会让下面所有派生数据重算 —— 否则「刚结束的比赛」会一直显示待录比分。
   const [dataRev, setDataRev] = useState(0);
+  const lastSyncTriggerRef = useRef(0);
+
   const refreshData = useCallback(async () => {
     try {
       const r = await fetch('/api/fixtures');
-      if (!r.ok) return false;
+      if (!r.ok) return null;
       const j = await r.json();
       if (j?.fixtures?.length && setFixtures(j.fixtures)) {
         setDataRev(v => v + 1);
-        return true;
       }
+      return j;
     } catch {
       /* 服务不可用（纯静态预览）时静默沿用内置快照，不打扰用户 */
     }
-    return false;
+    return null;
   }, []);
 
-  useEffect(() => {
-    refreshData();
+  const triggerSync = useCallback(async () => {
+    const now = Date.now();
+    // 防抖：10 秒内不重复发起同步，避免短时间频繁触发
+    if (now - lastSyncTriggerRef.current < 10000) return;
+    lastSyncTriggerRef.current = now;
+    try {
+      const r = await fetch('/api/scores/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apply: true })
+      });
+      if (r.ok) {
+        const j = await r.json();
+        // 若后端直接在同步响应中回传了新 fixtures，即刻替换并触发重绘
+        if (j?.fixtures?.length && setFixtures(j.fixtures)) {
+          setDataRev(v => v + 1);
+        } else if (j?.summary?.written?.changed > 0) {
+          refreshData();
+        }
+      } else if (r.status === 409) {
+        // 后台任务正在进行，延迟 2 秒获取最新写入结果
+        setTimeout(refreshData, 2000);
+      }
+    } catch {
+      /* 静默降级 */
+    }
   }, [refreshData]);
 
-  /**
-   * 自动保鲜：启动跑一次，之后每 30 分钟检查
-   *
-   * 自动保鲜改由**服务端**负责（server/index.js 的 runBackgroundSync：
-   * 启动 3 秒后首次自检，之后每 30 分钟一次，且用 activeSyncMonths 只扫 1~2 个月，
-   * 几秒完成）。渲染层不再自行定时同步 —— 否则与服务端各跑一套定时器，
-   * 互相触发 409「已有同步任务进行中」，纯属重复。
-   *
-   * 渲染层只保留两件事：
-   *   ① 读取（refreshData 拉 /api/fixtures，把服务端数据热替换进内存）
-   *   ② 手动兜底（设置面板的「立即同步比分」按钮）
-   */
+  // 每次刚启动/进入就检查是否有未同步完赛比分，有则立即更新
   useEffect(() => {
-    // 服务端后台同步完成后数据会变；页面聚焦时轻量校准一次（不做定时轮询）
+    refreshData().then(data => {
+      const currentList = data?.fixtures || getFixtures();
+      const hasUnsynced = (data?.freshness?.pendingCount > 0) ||
+        currentList.some(m => m.st === 'sched' && !m.tbd && Date.now() > ts(m.t) + MATCH_DURATION_MS);
+      if (hasUnsynced) {
+        triggerSync();
+      }
+    });
+  }, [refreshData, triggerSync]);
+
+  // 切换到「比赛日程」视图时，自检是否有已完赛但待录的场次（如昨日比分），若有则立即同步呈现
+  useEffect(() => {
+    if (view === 'schedule') {
+      const currentList = getFixtures();
+      const hasUnsynced = currentList.some(m => m.st === 'sched' && !m.tbd && Date.now() > ts(m.t) + MATCH_DURATION_MS);
+      if (hasUnsynced) {
+        triggerSync();
+      }
+    }
+  }, [view, triggerSync]);
+
+  useEffect(() => {
+    // 页面重新聚焦时轻量校准一次
     const onFocus = () => refreshData();
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);

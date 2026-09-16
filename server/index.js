@@ -251,7 +251,7 @@ export function createServer(rules = loadRules(), log = console) {
           const fixtures = await loadFixtures();
           const result = await syncScores({ fixtures, rules, months, allMonths, log });
 
-          let written = null;
+          let nextFixtures = null;
           if (apply && result.patches.size > 0) {
             const { fixtures: next, changed } = applyPatches(fixtures, result.patches);
             const issues = validateFixtures(next);
@@ -261,6 +261,7 @@ export function createServer(rules = loadRules(), log = console) {
             } else {
               const saved = saveFixtures(next);
               written = { ...saved, changed };
+              nextFixtures = next;
             }
           } else if (apply) {
             written = { ok: true, changed: 0, note: '没有需要写入的补丁' };
@@ -280,6 +281,7 @@ export function createServer(rules = loadRules(), log = console) {
             ok: true,
             dryRun: !apply,
             summary: lastSync,
+            fixtures: nextFixtures,
             conflicts: result.conflicts.slice(0, 20),
             incompleteScore: (result.incompleteScore || []).slice(0, 20),
             unmatchedCount: result.unmatched.length,
@@ -382,7 +384,7 @@ export function createServer(rules = loadRules(), log = console) {
     }
   };
 
-  const startupTimer = setTimeout(runBackgroundSync, 3000);
+  const startupTimer = setTimeout(runBackgroundSync, 500);
   const cronTimer = setInterval(runBackgroundSync, 30 * 60 * 1000);
 
   server.on('close', () => {

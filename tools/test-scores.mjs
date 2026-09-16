@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { planPatches, applyPatches, validateFixtures, ALLOWED_ST } from '../server/scores.js';
+import { planPatches, applyPatches, validateFixtures, ALLOWED_ST, activeSyncTargets } from '../server/scores.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixtures = JSON.parse(readFileSync(resolve(ROOT, 'src/data/fixtures.json'), 'utf8'));
@@ -132,6 +132,32 @@ console.log('四、取值域与边界');
     fixtures
   );
   ok('★ 0-0 被视为完整比分（不受 falsy 影响）', r3.patches.get(m.id)?.sc === '0-0', JSON.stringify([...r3.patches]));
+}
+
+/* ================================================================== */
+console.log('');
+console.log('五、增量定向同步（activeSyncTargets）');
+{
+  const now = new Date('2026-09-16T15:00:00+08:00').getTime();
+  const sampleFixtures = [
+    // 1. 已完赛且有比分：必须被排除
+    { id: '1', l: 'PL', t: '2026-09-14T03:00', st: 'done', sc: '3-0' },
+    // 2. 过去未完赛（待录入）：必须纳入目标
+    { id: '2', l: 'PL', t: '2026-09-15T03:00', st: 'sched', sc: null },
+    // 3. 未来 24 小时内的比赛：必须纳入目标
+    { id: '3', l: 'PD', t: '2026-09-17T03:00', st: 'sched', sc: null },
+    // 4. 远期比赛（12 天后）：必须排除
+    { id: '4', l: 'SA', t: '2026-09-28T03:00', st: 'sched', sc: null },
+    // 5. 延期无确切时间：排除
+    { id: '5', l: 'BL', t: null, st: 'pp', sc: null }
+  ];
+
+  const targets = activeSyncTargets(sampleFixtures, now);
+  ok('已完赛记录不纳入同步目标', !targets.get('PL')?.has('20260913'));
+  ok('未同步的过去比赛纳入目标并准确转换为 UTC 日期', targets.get('PL')?.has('20260914'));
+  ok('近期未来比赛纳入目标', targets.get('PD')?.has('20260916'));
+  ok('远期比赛不纳入目标', !targets.has('SA'));
+  ok('无时间的改期比赛不纳入目标', !targets.has('BL'));
 }
 
 console.log('');

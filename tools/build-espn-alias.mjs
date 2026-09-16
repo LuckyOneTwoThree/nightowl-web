@@ -122,6 +122,9 @@ for (const [key, c] of uniq) {
   if (ourById.has(abbr) && ourById.get(abbr).league === league) {
     ourId = abbr;
     how = 'abbr';
+  } else if (league === 'UCL' && abbr === 'MUN' && norm(c.displayName).includes('bayern')) {
+    ourId = 'FCB';
+    how = 'abbr-UCL-拜仁';
   } else if (league === 'UCL' && ourById.has(abbr)) {
     ourId = abbr;
     how = 'abbr-跨联赛(UCL)';

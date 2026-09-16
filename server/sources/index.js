@@ -21,16 +21,38 @@ export const DEFAULT_ORDER = Object.values(SOURCES)
 
 /** 各源的拉取策略（差异较大，各自声明） */
 const STRATEGY = {
-  // ESPN：按月分块（单次查询有上限），需要日期区间
+  // ESPN：按单日精准分块（单日 dates=YYYYMMDD 支持完好；日期范围会被上游 400 拒绝）
   espn: {
     perLeague: true,
-    units: months => months.map(ym => ({ kind: 'month', ym })),
-    fetch: (league, unit, opts) => espn.fetchLeague(league, espn.monthRange(unit.ym), opts)
+    units: ({ league, targets, months, targetDates }) => {
+      // 1. 若有按联赛分配的精准目标日期 Map 或对象
+      if (targets) {
+        const dates = targets.get ? targets.get(league) : targets[league];
+        if (dates && (dates.size || dates.length)) {
+          return Array.from(dates).sort().map(d => ({ kind: 'date', date: d }));
+        }
+        return [];
+      }
+      // 2. 若传入了全局 targetDates 列表
+      if (targetDates && targetDates.length) {
+        return targetDates.map(d => ({ kind: 'date', date: d }));
+      }
+      // 3. 兜底返回今日
+      return [{ kind: 'today', date: '' }];
+    },
+    fetch: (league, unit, opts) => espn.fetchLeague(league, unit.date || '', opts)
   },
-  // openfootball：整季一个文件，不分块 —— 只拉一次
+  // openfootball：整季一个文件，不分块 —— 作为副源备用
   openfootball: {
     perLeague: true,
-    units: () => [{ kind: 'season' }],
+    units: ({ league, targets }) => {
+      // 若存在精准 targets 且该联赛并无待同步场次，跳过此联赛避免多余开销
+      if (targets) {
+        const dates = targets.get ? targets.get(league) : targets[league];
+        if (!dates || (dates.size === 0 && dates.length === 0)) return [];
+      }
+      return [{ kind: 'season' }];
+    },
     fetch: (league, unit, opts) => openfootball.fetchLeague(league, opts.season || '2026-27', opts)
   }
 };
@@ -39,7 +61,7 @@ const STRATEGY = {
  * 拉取所有源的事件
  * @returns {{ events: object[], bySource: object, errors: object[] }}
  */
-export async function fetchAllEvents({ leagues, months, season, order = DEFAULT_ORDER, log = console }) {
+export async function fetchAllEvents({ leagues, months, targets, targetDates, season, order = DEFAULT_ORDER, log = console }) {
   const events = [];
   const bySource = {};
   const errors = [];
@@ -52,7 +74,8 @@ export async function fetchAllEvents({ leagues, months, season, order = DEFAULT_
     bySource[sid] = { events: 0, requests: 0, ok: 0, failed: 0 };
 
     for (const league of leagues) {
-      for (const unit of strat.units(months)) {
+      const units = strat.units({ league, targets, months, targetDates });
+      for (const unit of units) {
         requests.push({ sid, src, strat, league, unit });
       }
     }
@@ -68,10 +91,11 @@ export async function fetchAllEvents({ leagues, months, season, order = DEFAULT_
       bySource[r.sid].ok++;
     } catch (err) {
       bySource[r.sid].failed++;
-      errors.push({ source: r.sid, league: r.league, unit: r.unit.kind === 'month' ? r.unit.ym : 'season', message: err.message });
-      log.warn?.(`[sources] ${r.sid} ${r.league} 拉取失败：${err.message}`);
+      const unitLabel = r.unit.kind === 'date' ? r.unit.date : (r.unit.kind === 'month' ? r.unit.ym : r.unit.kind);
+      errors.push({ source: r.sid, league: r.league, unit: unitLabel, message: err.message });
+      log.warn?.(`[sources] ${r.sid} ${r.league} ${unitLabel} 拉取失败：${err.message}`);
     }
-    await new Promise(res => setTimeout(res, 350));
+    await new Promise(res => setTimeout(res, 200));
   }
 
   return { events, bySource, errors };

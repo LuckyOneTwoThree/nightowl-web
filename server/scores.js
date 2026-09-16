@@ -79,6 +79,43 @@ export function activeSyncMonths(fixtures = [], nowTs = Date.now()) {
   return Array.from(months).sort();
 }
 
+/**
+ * 增量未同步精准目标：
+ * 铁律：**已完赛（st === 'done' 且已有比分）的记录坚决不再重复同步**。
+ *
+ * 仅获取未同步的数据：
+ *   1. 历史已开球但未录入完赛比分的场次（m.st === 'sched' && kickTs < nowTs）
+ *   2. 当前正在进行的场次（kickTs <= nowTs && kickTs + 120min >= nowTs）
+ *   3. 近期 48 小时内的未来场次（可能刚刚确定精确开球时间或改期）
+ *
+ * 返回：Map<league, Set<string(YYYYMMDD)>>（转为 UTC 日期以匹配上游 API）
+ */
+export function activeSyncTargets(fixtures = [], nowTs = Date.now()) {
+  const targets = new Map();
+  const future48h = nowTs + 48 * 3600000;
+  const pad = n => String(n).padStart(2, '0');
+
+  for (const m of fixtures) {
+    // 已同步完赛比分的记录，100% 排除，绝不重复同步
+    if (m.st === 'done' && m.sc) continue;
+    // 延期场次且无确切开球时间的暂不主动扫
+    if (m.st === 'pp' && !m.t) continue;
+
+    const t = ts(m.t);
+    if (Number.isNaN(t)) continue;
+
+    // 只有已开球（未录入）或未来 48 小时以内的场次才需要保鲜
+    if (m.st === 'sched' && t <= future48h) {
+      const d = new Date(t);
+      const ymd = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
+      if (!targets.has(m.l)) targets.set(m.l, new Set());
+      targets.get(m.l).add(ymd);
+    }
+  }
+
+  return targets;
+}
+
 /* ------------------------------------------------------------------ */
 /* 折算补丁                                                            */
 /* ------------------------------------------------------------------ */
@@ -223,18 +260,46 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
   const cfg = rules.scores || {};
   const leagues = Object.keys(cfg.leagues || {});
   const order = (sources && sources.length ? sources : DEFAULT_ORDER).filter(s => DEFAULT_ORDER.includes(s));
+  const pad = n => String(n).padStart(2, '0');
   
-  let list;
+  let list = null;
+  let targets = null;
+
   if (months && months.length && months !== 'all') {
     list = Array.isArray(months) ? months : [months];
+    // 指定月份模式：提取指定月份内涉及的比赛日期
+    targets = new Map();
+    for (const m of fixtures) {
+      if (m.st === 'done' && !allMonths) continue;
+      const t = ts(m.t);
+      if (Number.isNaN(t)) continue;
+      const d = new Date(t);
+      const ym = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}`;
+      if (list.includes(ym)) {
+        const ymd = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
+        if (!targets.has(m.l)) targets.set(m.l, new Set());
+        targets.get(m.l).add(ymd);
+      }
+    }
   } else if (allMonths || months === 'all') {
     list = seasonMonths();
+    targets = new Map();
+    for (const m of fixtures) {
+      const t = ts(m.t);
+      if (Number.isNaN(t)) continue;
+      const d = new Date(t);
+      const ymd = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
+      if (!targets.has(m.l)) targets.set(m.l, new Set());
+      targets.get(m.l).add(ymd);
+    }
   } else {
+    // 默认常态增量同步：精准提取未同步完赛场次与近期 48 小时比赛的日期，已同步场次完全跳过
+    targets = activeSyncTargets(fixtures);
     list = activeSyncMonths(fixtures);
   }
 
   const { events, bySource, errors } = await fetchAllEvents({
-    leagues, months: list, order, log,
+    leagues, months: list, targets, order, log,
     season: cfg.season || '2026-27'
   });
 
@@ -246,6 +311,7 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
     bySource, errors,
     stats,
     months: list,
+    targets,
     sources: order
   };
 }
