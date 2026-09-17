@@ -1,7 +1,7 @@
 {
   "name": "nightowl-web",
   "private": true,
-  "version": "0.1.14",
+  "version": "0.1.15",
   "type": "module",
   "description": "夜猫看台 · 纯净观赛桌面版（本地单机）",
   "main": "electron/main.cjs",
