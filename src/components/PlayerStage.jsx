@@ -1,14 +1,17 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, memo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, memo, useRef, useState } from 'react';
 import { hm, zhDate, weekdayOf, datePart, liveMinute, humanCountdown } from '../core/format.js';
 import { teamName, leagueName } from '../data/index.js';
 import { ts, countdown as engineCountdown } from '../core/engine.js';
-import { Button, Hint, LiveDot, Meta, SectionLabel } from './atoms.jsx';
+import { Button, Hint, IconButton, LiveDot, Meta, SectionLabel } from './atoms.jsx';
 import {
+  IconCalendar,
+  IconCheck,
   IconChevronDown,
   IconChevronUp,
   IconExternal,
   IconKeyboard,
   IconLive,
+  IconReset,
   IconReveal,
   IconSignal,
   IconStop,
@@ -153,6 +156,112 @@ function OfficialLinks({ sources, match, limit = 99 }) {
 }
 
 /**
+ * 线路空态面板（模块作用域定义，防止 now 每秒更新时组件树反复 unmount）
+ *
+ * 依据赛事生命周期精准表达：
+ *   · 检索中：旋转动效与连接提示；
+ *   · 延期：延期警示；
+ *   · 终场：终场标志，引导官方平台录像/集锦；
+ *   · 远期未开赛（距开球 > 30m）：消除误导，明确告知赛前 15~30 分钟才会接入；
+ *   · 临近开赛（距开球 ≤ 30m）：雷达待命中，提供「立即检测」按钮；
+ *   · 进行中无源：明确告知源站状态，提供「重新检索」按钮。
+ */
+function LineEmptyState({ loading, state, isNearKickoff, scrapeError, onRefresh }) {
+  if (loading) {
+    return (
+      <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline/70 bg-surface-raised/20 p-3 text-center">
+        <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.04] text-accent">
+          <IconReset className="animate-spin" size={14} />
+        </span>
+        <p className="text-xs font-medium text-text-primary">正在检索直播线路…</p>
+        <p className="mt-1 text-2xs text-text-muted">正在连接聚合源与广播信号</p>
+      </div>
+    );
+  }
+
+  if (state === 'pp') {
+    return (
+      <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline/70 bg-surface-raised/20 p-3 text-center">
+        <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.04] text-text-muted">
+          <IconWarn size={14} />
+        </span>
+        <p className="text-xs font-medium text-text-primary">本场比赛已延期</p>
+        <p className="mt-1 text-2xs text-text-muted">暂无直播信号安排</p>
+      </div>
+    );
+  }
+
+  if (state === 'finished' || state === 'ended_pending') {
+    return (
+      <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline/70 bg-surface-raised/20 p-3 text-center">
+        <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.04] text-text-muted">
+          <IconCheck size={14} />
+        </span>
+        <p className="text-xs font-medium text-text-primary">比赛已终场</p>
+        <p className="mt-1 text-2xs leading-relaxed text-text-muted max-w-[210px]">
+          直播已关闭，可通过下方官方平台查看录像与精彩集锦
+        </p>
+      </div>
+    );
+  }
+
+  if (state === 'sched') {
+    if (isNearKickoff) {
+      return (
+        <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline/70 bg-surface-raised/20 p-3 text-center">
+          <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-amber-400/10 text-amber-400">
+            <IconSignal className="animate-pulse" size={14} />
+          </span>
+          <p className="text-xs font-medium text-text-primary">信号接入中…</p>
+          <p className="mt-1 text-2xs leading-relaxed text-text-muted max-w-[200px]">
+            源站正在陆续推流，系统将自动同步
+          </p>
+          <div className="mt-2.5">
+            <Button variant="ghost" size="sm" icon={<IconReset size={11} />} onClick={onRefresh}>
+              立即检测
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline/70 bg-surface-raised/20 p-3 text-center">
+        <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.04] text-text-muted">
+          <IconCalendar size={14} />
+        </span>
+        <p className="text-xs font-medium text-text-primary">比赛尚未开始</p>
+        <p className="mt-1 text-2xs leading-relaxed text-text-muted max-w-[215px]">
+          直播线路通常在赛前 15~30 分钟陆续上线，开赛临近时系统将自动同步
+        </p>
+      </div>
+    );
+  }
+
+  // state === 'live'
+  return (
+    <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline/70 bg-surface-raised/20 p-3 text-center">
+      <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.04] text-text-muted">
+        {scrapeError ? <IconWarn className="text-amber-400" size={14} /> : <IconSignal size={14} />}
+      </span>
+      <p className="text-xs font-medium text-text-primary">
+        {scrapeError ? '聚合信号暂未响应' : '暂未检索到可用线路'}
+      </p>
+      <p className="mt-1 text-2xs leading-relaxed text-text-muted max-w-[215px]">
+        {scrapeError
+          ? '第三方信号站网络异常，建议使用下方官方平台'
+          : '源站推流可能受限，可重试检索或使用下方官方平台'}
+      </p>
+      <div className="mt-2.5">
+        <Button variant="ghost" size="sm" icon={<IconReset size={11} />} onClick={onRefresh}>
+          重新检索
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
  * 主舞台播放大屏
  *
  * 版式：B 站 / YouTube 式「左视窗 + 右协同栏」，宽屏模式一键扩展为满屏剧场。
@@ -253,53 +362,129 @@ export default function PlayerStage({
     }
   }, []);
 
-  // 切换场次时重置并拉取最新聚合与广播信号
-  useEffect(() => {
-    stopPlayback();
-    setLines([]);
-    setLiveInfo(null);
-    setTheaterLinesExpanded(false);
+  const matchRef = useRef(match);
+  matchRef.current = match;
 
-    if (!match) return;
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
-    let alive = true;
-    setLoadingLines(true);
+  const activeLineIdRef = useRef(activeLineId);
+  activeLineIdRef.current = activeLineId;
 
-    const query = new URLSearchParams({
-      matchId: match.id || '',
-      h: match.h || '',
-      a: match.a || '',
-      date: datePart(match.t) || '',
-      // 开球时刻：聚合站同一对阵可能有多个房间，需要用时刻做邻近度排序
-      t: match.t || ''
-    });
+  /**
+   * 拉取/刷新直播线路
+   * @param {{ reset?: boolean, autoPlay?: boolean }} opts
+   *   reset: 是否在请求前重置现有线路（切场时为 true；手动刷新/自动轮询为 false，避免列表和画面闪烁）
+   *   autoPlay: 抓到直链后是否在比赛进行中自动起播
+   */
+  const fetchLines = useCallback(
+    async ({ reset = false, autoPlay = true } = {}) => {
+      const currentMatch = matchRef.current;
+      if (!currentMatch) return;
 
-    fetch(`/api/live-sources?${query}`)
-      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then(data => {
-        if (!alive) return;
+      if (reset) {
+        stopPlayback();
+        setLines([]);
+        setLiveInfo(null);
+        setTheaterLinesExpanded(false);
+      }
+      setLoadingLines(true);
+
+      try {
+        const query = new URLSearchParams({
+          matchId: currentMatch.id || '',
+          h: currentMatch.h || '',
+          a: currentMatch.a || '',
+          date: datePart(currentMatch.t) || '',
+          t: currentMatch.t || ''
+        });
+
+        const res = await fetch(`/api/live-sources?${query}`);
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+
+        // 避免网络异步返回时用户已切到其他场次
+        if (matchRef.current?.id !== currentMatch.id) return;
+
         setLiveInfo(data);
         const available = data.lines || [];
         setLines(available);
 
-        // 进行中的比赛若有可用直链，自动选中第一条起播
-        if (state === 'live' && available.length > 0) {
+        // 进行中的比赛若抓到可用直链且尚未起播，自动选中第一条起播
+        if (autoPlay && stateRef.current === 'live' && available.length > 0 && !activeLineIdRef.current) {
           const direct = available.find(l => l.isDirect && l.url);
           if (direct) selectLine(direct);
         }
-      })
-      .catch(err => {
-        if (!alive) return;
+      } catch (err) {
+        if (matchRef.current?.id !== currentMatch.id) return;
         console.warn('[PlayerStage] 获取直播线路失败:', err.message);
-      })
-      .finally(() => {
-        if (alive) setLoadingLines(false);
-      });
+      } finally {
+        if (matchRef.current?.id === currentMatch.id) {
+          setLoadingLines(false);
+        }
+      }
+    },
+    [selectLine, stopPlayback]
+  );
+
+  // 切换场次时全量重置并拉取
+  useEffect(() => {
+    if (!match?.id) return;
+    fetchLines({ reset: true, autoPlay: true });
+  }, [match?.id, fetchLines]);
+
+  // 开球瞬间（由 sched 转换为 live 时）自动探测最新推流并起播
+  const prevStateRef = useRef(state);
+  useEffect(() => {
+    if (prevStateRef.current !== 'live' && state === 'live') {
+      fetchLines({ reset: false, autoPlay: true });
+    }
+    prevStateRef.current = state;
+  }, [state, fetchLines]);
+
+  // 临界窗口自动静默探活机制（赛前 30 分钟 ~ 比赛进行中且缺源）
+  useEffect(() => {
+    if (!match?.t) return;
+    if (lines.length > 0 || state === 'finished' || state === 'ended_pending' || state === 'pp') {
+      return;
+    }
+
+    const kickTs = ts(match.t);
+    const diffMs = kickTs - Date.now();
+    let pollInterval = null;
+    let enterTimer = null;
+
+    const startPolling = () => {
+      pollInterval = setInterval(() => {
+        fetchLines({ reset: false, autoPlay: true });
+      }, 45000);
+    };
+
+    if (state === 'live') {
+      // 正在比赛中但暂无线路，立即启动 45 秒轮询
+      startPolling();
+    } else if (state === 'sched') {
+      const nearThreshold = 30 * 60 * 1000;
+      if (diffMs <= nearThreshold) {
+        // 已经在 30 分钟临界接入窗口内
+        startPolling();
+      } else {
+        // 距开赛较远，定时在进入 30 分钟窗口时静默拉取并启动轮询
+        const delayUntilNear = diffMs - nearThreshold;
+        if (delayUntilNear > 0 && delayUntilNear < 24 * 60 * 60 * 1000) {
+          enterTimer = setTimeout(() => {
+            fetchLines({ reset: false, autoPlay: true });
+            startPolling();
+          }, delayUntilNear);
+        }
+      }
+    }
 
     return () => {
-      alive = false;
+      if (pollInterval) clearInterval(pollInterval);
+      if (enterTimer) clearTimeout(enterTimer);
     };
-  }, [match?.id, match?.h, match?.a, match?.t, state, selectLine, stopPlayback]);
+  }, [match?.id, match?.t, state, lines.length, fetchLines]);
 
   const proxyUrl = streamUrl ? `/api/proxy?url=${encodeURIComponent(streamUrl)}` : null;
 
@@ -322,7 +507,10 @@ export default function PlayerStage({
   const kickTs = ts(match.t);
   const live = state === 'live';
   const minute = live ? liveMinute(kickTs, now) : 0;
-  const finished = state === 'finished';
+  const finished = state === 'finished' || state === 'ended_pending';
+  const postponed = state === 'pp';
+  const diffMs = kickTs - now;
+  const isNearKickoff = state === 'sched' && diffMs <= 30 * 60 * 1000 && diffMs >= 0;
   const directLines = lines.filter(l => l.isDirect && l.url);
 
   /* ---------------- 状态提示：按真实状态说话，不写死排期文案 ---------------- */
@@ -334,7 +522,7 @@ export default function PlayerStage({
       action: directLines.length > 1 ? { label: '换一条线路', onClick: nextLine } : null
     });
   }
-  if (liveInfo?.scrapeError) {
+  if (liveInfo?.scrapeError && (live || isNearKickoff)) {
     notices.push({ tone: 'warn', text: '聚合站未响应，已回退到官方平台直达', action: null });
   }
   if (liveInfo?.matchAmbiguous) {
@@ -449,13 +637,34 @@ export default function PlayerStage({
         <span className="inline-flex items-center gap-2">
           <IconLive className={live ? 'text-live' : 'text-text-faint'} />
           <span className="text-xs font-medium text-text-primary">直播线路</span>
-          <Meta num>{lines.length} 条</Meta>
+          <Meta num>
+            {lines.length > 0
+              ? `${lines.length} 条`
+              : live
+              ? '无可用'
+              : finished
+              ? '已终场'
+              : postponed
+              ? '已延期'
+              : isNearKickoff
+              ? '接入中'
+              : '待开播'}
+          </Meta>
         </span>
-        {directLines.length > 1 && (
-          <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
-            换线
-          </Button>
-        )}
+        <div className="flex items-center gap-1">
+          {directLines.length > 1 && (
+            <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
+              换线
+            </Button>
+          )}
+          <IconButton
+            label={loadingLines ? '正在检测线路…' : '刷新线路'}
+            onClick={() => fetchLines({ reset: false, autoPlay: true })}
+            disabled={loadingLines}
+          >
+            <IconReset className={loadingLines ? 'animate-spin text-accent' : ''} size={12} />
+          </IconButton>
+        </div>
       </div>
 
       {lines.length > 0 ? (
@@ -466,11 +675,13 @@ export default function PlayerStage({
           ))}
         </div>
       ) : (
-        <div className="flex flex-1 min-h-[80px] items-center justify-center py-3">
-          <p className="text-center text-2xs text-text-muted">
-            {loadingLines ? '正在检索线路…' : liveInfo?.scrapeError ? '未检索到线路' : '本场暂无直播线路，可用下方官方平台'}
-          </p>
-        </div>
+        <LineEmptyState
+          loading={loadingLines}
+          state={state}
+          isNearKickoff={isNearKickoff}
+          scrapeError={liveInfo?.scrapeError}
+          onRefresh={() => fetchLines({ reset: false, autoPlay: true })}
+        />
       )}
 
       {notices.length > 0 && (
@@ -550,18 +761,49 @@ export default function PlayerStage({
                   <IconLive className={live ? 'text-live' : 'text-text-faint'} />
                   <span className="text-xs font-medium text-text-primary">线路</span>
                 </span>
-                {visibleTheaterLines.map(l => (
-                  <LineButton key={l.id} l={l} compact active={activeLineId === l.id} onSelect={selectLine} />
-                ))}
-                {lines.length > 3 && (
-                  <Button variant="ghost" icon={<IconChevronDown />} onClick={() => setTheaterLinesExpanded(true)}>
-                    全部 {lines.length}
-                  </Button>
-                )}
-                {directLines.length > 1 && (
-                  <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
-                    换线
-                  </Button>
+                {lines.length > 0 ? (
+                  <>
+                    {visibleTheaterLines.map(l => (
+                      <LineButton key={l.id} l={l} compact active={activeLineId === l.id} onSelect={selectLine} />
+                    ))}
+                    {lines.length > 3 && (
+                      <Button variant="ghost" icon={<IconChevronDown />} onClick={() => setTheaterLinesExpanded(true)}>
+                        全部 {lines.length}
+                      </Button>
+                    )}
+                    {directLines.length > 1 && (
+                      <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
+                        换线
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex items-center gap-2 text-2xs text-text-muted">
+                    <span className="text-text-muted">
+                      {loadingLines
+                        ? '正在检索线路…'
+                        : finished
+                        ? '比赛已终场'
+                        : postponed
+                        ? '比赛已延期'
+                        : live
+                        ? '暂无可播线路'
+                        : isNearKickoff
+                        ? '信号接入中（正等待推流）'
+                        : '未开赛（线路通常在赛前 15~30 分钟接入）'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => fetchLines({ reset: false, autoPlay: true })}
+                      disabled={loadingLines}
+                      title="检测线路"
+                      aria-label="检测线路"
+                      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs text-text-secondary hover:bg-surface-raised hover:text-text-primary transition-colors disabled:opacity-40"
+                    >
+                      <IconReset size={11} className={loadingLines ? 'animate-spin text-accent' : ''} />
+                      <span>{loadingLines ? '检测中' : '检测'}</span>
+                    </button>
+                  </div>
                 )}
               </div>
               <div className="shrink-0">
