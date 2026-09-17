@@ -1,20 +1,21 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { VList } from 'virtua';
 import { weekdayOf } from '../core/format.js';
-import { fixtures, LEAGUE_ORDER, LEAGUE_NAMES, leagueColor } from '../data/index.js';
+import { getFixtures, LEAGUE_ORDER, LEAGUE_NAMES, leagueColor } from '../data/index.js';
 import { evalOne, stateOf, defaultScheduleFilters, dayCounts, owlDayOffset } from '../core/owl.js';
 import * as E from '../core/engine.js';
 import MatchRow from './MatchRow.jsx';
 import { EmptyState, Meta, TogglePill } from './atoms.jsx';
 import { IconCalendar, IconChevronLeft, IconChevronRight, IconClose, IconSearch } from './icons.jsx';
 
-/** 各联赛场次总数（静态，算一次） */
-const LEAGUE_TOTALS = fixtures.reduce((acc, m) => {
-  acc[m.l] = (acc[m.l] || 0) + 1;
-  return acc;
-}, {});
-
-const TOTAL = fixtures.length.toLocaleString();
+/**
+ * 各联赛场次总数
+ *
+ * ⚠️ 必须在组件内按当前数据算，不能用模块级 import { fixtures } 算一次：
+ * setFixtures 换的是 data/index.js 内部的 _fixtures，模块级绑定永远停在
+ * 构建期快照 —— 于是出现「命中 1900 场 / 全部 1897 场」的自相矛盾
+ * （列表 rows 走 getFixtures 是新数据，药丸计数是旧的）。
+ */
 
 /** 筛选器口径要能查到，但不该常驻在版面里解释自己 */
 const LEAGUE_HINT = '这里是「看哪些联赛」，与设置里的「关注联赛」是两件事：后者影响算法排序加 8 分，前者只是过滤显示。';
@@ -37,6 +38,16 @@ export default function ScheduleView({
 }) {
   const allSelected = filters.leagues.length === LEAGUE_ORDER.length;
   const matchCount = useMemo(() => rows.filter(r => r.type === 'match').length, [rows]);
+
+  // rows 由父组件按 dataRev 重建，数据变化时随之重算，与列表口径保持一致
+  const { leagueTotals, total } = useMemo(() => {
+    const list = getFixtures();
+    const totals = list.reduce((acc, m) => {
+      acc[m.l] = (acc[m.l] || 0) + 1;
+      return acc;
+    }, {});
+    return { leagueTotals: totals, total: list.length.toLocaleString() };
+  }, [rows]);
 
   /* ---- 日期导航 ----
      主流产品（FotMob / 懂球帝）的赛程页都是「日期条 + 当日比赛」，
@@ -281,7 +292,7 @@ export default function ScheduleView({
           on={allSelected}
           onClick={() => set({ leagues: [...LEAGUE_ORDER] })}
           label="全部"
-          count={TOTAL}
+          count={total}
           hint={LEAGUE_HINT}
         />
         {LEAGUE_ORDER.map(code => (
@@ -290,7 +301,7 @@ export default function ScheduleView({
             on={!allSelected && filters.leagues.includes(code)}
             onClick={() => toggleLeague(code)}
             label={LEAGUE_NAMES[code]}
-            count={LEAGUE_TOTALS[code] ?? 0}
+            count={leagueTotals[code] ?? 0}
             color={leagueColor(code)}
           />
         ))}

@@ -74,6 +74,7 @@
       "server/**/*",
       "src/core/**/*",
       "src/data/**/*",
+      "build/icon.png",
       "package.json"
     ],
     "win": {

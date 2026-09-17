@@ -251,19 +251,40 @@ export default function App() {
   const [dataRev, setDataRev] = useState(0);
   const lastSyncTriggerRef = useRef(0);
 
+  // 竞态保护：refreshData 有 4 个并发来源（挂载 effect / focus 监听 /
+  // triggerSync 的 409 延迟分支 / 设置抽屉按钮）。旧实现无任何保护，
+  // 后返回的旧响应会覆盖新数据（last-response-wins）。
+  // 两层：in-flight 复用避免重复请求；序号保证只有最新一次的响应才会被应用。
+  const refreshInFlightRef = useRef(null);
+  const refreshSeqRef = useRef(0);
+
   const refreshData = useCallback(async () => {
-    try {
-      const r = await fetch('/api/fixtures');
-      if (!r.ok) return null;
-      const j = await r.json();
-      if (j?.fixtures?.length && setFixtures(j.fixtures)) {
-        setDataRev(v => v + 1);
+    // 已有相同拉取在进行：复用同一个 promise，不重复发请求
+    if (refreshInFlightRef.current) return refreshInFlightRef.current;
+    refreshSeqRef.current += 1;
+    const seq = refreshSeqRef.current;
+    const p = (async () => {
+      try {
+        const r = await fetch('/api/fixtures');
+        if (!r.ok) return null;
+        const j = await r.json();
+        // 只接受最后一次发起的响应，避免旧响应覆盖新数据
+        if (seq !== refreshSeqRef.current) return null;
+        if (j?.fixtures?.length && setFixtures(j.fixtures)) {
+          setDataRev(v => v + 1);
+        }
+        return j;
+      } catch {
+        /* 服务不可用（纯静态预览）时静默沿用内置快照，不打扰用户 */
       }
-      return j;
-    } catch {
-      /* 服务不可用（纯静态预览）时静默沿用内置快照，不打扰用户 */
+      return null;
+    })();
+    refreshInFlightRef.current = p;
+    try {
+      return await p;
+    } finally {
+      refreshInFlightRef.current = null;
     }
-    return null;
   }, []);
 
   const triggerSync = useCallback(async () => {
@@ -344,17 +365,23 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const liveCount = useMemo(() => liveCountAt(Date.now()), [clockTs]);
 
-  // ---- 首屏自动锁定今晚之选（用户零点击即有内容）----
-  useEffect(() => {
-    if (activeMatchId) return;
-    if (tonight.hero) setActiveMatchId(tonight.hero.m.id);
-    else if (tonight.focal) setActiveMatchId(tonight.focal.m.id);
-  }, [tonight, activeMatchId]);
-
   // 按 dataRev 重建：保鲜同步后右栏也要拿到新记录（含比分），不能停在构建期快照
+  // ⚠️ 必须在下面的「首屏锁定」effect 之前声明 —— 该 effect 的依赖数组里含 matchMap，
+  //    const 的 TDZ 会让「先使用、后声明」在渲染期直接抛 ReferenceError。
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const matchMap = useMemo(buildMatchMap, [dataRev]);
   const activeMatch = activeMatchId ? matchMap[activeMatchId] || null : null;
+
+  // ---- 首屏自动锁定今晚之选（用户零点击即有内容）----
+  // ⚠️ 深链 ?match=XXX 可能已失效：分享链接过期、热更新后该场被移除、手填错误。
+  // 此时 activeMatchId 非空但 matchMap 里查不到 → 右栏永久空态，刷新也不自愈
+  // （旧逻辑只判 activeMatchId 非空就 return）。查不到就降级到今晚之选，
+  // URL 同步 effect 会把失效 id 顺手改掉，下次刷新即自愈。
+  useEffect(() => {
+    if (activeMatchId && matchMap[activeMatchId]) return;
+    if (tonight.hero) setActiveMatchId(tonight.hero.m.id);
+    else if (tonight.focal) setActiveMatchId(tonight.focal.m.id);
+  }, [tonight, activeMatchId, matchMap]);
 
   // 无球日的「下一场焦点战」倒计时：只在降级状态下出现，30 秒时钟足够。
   // 主舞台的倒计时不在这里 —— 它由 PlayerStage 自己按秒刷新（见该组件），

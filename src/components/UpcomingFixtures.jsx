@@ -6,20 +6,20 @@
  * 把双方各自的后续赛程摆在一起，配合档位徽章，一眼可比。
  */
 
+import { useMemo } from 'react';
 import { upcomingForTeams } from '../core/owl.js';
 import { teamName, leagueName, crestUrl, LEAGUE_ORDER } from '../data/index.js';
 import { hm, zhDate, weekdayOf } from '../core/format.js';
 import { tierOf } from '../core/engine.js';
+import { TIER_MAP } from '../core/narrative.js';
 import { Crest } from './atoms.jsx';
 import { EmptyState } from './atoms.jsx';
 
-const TIER_TONE = {
-  S0: 'text-emerald-400',
-  S1: 'text-teal-400',
-  S2: 'text-amber-400',
-  S3: 'text-orange-400',
-  S4: 'text-rose-400'
-};
+// 档位文字色复用 narrative 的 tier 色阶（与 SleepBadge / WeekView 同一口径），
+// 不再单独维护一份原生色 —— 两份色阶必然漂移。
+const TIER_TONE = Object.fromEntries(
+  Object.entries(TIER_MAP).map(([label, t]) => [label, t.text])
+);
 
 function TeamColumn({ teamId, list, side }) {
   const name = teamName(teamId);
@@ -71,7 +71,8 @@ export default function UpcomingFixtures({ match, prefs }) {
     );
   }
 
-  const { home, away } = upcomingForTeams(match);
+  // 全量遍历，随 match 变化时才算一次（App 的 30 秒 tick 与 revealed 变化会触发重渲染）
+  const { home, away } = useMemo(() => upcomingForTeams(match), [match]);
 
   return (
     <section className="flex h-full flex-col justify-between overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#14162a] via-[#0f111f] to-[#0a0c16] p-4 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]">

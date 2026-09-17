@@ -113,11 +113,59 @@ function createWindow() {
 
   // 拦截主窗口非本地服务的页面跳转，防止桌面应用内部被意外导航到外部网站
   mainWindow.webContents.on('will-navigate', (event, url) => {
+    // ⚠️ 不能用 url.startsWith(appOrigin)：userinfo 欺骗
+    // （http://127.0.0.1:3100@evil.com/）与后缀域名（http://127.0.0.1:3100.evil.com/）
+    // 都能通过前缀匹配，却会把外部站点加载进无地址栏的应用窗口。按 origin 严格比对。
     const appOrigin = `http://${HOST}:${appPort}`;
-    if (!url.startsWith(appOrigin)) {
+    let targetOrigin = null;
+    try {
+      targetOrigin = new URL(url).origin;
+    } catch {
+      targetOrigin = null; // 非法 URL 一律拦截
+    }
+    if (targetOrigin !== appOrigin) {
       event.preventDefault();
       shell.openExternal(url);
     }
+  });
+
+  /**
+   * 内容安全策略（深度复审 P2）
+   *
+   * 窗口是 frame:false 自绘标题栏、无地址栏，一旦未来出现任何注入点，钓鱼会非常逼真，
+   * 而 CSP 是零成本兜底。渲染层目前注入面极小（无 dangerouslySetInnerHTML / innerHTML /
+   * iframe，React 默认转义），但防御不能依赖「现在没有」。
+   *
+   * 策略说明：
+   *   · script-src 'self' —— 构建产物是 Vite 标准外部模块，无内联脚本
+   *   · style-src 需 'unsafe-inline' —— 组件大量使用 style={{}} 内联样式（React 行为，
+   *     非用户输入），不放行会整体破坏布局；内联样式不是脚本执行通道
+   *   · media-src blob: —— hls.js 通过 MediaSource 给 video 喂 blob: 流
+   *   · connect-src 只放行自身 + GitHub Releases API（网页端更新检测）
+   *
+   * 窗口加载的永远是本地服务的 dist 构建产物（electron:dev 与打包版同源），
+   * 故无条件生效；Vite 开发服务器只在浏览器里单独跑，不受此 CSP 影响。
+   */
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          [
+            "default-src 'self'",
+            "script-src 'self'",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data: blob:",
+            "font-src 'self'",
+            "media-src 'self' blob:",
+            "connect-src 'self' https://api.github.com",
+            "frame-ancestors 'none'",
+            "base-uri 'self'",
+            "form-action 'self'"
+          ].join('; ')
+        ]
+      }
+    });
   });
 
   return mainWindow;
@@ -139,6 +187,10 @@ ipcMain.on('win:open-external', (_event, url) => {
 
 /* ---------------- 自动更新守护（electron-updater） ---------------- */
 let autoUpdater = null;
+// 是否已有更新下载完成。electron-updater v6 在无已下载更新时调 quitAndInstall
+// 只会记一条日志然后直接返回（不退出），渲染层表现为「点了安装没反应」。
+// 用它门控安装入口，状态漂移时改为重新检测并给用户可见反馈。
+let updateDownloaded = false;
 try {
   ({ autoUpdater } = require('electron-updater'));
 } catch (err) {
@@ -159,6 +211,8 @@ function setupAutoUpdater(win) {
   };
 
   autoUpdater.on('checking-for-update', () => {
+    // 开始新一轮检测，上一轮的「已下载」状态作废
+    updateDownloaded = false;
     sendUpdate('checking');
   });
 
@@ -226,6 +280,7 @@ function setupAutoUpdater(win) {
   });
 
   autoUpdater.on('update-downloaded', info => {
+    updateDownloaded = true;
     sendUpdate('downloaded', { version: info.version });
 
     // 下载完成时补一条系统级通知：用户此刻很可能已切到别的窗口，
@@ -304,6 +359,19 @@ ipcMain.on('updater:download', () => {
 
 ipcMain.on('updater:install', () => {
   if (!app.isPackaged || !autoUpdater) return;
+  if (!updateDownloaded) {
+    // 状态漂移（渲染层以为已就绪、主进程其实没有）：直接装会无反应。
+    // 改为重新检测并告知渲染层，让按钮不再「点了没动静」。
+    console.warn('[main] updater:install 被调用但没有已下载的更新，改为重新检测');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater:event', {
+        status: 'checking',
+        message: '更新尚未下载完成，正在重新检测'
+      });
+    }
+    triggerUpdateCheck(false);
+    return;
+  }
   autoUpdater.quitAndInstall(false, true);
 });
 

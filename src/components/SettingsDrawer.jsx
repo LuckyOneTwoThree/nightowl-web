@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { fixtures, FOLLOWABLE_LEAGUES, LEAGUE_NAMES, leagueColor } from '../data/index.js';
+import { getFixtures, FOLLOWABLE_LEAGUES, LEAGUE_NAMES, leagueColor } from '../data/index.js';
 import { defaultPrefs } from '../core/prefs.js';
 import { BrandLogo, Button, Chip, Fieldset, Hint, Meta, Switch, TogglePill } from './atoms.jsx';
 import { IconClose, IconReset } from './icons.jsx';
@@ -62,6 +62,16 @@ export default function SettingsDrawer({
     if (open) loadFreshness();
   }, [open, loadFreshness]);
 
+  // Escape 关闭：抽屉常驻渲染，键盘用户需要一条不依赖鼠标的退出路径
+  useEffect(() => {
+    if (!open) return;
+    const onKey = e => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
   const runSync = async () => {
     setSyncing(true);
     setSyncMsg(null);
@@ -96,10 +106,17 @@ export default function SettingsDrawer({
     if (h < 24) return `${h.toFixed(1)} 小时前`;
     return `${Math.floor(h / 24)} 天前`;
   }, [fresh]);
-  const range = useMemo(() => {
-    const days = fixtures.map(m => m.t.slice(0, 10)).sort();
-    return days.length ? `${days[0]} ~ ${days[days.length - 1]}` : '—';
-  }, []);
+  // ⚠️ 不能用模块级 import { fixtures }：setFixtures 换的是 data/index.js 内部的
+  // _fixtures，那个绑定永远停在构建期快照。这里取 getFixtures()，并在新鲜度
+  // 刷新后（抽屉打开 / 同步完成）重算，保证与列表的「命中 N 场」口径一致。
+  const snapshotInfo = useMemo(() => {
+    const list = getFixtures();
+    const days = list.map(m => m.t.slice(0, 10)).sort();
+    return {
+      count: list.length.toLocaleString(),
+      range: days.length ? `${days[0]} ~ ${days[days.length - 1]}` : '—'
+    };
+  }, [fresh]);
 
   const patch = p => onPrefsChange({ ...prefs, ...p });
   const toggleLeague = code =>
@@ -138,6 +155,9 @@ export default function SettingsDrawer({
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
         aria-hidden={!open}
+        // 关闭只是视觉上移出视野，DOM 仍在 —— 内部按钮/滑杆仍在 Tab 序列里，
+        // aria-hidden 对可聚焦内容无效（a11y 违规）。inert 把整块移出焦点与点击。
+        inert={!open}
       >
         {/* 头部 */}
         <div className="flex items-center justify-between border-b border-line-hairline px-5 py-3.5">
@@ -255,7 +275,7 @@ export default function SettingsDrawer({
           <Fieldset title="数据与服务" hint={SERVICE_RULE}>
             <div className="space-y-1.5 rounded-lg border border-line-hairline bg-surface-card px-3 py-2.5 font-num text-2xs leading-relaxed tabular-nums text-text-secondary">
               <p>
-                赛程快照 {fixtures.length.toLocaleString()} 场 · {range}
+                赛程快照 {snapshotInfo.count} 场 · {snapshotInfo.range}
               </p>
 
               {health ? (
@@ -348,7 +368,7 @@ export default function SettingsDrawer({
               <button
                 type="button"
                 onClick={onOpenUpdateModal}
-                className="group flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/15 px-2.5 py-1 text-2xs font-medium text-accent shadow-[0_0_12px_rgba(245,185,66,0.25)] hover:bg-amber-500/25 transition-all cursor-pointer"
+                className="group flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-1 text-2xs font-medium text-accent shadow-[0_0_12px_rgba(245,185,66,0.25)] hover:bg-accent/25 transition-all cursor-pointer"
                 title={`发现新版本 v${updateState?.info?.version || ''}`}
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />

@@ -10,11 +10,15 @@
  * 移植成 node 脚本后，本地 electron-builder --dir 打包即可验证同一份逻辑。
  *
  * 检查两道：
- *   ① 相对 import 扫描 —— 逐一解析产物内 server/electron 模块的相对 import，
- *      断言目标文件存在。曾抓到「scores.js → ../src/core/engine.js 未打包」。
- *   ② 关键运行时文件断言（src/core、src/data、dist）。
+ *   ① 相对 import 扫描 —— 逐一解析产物内 server / electron / src/core 模块的相对
+ *      import，断言目标文件存在。曾抓到「scores.js → ../src/core/engine.js 未打包」。
+ *      ⚠️ src/core 必须纳入扫描：它是运行时代码（server/scores.js、
+ *         server/data-store.js 直接 import engine.js，engine → narrative → owl →
+ *         stats 整条链都在 src/core 内），不扫则 engine.js 若引用未打包模块时
+ *         安装版运行时崩、自检仍全绿。
+ *   ② 关键运行时文件断言（src/core、src/data、dist、build/icon.png）。
  *      注意 build/icon.ico 是打包输入（生成 exe 图标），不在产物内，
- *      断言的是仓库根存在该文件。
+ *      断言的是仓库根存在该文件；icon.png 是窗口/通知图标，必须进产物。
  */
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -54,7 +58,7 @@ const ok = (name, cond, detail = '') => {
 
 /* ---------- ① 相对 import 扫描 ---------- */
 console.log('');
-console.log('一、相对 import 可解析性（server + electron 全模块）');
+console.log('一、相对 import 可解析性（server + electron + src/core 全模块）');
 
 const scanTargets = [];
 const pushJs = dir => {
@@ -66,20 +70,23 @@ const pushJs = dir => {
   }
 };
 pushJs(join(appDir, 'server'));
+pushJs(join(appDir, 'src', 'core'));
 if (existsSync(join(appDir, 'electron'))) {
   for (const f of readdirSync(join(appDir, 'electron'))) {
     if (f.endsWith('.cjs') || f.endsWith('.mjs')) scanTargets.push(join(appDir, 'electron', f));
   }
 }
-ok(`扫描模块数 ${scanTargets.length}`, scanTargets.length >= 8, '过少说明 server/electron 未完整打包');
+ok(`扫描模块数 ${scanTargets.length}`, scanTargets.length >= 16, '过少说明 server/electron/src.core 未完整打包');
 
 const missing = [];
 for (const file of scanTargets) {
   const text = readFileSync(file, 'utf8');
-  // from '...' 与 import('...') 两种形态，单引号（本项目统一风格）
+  // 覆盖单/双引号的 from "..." 与 import("...")，以及 .cjs 里的 require('...')
+  // （此前只认单引号 from，双引号写法与裸 require 对检查不可见）
   const refs = [
-    ...text.matchAll(/from\s+'(\.[^']+)'/g),
-    ...text.matchAll(/import\(\s*'(\.[^']+)'\s*\)/g)
+    ...text.matchAll(/from\s+['"](\.[^'"]+)['"]/g),
+    ...text.matchAll(/import\(\s*['"](\.[^'"]+)['"]\s*\)/g),
+    ...text.matchAll(/require\(\s*['"](\.[^'"]+)['"]\s*\)/g)
   ].map(m => m[1]);
   for (const rel of refs) {
     const target = resolve(dirname(file), rel);
@@ -102,6 +109,7 @@ for (const f of [
   'server/rules.json',
   'server/scraper-alias.json',
   'server/espn-alias.json',
+  'build/icon.png',          // 窗口与两处更新通知图标 —— files 清单曾漏掉，安装版图标失效
   'dist/index.html'
 ]) {
   ok(f, existsSync(join(appDir, f)));

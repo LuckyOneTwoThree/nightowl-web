@@ -5,18 +5,18 @@
  * 按夜猫指数排序，点一条即切换到那场 —— 用户不必回到左栏列表去找。
  */
 
+import { useMemo } from 'react';
 import { sameNightPicks } from '../core/owl.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { hm } from '../core/format.js';
+import { TIER_MAP } from '../core/narrative.js';
 import { Crest, EmptyState } from './atoms.jsx';
 
-const TIER_TONE = {
-  S0: 'text-emerald-400',
-  S1: 'text-teal-400',
-  S2: 'text-amber-400',
-  S3: 'text-orange-400',
-  S4: 'text-rose-400'
-};
+// 档位文字色复用 narrative 的 tier 色阶（与 SleepBadge / WeekView 同一口径），
+// 不再单独维护一份原生色 —— 两份色阶必然漂移。
+const TIER_TONE = Object.fromEntries(
+  Object.entries(TIER_MAP).map(([label, t]) => [label, t.text])
+);
 
 export default function SameNightPicks({ match, prefs, onSelect }) {
   if (!match) {
@@ -31,7 +31,8 @@ export default function SameNightPicks({ match, prefs, onSelect }) {
     );
   }
 
-  const picks = sameNightPicks(match, prefs, 3);
+  // 遍历同夜全部场次，随 match / prefs 变化时才算一次
+  const picks = useMemo(() => sameNightPicks(match, prefs, 3), [match, prefs]);
 
   return (
     <section className="flex h-full flex-col justify-between overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#14162a] via-[#0f111f] to-[#0a0c16] p-4 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]">

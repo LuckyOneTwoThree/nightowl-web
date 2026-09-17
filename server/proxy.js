@@ -59,6 +59,43 @@ export function isValidHost(h) {
   return typeof h === 'string' && h.length > 0 && h.length <= 253 && /^[a-z0-9.-]+$/i.test(h) && !h.startsWith('.');
 }
 
+/**
+ * CORS 来源策略：只放行本机回环来源（深度复审 P0-2）
+ *
+ * 为什么需要：服务只绑 127.0.0.1，但**浏览器的跨域请求不认这个限制**。
+ * 此前 OPTIONS 预检无脑回 ACAO:* + ACAH:*、/api/proxy/allow 不校验来源、
+ * 代理响应也带 ACAO:* —— 任意外部网页都能（a）授权任意主机、（b）借代理
+ * 读回内网内容（本机实测确认）。这直接击穿了「不做开放代理」的核心设计。
+ *
+ * 为什么回环来源足够：应用自身的请求永远是同源 —— Electron 窗口加载
+ * 127.0.0.1:3100 本身；dev 模式走 Vite 的 /api 服务端代理（changeOrigin:false
+ * 会把浏览器来源 127.0.0.1:5173 原样转发，仍属回环）。回环策略还天然覆盖
+ * 端口回退（3100-3104）与 dev/preview 端口，无需逐个枚举。
+ * 攻击者要拿到回环来源，须先在本机起服务并让用户加载 —— 那已是本地代码执行，
+ * 门槛远高于「访问任意外部网页」。
+ *
+ * 返回值：允许时返回该来源串（用于回填 ACAO）；拒绝或无来源时返回 null。
+ * 无 Origin 头（同源 GET / 非浏览器请求）不需要 CORS 头，也返回 null。
+ */
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+
+export function allowedLocalOrigin(req, rules) {
+  const origin = req?.headers?.origin;
+  if (!origin) return null;
+  let u;
+  try {
+    u = new URL(origin);
+  } catch {
+    return null;
+  }
+  if ((u.protocol === 'http:' || u.protocol === 'https:') && LOOPBACK_HOSTS.has(u.hostname)) {
+    return origin;
+  }
+  // rules 里可额外放行（如内网开发机），默认为空
+  const extra = rules?.proxy?.allowedOrigins || [];
+  return extra.includes(origin) ? origin : null;
+}
+
 /** 只挑白名单里的请求头回传上游 */
 function pickHeaders(incoming, rules) {
   const allow = new Set((rules.proxy?.forwardHeaders || []).map(h => h.toLowerCase()));
@@ -223,30 +260,62 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
   };
 
   /**
-   * 拉取上游
+   * 拉取上游，并**逐跳复核重定向**
    *
-   * ⚠️ 这里的 timeoutMs **只负责「等到响应头」这一段**；头一到就 clearTimeout，
-   *    之后的 body 阶段交给调用方的 idle 计时器（见 handle）。
-   *    早期实现把 AbortController 建在本函数内部、头一到就彻底失效，
-   *    于是 body 阶段完全没有时间约束 —— 上游 TCP 僵住即永久占住并发槽位。
+   * ⚠️ 此前用 redirect: 'follow'，而 isHostAllowed 只在 handle 里对初始 URL 检查一次，
+   *    跳转目标不再复核 —— 授权主机一旦 302 到未授权的内部地址，代理照常取回内容，
+   *    白名单形同虚设（本机实测确认）。会话头同样只按初始主机解析一次，
+   *    会跟着重定向链继续发给跳转目标（用户给 A 的 Cookie 流向了 B）。
+   *
+   * 改为手动逐跳跟随：每一跳都重新过 isHostAllowed、重新解析**本跳主机**的会话头，
+   * 并限制总跳数防止重定向环。允许的跳数取自 rules，默认 5。
    */
   async function fetchUpstream(target, incomingHeaders, timeoutMs, ac) {
-    const timer = setTimeout(() => ac.abort(), timeoutMs);
-    try {
-      // 优先级：用户会话头 > 请求自带（白名单内）> rules 里的上游头
-      const custom = sessionHeaders.get(new URL(target).hostname) || {};
-      return await fetch(target, {
-        headers: {
-          ...(rules.proxy?.upstreamHeaders || {}),
-          ...incomingHeaders,
-          ...custom
-        },
-        redirect: 'follow',
-        signal: ac.signal
-      });
-    } finally {
-      clearTimeout(timer);
+    const maxRedirects = rules.proxy?.maxRedirects || 5;
+    let url = target;
+    for (let hop = 0; hop <= maxRedirects; hop++) {
+      const timer = setTimeout(() => ac.abort(), timeoutMs);
+      let res;
+      try {
+        // 优先级：用户会话头（按本跳主机解析）> 请求自带（白名单内）> rules 里的上游头
+        const custom = sessionHeaders.get(new URL(url).hostname) || {};
+        res = await fetch(url, {
+          headers: {
+            ...(rules.proxy?.upstreamHeaders || {}),
+            ...incomingHeaders,
+            ...custom
+          },
+          redirect: 'manual',
+          signal: ac.signal
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+
+      const location = res.headers.get('location');
+      if (res.status >= 300 && res.status < 400 && location) {
+        // 相对 Location 按本跳 URL 解析（//host、/path、相对路径都要处理）
+        const next = new URL(location, url);
+        if (next.protocol !== 'https:' && next.protocol !== 'http:') {
+          throw new ProxyError('bad-request', `重定向协议不支持 ${next.protocol}`, 400);
+        }
+        if (!isHostAllowed(next.hostname, rules, sessionAllowed)) {
+          throw new ProxyError('blocked', `重定向目标不在白名单：${next.hostname}`, 403);
+        }
+        // 丢弃重定向响应的 body，避免连接挂起
+        try {
+          await res.body?.cancel();
+        } catch {
+          /* 无 body 或已关闭，忽略 */
+        }
+        url = next.toString();
+        continue;
+      }
+
+      // 手动跟随时 res.url 就是最终实际请求的 URL，供 m3u8 重写基准使用
+      return res;
     }
+    throw new ProxyError('network', `重定向次数超限（${maxRedirects}）`, 502);
   }
 
   /**
@@ -321,6 +390,9 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
     } catch (err) {
       disarmIdle();
       releaseOnce();
+      // 逐跳复核抛出的 blocked / bad-request 是明确的策略判定，必须保留语义与状态码，
+      // 不能被吞成 504 网络错误（否则健康检查分不清「上游连不上」与「跳转被拒绝」）
+      if (err instanceof ProxyError) throw err;
       const msg = err?.name === 'AbortError' ? `上游超时（${timeoutMs}ms）` : `连接上游失败：${err?.message || err}`;
       // 网络失败不缓存、不闩锁 —— 下次请求照常重试
       throw new ProxyError('network', msg, 504);
@@ -338,7 +410,14 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
 
       /* ---- M3U8：必须整体读出并重写 ---- */
       if (isPlaylistResponse(contentType, target.pathname + target.search)) {
-        // readLimited 同样会无限期等待上游 —— 一并纳入 idle 保护
+        // readLimited 同样会无限期等待上游 —— 一并纳入 idle 保护。
+        // 客户端在读取期间断开时，与流式分支一样要中断上游并归还槽位，
+        // 否则并发闸门要等读完成或 idle 超时才释放（有 4MB 上限兜底，但仍占槽）。
+        res.on('close', () => {
+          disarmIdle();
+          ac.abort();
+          releaseOnce();
+        });
         armIdle();
         const buf = await readLimited(upstream, rules.proxy?.maxPlaylistBytes || 4194304);
         disarmIdle();
@@ -346,12 +425,14 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
         const finalBaseUrl = upstream.url || target.toString();
         const { text } = rewritePlaylist(raw, finalBaseUrl);
 
-        res.writeHead(200, {
+        const playlistHeaders = {
           'Content-Type': contentType || 'application/vnd.apple.mpegurl',
           'Cache-Control': cacheControlFor(finalBaseUrl, contentType),
-          'Access-Control-Allow-Origin': '*',
           'Content-Length': Buffer.byteLength(text)
-        });
+        };
+        const corsOrigin = allowedLocalOrigin(req, rules);
+        if (corsOrigin) playlistHeaders['Access-Control-Allow-Origin'] = corsOrigin;
+        res.writeHead(200, playlistHeaders);
         res.end(text);
         releaseOnce();
         return;
@@ -360,9 +441,10 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
       /* ---- 分片 / 其它媒体：流式转发，零内存驻留 ---- */
       const headers = {
         'Content-Type': contentType || 'application/octet-stream',
-        'Cache-Control': cacheControlFor(target.toString(), contentType),
-        'Access-Control-Allow-Origin': '*'
+        'Cache-Control': cacheControlFor(target.toString(), contentType)
       };
+      const mediaCorsOrigin = allowedLocalOrigin(req, rules);
+      if (mediaCorsOrigin) headers['Access-Control-Allow-Origin'] = mediaCorsOrigin;
       // Range 相关响应头必须透传，否则拖动会失败
       for (const h of ['content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified']) {
         const v = upstream.headers.get(h);

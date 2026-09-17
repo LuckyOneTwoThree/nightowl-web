@@ -79,6 +79,16 @@ export default function UpdateModal({
     }
   }, [open, isDesktop, webCheck.checked, webCheck.loading, checkWebUpdate]);
 
+  // Escape 关闭：模态弹窗应支持键盘退出，不能只靠点击遮罩
+  useEffect(() => {
+    if (!open) return;
+    const onKey = e => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   // 状态归一化
@@ -151,7 +161,7 @@ export default function UpdateModal({
           {/* 状态 2：已是最新版本 */}
           {status === 'not-available' && (
             <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-resource/15 text-resource">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>

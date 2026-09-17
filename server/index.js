@@ -11,7 +11,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join, extname, normalize } from 'node:path';
-import { createProxy, loadRules, ProxyError } from './proxy.js';
+import { createProxy, loadRules, ProxyError, allowedLocalOrigin } from './proxy.js';
 import { syncScores, applyPatches, validateFixtures } from './scores.js';
 import { getLiveSourcesForMatch } from './scraper.js';
 import { loadFixtures, saveFixtures, freshness } from './data-store.js';
@@ -54,7 +54,15 @@ async function serveStatic(pathname, res) {
   }
 
   // 防目录穿越：normalize 后必须仍在 DIST 内
-  const rel = normalize(decodeURIComponent(pathname)).replace(/^(\.\.[/\\])+/, '');
+  // decodeURIComponent 对 /%zz 这类非法百分号编码会抛 URIError（实测），
+  // 落到通用 catch 会返回 500 —— 是客户端的坏请求，给 404 更准确
+  let rel;
+  try {
+    rel = normalize(decodeURIComponent(pathname)).replace(/^(\.\.[/\\])+/, '');
+  } catch {
+    sendJSON(res, 404, { error: '非法路径编码', path: pathname });
+    return;
+  }
   let filePath = join(DIST, rel);
   if (!filePath.startsWith(DIST)) {
     sendJSON(res, 403, { error: '非法路径' });
@@ -80,19 +88,27 @@ async function serveStatic(pathname, res) {
   }
 }
 
-/** 读取并解析 JSON 请求体（限长，避免被大 body 打爆） */
+/**
+ * 读取并解析 JSON 请求体（限长，避免被大 body 打爆）
+ *
+ * ⚠️ 限长必须按**字节**而不是字符串长度：多字节字符（中文 3 字节、emoji 4 字节）
+ *    在 JS 字符串里只占 1-2 个码元，按 .length 限长实际允许的体积是上限的 2-3 倍。
+ */
 function readJsonBody(req, limit = 8192) {
   return new Promise((resolve, reject) => {
-    let buf = '';
+    const chunks = [];
+    let total = 0;
     req.on('data', c => {
-      buf += c;
-      if (buf.length > limit) {
+      total += Buffer.byteLength(c);
+      chunks.push(c);
+      if (total > limit) {
         reject(new Error('请求体超出限制'));
         req.destroy();
       }
     });
     req.on('end', () => {
       try {
+        const buf = Buffer.concat(chunks).toString('utf8');
         resolve(buf ? JSON.parse(buf) : {});
       } catch (e) {
         reject(e);
@@ -106,6 +122,20 @@ export function createServer(rules = loadRules(), log = console) {
   const proxy = createProxy(rules, log);
   let syncing = false;
   let lastSync = null;
+
+  /**
+   * 来源校验：浏览器跨域请求不认「只绑 127.0.0.1」这个限制，
+   * 任意外部网页原本可以驱动本服务的写接口（授权主机 / 触发同步）。
+   * 只放行本机回环来源（见 proxy.js 的 allowedLocalOrigin）。
+   * 同源请求与非浏览器请求不带 Origin，直接放行。
+   */
+  const rejectForeignOrigin = (req, res) => {
+    if (req.headers.origin && !allowedLocalOrigin(req, rules)) {
+      sendJSON(res, 403, { error: `来源不在允许列表：${req.headers.origin}（仅允许本机回环来源）` });
+      return true;
+    }
+    return false;
+  };
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || '127.0.0.1'}`);
@@ -137,6 +167,9 @@ export function createServer(rules = loadRules(), log = console) {
 
       /* ---------------- 会话级域名授权 ---------------- */
       if (pathname === '/api/proxy/allow' && req.method === 'POST') {
+        // 外部网页原本可以跨域调用本接口把任意主机写进会话白名单
+        // （预检此前无脑放行，实测确认）。必须校验来源。
+        if (rejectForeignOrigin(req, res)) return;
         try {
           const body = await readJsonBody(req);
           const list = Array.isArray(body.hosts) ? body.hosts : [body.host];
@@ -161,6 +194,7 @@ export function createServer(rules = loadRules(), log = console) {
 
       /* ---------------- 会话授权回收 ---------------- */
       if (pathname === '/api/proxy/revoke' && req.method === 'POST') {
+        if (rejectForeignOrigin(req, res)) return;
         try {
           const body = await readJsonBody(req);
           if (body.all === true) {
@@ -182,7 +216,23 @@ export function createServer(rules = loadRules(), log = console) {
       /* ---------------- 流代理 ---------------- */
       if (pathname === '/api/proxy') {
         if (req.method === 'OPTIONS') {
-          res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' });
+          // 只放行本机回环来源；外部来源的预检直接拒绝，actual request 也就发不出来
+          if (req.headers.origin && !allowedLocalOrigin(req, rules)) {
+            sendJSON(res, 403, { error: '来源不在允许列表（仅允许本机回环来源）' });
+            return;
+          }
+          // 允许的头取自转发白名单 + POST body 需要的 content-type，不再无脑回 *
+          const acah = [...(rules.proxy?.forwardHeaders || []), 'content-type']
+            .map(h => h.toLowerCase())
+            .join(', ');
+          const preflightHeaders = {
+            'Access-Control-Allow-Headers': acah,
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            Vary: 'Origin'
+          };
+          const origin = allowedLocalOrigin(req, rules);
+          if (origin) preflightHeaders['Access-Control-Allow-Origin'] = origin;
+          res.writeHead(204, preflightHeaders);
           res.end();
           return;
         }
@@ -232,6 +282,7 @@ export function createServer(rules = loadRules(), log = console) {
       }
 
       if (pathname === '/api/scores/sync' && req.method === 'POST') {
+        if (rejectForeignOrigin(req, res)) return;
         if (rules.scores?.enabled === false) {
           sendJSON(res, 503, { error: '保鲜模块已禁用（rules.scores.enabled=false）' });
           return;
@@ -366,12 +417,19 @@ export function createServer(rules = loadRules(), log = console) {
         const issues = validateFixtures(next);
         if (!issues.length) {
           const saved = saveFixtures(next);
-          log.log?.(`[scores] 后台自动保鲜完成：写入 ${changed} 场新完赛比分 (${Date.now() - startedAt}ms)`);
+          // ⚠️ 不能不看 saved.ok 就报「完成」：数据目录不可写时 saveFixtures 返回
+          //    {ok:false, reason}，此时日志在撒谎、lastSync.applied 也错报为 true。
+          const ok = saved?.ok !== false;
+          log[ok ? 'log' : 'warn']?.(
+            ok
+              ? `[scores] 后台自动保鲜完成：写入 ${changed} 场新完赛比分 (${Date.now() - startedAt}ms)`
+              : `[scores] 后台自动保鲜写盘失败：${saved?.reason || '未知原因'}（${changed} 场未落盘）`
+          );
           lastSync = {
             at: new Date().toISOString(),
             ms: Date.now() - startedAt,
             patches: result.patches.size,
-            applied: true,
+            applied: ok, // 写盘失败不得报「已应用」
             written: { ...saved, changed },
             errors: result.errors.length,
             stats: result.stats

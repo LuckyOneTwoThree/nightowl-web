@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, memo, useState } from 'react';
 import { hm, zhDate, weekdayOf, datePart, liveMinute, humanCountdown } from '../core/format.js';
 import { teamName, leagueName } from '../data/index.js';
 import { ts, countdown as engineCountdown } from '../core/engine.js';
@@ -65,6 +65,92 @@ export function sourceUrlFor(src, match) {
 
 const SHORTCUT_HINT =
   '播放中可用：F 全屏 · P 画中画 · 空格 暂停 · ← → 快退快进 · 1–9 切换线路。快捷键在视频画面获得焦点时生效。';
+
+/**
+ * ⚠️ 下面三个组件必须定义在模块作用域，不能写在 PlayerStage 的渲染函数体内。
+ *
+ * 本组件的 now 每秒 tick 一次（倒计时与进行中分钟数需要），若这三个组件定义在
+ * 渲染体内，每次渲染都会产生**新的函数引用**。React 按元素 type 的引用比较，
+ * 引用变了就判定为不同组件 → 整棵子树 unmount 再重建。于是直播线路列表、官方平台
+ * 链接、通知条每秒 DOM 反复销毁重建，键盘焦点每秒丢失（无法停留在线路按钮上）。
+ * 定义在模块作用域后 type 引用恒定，React 正常复用 DOM；LineButton 再套一层
+ * memo，列表项在 active 状态与选中回调未变时彻底跳过重渲染。
+ */
+function Notice({ n }) {
+  return (
+    <div
+      className={`flex items-start justify-between gap-2 rounded-md px-2.5 py-1.5 text-2xs leading-relaxed ${
+        n.tone === 'danger' ? 'bg-danger/10 text-danger' : 'bg-warn/10 text-warn'
+      }`}
+    >
+      <span className="inline-flex min-w-0 items-start gap-1.5">
+        <IconWarn size={12} className="mt-0.5" />
+        <span className="min-w-0">{n.text}</span>
+      </span>
+      {n.action && (
+        <button
+          type="button"
+          onClick={n.action.onClick}
+          className="shrink-0 font-medium underline underline-offset-2 hover:opacity-80"
+        >
+          {n.action.label}
+        </button>
+      )}
+    </div>
+  );
+}
+
+const LineButton = memo(function LineButton({ l, compact = false, active, onSelect }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(l)}
+      aria-pressed={active}
+      className={`inline-flex items-center justify-between gap-1.5 rounded-md px-2.5 py-1.5 text-2xs transition-colors cursor-pointer ${
+        compact ? 'shrink-0 whitespace-nowrap' : 'w-full'
+      } ${
+        active
+          ? 'bg-surface-accent font-semibold text-accent shadow-[0_0_8px_rgba(245,185,66,0.25)]'
+          : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
+      }`}
+    >
+      <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
+        {active && <IconSignal size={11} className="shrink-0" />}
+        <span className="truncate">{l.name}</span>
+      </span>
+      {!compact && <Meta className="shrink-0">{l.isDirect ? '直链' : '内嵌'}</Meta>}
+    </button>
+  );
+});
+
+function OfficialLinks({ sources, match, limit = 99 }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {sources.slice(0, limit).map(s => {
+        const url = sourceUrlFor(s, match);
+        return (
+          <a
+            key={s.id}
+            href={url}
+            target="_blank"
+            rel="noreferrer noopener"
+            title={s.note || s.homeUrl}
+            onClick={e => {
+              if (window.desktop?.openExternal && url) {
+                e.preventDefault();
+                window.desktop.openExternal(url);
+              }
+            }}
+            className="inline-flex items-center gap-1 rounded-md border border-line-control bg-surface-raised px-2.5 py-1 text-2xs text-text-secondary transition-colors hover:border-line-control-hover hover:bg-surface-accent hover:text-text-primary"
+          >
+            <IconExternal size={11} />
+            {s.name}
+          </a>
+        );
+      })}
+    </div>
+  );
+}
 
 /**
  * 主舞台播放大屏
@@ -262,28 +348,6 @@ export default function PlayerStage({
     });
   }
 
-  const Notice = ({ n }) => (
-    <div
-      className={`flex items-start justify-between gap-2 rounded-md px-2.5 py-1.5 text-2xs leading-relaxed ${
-        n.tone === 'danger' ? 'bg-danger/10 text-danger' : 'bg-warn/10 text-warn'
-      }`}
-    >
-      <span className="inline-flex min-w-0 items-start gap-1.5">
-        <IconWarn size={12} className="mt-0.5" />
-        <span className="min-w-0">{n.text}</span>
-      </span>
-      {n.action && (
-        <button
-          type="button"
-          onClick={n.action.onClick}
-          className="shrink-0 font-medium underline underline-offset-2 hover:opacity-80"
-        >
-          {n.action.label}
-        </button>
-      )}
-    </div>
-  );
-
   /* ---------------- 视频核心屏 ---------------- */
   const VideoScreen = (
     <div
@@ -376,57 +440,7 @@ export default function PlayerStage({
     </div>
   );
 
-  /* ---------------- 线路按钮（两种模式共用） ---------------- */
-  const LineButton = ({ l, compact = false }) => {
-    const isActive = activeLineId === l.id;
-    return (
-      <button
-        type="button"
-        onClick={() => selectLine(l)}
-        aria-pressed={isActive}
-        className={`inline-flex items-center justify-between gap-1.5 rounded-md px-2.5 py-1.5 text-2xs transition-colors cursor-pointer ${
-          compact ? 'shrink-0 whitespace-nowrap' : 'w-full'
-        } ${
-          isActive
-            ? 'bg-surface-accent font-semibold text-accent shadow-[0_0_8px_rgba(245,185,66,0.25)]'
-            : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
-        }`}
-      >
-        <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
-          {isActive && <IconSignal size={11} className="shrink-0" />}
-          <span className="truncate">{l.name}</span>
-        </span>
-        {!compact && <Meta className="shrink-0">{l.isDirect ? '直链' : '内嵌'}</Meta>}
-      </button>
-    );
-  };
-
-  const OfficialLinks = ({ limit = 99 }) => (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {sources.slice(0, limit).map(s => {
-        const url = sourceUrlFor(s, match);
-        return (
-          <a
-            key={s.id}
-            href={url}
-            target="_blank"
-            rel="noreferrer noopener"
-            title={s.note || s.homeUrl}
-            onClick={e => {
-              if (window.desktop?.openExternal && url) {
-                e.preventDefault();
-                window.desktop.openExternal(url);
-              }
-            }}
-            className="inline-flex items-center gap-1 rounded-md border border-line-control bg-surface-raised px-2.5 py-1 text-2xs text-text-secondary transition-colors hover:border-line-control-hover hover:bg-surface-accent hover:text-text-primary"
-          >
-            <IconExternal size={11} />
-            {s.name}
-          </a>
-        );
-      })}
-    </div>
-  );
+  /* ---------------- 线路按钮（两种模式共用，组件定义见模块作用域） ---------------- */
 
   /* ---------------- 右侧协同栏 ---------------- */
   const ControlSidebar = (
@@ -448,7 +462,7 @@ export default function PlayerStage({
         // 列数按容器实际宽度自适应；在桌面端作为 flex-1 弹性填充高度并支持顺畅滚动
         <div className="scrollbar-thin -mr-1 mt-2.5 grid min-h-[80px] max-h-[220px] lg:max-h-none lg:flex-1 content-start gap-1.5 overflow-y-auto pr-1 [grid-template-columns:repeat(auto-fill,minmax(135px,1fr))]">
           {lines.map(l => (
-            <LineButton key={l.id} l={l} />
+            <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={selectLine} />
           ))}
         </div>
       ) : (
@@ -470,7 +484,7 @@ export default function PlayerStage({
       <div className="mt-2.5 shrink-0 border-t border-line-hairline pt-2.5">
         <SectionLabel>官方平台</SectionLabel>
         <div className="mt-1.5">
-          <OfficialLinks />
+          <OfficialLinks sources={sources} match={match} />
         </div>
       </div>
 
@@ -537,7 +551,7 @@ export default function PlayerStage({
                   <span className="text-xs font-medium text-text-primary">线路</span>
                 </span>
                 {visibleTheaterLines.map(l => (
-                  <LineButton key={l.id} l={l} compact />
+                  <LineButton key={l.id} l={l} compact active={activeLineId === l.id} onSelect={selectLine} />
                 ))}
                 {lines.length > 3 && (
                   <Button variant="ghost" icon={<IconChevronDown />} onClick={() => setTheaterLinesExpanded(true)}>
@@ -551,7 +565,7 @@ export default function PlayerStage({
                 )}
               </div>
               <div className="shrink-0">
-                <OfficialLinks limit={4} />
+                <OfficialLinks sources={sources} match={match} limit={4} />
               </div>
             </div>
           ) : (
@@ -569,7 +583,7 @@ export default function PlayerStage({
                   )}
                 </span>
                 <span className="flex items-center gap-3">
-                  <OfficialLinks />
+                  <OfficialLinks sources={sources} match={match} />
                   <Button variant="ghost" icon={<IconChevronUp />} onClick={() => setTheaterLinesExpanded(false)}>
                     收起
                   </Button>
@@ -577,7 +591,7 @@ export default function PlayerStage({
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 {lines.map(l => (
-                  <LineButton key={l.id} l={l} />
+                  <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={selectLine} />
                 ))}
               </div>
             </div>

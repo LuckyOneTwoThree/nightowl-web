@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
  * 主流级开屏动画 · 夜猫看台 (NightOwl Splash Screen)
@@ -21,16 +21,30 @@ export default function SplashScreen({
   const [countdown, setCountdown] = useState(initialCountdown);
   const [statusText, setStatusText] = useState('正在连接绿茵信号网络...');
   const [progress, setProgress] = useState(25);
+  // 退出阶段的 450ms 计时器：必须可清理 —— 父级在退出动画期间卸载本组件时，
+  // 未清理的计时器会命中「卸载后 setState」并二次触发 onClose。
+  const dismissTimerRef = useRef(null);
 
   // 快捷跳过处理
   const handleDismiss = useCallback(() => {
     if (phase === 'exit' || phase === 'done') return;
     setPhase('exit');
-    setTimeout(() => {
+    dismissTimerRef.current = setTimeout(() => {
+      dismissTimerRef.current = null;
       setPhase('done');
       onClose?.();
     }, 450);
   }, [phase, onClose]);
+
+  // 卸载时兜底清理退出计时器（组件由父级按 splashOpen 条件渲染，随时可能被摘掉）
+  useEffect(() => {
+    return () => {
+      if (dismissTimerRef.current) {
+        clearTimeout(dismissTimerRef.current);
+        dismissTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // 键盘快捷键监听：Space / Enter / Escape 直接跳过
   useEffect(() => {
@@ -85,7 +99,7 @@ export default function SplashScreen({
     <div
       role="dialog"
       aria-label="夜猫看台开屏画面"
-      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-between overflow-hidden select-none bg-[#08090e] px-6 py-8 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+      className={`fixed inset-0 z-splash flex flex-col items-center justify-between overflow-hidden select-none bg-[#08090e] px-6 py-8 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
         phase === 'exit'
           ? 'opacity-0 scale-105 pointer-events-none'
           : 'opacity-100 scale-100'
