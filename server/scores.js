@@ -80,6 +80,21 @@ export function activeSyncMonths(fixtures = [], nowTs = Date.now()) {
 }
 
 /**
+ * tbd（开球时间待定）场次的查询日期展开半径
+ *
+ * 为什么必须展开：tbd 场次的时间是**整轮共用的占位值**（实测 108/108 个 tbd 轮次
+ * 整轮同一个占位时间，如德甲第 5 轮 9 场全是「2026-10-11T02:00」），
+ * 但一轮实际跨周五 / 周六 / 周日**三个不同的日子**。ESPN 按精确日期查询，
+ * 只查占位日就会漏掉其余日子的场次 —— 它们会永久停在 tbd，
+ * 开球后表现为「待录比分 → 上游未提供」。
+ *
+ * 占位日通常是该轮的某一天，±3 天足以覆盖一整轮的全部日期。
+ * 代价：每个进入同步窗口的 tbd 轮从 1 次请求变 7 次，
+ * 但同一时刻进入 48h 窗口的 tbd 轮通常只有 1~2 个，增量可接受。
+ */
+const TBD_EXPAND_DAYS = 3;
+
+/**
  * 增量未同步精准目标：
  * 铁律：**已完赛（st === 'done' 且已有比分）的记录坚决不再重复同步**。
  *
@@ -87,6 +102,8 @@ export function activeSyncMonths(fixtures = [], nowTs = Date.now()) {
  *   1. 历史已开球但未录入完赛比分的场次（m.st === 'sched' && kickTs < nowTs）
  *   2. 当前正在进行的场次（kickTs <= nowTs && kickTs + 120min >= nowTs）
  *   3. 近期 48 小时内的未来场次（可能刚刚确定精确开球时间或改期）
+ *
+ * tbd 场次按占位日 ± TBD_EXPAND_DAYS 展开（见上）。
  *
  * 返回：Map<league, Set<string(YYYYMMDD)>>（转为 UTC 日期以匹配上游 API）
  */
@@ -106,13 +123,62 @@ export function activeSyncTargets(fixtures = [], nowTs = Date.now()) {
 
     // 只有已开球（未录入）或未来 48 小时以内的场次才需要保鲜
     if (m.st === 'sched' && t <= future48h) {
-      const d = new Date(t);
-      const ymd = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
-      if (!targets.has(m.l)) targets.set(m.l, new Set());
-      targets.get(m.l).add(ymd);
+      const add = (ms) => {
+        const d = new Date(ms);
+        const ymd = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
+        if (!targets.has(m.l)) targets.set(m.l, new Set());
+        targets.get(m.l).add(ymd);
+      };
+      add(t);
+      // tbd：占位日可能不是真实比赛日，向前后展开覆盖整轮。
+      // 只对「占位日仍可能覆盖真实比赛日」的场次展开 —— ESPN 在开球前数日就公布真实时间，
+      // 此时占位日在未来或临近。占位日已过去很久仍为 tbd 的场次（积压），展开窗口早已整体
+      // 落在过去，再查也查不到，反而把每个这种场次的 1 个请求永久放大成 7 个，拖慢整轮同步。
+      if (m.tbd && t >= nowTs - TBD_EXPAND_DAYS * 86400000) {
+        for (let i = 1; i <= TBD_EXPAND_DAYS; i++) {
+          add(t - i * 86400000);
+          add(t + i * 86400000);
+        }
+      }
     }
   }
 
+  return targets;
+}
+
+/**
+ * UCL 淘汰赛接管扫描（P2）
+ *
+ * 背景：欧冠淘汰赛（2027-02 起）的对阵要等 2027-01 抽签后才确定，
+ * 本地快照里不可能有这些场次。而 activeSyncTargets 的查询日期
+ * **完全由本地场次推导**——本地没有，就不会生成查询，新赛程永远发现不了。
+ * 于是欧冠赛程到 2027-01-28 就断了，而淘汰赛恰是深夜观赛的核心场景。
+ *
+ * 解法：UCL 的查询不依赖本地场次，直接扫「本周的欧冠比赛日」。
+ * 欧冠固定在周二/周三/周四进行，扫本周这三天即可覆盖；
+ * 拉到本地没有的对阵会进入现有 unmatched 报告（stats.noCounterpart），
+ * 由人或脚本决定是否纳入——**不自动新增场次**，守住「数据只走脚本」的铁律。
+ *
+ * 代价：常态同步每次多 3 个请求（约 +10%），可接受。
+ * 欧冠休赛期（6-8 月）这三天没有赛事，ESPN 返回空，无副作用。
+ */
+// 相对周一的偏移：+1=周二、+2=周三、+3=周四（欧冠固定在这三天）
+const UCL_MATCH_OFFSETS = [1, 2, 3];
+
+export function uclWeeklyTargets(nowTs = Date.now(), targets = new Map()) {
+  const pad = n => String(n).padStart(2, '0');
+  const now = new Date(nowTs);
+  // 本周一（UTC，取 UTC 日分量构造，避免本地时区把日期推前一天）
+  const wd = now.getUTCDay();
+  const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  monday.setUTCDate(monday.getUTCDate() - ((wd + 6) % 7));
+
+  if (!targets.has('UCL')) targets.set('UCL', new Set());
+  const set = targets.get('UCL');
+  for (const offset of UCL_MATCH_OFFSETS) {
+    const d = new Date(monday.getTime() + offset * 86400000);
+    set.add(`${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`);
+  }
   return targets;
 }
 
@@ -296,6 +362,10 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
     // 默认常态增量同步：精准提取未同步完赛场次与近期 48 小时比赛的日期，已同步场次完全跳过
     targets = activeSyncTargets(fixtures);
     list = activeSyncMonths(fixtures);
+    // UCL 淘汰赛接管：欧冠查询不依赖本地场次（抽签后才有对阵），直接扫本周比赛日
+    if (leagues.includes('UCL')) {
+      targets = uclWeeklyTargets(Date.now(), targets);
+    }
   }
 
   const { events, bySource, errors } = await fetchAllEvents({

@@ -46,6 +46,9 @@ const STRATEGY = {
   openfootball: {
     perLeague: true,
     units: ({ league, targets }) => {
+      // 该源不覆盖欧冠（只有五大联赛）：UCL 接管扫描会给 UCL 塞入查询日期，
+      // 但这里拉了也是空，直接跳过，避免每次同步浪费一次请求
+      if (!openfootball.LEAGUES[league]) return [];
       // 若存在精准 targets 且该联赛并无待同步场次，跳过此联赛避免多余开销
       if (targets) {
         const dates = targets.get ? targets.get(league) : targets[league];

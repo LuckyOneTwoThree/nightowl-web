@@ -126,7 +126,43 @@ export async function fetchSchedule(force = false) {
     throw new Error(`获取赛程失败，全部镜像均不可达: ${lastErr?.message || '未知错误'}`);
   }
 
-  const items = [...html.matchAll(/class="[^"]*group-game-item[^"]*"[\s\S]*?href=['"](\/live\/(\d+)\/play)['"][^>]*>([\s\S]*?)<\/a>/gi)];
+  const games = parseScheduleHtml(html, activeMirror);
+
+  /**
+   * 结构性探活（P3）
+   *
+   * 聚合站改版（改一个 CSS 类名）时，三个正则会同时失效，解析出 0 条。
+   * 此前 0 条与「今天确实没比赛」走同一条路径：返回空数组，上层静默降级成
+   * 「本场暂无直播线路」—— 用户分不清是没匹配还是抓取挂了，而抓取其实早坏了。
+   *
+   * 判据：页面足够长（>2000 字符 = 真实首页），且存在**多个** /live/N/play 链接
+   * （≥3 个），却一条都没解析出来 → 判定解析失败。
+   *
+   * 为什么要求「多个」而非「存在」：真正的无比赛日首页也可能在页脚放一两个
+   * 回放/推荐链接，单个链接不足以区分「改版」与「今天没比赛」；
+   * 而改版时整页几十个比赛链接全都失去 group-game-item 外壳，数量上远超阈值。
+   */
+  if (games.length === 0 && html.length > 2000) {
+    const liveLinks = html.match(/\/live\/\d+\/play/gi) || [];
+    if (liveLinks.length >= 3) {
+      throw new Error(
+        `页面结构已变化：HTML 含 ${html.length} 字符、${liveLinks.length} 个直播链接，但正则未匹配到任何场次（疑似站点改版）`
+      );
+    }
+  }
+
+  cache.schedule = { time: now, data: games };
+  return games;
+}
+
+/**
+ * 从聚合站首页 HTML 解析赛程（导出供离线回归测试直接调用）
+ *
+ * ⚠️ 测试必须调用本函数，不能自己重写一遍解析逻辑 ——
+ *    此前 check-scraper.mjs 复制了一份匹配规则，结构上不可能发现解析本身的缺陷。
+ */
+export function parseScheduleHtml(html, baseUrl = "") {
+  const items = [...String(html || "").matchAll(/class="[^"]*group-game-item[^"]*"[\s\S]*?href=['"](\/live\/(\d+)\/play)['"][^>]*>([\s\S]*?)<\/a>/gi)];
 
   const games = [];
   for (const item of items) {
@@ -147,7 +183,7 @@ export async function fetchSchedule(force = false) {
 
       games.push({
         gameId,
-        playUrl: activeMirror + playUrl,
+        playUrl: (baseUrl || activeMirror) + playUrl,
         homeRaw,
         awayRaw,
         homeId: homeId || null,
@@ -160,7 +196,6 @@ export async function fetchSchedule(force = false) {
     }
   }
 
-  cache.schedule = { time: now, data: games };
   return games;
 }
 

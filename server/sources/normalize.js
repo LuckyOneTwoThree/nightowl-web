@@ -110,13 +110,15 @@ export function utcToBeijingWall(iso) {
   return `${b.getUTCFullYear()}-${p(b.getUTCMonth() + 1)}-${p(b.getUTCDate())}T${p(b.getUTCHours())}:${p(b.getUTCMinutes())}`;
 }
 
-/** 'YYYY-MM-DD' + 'HH:mm'（当地区域时间，按北京时间理解）→ 墙钟串 */
-export function localPartsToWall(dateStr, timeStr) {
-  if (!dateStr) return null;
-  const t = (timeStr && /^\d{1,2}:\d{2}/.test(timeStr) ? timeStr.slice(0, 5) : '00:00').padStart(5, '0');
-  const [h, m] = t.split(':');
-  return `${dateStr}T${String(h).padStart(2, '0')}:${m}`;
-}
+/**
+ * ⚠️ 已删除：localPartsToWall(dateStr, timeStr)
+ *
+ * 它把「当地区域时间」直接当成「北京时间」拼接，缺 time 时默认 00:00。
+ * 这两件事都被 tz.mjs 的 localToBeijingWall 取代：
+ *   · 当地时间必须按联赛偏移 + 夏令时换算，否则整体偏移 6~7 小时
+ *   · 缺 time 必须返回 null，默认 00:00 会造出假时刻并清掉 tbd
+ * 保留它会让人在不知情的情况下重新引入静默错误，故删除。
+ */
 
 /** 带退避的 JSON 拉取（多通道：Node fetch → curl 兜底） */
 const sleep = ms => new Promise(r => setTimeout(r, ms));

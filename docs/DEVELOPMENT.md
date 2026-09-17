@@ -32,7 +32,9 @@ npm run verify:algo    # 算法回归（与原版的偏差比对）
 ```bash
 npm run test:owl           # 应用层视图模型（今晚/本周/赛程/分区/推荐）
 npm run test:stats         # 真实数据统计（近况/攻防/交锋）
+npm run test:tz            # openfootball 时区换算（离线，含夏令时边界）
 npm run test:scraper-match # 直播源队名匹配（离线，含错配回归）
+npm run test:scraper-parse # 抓取器 HTML 解析（离线，含改版探活回归）
 npm run check:scraper      # 直播源抓取实测（联网，含 P0 误配回归）
 npm run test:sources       # 数据源健康度（联网）
 ```
@@ -41,20 +43,22 @@ npm run test:sources       # 数据源健康度（联网）
 
 ## 测试体系
 
-**13 个脚本、271 项断言**，`npm run test:all` 串行执行。它们不是形式化的覆盖率，而是每一条都对应过一次真实事故或一条不能破的纪律：
+**15 个脚本、346 项断言**，`npm run test:all` 串行执行。它们不是形式化的覆盖率，而是每一条都对应过一次真实事故或一条不能破的纪律：
 
 | 脚本 | 项数 | 守住什么 |
 | :--- | ---: | :--- |
-| `test:owl` | 46 | 视图模型不变量：分区不丢不重、推荐排除自身、只看未来、排序口径 |
+| `test:owl` | 53 | 视图模型不变量：分区不丢不重、推荐排除自身、只看未来、排序口径 |
+| `test:scores` | 44 | 保鲜折算：只写三值状态、比分不全不落库；tbd 轮展开；UCL 接管 |
 | `test:m3u8` | 31 | M3U8 十类载体的 URI 重写完整性 |
 | `test:session` | 27 | 代理会话授权与回收（TTL / revoke 幂等） |
 | `test:proxy` | 26 | 白名单拒绝、并发闸门、失败语义 |
 | `test:media` | 24 | 媒体类型判定（显式 `kind`，不靠 URL 嗅探） |
 | `test:scraper-match` | 22 | 直播源匹配：**只做双方全等，禁止单队兜底** |
-| `test:scores` | 19 | 保鲜折算：只写三值状态、比分不全不落库 |
+| `test:scraper-parse` | 20 | 抓取器 HTML 解析：**改版时必须抛错，不能静默返回空** |
 | `test:stats` | 19 | 统计口径：不含本场与未来场次（防剧透） |
 | `test:playback` | 18 | 播放链路参数完整性 |
 | `test:proxy-timeout` | 13 | 三层超时（响应头 / 流静默 / 排队） |
+| `test:tz` | 28 | openfootball 时区换算：夏令时边界、**缺 time 不造假时刻** |
 | `test:team-alias` | 11 | 队名别名一致性与覆盖率 |
 | `check:sources` | 8 | 数据源健康度（联网） |
 | `check:scraper` | 7 | 抓取实测 + **P0 误配零容忍回归**（联网） |

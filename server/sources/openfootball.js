@@ -4,13 +4,19 @@
  * 特点：完全免费、无需密钥、托管在 GitHub raw，**实测稳定**（不受 ESPN 那条通道影响）。
  *       覆盖五大联赛，且场次数与本项目 fixtures 完全吻合
  *       （en.1 380 / es.1 380 / it.1 380 / de.1 306 / fr.1 306）。
+ *       **整季一个文件** —— 这是它相对 ESPN（按日分块）的核心优势：
+ *       tbd 占位轮次整轮共用一个占位日，ESPN 按日查询会漏掉非占位日的场次，
+ *       而本源一次请求拿全季，能补齐那些被漏掉的真实开球时间。
  *
- * 局限（必须显式处理，否则会引入静默错误）：
- *   1. **只给本地开球时间，不带时区**（`date` + `time` 是当地墙钟）。
- *      本项目的时间口径是「北京墙钟」，直接拿它当开球时间去写，会整体偏移。
- *      → 因此本适配器标记 `kickoffTrusted: false`，**合并时只取比分、不取时间**。
- *   2. 更新有滞后（社区维护），比分不如 ESPN 及时。
- *   3. 无欧冠。
+ * 时间口径（已修正）：
+ *   数据给的是**联赛所在地的当地墙钟**（date + time 不带时区）。此前直接当北京墙钟用
+ *   会偏移 6~7 小时，于是被标为 kickoffTrusted: false，开球时间从未被采信。
+ *   现在经 tz.mjs 的「联赛偏移 + 欧洲夏令时」换算为北京墙钟，并**升级为可信时间源**
+ *   （与 ESPN 交叉验证 0 偏差，见 tools/verify-openfootball-tz.mjs）。
+ *
+ * 剩余局限：
+ *   1. 更新有滞后（社区维护），比分不如 ESPN 及时。
+ *   2. 无欧冠。
  *
  * 数据形状：
  *   { name, matches: [ { round, date:'2026-08-21', time:'20:00',
@@ -18,7 +24,8 @@
  *                        score:{ ht:[2,0], ft:[3,0] } } ] }
  */
 
-import { buildNameIndex, loadTeams, resolveByName, localPartsToWall, fetchJSON } from './normalize.js';
+import { buildNameIndex, loadTeams, resolveByName, fetchJSON } from './normalize.js';
+import { localToBeijingWall } from './tz.mjs';
 
 export const id = 'openfootball';
 export const label = 'openfootball';
@@ -64,13 +71,19 @@ export async function fetchLeague(league, season = '2026-27', opts = {}) {
     const ft = m.score?.ft;
     const done = Array.isArray(ft) && ft.length === 2;
 
+    // openfootball 对未公布时间的场次只给 date、不给 time（实测德甲 261/306 场如此）。
+    // 此时 kickoff 为 null、不可信 —— 宁可保持 tbd，也不造一个假时刻（见 tz.mjs 注释）。
+    const hasTime = typeof m.time === 'string' && /^\d{1,2}:\d{2}/.test(m.time);
+
     out.push({
       league,
       homeId,
       awayId,
-      // ⚠️ 本地墙钟、非北京墙钟 —— kickoffTrusted=false，合并时不会用它覆盖开球时间
-      kickoff: localPartsToWall(m.date, m.time),
-      kickoffTrusted: false,
+      // 当地墙钟 → 北京墙钟（联赛偏移 + 欧洲夏令时）。
+      // 换算正确性已与 ESPN 交叉验证（tools/verify-openfootball-tz.mjs），
+      // 有 time 的场次升级为可信时间源 —— 这是清除 tbd 占位的关键一环。
+      kickoff: hasTime ? localToBeijingWall(m.date, m.time, league) : null,
+      kickoffTrusted: hasTime,
       state: done ? 'done' : 'sched',
       homeScore: done ? String(ft[0]) : null,
       awayScore: done ? String(ft[1]) : null,

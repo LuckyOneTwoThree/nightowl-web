@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { planPatches, applyPatches, validateFixtures, ALLOWED_ST, activeSyncTargets } from '../server/scores.js';
+import { planPatches, applyPatches, validateFixtures, ALLOWED_ST, activeSyncTargets, uclWeeklyTargets } from '../server/scores.js';
 import { createServer } from '../server/index.js';
 import { loadRules } from '../server/proxy.js';
 
@@ -160,6 +160,61 @@ console.log('五、增量定向同步（activeSyncTargets）');
   ok('近期未来比赛纳入目标', targets.get('PD')?.has('20260916'));
   ok('远期比赛不纳入目标', !targets.has('SA'));
   ok('无时间的改期比赛不纳入目标', !targets.has('BL'));
+}
+
+/* ================================================================== */
+console.log('');
+console.log('五·二、★ tbd 占位轮的查询日期展开（防止整轮漏同步）');
+{
+  // 背景：tbd 轮整轮共用一个占位时间（实测 108/108 轮如此），
+  // 但一轮跨周五/周六/周日。只查占位日会漏掉其余日子的场次，
+  // 它们永久停在 tbd，开球后表现为「上游未提供」。
+  const now = new Date('2026-09-16T15:00:00+08:00').getTime();
+  const sampleFixtures = [
+    // tbd 场次：占位 2026-09-18T03:00（北京）→ UTC 2026-09-17（须落在 48h 窗口内）
+    { id: 't1', l: 'BL', t: '2026-09-18T03:00', st: 'sched', sc: null, tbd: true },
+    // 非 tbd 场次：时间已确认，不需要展开
+    { id: 't2', l: 'PL', t: '2026-09-18T03:00', st: 'sched', sc: null, tbd: false }
+  ];
+
+  const targets = activeSyncTargets(sampleFixtures, now);
+
+  // tbd：占位日 ±3 天，共 7 个查询日期
+  const blDates = targets.get('BL');
+  ok('tbd 场次展开为 7 个查询日期（占位日 ±3 天）', blDates?.size === 7, `实际 ${blDates?.size}`);
+  ok('tbd 展开包含占位日本身', blDates?.has('20260917'));
+  ok('tbd 展开包含前 3 天', ['20260914', '20260915', '20260916'].every(x => blDates?.has(x)));
+  ok('tbd 展开包含后 3 天', ['20260918', '20260919', '20260920'].every(x => blDates?.has(x)));
+
+  // 非 tbd：只有占位日 1 个
+  ok('非 tbd 场次只生成 1 个查询日期（不展开）', targets.get('PL')?.size === 1, `实际 ${targets.get('PL')?.size}`);
+  ok('非 tbd 场次的查询日期就是其真实日期', targets.get('PL')?.has('20260917'));
+}
+
+/* ================================================================== */
+console.log('');
+console.log('五·三、★ UCL 淘汰赛接管（不依赖本地场次扫本周比赛日）');
+{
+  // 2026-09-16 是周三 → 本周二是 09-15、周三 09-16、周四 09-17（UTC）
+  const now = new Date('2026-09-16T15:00:00+08:00').getTime();
+  const t = uclWeeklyTargets(now);
+  const ucl = t.get('UCL');
+  ok('UCL 生成本周 3 个比赛日（周二/三/四）', ucl?.size === 3, `实际 ${ucl?.size}`);
+  ok('包含本周二 20260915', ucl?.has('20260915'));
+  ok('包含本周三 20260916', ucl?.has('20260916'));
+  ok('包含本周四 20260917', ucl?.has('20260917'));
+  ok('不包含本周一', !ucl?.has('20260914'));
+  ok('不包含本周五', !ucl?.has('20260918'));
+
+  // 跨周边界：周日算本周的末尾，本周二三四仍属同一周
+  const sunday = new Date('2026-09-20T15:00:00+08:00').getTime();
+  const t2 = uclWeeklyTargets(sunday);
+  ok('周日时本周二三四仍是 09-15/16/17', t2.get('UCL')?.has('20260915') && t2.get('UCL')?.has('20260917'));
+
+  // 传入已有 targets 时是追加而非覆盖
+  const base = new Map([['PL', new Set(['20260916'])]]);
+  const merged = uclWeeklyTargets(now, base);
+  ok('追加到已有 targets 时不覆盖其它联赛', merged.get('PL')?.has('20260916') && merged.get('UCL')?.size === 3);
 }
 
 /* ================================================================== */
