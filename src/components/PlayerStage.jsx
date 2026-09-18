@@ -2,12 +2,13 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, memo, useRef, useState
 import { hm, zhDate, weekdayOf, datePart, liveMinute, humanCountdown } from '../core/format.js';
 import { teamName, leagueName } from '../data/index.js';
 import { ts, countdown as engineCountdown } from '../core/engine.js';
-import { Button, Hint, IconButton, LiveDot, Meta, SectionLabel } from './atoms.jsx';
+import { Button, Crest, Hint, IconButton, LiveDot, Meta, SectionLabel, SleepBadge, Stars } from './atoms.jsx';
 import {
   IconCalendar,
   IconCheck,
   IconChevronDown,
   IconChevronUp,
+  IconDerby,
   IconExternal,
   IconKeyboard,
   IconLive,
@@ -144,7 +145,7 @@ function OfficialLinks({ sources, match, limit = 99 }) {
                 window.desktop.openExternal(url);
               }
             }}
-            className="inline-flex items-center gap-1 rounded-md border border-line-control bg-surface-raised px-2.5 py-1 text-2xs text-text-secondary transition-colors hover:border-line-control-hover hover:bg-surface-accent hover:text-text-primary"
+            className="inline-flex items-center gap-1 rounded-md border border-line-control bg-surface-raised px-2.5 py-1 text-2xs text-text-secondary transition-colors hover:border-line-control hover:bg-surface-accent hover:text-text-primary"
           >
             <IconExternal size={11} />
             {s.name}
@@ -276,6 +277,7 @@ function LineEmptyState({ loading, state, isNearKickoff, scrapeError, onRefresh 
 export default function PlayerStage({
   match,
   state,
+  intel,
   isOverlayOpen = false,
   spoilerFree = true,
   revealed = false,
@@ -302,9 +304,6 @@ export default function PlayerStage({
   useEffect(() => {
     setAspectRatio(16 / 9);
   }, [match?.id]);
-
-  // 协同模式基准最大高度（放宽至 700px/68vh，确保大屏下中间比赛画面最大化伸展）；宽屏剧场模式扩展至 860px/80vh，占满主舞台
-  const maxH = theaterMode ? 'min(860px, 80vh)' : 'min(700px, 68vh)';
 
   const [streamUrl, setStreamUrl] = useState(null);
   const [streamKind, setStreamKind] = useState(null);
@@ -540,11 +539,9 @@ export default function PlayerStage({
   const VideoScreen = (
     <div
       style={{
-        maxHeight: maxH,
-        maxWidth: theaterMode ? undefined : `calc(${maxH} * ${aspectRatio})`,
         aspectRatio: `${aspectRatio}`
       }}
-      className={`relative isolate z-0 w-full overflow-hidden rounded-xl bg-black shadow-2xl transition-all duration-200 ${
+      className={`relative isolate z-0 w-full overflow-hidden rounded-xl bg-stage-bg border border-line-hairline shadow-2xl transition-all duration-200 ${
         isOverlayOpen ? 'pointer-events-none select-none' : ''
       }`}
     >
@@ -559,40 +556,97 @@ export default function PlayerStage({
           <Player src={proxyUrl} kind={streamKind} onError={setError} onAspectRatio={setAspectRatio} />
         </Suspense>
       ) : (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#182133] via-[#0d121c] to-black">
-          {state === 'sched' && (
-            <>
-              <span className="text-2xs text-text-faint">距开球</span>
-              <span className="font-num text-3xl font-semibold tabular-nums bg-gradient-to-r from-amber-200 via-amber-400 to-amber-300 bg-clip-text text-transparent sm:text-4xl">
-                {stageCountdown}
-              </span>
-              <Meta num>
-                {zhDate(datePart(match.t))} {weekdayOf(datePart(match.t))} {hm(match.t)}
-              </Meta>
-            </>
-          )}
-          {live && (
-            <span className="inline-flex items-center gap-2 rounded-full border border-live/30 bg-gradient-to-r from-live/20 to-live/5 px-3.5 py-1">
-              <LiveDot />
-              <span className="font-num text-xs font-semibold tabular-nums text-live">
-                进行中 {minute}′
-              </span>
-            </span>
-          )}
-          {state === 'ended_pending' && <span className="text-xs text-text-muted">已终场，等待比分录入</span>}
-          {finished &&
-            (spoilerFree && !revealed ? (
-              <Button variant="default" icon={<IconReveal />} onClick={() => onReveal?.(match.id)}>
-                揭晓比分
-              </Button>
-            ) : (
-              <span className="font-num text-3xl font-semibold tabular-nums text-text-primary">
-                {match.sc || '—'}
-              </span>
-            ))}
-          {state === 'pp' && <span className="text-xs text-text-muted">本场延期</span>}
-          {!live && !finished && state !== 'ended_pending' && state !== 'pp' && state !== 'sched' && (
-            <span className="text-xs text-text-muted">未开播</span>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-stage-bg">
+          {state === 'sched' ? (
+            <div className="flex w-full max-w-lg flex-col items-center justify-center px-6 py-6 text-center select-none">
+              {/* 双方队徽与队名 */}
+              <div className="flex w-full items-center justify-center gap-3 sm:gap-6">
+                <div className="flex flex-1 min-w-0 items-center justify-end gap-2.5">
+                  <span className="truncate text-sm sm:text-base font-semibold text-text-primary" title={teamName(match.h)}>
+                    {teamName(match.h)}
+                  </span>
+                  <Crest id={match.h} size={28} />
+                </div>
+
+                <span className="font-num text-2xs font-semibold text-text-faint uppercase tracking-wider px-1">
+                  vs
+                </span>
+
+                <div className="flex flex-1 min-w-0 items-center justify-start gap-2.5">
+                  <Crest id={match.a} size={28} />
+                  <span className="truncate text-sm sm:text-base font-semibold text-text-primary" title={teamName(match.a)}>
+                    {teamName(match.a)}
+                  </span>
+                </div>
+              </div>
+
+              {/* 联赛轮次与开球时间 */}
+              <div className="mt-2 flex items-center justify-center gap-2 text-2xs text-text-muted">
+                <span>{leagueName(match.l)} 第 {match.r} 轮</span>
+                <span className="text-text-faint">·</span>
+                <span className="font-num">
+                  {match.tbd ? '时间待定' : `${zhDate(datePart(match.t))} ${weekdayOf(datePart(match.t))} ${hm(match.t)}`}
+                </span>
+              </div>
+
+              {/* 中部：纯色大号倒计时 */}
+              <div className="mt-6 flex flex-col items-center">
+                <span className="text-2xs text-text-faint">距开球倒计时</span>
+                <span className="font-num text-3xl sm:text-4xl font-semibold tabular-nums text-accent tracking-tight mt-1">
+                  {stageCountdown}
+                </span>
+              </div>
+
+              {/* 下部：睡眠档位 + 星级 + 看点 / 德比标签 */}
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                <SleepBadge match={match} />
+                {intel?.ev?.star ? <Stars star={intel.ev.star} /> : null}
+                {intel?.ev?.rivalry && (
+                  <span className="inline-flex items-center gap-1 rounded border border-warn/30 bg-warn/10 px-2 py-0.5 text-2xs font-medium text-warn">
+                    <IconDerby size={11} />
+                    {intel.ev.rivalry}
+                  </span>
+                )}
+                {intel?.ev?.isFollowed && (
+                  <span className="inline-flex items-center rounded border border-accent/30 bg-surface-accent px-2 py-0.5 text-2xs font-medium text-accent">
+                    主队出战
+                  </span>
+                )}
+              </div>
+
+              {/* 核心看点精简摘要 */}
+              {intel?.narrative?.headline && (
+                <p className="mt-3.5 max-w-md line-clamp-2 text-xs leading-relaxed text-text-secondary">
+                  {intel.narrative.headline}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-2.5">
+              {live && (
+                <span className="inline-flex items-center gap-2 rounded-full border border-live/30 bg-live/15 px-3.5 py-1">
+                  <LiveDot />
+                  <span className="font-num text-xs font-semibold tabular-nums text-live">
+                    进行中 {minute}′
+                  </span>
+                </span>
+              )}
+              {state === 'ended_pending' && <span className="text-xs text-text-muted">已终场，等待比分录入</span>}
+              {finished &&
+                (spoilerFree && !revealed ? (
+                  <Button variant="default" icon={<IconReveal />} onClick={() => onReveal?.(match.id)}>
+                    揭晓比分
+                  </Button>
+                ) : (
+                  <span className="font-num text-3xl font-semibold tabular-nums text-text-primary">
+                    {match.sc || '—'}
+                  </span>
+                ))}
+              {state === 'pp' && <span className="text-xs text-text-muted">本场延期</span>}
+              {!live && !finished && state !== 'ended_pending' && state !== 'pp' && (
+                <span className="text-xs text-text-muted">未开播</span>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -600,12 +654,16 @@ export default function PlayerStage({
       {/* 顶部对阵常驻条 —— 全应用唯一的对阵命名处 */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-overlay flex items-center justify-between gap-2 bg-gradient-to-b from-black/80 via-black/35 to-transparent px-3.5 py-2.5">
         <div className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-sm font-semibold text-text-primary">
-            {teamName(match.h)} vs {teamName(match.a)}
-          </span>
-          <span className="shrink-0 text-2xs text-text-muted">
-            {leagueName(match.l)} 第 {match.r} 轮
-          </span>
+          {(!state || state !== 'sched' || streamUrl) && (
+            <>
+              <span className="truncate text-sm font-semibold text-text-primary">
+                {teamName(match.h)} vs {teamName(match.a)}
+              </span>
+              <span className="shrink-0 text-2xs text-text-muted">
+                {leagueName(match.l)} 第 {match.r} 轮
+              </span>
+            </>
+          )}
         </div>
         <div className="pointer-events-auto flex shrink-0 items-center gap-2">
           {live && (
@@ -741,7 +799,7 @@ export default function PlayerStage({
       {/* 宽屏协同模式：父级 items-stretch，右侧侧栏严格与视频区等高，下端齐平 */}
       {!theaterMode ? (
         <div className="flex w-full flex-col items-stretch gap-3 lg:flex-row lg:items-stretch">
-          <div className="player-adaptive-video flex min-w-0 flex-1 items-start justify-center">
+          <div className="player-adaptive-video flex min-w-0 flex-1">
             {VideoScreen}
           </div>
           {ControlSidebar}

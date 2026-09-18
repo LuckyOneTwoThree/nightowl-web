@@ -39,14 +39,20 @@ import {
  *
  *   对阵标题也不再在这里重复一次 —— 主舞台顶部条是全应用唯一的对阵命名处。
  */
-export default function IntelPanel({ match, prefs, indexHint }) {
+export default function IntelPanel({ match, prefs, indexHint, intel: propIntel }) {
   const [tab, setTab] = useState('decision');
 
-  const evalResult = useMemo(() => (match ? evalOne(match, prefs) : null), [match, prefs]);
+  const evalResult = useMemo(() => {
+    if (propIntel?.ev) return { ev: propIntel.ev, index: propIntel.index };
+    return match ? evalOne(match, prefs) : null;
+  }, [propIntel, match, prefs]);
   const ev = evalResult?.ev || null;
-  const index = evalResult?.index || 0;
-  const tier = useMemo(() => (match ? sleepTier(match.t) : null), [match?.t]);
-  const narrative = useMemo(() => (match && ev ? narrativeOf(match, ev, storylines) : null), [match, ev]);
+  const index = evalResult?.index ?? propIntel?.index ?? 0;
+  const tier = useMemo(() => propIntel?.tier || (match ? sleepTier(match.t) : null), [propIntel?.tier, match?.t]);
+  const narrative = useMemo(
+    () => propIntel?.narrative || (match && ev ? narrativeOf(match, ev, storylines) : null),
+    [propIntel?.narrative, match, ev]
+  );
   const stories = useMemo(() => (match ? storylinesOf(match, storylines) : []), [match]);
   const identity = useMemo(() => (match ? seasonIdentityOf(match) : null), [match]);
   const stats = useMemo(() => (match ? computeMatchStats(match) : null), [match]);
@@ -64,9 +70,9 @@ export default function IntelPanel({ match, prefs, indexHint }) {
   const leagueB = leagueBonus(ev, PRODUCT_WEIGHTS);
 
   return (
-    <section className="overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#14162a] via-[#0f111f] to-[#0a0c16] shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+    <section className="overflow-hidden rounded-xl border border-line-hairline bg-surface-panel shadow-card">
       {/* 面板头：只放视图切换，不放对阵信息 */}
-      <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] bg-[#181a32]/50 px-3.5 py-2.5">
+      <div className="flex items-center justify-between gap-3 border-b border-line-hairline bg-surface-raised/40 px-3.5 py-2.5">
         <div className="flex items-center gap-1" role="tablist" aria-label="情报视图">
           <PanelTab active={tab === 'decision'} onClick={() => setTab('decision')} icon={<IconCost />}>
             熬夜代价与看点
@@ -142,8 +148,8 @@ function PanelTab({ active, onClick, icon, children }) {
       onClick={onClick}
       className={`inline-flex items-center rounded-lg px-3 py-1.5 text-xs transition-all ${
         active
-          ? 'bg-gradient-to-r from-accent/25 via-accent/15 to-accent/10 border border-accent/40 font-semibold text-accent shadow-[0_0_12px_rgba(245,185,66,0.18)]'
-          : 'border border-transparent text-text-muted hover:border-white/[0.08] hover:bg-white/[0.04] hover:text-text-primary'
+          ? 'bg-surface-accent border border-accent/40 font-semibold text-accent shadow-sm'
+          : 'border border-transparent text-text-muted hover:border-line-hairline hover:bg-surface-raised hover:text-text-primary'
       }`}
     >
       {icon}
@@ -311,14 +317,14 @@ function AttributionSection({ ev, tier, index, storyB, followedB, leagueB }) {
     ['故事线加成', storyB],
     ['主队加成', followedB],
     ['联赛加成', leagueB],
-    ['睡眠成本', `−${tier.cost}h`],
-    ['观看占用', `−${WATCH_COST}h`]
+    ['睡眠代价', `${tier.cost}h (${tier.label} ${tier.zh})`],
+    ['观看占用', `${WATCH_COST}h`]
   ];
   return (
     <Block
       icon={<IconCompare />}
       title="指数归因"
-      right={<Hint content="各分项由推荐引擎实时算出，与排序口径完全一致，不是展示用的近似值。" align="end" />}
+      right={<Hint content="指数计算为：(基础看点 + 各项加成) ÷ (1 + 睡眠代价 + 观看占用)。各分项由推荐引擎实时算出，与排序口径完全一致。" align="end" />}
     >
       <dl className="space-y-1">
         {rows.map(([label, val]) => {

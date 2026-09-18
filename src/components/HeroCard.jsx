@@ -44,28 +44,24 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
     <article
       className={`no-drag rounded-xl p-3.5 transition-all ${
         isHighlight
-          ? 'border border-amber-500/35 bg-gradient-to-b from-[#1d1f38] via-[#131528] to-[#0c0e1a] shadow-[0_8px_30px_-6px_rgba(245,185,66,0.15),0_0_24px_-6px_rgba(124,58,237,0.12),inset_0_1px_0_0_rgba(255,255,255,0.08)]'
-          : 'border border-white/[0.08] bg-gradient-to-b from-[#16172e] via-[#101122] to-[#0a0b17] shadow-[0_4px_20px_rgba(0,0,0,0.4),inset_0_1px_0_0_rgba(255,255,255,0.05)]'
+          ? 'border border-accent/40 bg-surface-card shadow-[0_8px_24px_-4px_rgba(245,185,66,0.12)]'
+          : 'border border-line-hairline bg-surface-card shadow-card'
       }`}
     >
       {/* 标题行：档位措辞 + 夜猫指数 */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span
-            className={`text-2xs font-semibold ${isHighlight ? 'text-amber-300' : 'text-text-muted'}`}
+            className={`text-2xs font-semibold ${isHighlight ? 'text-accent' : 'text-text-muted'}`}
           >
             {copy.label}
           </span>
           <Stars star={ev.star} />
           {ev.isFollowed && <Chip tone="accent">主队</Chip>}
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-baseline gap-1.5">
           <span className="text-2xs text-text-faint">夜猫指数</span>
-          <span
-            className={`font-num text-sm font-semibold tabular-nums ${
-              isHighlight ? 'text-accent' : 'text-text-secondary'
-            }`}
-          >
+          <span className="font-num text-xl font-bold tabular-nums text-accent">
             {hero.index.toFixed(1)}
           </span>
           <Hint title="夜猫指数说明" content={indexHint} side="bottom" align="end" />
@@ -132,7 +128,7 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
 export function NoMatchCard({ focal, countdown, onSelect }) {
   if (!focal) {
     return (
-      <article className="no-drag rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#161c2b] to-[#0c0f17] p-4 text-center shadow-card">
+      <article className="no-drag rounded-xl border border-line-hairline bg-surface-card p-4 text-center shadow-card">
         <p className="text-sm font-medium text-text-primary">近期没有可安排的比赛</p>
         <p className="mt-1 text-2xs text-text-muted">赛程数据可能尚未同步，可在「偏好与数据」中手动同步。</p>
       </article>
@@ -141,7 +137,7 @@ export function NoMatchCard({ focal, countdown, onSelect }) {
 
   const m = focal.m;
   return (
-    <article className="no-drag rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#161c2b] to-[#0c0f17] p-3.5 shadow-card">
+    <article className="no-drag rounded-xl border border-line-hairline bg-surface-card p-3.5 shadow-card">
       <div className="flex items-center justify-between gap-2">
         <span className="text-2xs font-semibold text-text-muted">今夜无球 · 下一场焦点</span>
         <Stars star={focal.ev.star} />

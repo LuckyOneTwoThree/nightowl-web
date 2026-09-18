@@ -55,13 +55,18 @@ export default function TeamPicker({
   return (
     <div className="flex flex-col">
       {/* 已选：放在最前面，选完能立刻看到结果 */}
-      {selected.length > 0 && (
+      {selected.length > 0 ? (
         <div className="scrollbar-thin mb-2 flex max-h-16 flex-wrap gap-1.5 overflow-y-auto">
           {selected.map(id => (
             <RemovableChip key={id} leading={<Crest id={id} size={14} />} onRemove={() => toggle(id)}>
               {TEAM_MAP[id]?.zh || id}
             </RemovableChip>
           ))}
+        </div>
+      ) : (
+        <div className="mb-2 flex items-center justify-between rounded-md border border-dashed border-line-hairline bg-surface-panel/60 px-2.5 py-1.5 text-2xs text-text-muted">
+          <span>暂未关注主队（主队比赛将获得夜猫指数加成与专属标记）</span>
+          <span className="text-text-faint">点击下方添加</span>
         </div>
       )}
 
@@ -131,10 +136,10 @@ export default function TeamPicker({
                   onClick={() => toggle(t.id)}
                   aria-pressed={on}
                   title={`${t.zh} (${t.en}) · ${LEAGUE_NAMES[t.league] || t.league}${t.tag ? ` · ${t.tag}` : ''}`}
-                  className={`relative flex flex-col items-center gap-1 rounded-md px-1 py-1.5 transition-colors ${
+                  className={`relative flex flex-col items-center gap-1 rounded-md px-1 py-1.5 transition-all ${
                     on
-                      ? 'bg-surface-accent text-accent'
-                      : 'bg-surface-card text-text-secondary hover:bg-surface-raised hover:text-text-primary'
+                      ? 'border border-accent/50 bg-surface-accent text-accent font-medium shadow-sm'
+                      : 'border border-transparent bg-surface-card text-text-secondary hover:border-line-hairline hover:bg-surface-raised hover:text-text-primary'
                   }`}
                 >
                   {on && (

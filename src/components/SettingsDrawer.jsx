@@ -326,7 +326,7 @@ export default function SettingsDrawer({
                             ? '从 ESPN / openfootball 拉取最新比分并写入本地数据'
                             : '当前没有可写的数据目录（桌面版才有），只能预览'
                         }
-                        className="rounded bg-surface-elevated px-2 py-0.5 font-ui text-[10px] text-text-secondary transition-colors hover:text-primary-gold disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded border border-line-control bg-surface-raised px-2 py-0.5 text-2xs text-text-secondary transition-colors hover:text-accent hover:border-line-control disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         {syncing ? '同步中…' : '立即同步比分'}
                       </button>

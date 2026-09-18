@@ -129,8 +129,8 @@
   --text-secondary-rgb: 191 200 214;
   --text-muted: #7d8899;
   --text-muted-rgb: 125 136 153;
-  --text-faint: #55606f;
-  --text-faint-rgb: 85 96 111;
+  --text-faint: #7c8798;
+  --text-faint-rgb: 124 135 152;
 
   /* ---- 品牌：全站唯一强调色。--accent-ink 是其上的文字色 ---- */
   --accent: #f5b942;
@@ -139,28 +139,29 @@
   --accent-soft: #1f1a10;
   --accent-soft-rgb: 31 26 16;
 
-  /* ---- 语义状态：各司其职，禁止挪作装饰 ---- */
+  /* ---- 语义状态：各司其职，禁止挪作装饰 ----
+     铁律：Chip 仅用于系统异常（延期/雷区/起播失败/缺失），严禁用 Chip 表达睡眠档位！ */
   --live: #e2564f;
   --live-rgb: 226 86 79;
   --resource: #45bfae; /* 睡眠额度 / 预算 —— 全应用只有"额度"用它 */
   --resource-rgb: 69 191 174;
   --warn: #e0a82e;
   --warn-rgb: 224 168 46;
-  --danger: #e8703a;
-  --danger-rgb: 232 112 58;
+  --danger: #e0483c;
+  --danger-rgb: 224 72 60;
 
-  /* ---- 睡眠档位 S0→S4：单一连续色阶，从"无代价"到"高代价" ----
+  /* ---- 睡眠档位 S0→S4：单一连续色阶，独占 SleepBadge，与系统警告/错误彻底拉开色相 ----
      取代此前 emerald/teal/amber/orange/purple 五种互不相干的 Tailwind 色。 */
   --tier-0: #35a06f;
   --tier-0-rgb: 53 160 111;
   --tier-1: #6bb37a;
   --tier-1-rgb: 107 179 122;
-  --tier-2: #e0a82e;
-  --tier-2-rgb: 224 168 46;
-  --tier-3: #e8703a;
-  --tier-3-rgb: 232 112 58;
-  --tier-4: #d8503f;
-  --tier-4-rgb: 216 80 63;
+  --tier-2: #d4a028;
+  --tier-2-rgb: 212 160 40;
+  --tier-3: #e88a3a;
+  --tier-3-rgb: 232 138 58;
+  --tier-4: #c83d32;
+  --tier-4-rgb: 200 61 50;
 
   /* ---- 赛果三态：平局用中性灰而非琥珀色（琥珀与"警告"抢语义） ---- */
   --result-win: #35a06f;
@@ -250,4 +251,15 @@
     flex: 1 1 0%;
   }
 }
+
+/* 无障碍动效降级：用户系统开启减弱动态效果时，禁用过度动画与高频跳动 */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 

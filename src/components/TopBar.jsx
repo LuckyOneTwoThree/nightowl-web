@@ -42,7 +42,7 @@ function WindowControls() {
       <button
         type="button"
         onClick={() => window.desktop?.close()}
-        className={`${base} hover:bg-rose-500/85 hover:text-white`}
+        className={`${base} hover:bg-danger hover:text-white`}
         aria-label="关闭"
         title="关闭"
       >
@@ -101,19 +101,13 @@ export default function TopBar({
 
   return (
     <header
-      className="drag-region relative flex h-[52px] min-h-[52px] select-none items-center justify-between bg-gradient-to-r from-[#0d1226]/95 via-[#090b14]/90 to-[#190e30]/95 px-5 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.5)]"
+      className="drag-region relative flex h-[52px] min-h-[52px] select-none items-center justify-between border-b border-line-hairline bg-surface-panel/95 px-5 backdrop-blur-xl shadow-sm"
       style={{ paddingLeft: isMacDesktop ? 80 : undefined }}
     >
-      {/* 底部极光微流光边线：左侧星空蓝 -> 中段低调冰霜 -> 右侧极光紫 */}
-      <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-blue-500/30 via-white/[0.08] to-purple-500/40"
-        aria-hidden="true"
-      />
-
       <div className="flex items-center gap-5">
         <div className="flex items-center gap-2.5">
-          <BrandLogo size={26} rounded="md" withGlow />
-          <span className="bg-gradient-to-r from-amber-200 via-amber-400 to-amber-300 bg-clip-text text-sm font-bold tracking-tight text-transparent drop-shadow-[0_0_12px_rgba(245,185,66,0.35)]">
+          <BrandLogo size={26} rounded="md" withGlow={false} />
+          <span className="text-sm font-bold tracking-tight text-text-primary">
             夜猫看台
           </span>
         </div>

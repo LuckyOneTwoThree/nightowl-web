@@ -37,43 +37,68 @@
 
 ## 二、色彩系统（Design Tokens）
 
-深夜关灯场景下，UI 建立在 **深空墨黑、暗曜石、琥珀金、深海青与警示红** 的层级体系上：
+深夜关灯场景下，UI 建立在 **深空墨黑、暗曜石、琥珀金、单一连续睡眠色阶与语义状态色** 的层级体系上。
+代码唯一事实来源：`src/index.css`（定义色值）与 `tailwind.config.js`（暴露工具类）。
 
 ### 2.1 背景与表面层级（Elevation Surfaces）
 
-| Token 名 | 色值 (HEX) | Tailwind 映射 | 语义说明 |
+| Token 名 | 色值 (HEX) | Tailwind 类 | 语义说明 |
 | :--- | :--- | :--- | :--- |
-| `bg-app` | `#0A0D14` | `bg-[#0A0D14]` | 应用最底层底色（深空墨黑，吸光护眼） |
-| `surface-card` | `#131722` | `bg-[#131722]` | 标准卡片底色（深曜石） |
-| `surface-card-hover` | `#1A2030` | `bg-[#1A2030]` | 鼠标悬停卡片时的微亮底色 |
-| `surface-elevated` | `#1E2538` | `bg-[#1E2538]` | 悬浮菜单、下拉框、控制台面板底色 |
-| `border-subtle` | `#232A3B` | `border-[#232A3B]` | 基础细边框（1px），用于卡片分离 |
-| `border-strong` | `#333E56` | `border-[#333E56]` | 聚焦边框、激活态边框 |
+| `bg-app` | `#0b0e15` | `bg-app` | 全局视窗最底层底色（深空墨黑，吸光护眼） |
+| `surface-panel` | `#0f131d` | `bg-surface-panel` | 侧栏底色、顶栏背景、大型容器基底 |
+| `surface-card` | `#131825` | `bg-surface-card` | 标准卡片底色（列表项、Hero 卡、情报面板） |
+| `surface-raised` | `#181f30` | `bg-surface-raised` | 悬停态、选中态高亮层、浮层内容底色 |
+| `surface-press` | `#1f283d` | `bg-surface-press` | 按钮与可点击条目按下态 |
+| `surface-accent` | `#1f1a10` | `bg-surface-accent` | 品牌金微暗背景容器（胶囊、选中药丸、高亮底） |
+| `stage-bg` | `#07090e` | `bg-stage-bg` | 观赛大屏与播放器深邃视窗底色 |
 
-### 2.2 品牌与功能强调色（Brand & Functional Colors）
+### 2.2 描边与文本层级
 
-| Token 名 | 色值 (HEX) | Tailwind 映射 | 语义说明 |
+| Token 名 | 色值 (HEX/RGBA) | Tailwind 类 | 语义说明 |
 | :--- | :--- | :--- | :--- |
-| `primary-gold` | `#FFB800` | `text-[#FFB800]`, `bg-[#FFB800]` | **品牌主色·琥珀金**：今晚之选高光、夜猫高指数、重点按钮 |
-| `primary-gold-dim` | `rgba(255, 184, 0, 0.12)` | `bg-[#FFB800]/10` | 琥珀金半透明容器底色 |
-| `live-red` | `#E24B4A` | `text-[#E24B4A]`, `bg-[#E24B4A]` | **直播进行中**：呼吸动画灯、LIVE 标签、比分实时高亮 |
-| `accent-teal` | `#44E2CD` | `text-[#44E2CD]`, `bg-[#44E2CD]` | **健康/轻度/安全**：S0/S1 睡眠档、沙箱安全标记 |
-| `accent-purple` | `#CEB5FF` | `text-[#CEB5FF]`, `bg-[#CEB5FF]` | **故事线/荣誉**：德比名、故事线剧情高亮 |
-| `warning-amber` | `#F59E0B` | `text-[#F59E0B]` | S2 黄金修仙档、赛前 30 分钟预热态 |
-| `danger-orange` | `#FF7A45` | `text-[#FF7A45]` | S3 重度档、雷区预警文字 |
-| `sleep-extreme` | `#9333EA` | `text-[#9333EA]` | S4 极限黎明档（04:00+ 开球） |
+| `line-hairline` | `rgba(255, 255, 255, 0.06)` | `border-line-hairline` | 1px 极细分界线，用于大区隔与卡片边缘 |
+| `line-control` | `rgba(255, 255, 255, 0.12)` | `border-line-control` | 控件描边、按钮边界、强分割线 |
+| `text-primary` | `#edf1f7` | `text-text-primary` | 主标题、队名、关键比分、最高层级文字 |
+| `text-secondary` | `#bfc8d6` | `text-text-secondary` | 正文、主要看点、常规可读文字 |
+| `text-muted` | `#7d8899` | `text-text-muted` | 次要说明、开球时刻、辅助元信息 |
+| `text-faint` | `#7c8798` | `text-text-faint` | 弱提示文字（在 `#0b0e15` 上对比度达 5.03:1，通过 WCAG AA） |
+
+### 2.3 品牌与语义状态色（Brand & Status Colors）
+
+> [!CAUTION]
+> **各司其职，严禁混用**：
+> 1. `accent`（琥珀金）是全站唯一品牌色，只用于当屏最高优先级行动点与核心指数，严禁当装饰条到处涂刷；
+> 2. `live` 独占进行中红点与分钟数；
+> 3. `resource` 独占睡眠预算与额度；
+> 4. `warn`/`danger` 为系统级异常（延期/起播失败/雷区），**严禁用于睡眠档位**！
+
+| Token 名 | 色值 (HEX) | Tailwind 类 | 语义说明 |
+| :--- | :--- | :--- | :--- |
+| `accent` | `#f5b942` | `text-accent`, `bg-accent` | **品牌主色·琥珀金**：今晚之选高光、夜猫指数、核心 CTA |
+| `accent-ink` | `#1A1204` | `text-accent-ink` | 品牌金按钮之上的高对比度反色字 |
+| `live` | `#e2564f` | `text-live`, `bg-live` | **直播进行中**：实时红点（LiveDot）、进行中分钟数 |
+| `resource` | `#45bfae` | `text-resource`, `bg-resource` | **睡眠预算额度**：周视图预算条与额度占用专用色 |
+| `warn` | `#e0a82e` | `text-warn`, `bg-warn` | **系统警告**：德比对决弱警示、聚合源延迟 |
+| `danger` | `#e0483c` | `text-danger`, `bg-danger` | **系统危险/错误**：比赛延期、起播失败、熬夜重度代价预警 |
 
 ---
 
-## 三、睡眠成本 S0~S4 视觉徽章体系
+## 三、睡眠成本 S0~S4 连续色阶体系（独占 SleepBadge）
 
-| 档位 | 标签 | 成本 | 颜色搭配 | 适用开球时间（北京时间） |
-| :--- | :--- | :--- | :--- | :--- |
-| **S0** | `S0 零成本` | 0.0h | `bg-emerald-500/10 text-emerald-400 border-emerald-500/20` | 白天至 22:30 之前 |
-| **S1** | `S1 轻度` | 1.0h | `bg-teal-500/10 text-teal-400 border-teal-500/20` | 22:30–00:30 |
-| **S2** | `S2 黄金修仙` | 2.5h | `bg-amber-500/10 text-amber-400 border-amber-500/20` | 00:30–02:30 黄金档 |
-| **S3** | `S3 重度死线` | 3.5h | `bg-orange-500/10 text-orange-400 border-orange-500/20` | 02:30–04:00 深夜死线档 |
-| **S4** | `S4 极限折磨` | 4.5h | `bg-purple-500/10 text-purple-400 border-purple-500/20` | 04:00–07:00 黎明档 |
+睡眠档位采用从“零代价”到“高代价”的单向连续色阶，彻底解绑此前互不相干的散乱色系。
+
+| 档位 | 标签 | 成本 | 颜色 Token | 色值 (HEX) | 适用开球时间（北京时间） |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **S0** | `S0 零成本` | 0.0h | `tier-0` | `#35a06f` | 白天至 22:30 之前 |
+| **S1** | `S1 轻度` | 1.0h | `tier-1` | `#6bb37a` | 22:30–00:30 |
+| **S2** | `S2 黄金修仙` | 2.5h | `tier-2` | `#d4a028` | 00:30–02:30 黄金档 |
+| **S3** | `S3 重度` | 3.5h | `tier-3` | `#e88a3a` | 02:30–04:00 深夜死线档 |
+| **S4** | `S4 极限` | 4.5h | `tier-4` | `#c83d32` | 04:00–07:00 黎明档 |
+
+> [!IMPORTANT]
+> **设计纪律铁律**：
+> - 睡眠档位视觉**独占 `SleepBadge` 组件**，禁止使用 `Chip` 表达睡眠档位；
+> - `Chip(tone="warn"|"danger")` 仅用于表达系统级非正常状态。
 
 ---
 
@@ -81,10 +106,11 @@
 
 1. **macOS 交通灯安全区**：
    - 顶栏左侧设置 `pl-20`（约 80px），避让系统红黄绿关闭/最小化按钮；
-   - 顶栏增加 `-webkit-app-region: drag`，按钮声明 `no-drag`；
-2. **严禁外层滚动条**：
+   - 顶栏增加 `-webkit-app-region: drag`，内部按钮声明 `no-drag`；
+2. **严禁外层滚动条与零 CLS**：
    - `html, body` 声明 `h-screen w-screen overflow-hidden`；
-   - 仅左栏内容区域 `overflow-y-auto` 并应用极细深色滚动条。
+   - 主舞台高度在赛前态与开播态之间严格等高（基准 `aspectRatio: 16/9` 与 `maxH` 恒定），杜绝起播跳动；
+   - 列表长内容在容器内局部滚动并应用细滚动条（`scrollbar-thin`）。
 
 ---
 
@@ -92,54 +118,52 @@
 
 UI 界面中展示的数据**必须 100% 存在于本地数据层与算法输出中**：
 - ✅ **允许展示**：
-  - 双方队名、队色、联赛名、北京开球时间、已赛比分（`fixtures.full.json`）
+  - 双方队名、队徽、联赛名、北京开球时间、已赛比分（`fixtures.full.json`）
   - S0-S4 睡眠档位、夜猫指数、星级（`engine.js` 运行时输出）
   - 德比对决名（如“北伦敦德比”、“米兰德比”，来自 `rivalries.json`）
   - 焦点故事线与关键节点（来自 `storylines.json`）
   - 球队**赛季身份**标签（来自 `teams.json` 的 `tag` 字段，实有值仅「卫冕冠军」「升班马」两种，**且仅 17/111 队有** → 无标签时回落显示联赛名 + 轮次）
-  - 线路名称（来自抓取源原始文案，**非结构化文本**）
+  - 真实比赛数据统计（`stats.js` 计算的已赛胜率、得失球、近5场走势、H2H 历史交锋）
+  - 线路名称（来自抓取源原始文案）
 - ❌ **严禁编造**：
-  - 严禁出现"近5次交锋胜负统计"（H2H 数据全库不存在）
-  - 严禁出现"球员对抗指数 92%"（无球员级数据）
-  - 严禁出现"建议次日补觉具体分钟数"（算法仅输出 cost，需使用通识文字模板）
   - 严禁出现 `xG` / 预期进球率（全库无 xG 数据）
-  - 严禁出现控球率 / 传球精度 / 成功率等**技术统计**（无统计级数据）
-  - 严禁出现阵型、首发阵容、球员位置图（无球员数据）
-  - 严禁出现"节律扰动""认知负荷""免疫力恢复"等**生理模型**指标（无医学模型）
-  - 严禁出现码率 / 帧率 / 线路延迟（`tv` 字段非空 0 条，抓取源不提供结构化元数据）
-  - 严禁把 `teams.tag` 当"战术风格标签"使用（**该字段语义是赛季身份**，且 94 支球队无值）
-
-> **判据来源**：上述每一条均已在《数据可达性对账表》中逐字段核实，并附实测证据。任何新增展示项都需先经该表核验。
+  - 严禁出现控球率 / 传球精度 / 成功率等技术统计（无统计级数据）
+  - 严禁出现阵型、首发阵容、球员位置图（无球员级数据）
+  - 严禁出现"节律扰动""认知负荷""免疫力恢复"等生理模型指标（无医学模型）
+  - 严禁出现码率 / 帧率 / 线路延迟（无结构化元数据）
 
 ---
 
-## 六、Stitch 专用 Tailwind 配置代码
+## 六、视觉系统 Token 对照表（Single Source of Truth）
 
-```html
-<script id="tailwind-config">
-tailwind.config = {
-  darkMode: "class",
-  theme: {
-    extend: {
-      colors: {
-        "bg-app": "#0A0D14",
-        "surface-card": "#131722",
-        "surface-card-hover": "#1A2030",
-        "surface-elevated": "#1E2538",
-        "border-subtle": "#232A3B",
-        "border-strong": "#333E56",
-        "primary-gold": "#FFB800",
-        "live-red": "#E24B4A",
-        "accent-teal": "#44E2CD",
-        "accent-purple": "#CEB5FF"
-      },
-      fontFamily: {
-        "headline": ["Hanken Grotesk", "sans-serif"],
-        "body": ["Be Vietnam Pro", "sans-serif"],
-        "mono": ["JetBrains Mono", "monospace"]
-      }
-    }
+```javascript
+// tailwind.config.js 语义映射
+export default {
+  colors: {
+    'bg-app': 'rgb(var(--bg-app-rgb) / <alpha-value>)',
+    'surface-panel': 'rgb(var(--surface-panel-rgb) / <alpha-value>)',
+    'surface-card': 'rgb(var(--surface-card-rgb) / <alpha-value>)',
+    'surface-raised': 'rgb(var(--surface-raised-rgb) / <alpha-value>)',
+    'surface-press': 'rgb(var(--surface-press-rgb) / <alpha-value>)',
+    'surface-accent': 'rgb(var(--accent-soft-rgb) / <alpha-value>)',
+    'stage-bg': 'rgb(var(--stage-bg-rgb) / <alpha-value>)',
+    'line-hairline': 'rgb(var(--line-hairline-rgb) / <alpha-value>)',
+    'line-control': 'rgb(var(--line-control-rgb) / <alpha-value>)',
+    'text-primary': 'rgb(var(--text-primary-rgb) / <alpha-value>)',
+    'text-secondary': 'rgb(var(--text-secondary-rgb) / <alpha-value>)',
+    'text-muted': 'rgb(var(--text-muted-rgb) / <alpha-value>)',
+    'text-faint': 'rgb(var(--text-faint-rgb) / <alpha-value>)',
+    accent: 'rgb(var(--accent-rgb) / <alpha-value>)',
+    live: 'rgb(var(--live-rgb) / <alpha-value>)',
+    resource: 'rgb(var(--resource-rgb) / <alpha-value>)',
+    warn: 'rgb(var(--warn-rgb) / <alpha-value>)',
+    danger: 'rgb(var(--danger-rgb) / <alpha-value>)',
+    'tier-0': 'rgb(var(--tier-0-rgb) / <alpha-value>)',
+    'tier-1': 'rgb(var(--tier-1-rgb) / <alpha-value>)',
+    'tier-2': 'rgb(var(--tier-2-rgb) / <alpha-value>)',
+    'tier-3': 'rgb(var(--tier-3-rgb) / <alpha-value>)',
+    'tier-4': 'rgb(var(--tier-4-rgb) / <alpha-value>)'
   }
-}
-</script>
+};
 ```
+

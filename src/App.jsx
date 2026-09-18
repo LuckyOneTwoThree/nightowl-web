@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getFixtures, setFixtures } from './data/index.js';
-import { countdown as engineCountdown, ts, MATCH_DURATION_MS } from './core/engine.js';
+import { getFixtures, setFixtures, storylines } from './data/index.js';
+import { countdown as engineCountdown, ts, MATCH_DURATION_MS, sleepTier } from './core/engine.js';
 import { humanCountdown } from './core/format.js';
 import { loadPrefs, savePrefs } from './core/prefs.js';
 import {
@@ -9,8 +9,10 @@ import {
   computeScheduleRows,
   defaultScheduleFilters,
   liveCountAt,
-  stateOf
+  stateOf,
+  evalOne
 } from './core/owl.js';
+import { narrativeOf } from './core/narrative.js';
 
 import TopBar from './components/TopBar.jsx';
 import TonightView, { INDEX_HINT } from './components/TonightView.jsx';
@@ -372,6 +374,14 @@ export default function App() {
   const matchMap = useMemo(buildMatchMap, [dataRev]);
   const activeMatch = activeMatchId ? matchMap[activeMatchId] || null : null;
 
+  const activeIntel = useMemo(() => {
+    if (!activeMatch) return null;
+    const { ev, index } = evalOne(activeMatch, prefs);
+    const tier = sleepTier(activeMatch.t);
+    const narrative = narrativeOf(activeMatch, ev, storylines);
+    return { ev, index, tier, narrative };
+  }, [activeMatch, prefs]);
+
   // ---- 首屏自动锁定今晚之选（用户零点击即有内容）----
   // ⚠️ 深链 ?match=XXX 可能已失效：分享链接过期、热更新后该场被移除、手填错误。
   // 此时 activeMatchId 非空但 matchMap 里查不到 → 右栏永久空态，刷新也不自愈
@@ -402,7 +412,7 @@ export default function App() {
   }, [view, activeMatchId]);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#08090e] bg-[radial-gradient(ellipse_75%_55%_at_85%_5%,_rgba(124,58,237,0.16),_transparent_65%),radial-gradient(ellipse_60%_50%_at_12%_15%,_rgba(37,99,235,0.14),_transparent_65%),radial-gradient(ellipse_110%_70%_at_50%_-10%,_rgba(30,42,75,0.35),_rgba(8,10,16,0.95)_70%,_#05060a_100%)] text-text-primary">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-app text-text-primary">
       {/* TopBar 的时钟、PlayerStage 的倒计时各自内部按秒刷新，不走这里 */}
       <TopBar
         view={view}
@@ -421,7 +431,7 @@ export default function App() {
       {/* 主工作区：左栏黄金比例（320-340px） + 右栏核心主舞台（~75%） */}
       <main className="flex min-h-0 flex-1 overflow-hidden">
         {/* 左栏：决策与列表 */}
-        <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] shrink-0 flex-col overflow-hidden border-r border-white/[0.06] bg-gradient-to-b from-[#111322]/90 via-[#0c0e17]/95 to-[#07080f] p-3.5 shadow-[4px_0_24px_rgba(0,0,0,0.35)]">
+        <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] shrink-0 flex-col overflow-hidden border-r border-line-hairline bg-surface-panel p-3.5 shadow-card">
           {view === 'tonight' && (
             <TonightView
               tonight={tonight}
@@ -468,17 +478,18 @@ export default function App() {
             上半（播放器 + 熬夜看点/双方数据）保持原有纵向排布；
             下半新增模块区：双方后续赛程 & 同夜推荐 —— 宽屏并排两列、窄屏堆叠，
             把全屏时下方的空白用真正有决策价值的信息填满。 */}
-        <section className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto bg-gradient-to-b from-[#0e101f]/60 via-[#080912]/80 to-[#040508]/95 p-4">
+        <section className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto bg-app p-4">
           <div className="mx-auto flex w-full max-w-[1800px] 2xl:max-w-full flex-col gap-3">
             <PlayerStage
               match={activeMatch}
               state={activeMatch ? stateOf(activeMatch, clockTs) : 'sched'}
+              intel={activeIntel}
               isOverlayOpen={settingsOpen || onboardingOpen}
               spoilerFree={prefs.spoilerFree}
               revealed={activeMatch ? revealed.has(activeMatch.id) : false}
               onReveal={reveal}
             />
-            <IntelPanel match={activeMatch} prefs={prefs} indexHint={INDEX_HINT} />
+            <IntelPanel match={activeMatch} prefs={prefs} intel={activeIntel} indexHint={INDEX_HINT} />
             <div className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-2">
               <UpcomingFixtures match={activeMatch} prefs={prefs} />
               <SameNightPicks match={activeMatch} prefs={prefs} onSelect={select} />
@@ -527,7 +538,7 @@ export default function App() {
       {updateAvailable && !toastDismissed && !updateModalOpen && (
         <aside
           aria-label="版本更新提醒"
-          className="fixed bottom-5 right-5 z-40 flex max-w-sm items-center gap-3 rounded-xl border border-accent/40 bg-surface-card/95 p-3.5 shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-xl animate-in fade-in slide-in-from-bottom-3 duration-300"
+          className="fixed bottom-5 right-5 z-modal flex max-w-sm items-center gap-3 rounded-xl border border-accent/40 bg-surface-card/95 p-3.5 shadow-pop backdrop-blur-xl transition-all duration-300"
         >
           <div className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />

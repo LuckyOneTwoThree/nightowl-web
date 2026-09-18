@@ -223,7 +223,7 @@ export function Button({
   return (
     <button
       type={type}
-      className={`no-drag inline-flex items-center justify-center gap-1.5 rounded-md transition-colors active:translate-y-px disabled:cursor-not-allowed disabled:opacity-45 ${
+      className={`no-drag inline-flex items-center justify-center gap-1.5 rounded-md transition-colors active:translate-y-px focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 ${
         variants[variant] || variants.default
       } ${sizes[size] || sizes.sm} ${className}`}
       {...rest}
@@ -241,7 +241,7 @@ export function IconButton({ children, label, className = '', ...rest }) {
       type="button"
       aria-label={label}
       title={label}
-      className={`no-drag inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary ${className}`}
+      className={`no-drag inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none ${className}`}
       {...rest}
     >
       {children}
@@ -274,7 +274,7 @@ export function Switch({ on, onChange, label }) {
 /** 分段选择器（视图切换 / 线路切换 / 联赛筛选共用） */
 export function Segmented({ items, value, onChange, className = '' }) {
   return (
-    <div className={`inline-flex items-center gap-1 rounded-lg border border-white/[0.06] bg-[#101522]/70 p-0.5 shadow-inner backdrop-blur-sm ${className}`} role="tablist">
+    <div className={`inline-flex items-center gap-1 rounded-lg border border-line-hairline bg-surface-panel p-0.5 shadow-inner ${className}`} role="tablist">
       {items.map(it => {
         const active = it.id === value;
         return (
@@ -284,10 +284,10 @@ export function Segmented({ items, value, onChange, className = '' }) {
             role="tab"
             aria-selected={active}
             onClick={() => onChange(it.id)}
-            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs transition-all ${
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs transition-all focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none ${
               active
-                ? 'border border-accent/40 bg-gradient-to-r from-accent/25 via-accent/15 to-accent/10 font-semibold text-accent shadow-[0_0_12px_rgba(245,185,66,0.2)]'
-                : 'border border-transparent text-text-muted hover:border-white/[0.06] hover:bg-white/[0.04] hover:text-text-primary'
+                ? 'border border-accent/40 bg-surface-accent font-semibold text-accent shadow-sm'
+                : 'border border-transparent text-text-muted hover:border-line-hairline hover:bg-surface-raised hover:text-text-primary'
             }`}
           >
             {it.icon}
@@ -397,7 +397,7 @@ export function Hint({
       )}
       <span
         role="tooltip"
-        className={`pointer-events-none absolute z-50 ${posSide} ${posAlign} hidden w-max max-w-[240px] rounded-lg border border-white/15 bg-[#1a2336] p-2.5 text-left text-2xs font-normal leading-relaxed text-text-secondary shadow-[0_12px_32px_rgba(0,0,0,0.85)] group-hover/hint:block group-focus-within/hint:block`}
+        className={`pointer-events-none absolute z-pop ${posSide} ${posAlign} hidden w-max max-w-[240px] rounded-lg border border-line-hairline bg-surface-raised p-2.5 text-left text-2xs font-normal leading-relaxed text-text-secondary shadow-pop group-hover/hint:block group-focus-within/hint:block`}
       >
         {title && <div className="mb-1 font-semibold text-accent text-2xs">{title}</div>}
         {content}
