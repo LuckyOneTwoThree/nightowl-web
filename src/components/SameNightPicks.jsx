@@ -10,10 +10,9 @@ import { sameNightPicks } from '../core/owl.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { hm } from '../core/format.js';
 import { TIER_MAP } from '../core/narrative.js';
-import { Crest, EmptyState } from './atoms.jsx';
+import { Crest, EmptyState, Meta } from './atoms.jsx';
 
-// 档位文字色复用 narrative 的 tier 色阶（与 SleepBadge / WeekView 同一口径），
-// 不再单独维护一份原生色 —— 两份色阶必然漂移。
+// 档位文字色复用 narrative 的 tier 色阶（与 SleepBadge / WeekView 同一口径）
 const TIER_TONE = Object.fromEntries(
   Object.entries(TIER_MAP).map(([label, t]) => [label, t.text])
 );
@@ -21,7 +20,7 @@ const TIER_TONE = Object.fromEntries(
 export default function SameNightPicks({ match, prefs, onSelect }) {
   if (!match) {
     return (
-      <section className="flex h-full flex-col justify-center overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#14162a] via-[#0f111f] to-[#0a0c16] p-4 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+      <section className="flex h-full flex-col justify-center overflow-hidden rounded-xl border border-line-hairline bg-surface-card p-4 shadow-card">
         <EmptyState
           icon={null}
           title="选中一场比赛，查看同夜其他推荐"
@@ -35,18 +34,16 @@ export default function SameNightPicks({ match, prefs, onSelect }) {
   const picks = useMemo(() => sameNightPicks(match, prefs, 3), [match, prefs]);
 
   return (
-    <section className="flex h-full flex-col justify-between overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#14162a] via-[#0f111f] to-[#0a0c16] p-4 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+    <section className="flex h-full flex-col justify-between overflow-hidden rounded-xl border border-line-hairline bg-surface-card p-4 shadow-card transition-shadow hover:shadow-pop">
       <div>
         <div className="mb-2.5 flex items-center justify-between">
-          <h3 className="font-ui text-2xs font-semibold tracking-wide text-text-primary">
-            同夜其他推荐
-          </h3>
-          <span className="font-ui text-2xs text-text-muted">按夜猫指数排序 · 点击切换</span>
+          <h3 className="text-2xs font-semibold tracking-wide text-text-primary">同夜其他推荐</h3>
+          <Meta>按夜猫指数排序 · 点击切换</Meta>
         </div>
 
         {picks.length === 0 ? (
           <div className="flex h-[116px] items-center justify-center text-center">
-            <p className="font-ui text-2xs text-text-faint">
+            <p className="text-2xs text-text-faint">
               今晚没有其他可推荐的场次（都已结束或只剩当前这场）
             </p>
           </div>
@@ -57,7 +54,7 @@ export default function SameNightPicks({ match, prefs, onSelect }) {
                 <button
                   type="button"
                   onClick={() => onSelect?.(m.id)}
-                  className="flex w-full items-center gap-2 rounded-lg border border-white/[0.04] bg-white/[0.04] px-2.5 py-1.5 text-left transition-all hover:border-white/[0.12] hover:bg-white/[0.08]"
+                  className="flex w-full items-center gap-2 rounded-lg border border-transparent bg-surface-raised/40 px-2.5 py-1.5 text-left transition-all hover:border-line-hairline hover:bg-surface-raised"
                 >
                   <span className="font-num text-2xs tabular-nums text-text-faint">{hm(m.t)}</span>
                   <span
@@ -67,7 +64,7 @@ export default function SameNightPicks({ match, prefs, onSelect }) {
                   />
                   <span className="flex min-w-0 flex-1 items-center gap-1.5">
                     <Crest id={m.h} size={14} />
-                    <span className="truncate font-ui text-2xs text-text-primary">
+                    <span className="truncate text-2xs text-text-primary">
                       {teamName(m.h)} vs {teamName(m.a)}
                     </span>
                     <Crest id={m.a} size={14} />
@@ -83,11 +80,6 @@ export default function SameNightPicks({ match, prefs, onSelect }) {
             ))}
           </ul>
         )}
-      </div>
-
-      <div className="mt-3 flex items-center justify-between border-t border-white/[0.06] pt-2 font-ui text-2xs text-text-faint">
-        <span>同夜场次 · 动态联动</span>
-        <span>{picks.length} 场候选</span>
       </div>
     </section>
   );

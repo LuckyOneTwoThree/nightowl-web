@@ -32,7 +32,7 @@ export function BrandLogo({ size = 26, rounded = 'md', className = '', withGlow 
   return (
     <span
       style={{ width: size, height: size }}
-      className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden border border-white/15 bg-[#0e121d] shadow-sm transition-transform duration-300 ${roundCls} ${
+      className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden border border-line-control bg-surface-card shadow-sm transition-transform duration-300 ${roundCls} ${
         withGlow
           ? 'border-accent/40 shadow-[0_0_14px_rgba(245,185,66,0.32)]'
           : 'shadow-[0_2px_8px_rgba(0,0,0,0.5)]'
@@ -106,9 +106,9 @@ export function Meta({ children, className = '', num = false }) {
 /** 状态标签：只用于**有语义**的状态（档位 / 直播 / 主队 / 警告） */
 export function Chip({ tone = 'neutral', children, className = '' }) {
   const tones = {
-    neutral: 'bg-white/[0.04] border border-white/[0.06] text-text-muted',
-    accent: 'bg-accent/15 border border-accent/30 text-accent shadow-[0_0_8px_rgba(245,185,66,0.15)]',
-    live: 'bg-live/15 border border-live/30 text-live shadow-[0_0_8px_rgba(226,86,79,0.15)]',
+    neutral: 'bg-surface-raised border border-line-hairline text-text-muted',
+    accent: 'bg-accent/15 border border-accent/30 text-accent',
+    live: 'bg-live/15 border border-live/30 text-live',
     warn: 'bg-warn/15 border border-warn/30 text-warn',
     danger: 'bg-danger/15 border border-danger/30 text-danger',
     resource: 'bg-resource/15 border border-resource/30 text-resource'
@@ -211,9 +211,9 @@ export function Button({
   ...rest
 }) {
   const variants = {
-    primary: 'bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 text-accent-ink hover:brightness-105 font-semibold shadow-[0_0_16px_rgba(245,185,66,0.25)]',
-    default: 'bg-gradient-to-b from-[#1c2436] to-[#121722] border border-white/[0.08] text-text-primary hover:border-white/20 hover:from-[#222c42] hover:to-[#161c2b] shadow-sm',
-    ghost: 'border border-white/[0.08] bg-white/[0.03] text-text-secondary hover:bg-white/[0.08] hover:border-white/20 hover:text-text-primary transition-all',
+    primary: 'bg-accent text-accent-ink font-semibold shadow-pop hover:brightness-110',
+    default: 'bg-surface-raised border border-line-control text-text-primary shadow-card hover:border-line-control hover:bg-surface-press',
+    ghost: 'border border-line-hairline bg-surface-card text-text-secondary transition-all hover:border-line-control hover:bg-surface-raised hover:text-text-primary',
     danger: 'border border-danger/30 bg-danger/10 text-danger hover:bg-danger/20'
   };
   const sizes = {
@@ -397,7 +397,7 @@ export function Hint({
       )}
       <span
         role="tooltip"
-        className={`pointer-events-none absolute z-pop ${posSide} ${posAlign} hidden w-max max-w-[240px] rounded-lg border border-line-hairline bg-surface-raised p-2.5 text-left text-2xs font-normal leading-relaxed text-text-secondary shadow-pop group-hover/hint:block group-focus-within/hint:block`}
+        className={`hint-enter pointer-events-none absolute z-pop ${posSide} ${posAlign} hidden w-max max-w-[240px] rounded-lg border border-line-hairline bg-surface-raised p-2.5 text-left text-2xs font-normal leading-relaxed text-text-secondary shadow-pop group-hover/hint:block group-focus-within/hint:block`}
       >
         {title && <div className="mb-1 font-semibold text-accent text-2xs">{title}</div>}
         {content}
@@ -438,8 +438,10 @@ export function Fieldset({ title, right, hint, children, className = '' }) {
 /** 空态：一句话 + 一个出口，不解释原理 */
 export function EmptyState({ icon = null, title, desc, action = null }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
-      <span className="text-text-faint">{icon || <IconEmpty />}</span>
+    <div className="flex flex-1 flex-col items-center justify-center gap-2.5 px-6 py-10 text-center">
+      <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line-hairline bg-surface-raised/50 text-text-faint">
+        {icon || <IconEmpty />}
+      </span>
       <p className="text-sm font-medium text-text-secondary">{title}</p>
       {desc && <p className="max-w-[280px] text-xs leading-relaxed text-text-muted">{desc}</p>}
       {action}

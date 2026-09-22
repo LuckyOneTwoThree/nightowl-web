@@ -99,15 +99,15 @@ export default function SplashScreen({
     <div
       role="dialog"
       aria-label="夜猫看台开屏画面"
-      className={`fixed inset-0 z-splash flex flex-col items-center justify-between overflow-hidden select-none bg-[#08090e] px-6 py-8 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+      className={`fixed inset-0 z-splash flex flex-col items-center justify-between overflow-hidden select-none bg-stage-bg px-6 py-8 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
         phase === 'exit'
           ? 'opacity-0 scale-105 pointer-events-none'
           : 'opacity-100 scale-100'
       }`}
     >
       {/* 多重宇宙星云背景环境光 */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_75%_55%_at_85%_10%,_rgba(124,58,237,0.22),_transparent_65%)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_65%_50%_at_15%_20%,_rgba(37,99,235,0.20),_transparent_65%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_75%_55%_at_85%_10%,_rgba(245,185,66,0.12),_transparent_65%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_65%_50%_at_15%_20%,_rgba(69,191,174,0.10),_transparent_65%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_70%_at_50%_50%,_rgba(245,185,66,0.06),_transparent_60%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-15%,_rgba(30,42,75,0.4),_rgba(8,10,16,0.95)_70%,_#05060a_100%)]" />
 
@@ -116,7 +116,7 @@ export default function SplashScreen({
         <button
           type="button"
           onClick={handleDismiss}
-          className="group flex items-center gap-1.5 rounded-full border border-white/10 bg-surface-card/60 px-3.5 py-1.5 text-xs text-text-secondary shadow-lg backdrop-blur-md transition-all hover:border-accent/40 hover:bg-surface-raised/80 hover:text-text-primary cursor-pointer"
+          className="group flex items-center gap-1.5 rounded-full border border-line-hairline bg-surface-card/60 px-3.5 py-1.5 text-xs text-text-secondary shadow-lg backdrop-blur-md transition-all hover:border-accent/40 hover:bg-surface-raised/80 hover:text-text-primary cursor-pointer"
         >
           <span>跳过</span>
           <span className="flex h-4 w-4 items-center justify-center rounded-full bg-accent/20 font-num text-2xs font-semibold text-accent group-hover:bg-accent/30">
@@ -131,10 +131,10 @@ export default function SplashScreen({
         <div className="relative mb-6 flex items-center justify-center">
           {/* 外圈微光脉冲环 */}
           <div className="absolute h-28 w-28 rounded-full border border-accent/20 bg-accent/5 animate-ping opacity-25" />
-          <div className="absolute h-36 w-36 rounded-full border border-purple-500/20 bg-purple-500/5 animate-pulse opacity-20" />
+          <div className="absolute h-36 w-36 rounded-full border border-resource/20 bg-resource/5 animate-pulse opacity-20" />
 
           {/* 发光主体圆角底座 */}
-          <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-b from-[#1c2237] via-[#101424] to-[#0a0c16] shadow-[0_0_40px_rgba(245,185,66,0.28),0_16px_36px_rgba(0,0,0,0.8),inset_0_1px_0_0_rgba(255,255,255,0.25)] transition-transform duration-700 hover:scale-105">
+          <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border border-line-control bg-surface-card shadow-[0_0_40px_rgba(245,185,66,0.28),0_16px_36px_rgba(0,0,0,0.8),inset_0_1px_0_0_rgba(255,255,255,0.25)] transition-transform duration-700 hover:scale-105">
             <img
               src="/favicon.png"
               alt="夜猫看台"
@@ -147,7 +147,7 @@ export default function SplashScreen({
         </div>
 
         {/* 主标题：夜猫看台 */}
-        <h1 className="mb-2 bg-gradient-to-r from-white via-amber-100 to-amber-300 bg-clip-text text-3xl font-extrabold tracking-wider text-transparent sm:text-4xl drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">
+        <h1 className="mb-2 bg-gradient-to-r from-text-primary via-text-primary to-accent bg-clip-text text-3xl font-extrabold tracking-wider text-transparent sm:text-4xl drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">
           夜猫看台
         </h1>
 
@@ -167,7 +167,7 @@ export default function SplashScreen({
         {/* 极细流光进度条 */}
         <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/10">
           <div
-            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 shadow-[0_0_8px_rgba(245,185,66,0.7)] transition-all duration-700 ease-out"
+            className="absolute inset-y-0 left-0 rounded-full bg-accent shadow-pop transition-all duration-700 ease-out"
             style={{
               width: phase === 'exit' ? '100%' : `${progress}%`
             }}

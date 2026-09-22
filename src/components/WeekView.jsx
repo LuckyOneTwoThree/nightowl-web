@@ -94,7 +94,7 @@ export default function WeekView({
               step="0.5"
               value={plan.budget}
               onChange={e => onBudgetChange(Number(e.target.value))}
-              className="mt-2.5 w-full accent-resource"
+              className="mt-2.5 w-full accent-[rgb(69_191_174)]"
               aria-label="每周熬夜预算（小时）"
             />
 
@@ -217,18 +217,23 @@ export default function WeekView({
           hint="柱子高度 = 当天最晚那场球的睡眠成本；颜色与档位徽章同一色阶。"
           right={<Meta>按当日最高档位</Meta>}
         >
-          <div className="flex items-end justify-between gap-1.5" style={{ height: 64 }}>
+          <div className="flex items-end justify-between gap-1.5">
             {days.map((d, i) => {
               const h = d.count === 0 ? 3 : Math.max(8, (d.cost / 4.5) * 60);
               return (
                 <div key={d.date} className="flex flex-1 flex-col items-center gap-1.5">
-                  <div
-                    className={`w-full rounded-sm ${
-                      d.count === 0 ? 'bg-line-hairline' : `${BUCKET_CLASS[bucketOf(d.cost)]} opacity-90`
-                    }`}
-                    style={{ height: h }}
-                    title={`${zhDate(d.date)} · ${d.count} 场 · 最高 ${hmCost(d.cost)}`}
-                  />
+                  <div className="flex w-full flex-col items-center justify-end gap-0.5" style={{ height: 64 }}>
+                    {d.count > 0 && (
+                      <span className="font-num text-2xs tabular-nums text-text-faint">{hmCost(d.cost)}</span>
+                    )}
+                    <div
+                      className={`w-full rounded-sm transition-all ${
+                        d.count === 0 ? 'bg-line-hairline' : `${BUCKET_CLASS[bucketOf(d.cost)]} opacity-90`
+                      } ${i === 0 ? 'ring-1 ring-accent/40' : ''}`}
+                      style={{ height: h }}
+                      title={`${zhDate(d.date)} · ${d.count} 场 · 最高 ${hmCost(d.cost)}`}
+                    />
+                  </div>
                   <span className="text-2xs text-text-faint">周{WEEKDAY_SHORT[i]}</span>
                 </div>
               );

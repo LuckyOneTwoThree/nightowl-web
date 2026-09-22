@@ -8,15 +8,13 @@
 
 import { useMemo } from 'react';
 import { upcomingForTeams } from '../core/owl.js';
-import { teamName, leagueName, crestUrl, LEAGUE_ORDER } from '../data/index.js';
 import { hm, zhDate, weekdayOf } from '../core/format.js';
+import { teamName } from '../data/index.js';
 import { tierOf } from '../core/engine.js';
 import { TIER_MAP } from '../core/narrative.js';
-import { Crest } from './atoms.jsx';
-import { EmptyState } from './atoms.jsx';
+import { Crest, EmptyState, Meta } from './atoms.jsx';
 
-// 档位文字色复用 narrative 的 tier 色阶（与 SleepBadge / WeekView 同一口径），
-// 不再单独维护一份原生色 —— 两份色阶必然漂移。
+// 档位文字色复用 narrative 的 tier 色阶（与 SleepBadge / WeekView 同一口径）
 const TIER_TONE = Object.fromEntries(
   Object.entries(TIER_MAP).map(([label, t]) => [label, t.text])
 );
@@ -27,11 +25,11 @@ function TeamColumn({ teamId, list, side }) {
     <div className="min-w-0 flex-1">
       <div className="mb-1.5 flex items-center gap-1.5">
         <Crest id={teamId} size={16} />
-        <span className="truncate font-ui text-2xs font-semibold text-text-primary">{name}</span>
-        <span className="font-ui text-2xs text-text-faint">{side}</span>
+        <span className="truncate text-2xs font-semibold text-text-primary">{name}</span>
+        <span className="text-2xs text-text-faint">{side}</span>
       </div>
       {list.length === 0 ? (
-        <p className="py-1 font-ui text-2xs text-text-faint">暂无已排期的后续比赛</p>
+        <p className="py-1 text-2xs text-text-faint">暂无已排期的后续比赛</p>
       ) : (
         <ul className="space-y-1">
           {list.map(m => {
@@ -40,9 +38,9 @@ function TeamColumn({ teamId, list, side }) {
             return (
               <li
                 key={m.id}
-                className="flex items-center justify-between gap-2 rounded bg-surface-card/60 px-2 py-1"
+                className="flex items-center justify-between gap-2 rounded-md bg-surface-raised/50 px-2 py-1 transition-colors hover:bg-surface-raised"
               >
-                <span className="min-w-0 flex-1 truncate font-ui text-2xs text-text-secondary">
+                <span className="min-w-0 flex-1 truncate text-2xs text-text-secondary">
                   {/* weekdayOf / zhDate 只吃纯日期（YYYY-MM-DD），传带 T 的 t 会得到 NaN */}
                   {zhDate(m.t.slice(0, 10))} {weekdayOf(m.t.slice(0, 10)).slice(0, 1)} {hm(m.t)} {opp}
                 </span>
@@ -61,7 +59,7 @@ function TeamColumn({ teamId, list, side }) {
 export default function UpcomingFixtures({ match, prefs }) {
   if (!match) {
     return (
-      <section className="flex h-full flex-col justify-center overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#14162a] via-[#0f111f] to-[#0a0c16] p-4 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+      <section className="flex h-full flex-col justify-center overflow-hidden rounded-xl border border-line-hairline bg-surface-card p-4 shadow-card">
         <EmptyState
           icon={null}
           title="选中一场比赛，查看双方后续赛程"
@@ -75,25 +73,17 @@ export default function UpcomingFixtures({ match, prefs }) {
   const { home, away } = useMemo(() => upcomingForTeams(match), [match]);
 
   return (
-    <section className="flex h-full flex-col justify-between overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-b from-[#14162a] via-[#0f111f] to-[#0a0c16] p-4 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+    <section className="flex h-full flex-col justify-between overflow-hidden rounded-xl border border-line-hairline bg-surface-card p-4 shadow-card transition-shadow hover:shadow-pop">
       <div>
         <div className="mb-2.5 flex items-center justify-between">
-          <h3 className="font-ui text-2xs font-semibold tracking-wide text-text-primary">
-            双方后续赛程
-          </h3>
-          <span className="font-ui text-2xs text-text-muted">
-            各取最近 4 场 · 档位越高熬夜代价越大
-          </span>
+          <h3 className="text-2xs font-semibold tracking-wide text-text-primary">双方后续赛程</h3>
+          <Meta>各取最近 4 场 · 档位越高熬夜代价越大</Meta>
         </div>
         <div className="flex gap-4">
           <TeamColumn teamId={match.h} list={home} side="主队" />
-          <div className="w-px shrink-0 bg-white/[0.08]" />
+          <div className="w-px shrink-0 bg-line-hairline" />
           <TeamColumn teamId={match.a} list={away} side="客队" />
         </div>
-      </div>
-      <div className="mt-3 flex items-center justify-between border-t border-white/[0.06] pt-2 font-ui text-2xs text-text-faint">
-        <span>对阵排期 · 关联评估</span>
-        <span>主客各至多 4 轮</span>
       </div>
     </section>
   );

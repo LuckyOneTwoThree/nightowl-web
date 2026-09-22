@@ -412,7 +412,7 @@ export default function App() {
   }, [view, activeMatchId]);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-app text-text-primary">
+    <div className="flex h-screen w-screen flex-col overflow-hidden stage-atmosphere text-text-primary">
       {/* TopBar 的时钟、PlayerStage 的倒计时各自内部按秒刷新，不走这里 */}
       <TopBar
         view={view}
@@ -556,7 +556,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setUpdateModalOpen(true)}
-              className="rounded-lg bg-accent px-2.5 py-1 text-2xs font-semibold text-black transition-transform hover:brightness-110 active:scale-95 cursor-pointer"
+              className="rounded-lg bg-accent px-2.5 py-1 text-2xs font-semibold text-accent-ink transition-transform hover:brightness-110 active:scale-95 cursor-pointer"
             >
               查看
             </button>

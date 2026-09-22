@@ -70,7 +70,7 @@ export default function IntelPanel({ match, prefs, indexHint, intel: propIntel }
   const leagueB = leagueBonus(ev, PRODUCT_WEIGHTS);
 
   return (
-    <section className="overflow-hidden rounded-xl border border-line-hairline bg-surface-panel shadow-card">
+    <section className="glass-lift overflow-hidden rounded-xl border border-line-hairline bg-surface-panel shadow-card">
       {/* 面板头：只放视图切换，不放对阵信息 */}
       <div className="flex items-center justify-between gap-3 border-b border-line-hairline bg-surface-raised/40 px-3.5 py-2.5">
         <div className="flex items-center gap-1" role="tablist" aria-label="情报视图">
@@ -91,7 +91,7 @@ export default function IntelPanel({ match, prefs, indexHint, intel: propIntel }
       </div>
 
       {tab === 'decision' ? (
-        <div className="grid grid-cols-1 gap-x-0 gap-y-0 p-3.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="grid grid-cols-1 gap-x-0 gap-y-0 p-3.5 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
           <div className="space-y-3 lg:pr-6 lg:border-r lg:border-line-hairline">
             <SleepCostSection tier={tier} match={match} />
             <NarrativeSection narrative={narrative} stories={stories} ev={ev} />
@@ -181,11 +181,14 @@ function SleepCostSection({ tier, match }) {
   const style = TIER_MAP[tier.label] || TIER_MAP.S0;
   return (
     <Block icon={<IconTier />} title="睡眠代价" right={<Meta num>{match.tbd ? '时间待定' : `${hm(match.t)} 开球`}</Meta>}>
-      <div className="flex items-baseline gap-2">
-        <span className={`font-num text-xl font-semibold tabular-nums ${style.text}`}>{tier.cost}h</span>
-        <span className="text-xs text-text-secondary">
-          <span className={`font-num ${style.text}`}>{tier.label}</span> {tier.zh}档
-        </span>
+      <div className="flex items-baseline gap-2.5">
+        <span className={`font-num text-2xl font-bold tabular-nums ${style.text}`}>{tier.cost}h</span>
+        <div className="flex flex-col">
+          <span className="text-sm font-medium text-text-primary">
+            <span className={`font-num ${style.text}`}>{tier.label}</span> {tier.zh}档
+          </span>
+          <Meta num className="mt-0.5">睡眠成本</Meta>
+        </div>
       </div>
 
       {/* 五档连续色阶：当前档实心，其余压暗。取代此前 emerald/teal/amber/orange/purple 五色并置 */}

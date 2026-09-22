@@ -210,7 +210,7 @@ function LineEmptyState({ loading, state, isNearKickoff, scrapeError, onRefresh 
     if (isNearKickoff) {
       return (
         <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline/70 bg-surface-raised/20 p-3 text-center">
-          <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-amber-400/10 text-amber-400">
+          <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 text-accent">
             <IconSignal className="animate-pulse" size={14} />
           </span>
           <p className="text-xs font-medium text-text-primary">信号接入中…</p>
@@ -243,7 +243,7 @@ function LineEmptyState({ loading, state, isNearKickoff, scrapeError, onRefresh 
   return (
     <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline/70 bg-surface-raised/20 p-3 text-center">
       <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.04] text-text-muted">
-        {scrapeError ? <IconWarn className="text-amber-400" size={14} /> : <IconSignal size={14} />}
+        {scrapeError ? <IconWarn className="text-warn" size={14} /> : <IconSignal size={14} />}
       </span>
       <p className="text-xs font-medium text-text-primary">
         {scrapeError ? '聚合信号暂未响应' : '暂未检索到可用线路'}

@@ -154,7 +154,7 @@ export default function ScheduleView({
           value={filters.query}
           onChange={e => set({ query: e.target.value })}
           placeholder="搜索球队 / 联赛 / 场次 ID"
-          className="w-full rounded-lg border border-white/[0.08] bg-[#111724]/80 py-1.5 pl-8 pr-8 text-xs text-text-primary placeholder:text-text-faint focus:border-accent/50 focus:bg-[#151d2d] focus:outline-none transition-all shadow-inner"
+          className="w-full rounded-lg border border-line-control bg-surface-card py-1.5 pl-8 pr-8 text-xs text-text-primary placeholder:text-text-faint transition-all focus:border-accent/50 focus:bg-surface-raised focus:outline-none shadow-card"
         />
         {filters.query && (
           <button
@@ -176,18 +176,18 @@ export default function ScheduleView({
             type="button"
             onClick={() => stepDate(-1)}
             title="前一天"
-            className="inline-flex h-6.5 w-6.5 items-center justify-center rounded-md border border-white/[0.08] bg-gradient-to-b from-[#182030] to-[#101520] text-text-secondary transition-all hover:border-accent/40 hover:text-text-primary shadow-sm"
+            className="inline-flex h-6.5 w-6.5 items-center justify-center rounded-md border border-line-control bg-surface-raised text-text-secondary shadow-card transition-all hover:border-accent/40 hover:bg-surface-press hover:text-text-primary"
           >
             <IconChevronLeft size={12} />
           </button>
-          <span className="font-ui text-2xs font-semibold text-text-primary">
+          <span className="font-body text-2xs font-semibold text-text-primary">
             {showAll ? '全季赛程' : `${selDate} (${weekdayOf(selDate)})`}
           </span>
           <button
             type="button"
             onClick={() => stepDate(1)}
             title="后一天"
-            className="inline-flex h-6.5 w-6.5 items-center justify-center rounded-md border border-white/[0.08] bg-gradient-to-b from-[#182030] to-[#101520] text-text-secondary transition-all hover:border-accent/40 hover:text-text-primary shadow-sm"
+            className="inline-flex h-6.5 w-6.5 items-center justify-center rounded-md border border-line-control bg-surface-raised text-text-secondary shadow-card transition-all hover:border-accent/40 hover:bg-surface-press hover:text-text-primary"
           >
             <IconChevronRight size={12} />
           </button>
@@ -198,7 +198,7 @@ export default function ScheduleView({
             <button
               type="button"
               onClick={() => setDate(todayDate)}
-              className="rounded-md border border-accent/40 bg-gradient-to-r from-accent/20 to-accent/10 px-2 py-0.5 font-ui text-2xs font-medium text-accent transition-all hover:border-accent/60 hover:from-accent/30 hover:to-accent/20 shadow-sm"
+              className="rounded-md border border-accent/40 bg-surface-accent px-2 py-0.5 text-2xs font-medium text-accent shadow-card transition-all hover:border-accent/60 hover:bg-accent/20"
             >
               回到今天
             </button>
@@ -220,7 +220,7 @@ export default function ScheduleView({
               }
             }}
             title="按日历选择日期"
-            className="inline-flex h-6.5 w-6.5 items-center justify-center rounded-md border border-white/[0.08] bg-gradient-to-b from-[#182030] to-[#101520] text-text-muted transition-all hover:border-accent/40 hover:text-text-primary shadow-sm"
+            className="inline-flex h-6.5 w-6.5 items-center justify-center rounded-md border border-line-control bg-surface-raised text-text-muted shadow-card transition-all hover:border-accent/40 hover:bg-surface-press hover:text-text-primary"
           >
             <IconCalendar size={12} />
           </button>
@@ -230,7 +230,7 @@ export default function ScheduleView({
       {/* 日期横向滚动导航条（过去 14 天到未来 28 天，安全内边距杜绝边缘裁剪，自动居中当前日期） */}
       <div
         ref={stripRef}
-        className="scrollbar-thin flex items-stretch gap-1.5 overflow-x-auto rounded-lg border border-white/[0.05] bg-[#0c1017]/70 p-1.5 backdrop-blur-sm shadow-inner"
+        className="scrollbar-thin flex items-stretch gap-1.5 overflow-x-auto rounded-lg border border-line-hairline bg-surface-panel/80 p-1.5 shadow-card backdrop-blur-sm"
       >
         {dayStrip.map(item => {
           const active = !showAll && item.date === selDate;
@@ -252,13 +252,13 @@ export default function ScheduleView({
                 active
                   ? 'border-accent/60 bg-gradient-to-b from-accent/30 via-accent/15 to-accent/5 shadow-[0_0_14px_rgba(245,185,66,0.22)]'
                   : item.isToday
-                    ? 'border-accent/30 bg-gradient-to-b from-[#1a2233] to-[#111722] hover:border-accent/50'
-                    : 'border-white/[0.06] bg-gradient-to-b from-[#151c2a] to-[#0e121a] hover:border-white/20 hover:from-[#1a2334] hover:to-[#111620]'
+                    ? 'border-accent/30 bg-surface-accent hover:border-accent/50'
+                    : 'border-line-hairline bg-surface-card hover:border-line-control hover:bg-surface-raised'
               }`}
             >
               <div
                 className={`font-num text-2xs font-semibold tabular-nums ${
-                  active ? 'text-accent' : item.isToday ? 'text-amber-300' : 'text-text-secondary'
+                  active ? 'text-accent' : item.isToday ? 'text-accent' : 'text-text-secondary'
                 }`}
               >
                 {label}
@@ -276,7 +276,7 @@ export default function ScheduleView({
           ref={showAll ? activeBtnRef : null}
           onClick={() => setDate('all')}
           aria-pressed={showAll}
-          className={`shrink-0 rounded-md border px-2.5 py-1 font-ui text-2xs transition-all ${
+          className={`shrink-0 rounded-md border px-2.5 py-1 font-body text-2xs transition-all ${
             showAll
               ? 'border-accent/60 bg-gradient-to-b from-accent/25 to-accent/10 text-accent font-semibold shadow-sm'
               : 'border-line-hairline bg-surface-card text-text-secondary hover:border-accent/40'

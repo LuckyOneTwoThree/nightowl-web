@@ -1,6 +1,6 @@
-import { hm, zhDate, weekdayOf, datePart, liveMinute } from '../core/format.js';
-import { teamName, leagueName } from '../data/index.js';
-import { ts, sleepTier } from '../core/engine.js';
+import { hm, zhDate, weekdayOf, datePart, liveMinute, humanCountdown } from '../core/format.js';
+import { teamName, leagueName, teamColor } from '../data/index.js';
+import { ts, sleepTier, countdown as engineCountdown } from '../core/engine.js';
 import { Button, Chip, Crest, Hint, LiveDot, Meta, SleepBadge, Stars } from './atoms.jsx';
 import { IconPlay, IconWarn } from './icons.jsx';
 
@@ -14,20 +14,24 @@ const TIER_COPY = {
   weak: { label: '今夜无必看', cta: '仍要观看', ctaVariant: 'ghost' }
 };
 
+/** 主队色环境光：极低透明度径向光晕，让 Hero 有转播台的空气感 */
+function TeamAura({ color, side }) {
+  const pos = side === 'home' ? 'left-[-20%] top-[-30%]' : 'right-[-20%] top-[-30%]';
+  return (
+    <div
+      aria-hidden="true"
+      className={`pointer-events-none absolute ${pos} h-40 w-40 rounded-full opacity-[0.14] blur-3xl`}
+      style={{ backgroundColor: color || 'var(--accent)' }}
+    />
+  );
+}
+
 /**
- * 今晚之选 Hero 卡（D9 分档）
+ * 今晚之选 Hero 卡 · Broadcast Hero
  *
- * 降噪要点：
- *   · 高亮档此前用 `bg-gradient-to-b from-amber-500/8`，与卡片本身的金边、
- *     金色 CTA、金色指数叠加成四层强调。现在卡内的品牌金只剩两个角色：
- *     描边 = 这张卡是今晚之选，实心 CTA = 这里点下去。档位措辞与指数回归中性
- *     ——同一个指数在下方情报面板表头已经用 accent 标过一次，重复上色不增加信息。
- *   · 「L2 看点」是内容供给层级的内部编号，对用户没有决策价值，降为 Hint。
- *   · 冷知识此前是紫色斜体底块 —— 一个装饰性色块抢走了主看点的注意力，
- *     改为正文下方的一行弱文字。
- *   · 卡片不渲染 narrative.lines / trivia：默认选中的就是今晚之选，这两块会与下方
- *     情报面板的「看点与故事线」逐字重复三行。卡片只留一句推荐语，展开内容
- *     归面板这个唯一事实来源，省下的竖向空间还给赛程列表。
+ * 设计目标：全屏情绪峰值。用户 3 秒内必须感到「今晚就该看这场」。
+ * 但仍守纪律：品牌金只出现在描边 / 指数 / CTA，主队色只做 12–14% 环境光，
+ * 不引入第二强调色体系。
  */
 export default function HeroCard({ hero, tier, narrative, state, now, onWatch, indexHint }) {
   const m = hero.m;
@@ -38,85 +42,168 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
 
   const live = state === 'live';
   const minute = live ? liveMinute(ts(m.t), now) : 0;
-  const tierCost = sleepTier(m.t).cost;
+  const tierInfo = sleepTier(m.t);
+  const tierCost = tierInfo.cost;
+  const homeColor = teamColor(m.h);
+  const awayColor = teamColor(m.a);
+
+  // 倒计时：仅未开赛时展示，秒级由父层 30s tick 足够（Hero 不需要秒跳）
+  let countdownLabel = null;
+  if (!live && state === 'sched' && !m.tbd) {
+    const ms = ts(m.t) - now;
+    if (ms > 0 && ms < 24 * 3600000) {
+      countdownLabel = humanCountdown(engineCountdown(ts(m.t), now));
+    }
+  }
 
   return (
     <article
-      className={`no-drag rounded-xl p-3.5 transition-all ${
+      className={`no-drag relative overflow-hidden rounded-xl p-4 transition-all duration-300 ${
         isHighlight
-          ? 'border border-accent/40 bg-surface-card shadow-[0_8px_24px_-4px_rgba(245,185,66,0.12)]'
+          ? 'border border-accent/45 bg-surface-card shadow-[0_8px_28px_-6px_rgba(245,185,66,0.18)]'
           : 'border border-line-hairline bg-surface-card shadow-card'
       }`}
     >
-      {/* 标题行：档位措辞 + 夜猫指数 */}
-      <div className="flex items-center justify-between gap-2">
+      {/* 主客环境光 */}
+      <TeamAura color={homeColor} side="home" />
+      <TeamAura color={awayColor} side="away" />
+      {isHighlight && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent"
+        />
+      )}
+
+      {/* 顶部：档位 + 星级 + 主队 + 指数仪表 */}
+      <div className="relative flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span
-            className={`text-2xs font-semibold ${isHighlight ? 'text-accent' : 'text-text-muted'}`}
-          >
+          <span className={`text-2xs font-semibold tracking-wide ${isHighlight ? 'text-accent' : 'text-text-muted'}`}>
             {copy.label}
           </span>
           <Stars star={ev.star} />
           {ev.isFollowed && <Chip tone="accent">主队</Chip>}
-        </div>
-        <div className="flex shrink-0 items-baseline gap-1.5">
-          <span className="text-2xs text-text-faint">夜猫指数</span>
-          <span className="font-num text-xl font-bold tabular-nums text-accent">
-            {hero.index.toFixed(1)}
-          </span>
-          <Hint title="夜猫指数说明" content={indexHint} side="bottom" align="end" />
-        </div>
-      </div>
-
-      {/* 对阵 */}
-      <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-        <div className="flex min-w-0 items-center justify-end gap-2">
-          <span className="truncate text-sm font-semibold text-text-primary" title={teamName(m.h)}>
-            {teamName(m.h)}
-          </span>
-          <Crest id={m.h} size={26} />
-        </div>
-        <span className="px-1 font-num text-2xs text-text-faint">vs</span>
-        <div className="flex min-w-0 items-center gap-2">
-          <Crest id={m.a} size={26} />
-          <span className="truncate text-sm font-semibold text-text-primary" title={teamName(m.a)}>
-            {teamName(m.a)}
-          </span>
-        </div>
-      </div>
-
-      {/* 时刻行 */}
-      <div className="mt-1.5 flex items-center justify-center gap-2">
-        {live ? (
-          <span className="inline-flex items-center gap-1.5">
-            <LiveDot />
-            <span className="font-num text-2xs font-medium text-live">进行中 {minute}′</span>
-          </span>
-        ) : (
-          <Meta num>
-            {m.tbd ? '时间待定' : `${hm(m.t)} 开球`} · {zhDate(datePart(m.t))} {weekdayOf(datePart(m.t))}
-          </Meta>
-        )}
-        <Meta>{leagueName(m.l)} 第 {m.r} 轮</Meta>
-      </div>
-
-      {/* 主看点：只给一句话推荐语，展开内容在下方情报面板 */}
-      <div className="mt-3 border-t border-line-hairline pt-2.5">
-        <p className="text-xs font-medium leading-relaxed text-text-primary">{narrative.headline}</p>
-      </div>
-
-      {/* 底部：睡眠代价 + CTA */}
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <SleepBadge match={m} />
-          {tierCost >= 3.5 && (
-            <span className="inline-flex items-center gap-1 text-2xs text-danger">
-              <IconWarn size={11} />
-              熬夜代价高
+          {live && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-live/12 px-2 py-0.5">
+              <LiveDot />
+              <span className="font-num text-2xs font-semibold tabular-nums text-live">{minute}′</span>
             </span>
           )}
         </div>
-        <Button variant={copy.ctaVariant} size="md" icon={<IconPlay />} onClick={() => onWatch(m.id)}>
+
+        {/* 夜猫指数 · 仪表盘式 */}
+        <div className="flex shrink-0 flex-col items-end">
+          <span className="text-2xs text-text-faint">夜猫指数</span>
+          <div className="flex items-baseline gap-0.5">
+            <span className={`font-num text-3xl font-bold leading-none tabular-nums ${isWeak ? 'text-text-secondary' : 'text-accent'}`}>
+              {hero.index.toFixed(1)}
+            </span>
+            <Hint title="夜猫指数说明" content={indexHint} side="bottom" align="end" />
+          </div>
+          {/* 指数刻度条 */}
+          <div className="mt-1.5 h-1 w-16 overflow-hidden rounded-full bg-line-control">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${isWeak ? 'bg-text-muted' : 'bg-accent'}`}
+              style={{ width: `${Math.min(100, (hero.index / 30) * 100)}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 对阵舞台 */}
+      <div className="relative mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        {/* 主队 */}
+        <div className="flex min-w-0 flex-col items-end gap-1.5">
+          <Crest id={m.h} size={44} className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]" />
+          <span className="w-full truncate text-right text-base font-semibold text-text-primary" title={teamName(m.h)}>
+            {teamName(m.h)}
+          </span>
+          <span className="text-2xs text-text-faint">主队</span>
+        </div>
+
+        {/* 中央：开球时刻 / 倒计时 / 直播 */}
+        <div className="flex min-w-[88px] flex-col items-center px-1">
+          {live ? (
+            <>
+              <span className="font-num text-2xl font-bold leading-none tabular-nums text-live">{minute}′</span>
+              <span className="mt-1 text-2xs font-medium text-live">进行中</span>
+            </>
+          ) : countdownLabel ? (
+            <>
+              <span className="font-num text-2xl font-bold leading-none tabular-nums text-accent">{countdownLabel}</span>
+              <span className="mt-1 text-2xs text-text-faint">距开球</span>
+            </>
+          ) : (
+            <>
+              <span className="font-num text-2xl font-bold leading-none tabular-nums text-text-primary">
+                {m.tbd ? '--:--' : hm(m.t)}
+              </span>
+              <span className="mt-1 text-2xs text-text-faint">{m.tbd ? '时间待定' : '开球'}</span>
+            </>
+          )}
+          <span className="mt-1 font-num text-2xs text-text-faint">VS</span>
+        </div>
+
+        {/* 客队 */}
+        <div className="flex min-w-0 flex-col items-start gap-1.5">
+          <Crest id={m.a} size={44} className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]" />
+          <span className="w-full truncate text-base font-semibold text-text-primary" title={teamName(m.a)}>
+            {teamName(m.a)}
+          </span>
+          <span className="text-2xs text-text-faint">客队</span>
+        </div>
+      </div>
+
+      {/* 赛事元信息 */}
+      <div className="relative mt-2 flex items-center justify-center gap-2">
+        <Meta num>
+          {m.tbd
+            ? '时间待定'
+            : `${zhDate(datePart(m.t))} ${weekdayOf(datePart(m.t))} ${hm(m.t)}`}
+        </Meta>
+        <Meta>
+          {leagueName(m.l)} 第 {m.r} 轮
+        </Meta>
+      </div>
+
+      {/* 主看点 */}
+      <div className="relative mt-3 border-t border-line-hairline pt-2.5">
+        <p className="text-sm font-medium leading-relaxed text-text-primary">{narrative.headline}</p>
+      </div>
+
+      {/* 底部：睡眠代价 + CTA */}
+      <div className="relative mt-3.5 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-col gap-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <SleepBadge match={m} />
+            {tierCost >= 3.5 && (
+              <span className="inline-flex items-center gap-1 text-2xs text-danger">
+                <IconWarn size={11} />
+                熬夜代价高
+              </span>
+            )}
+          </div>
+          {/* 档位色阶细条：让睡眠成本一眼可感 */}
+          <div className="flex h-1 w-28 gap-0.5" aria-hidden="true">
+            {[0, 1, 2, 3, 4].map(i => {
+              const on = Number((tierInfo.label || 'S0').replace('S', '')) >= i;
+              const colors = ['bg-tier-0', 'bg-tier-1', 'bg-tier-2', 'bg-tier-3', 'bg-tier-4'];
+              return (
+                <span
+                  key={i}
+                  className={`h-full flex-1 rounded-full ${on ? colors[i] : 'bg-line-control'}`}
+                  style={{ opacity: on ? 0.95 : 0.5 }}
+                />
+              );
+            })}
+          </div>
+        </div>
+        <Button
+          variant={copy.ctaVariant}
+          size="md"
+          icon={<IconPlay />}
+          onClick={() => onWatch(m.id)}
+          className={copy.ctaVariant === 'primary' ? 'min-w-[112px] shadow-pop' : 'min-w-[112px]'}
+        >
           {copy.cta}
         </Button>
       </div>
@@ -137,33 +224,34 @@ export function NoMatchCard({ focal, countdown, onSelect }) {
 
   const m = focal.m;
   return (
-    <article className="no-drag rounded-xl border border-line-hairline bg-surface-card p-3.5 shadow-card">
-      <div className="flex items-center justify-between gap-2">
+    <article className="no-drag relative overflow-hidden rounded-xl border border-line-hairline bg-surface-card p-4 shadow-card">
+      <TeamAura color={teamColor(m.h)} side="home" />
+      <div className="relative flex items-center justify-between gap-2">
         <span className="text-2xs font-semibold text-text-muted">今夜无球 · 下一场焦点</span>
         <Stars star={focal.ev.star} />
       </div>
 
-      <div className="mt-3 flex items-center justify-center gap-3">
+      <div className="relative mt-3 flex items-center justify-center gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <Crest id={m.h} size={22} />
+          <Crest id={m.h} size={28} />
           <span className="truncate text-sm font-semibold text-text-primary">{teamName(m.h)}</span>
         </div>
-        <span className="font-num text-2xs text-text-faint">vs</span>
+        <span className="font-num text-2xs text-text-faint">VS</span>
         <div className="flex min-w-0 items-center gap-2">
-          <Crest id={m.a} size={22} />
+          <Crest id={m.a} size={28} />
           <span className="truncate text-sm font-semibold text-text-primary">{teamName(m.a)}</span>
         </div>
       </div>
 
-      <div className="mt-3 flex flex-col items-center border-t border-line-hairline pt-2.5">
+      <div className="relative mt-3 flex flex-col items-center border-t border-line-hairline pt-2.5">
         <span className="text-2xs text-text-faint">距开球</span>
-        <span className="font-num text-xl font-semibold tabular-nums text-accent">{countdown}</span>
+        <span className="font-num text-2xl font-bold tabular-nums text-accent">{countdown}</span>
         <Meta num className="mt-0.5">
           {zhDate(datePart(m.t))} {weekdayOf(datePart(m.t))} {hm(m.t)} · {leagueName(m.l)}
         </Meta>
       </div>
 
-      <Button variant="default" size="md" className="mt-3 w-full" onClick={() => onSelect(m.id)}>
+      <Button variant="default" size="md" className="relative mt-3 w-full" onClick={() => onSelect(m.id)}>
         查看赛前情报
       </Button>
     </article>

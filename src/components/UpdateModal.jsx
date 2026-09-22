@@ -123,12 +123,12 @@ export default function UpdateModal({
       aria-label="版本更新"
       className="fixed inset-0 z-modal flex items-center justify-center bg-black/75 px-4 backdrop-blur-md transition-opacity duration-200"
     >
-      <div className="relative flex w-full max-w-[460px] flex-col overflow-hidden rounded-2xl border border-white/[0.12] bg-[#0c101c]/95 shadow-[0_20px_50px_rgba(0,0,0,0.8),inset_0_1px_0_0_rgba(255,255,255,0.12)]">
+      <div className="relative flex w-full max-w-[460px] flex-col overflow-hidden rounded-2xl border border-line-control bg-surface-card/95 shadow-[0_20px_50px_rgba(0,0,0,0.8),inset_0_1px_0_0_rgba(255,255,255,0.12)]">
         {/* 顶部环境流光装饰条 */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-1 rounded-t-2xl bg-gradient-to-r from-blue-500 via-amber-400 to-purple-500" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-1 rounded-t-2xl bg-gradient-to-r from-accent/40 via-accent to-accent/40" />
 
         {/* 标题栏 */}
-        <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
+        <div className="flex items-center justify-between border-b border-line-hairline px-5 py-4">
           <div className="flex items-center gap-2.5">
             <BrandLogo size={30} rounded="lg" withGlow />
             <div>
@@ -187,7 +187,7 @@ export default function UpdateModal({
               {/* 更新日志区域 */}
               <div className="flex flex-col gap-1.5">
                 <span className="text-2xs font-medium text-text-muted">更新内容与修复：</span>
-                <div className="scrollbar-thin max-h-36 overflow-y-auto rounded-lg border border-white/[0.08] bg-black/40 p-3 text-2xs leading-relaxed text-text-secondary whitespace-pre-line font-mono">
+                <div className="scrollbar-thin max-h-36 overflow-y-auto rounded-lg border border-line-hairline bg-stage-bg/60 p-3 text-2xs leading-relaxed text-text-secondary whitespace-pre-line font-num">
                   {releaseNotes}
                 </div>
               </div>
@@ -205,7 +205,7 @@ export default function UpdateModal({
               {/* 进度条 */}
               <div className="relative h-2 w-full overflow-hidden rounded-full bg-white/10">
                 <div
-                  className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 shadow-[0_0_10px_rgba(245,185,66,0.6)] transition-all duration-300"
+                  className="absolute inset-y-0 left-0 rounded-full bg-accent shadow-pop transition-all duration-300"
                   style={{ width: `${updateState?.progress?.percent || 0}%` }}
                 />
               </div>
@@ -223,7 +223,7 @@ export default function UpdateModal({
           {/* 状态 5：下载完成待重启 */}
           {status === 'downloaded' && (
             <div className="flex flex-col items-center justify-center gap-2.5 py-4 text-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-400/20 text-accent">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/20 text-accent">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -250,7 +250,7 @@ export default function UpdateModal({
         </div>
 
         {/* 底部按钮操作栏 */}
-        <div className="flex items-center justify-between rounded-b-2xl border-t border-white/[0.08] bg-[#090c15] px-5 py-3.5">
+        <div className="flex items-center justify-between rounded-b-2xl border-t border-line-hairline bg-surface-panel px-5 py-3.5">
           <button
             type="button"
             onClick={handleOpenReleasePage}
