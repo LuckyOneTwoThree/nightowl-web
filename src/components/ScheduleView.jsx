@@ -111,6 +111,18 @@ export default function ScheduleView({
 
   const dayMatchCount = dayGroups?.matches.length ?? 0;
 
+  // 空日期时，从当前已筛选赛程中找最近有比赛的一天。
+  // rows 已经应用联赛、关注球队和关键词条件，因此快捷跳转不会跳到一个
+  // 对当前筛选仍然为空的日期。
+  const nearestMatchDay = useMemo(() => {
+    const days = rows
+      .filter(row => row.type === 'date')
+      .map(row => ({ date: row.date, count: row.count }));
+    return days.find(day => day.date > selDate) ||
+      [...days].reverse().find(day => day.date < selDate) ||
+      null;
+  }, [rows, selDate]);
+
   const set = patch => onFiltersChange({ ...filters, ...patch });
 
   const setDate = d => {
@@ -340,13 +352,24 @@ export default function ScheduleView({
               title={`${selDate}（${weekdayOf(selDate)}）没有匹配的场次`}
               desc="换个日期，或点「全部」查看全季赛程。"
               action={
-                <button
-                  type="button"
-                  onClick={() => setDate('all')}
-                  className="text-2xs text-accent underline underline-offset-2"
-                >
-                  查看全部赛程
-                </button>
+                <div className="flex flex-col items-center gap-2">
+                  {nearestMatchDay && (
+                    <button
+                      type="button"
+                      onClick={() => setDate(nearestMatchDay.date)}
+                      className="rounded-md border border-accent/40 bg-surface-accent px-3 py-1.5 text-2xs font-medium text-accent transition-colors hover:border-accent/60 hover:bg-accent/20"
+                    >
+                      跳到最近有赛日 · {nearestMatchDay.date.slice(5).replace('-', '/')}（{nearestMatchDay.count} 场）
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setDate('all')}
+                    className="text-2xs text-text-muted underline underline-offset-2 transition-colors hover:text-text-primary"
+                  >
+                    查看全部赛程
+                  </button>
+                </div>
               }
             />
           ) : (

@@ -1,14 +1,13 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, memo, useRef, useState } from 'react';
 import { hm, zhDate, weekdayOf, datePart, liveMinute, humanCountdown } from '../core/format.js';
-import { teamName, leagueName } from '../data/index.js';
+import { teamName, teamColor, leagueName } from '../data/index.js';
 import { ts, countdown as engineCountdown } from '../core/engine.js';
-import { Button, Crest, Hint, IconButton, LiveDot, Meta, SectionLabel, SleepBadge, Stars } from './atoms.jsx';
+import { Button, Crest, Hint, IconButton, LiveDot, Meta, SectionLabel } from './atoms.jsx';
 import {
   IconCalendar,
   IconCheck,
   IconChevronDown,
   IconChevronUp,
-  IconDerby,
   IconExternal,
   IconKeyboard,
   IconLive,
@@ -558,69 +557,62 @@ export default function PlayerStage({
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-stage-bg">
           {state === 'sched' ? (
-            <div className="flex w-full max-w-lg flex-col items-center justify-center px-6 py-6 text-center select-none">
-              {/* 双方队徽与队名 */}
-              <div className="flex w-full items-center justify-center gap-3 sm:gap-6">
-                <div className="flex flex-1 min-w-0 items-center justify-end gap-2.5">
-                  <span className="truncate text-sm sm:text-base font-semibold text-text-primary" title={teamName(match.h)}>
-                    {teamName(match.h)}
+            <>
+              {/* 赛前画面借用双方队色做低饱和氛围光；只增强视觉识别，不引入虚构比赛信息。 */}
+              <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+                <span
+                  className="absolute -left-24 top-1/2 h-64 w-64 -translate-y-1/2 rounded-full blur-[100px] opacity-[0.16]"
+                  style={{ backgroundColor: teamColor(match.h) }}
+                />
+                <span
+                  className="absolute -right-24 top-1/2 h-64 w-64 -translate-y-1/2 rounded-full blur-[100px] opacity-[0.16]"
+                  style={{ backgroundColor: teamColor(match.a) }}
+                />
+                <span className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(21,27,41,0.5)_0%,rgba(7,9,14,0.82)_72%)]" />
+              </div>
+
+              <div className="relative z-10 flex w-full max-w-lg flex-col items-center justify-center px-6 py-6 text-center select-none">
+                {/* 双方队徽与队名 */}
+                <div className="flex w-full items-center justify-center gap-3 sm:gap-7">
+                  <div className="flex flex-1 min-w-0 items-center justify-end gap-3">
+                    <span className="truncate text-base sm:text-lg font-semibold text-text-primary" title={teamName(match.h)}>
+                      {teamName(match.h)}
+                    </span>
+                    <Crest id={match.h} size={40} />
+                  </div>
+
+                  <span className="rounded-full border border-white/[0.08] bg-white/[0.035] px-2.5 py-1 font-num text-2xs font-semibold text-text-muted uppercase tracking-wider">
+                    vs
                   </span>
-                  <Crest id={match.h} size={28} />
+
+                  <div className="flex flex-1 min-w-0 items-center justify-start gap-3">
+                    <Crest id={match.a} size={40} />
+                    <span className="truncate text-base sm:text-lg font-semibold text-text-primary" title={teamName(match.a)}>
+                      {teamName(match.a)}
+                    </span>
+                  </div>
                 </div>
 
-                <span className="font-num text-2xs font-semibold text-text-faint uppercase tracking-wider px-1">
-                  vs
-                </span>
-
-                <div className="flex flex-1 min-w-0 items-center justify-start gap-2.5">
-                  <Crest id={match.a} size={28} />
-                  <span className="truncate text-sm sm:text-base font-semibold text-text-primary" title={teamName(match.a)}>
-                    {teamName(match.a)}
+                {/* 联赛轮次与开球时间 */}
+                <div className="mt-2 flex items-center justify-center gap-2 text-2xs text-text-muted">
+                  <span>{leagueName(match.l)} 第 {match.r} 轮</span>
+                  <span className="text-text-faint">·</span>
+                  <span className="font-num">
+                    {match.tbd ? '时间待定' : `${zhDate(datePart(match.t))} ${weekdayOf(datePart(match.t))} ${hm(match.t)}`}
                   </span>
                 </div>
-              </div>
 
-              {/* 联赛轮次与开球时间 */}
-              <div className="mt-2 flex items-center justify-center gap-2 text-2xs text-text-muted">
-                <span>{leagueName(match.l)} 第 {match.r} 轮</span>
-                <span className="text-text-faint">·</span>
-                <span className="font-num">
-                  {match.tbd ? '时间待定' : `${zhDate(datePart(match.t))} ${weekdayOf(datePart(match.t))} ${hm(match.t)}`}
-                </span>
-              </div>
-
-              {/* 中部：纯色大号倒计时 */}
-              <div className="mt-6 flex flex-col items-center">
-                <span className="text-2xs text-text-faint">距开球倒计时</span>
-                <span className="font-num text-3xl sm:text-4xl font-semibold tabular-nums text-accent tracking-tight mt-1">
-                  {stageCountdown}
-                </span>
-              </div>
-
-              {/* 下部：睡眠档位 + 星级 + 看点 / 德比标签 */}
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-                <SleepBadge match={match} />
-                {intel?.ev?.star ? <Stars star={intel.ev.star} /> : null}
-                {intel?.ev?.rivalry && (
-                  <span className="inline-flex items-center gap-1 rounded border border-warn/30 bg-warn/10 px-2 py-0.5 text-2xs font-medium text-warn">
-                    <IconDerby size={11} />
-                    {intel.ev.rivalry}
+                {/* 中部：主焦点倒计时 */}
+                <div className="mt-6 flex flex-col items-center rounded-2xl border border-white/[0.07] bg-black/20 px-8 py-3.5 shadow-inner shadow-black/20">
+                  <span className="text-2xs text-text-faint">距开球倒计时</span>
+                  <span className="mt-1 font-num text-3xl font-semibold tabular-nums text-accent tracking-tight">
+                    {stageCountdown}
                   </span>
-                )}
-                {intel?.ev?.isFollowed && (
-                  <span className="inline-flex items-center rounded border border-accent/30 bg-surface-accent px-2 py-0.5 text-2xs font-medium text-accent">
-                    主队出战
-                  </span>
-                )}
-              </div>
+                </div>
 
-              {/* 核心看点精简摘要 */}
-              {intel?.narrative?.headline && (
-                <p className="mt-3.5 max-w-md line-clamp-2 text-xs leading-relaxed text-text-secondary">
-                  {intel.narrative.headline}
-                </p>
-              )}
-            </div>
+                {/* 睡眠代价与故事看点统一在下方情报面板呈现，主舞台只保留开球信息。 */}
+              </div>
+            </>
           ) : (
             <div className="flex flex-col items-center justify-center gap-2.5">
               {live && (
@@ -690,7 +682,7 @@ export default function PlayerStage({
 
   /* ---------------- 右侧协同栏 ---------------- */
   const ControlSidebar = (
-    <div className="flex w-full shrink-0 flex-col rounded-xl border border-line-hairline bg-surface-card p-3.5 shadow-card transition-all lg:w-[285px] xl:w-[315px] lg:self-stretch min-h-0">
+    <div className="flex w-full shrink-0 flex-col rounded-xl border border-line-hairline bg-surface-card p-3.5 shadow-card transition-all xl:w-[315px] xl:self-stretch min-h-0">
       <div className="flex items-center justify-between gap-2 shrink-0">
         <span className="inline-flex items-center gap-2">
           <IconLive className={live ? 'text-live' : 'text-text-faint'} />
@@ -727,7 +719,7 @@ export default function PlayerStage({
 
       {lines.length > 0 ? (
         // 列数按容器实际宽度自适应；在桌面端作为 flex-1 弹性填充高度并支持顺畅滚动
-        <div className="scrollbar-thin -mr-1 mt-2.5 grid min-h-[80px] max-h-[220px] lg:max-h-none lg:flex-1 content-start gap-1.5 overflow-y-auto pr-1 [grid-template-columns:repeat(auto-fill,minmax(135px,1fr))]">
+        <div className="scrollbar-thin -mr-1 mt-2.5 grid min-h-[80px] max-h-[220px] xl:max-h-none xl:flex-1 content-start gap-1.5 overflow-y-auto pr-1 [grid-template-columns:repeat(auto-fill,minmax(135px,1fr))]">
           {lines.map(l => (
             <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={selectLine} />
           ))}
@@ -757,27 +749,6 @@ export default function PlayerStage({
         </div>
       </div>
 
-      {/* 本场赛事轻量信息条：充实侧栏，给观赛提供上下文，消除与大屏画面等高时的腹部留白 */}
-      {match && (
-        <div className="mt-2.5 shrink-0 rounded-lg border border-line-hairline/60 bg-surface-raised/40 p-2.5 text-2xs">
-          <div className="flex items-center justify-between text-text-muted">
-            <span>{leagueName(match.l)} · 第 {match.r} 轮</span>
-            {live ? (
-              <span className="font-num font-medium text-live">进行中 {minute}′</span>
-            ) : finished ? (
-              <span className="font-num font-semibold text-text-primary">{match.sc || '已终场'}</span>
-            ) : (
-              <span className="font-num text-text-secondary">{zhDate(datePart(match.t))} {hm(match.t)}</span>
-            )}
-          </div>
-          <div className="mt-1.5 flex items-center justify-between font-medium text-text-primary">
-            <span className="truncate max-w-[45%]">{teamName(match.h)}</span>
-            <span className="text-text-faint font-normal">vs</span>
-            <span className="truncate max-w-[45%] text-right">{teamName(match.a)}</span>
-          </div>
-        </div>
-      )}
-
       <div className="mt-auto flex shrink-0 items-center justify-between border-t border-line-hairline pt-2.5">
         <span className="inline-flex items-center gap-1.5">
           <Hint content={SHORTCUT_HINT} align="start">
@@ -798,7 +769,7 @@ export default function PlayerStage({
     <div className="flex w-full flex-col gap-2.5">
       {/* 宽屏协同模式：父级 items-stretch，右侧侧栏严格与视频区等高，下端齐平 */}
       {!theaterMode ? (
-        <div className="flex w-full flex-col items-stretch gap-3 lg:flex-row lg:items-stretch">
+        <div className="flex w-full flex-col items-stretch gap-3 xl:flex-row xl:items-stretch">
           <div className="player-adaptive-video flex min-w-0 flex-1">
             {VideoScreen}
           </div>

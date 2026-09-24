@@ -52,6 +52,7 @@ export default function WeekView({
   const [showZero, setShowZero] = useState(false);
 
   const { plan, minefield, days, advice } = week;
+  const hasScheduledMatches = days.some(day => day.count > 0);
   const usedRatio = plan.budget > 0 ? plan.used / plan.budget : 0;
   const remain = Math.max(0, plan.budget - plan.used);
 
@@ -115,16 +116,25 @@ export default function WeekView({
           right={<Meta num>{plan.best.length} / 5</Meta>}
         >
           {plan.best.length === 0 ? (
-            <p className="rounded-md border border-line-hairline px-3 py-4 text-center text-xs text-text-muted">
-              当前额度下没有可入包的场次
-              <button
-                type="button"
-                onClick={() => onBudgetChange(Math.min(8, plan.budget + 1))}
-                className="ml-1.5 text-accent underline underline-offset-2"
-              >
-                提高 1 小时
-              </button>
-            </p>
+            <div className="rounded-lg border border-line-hairline bg-surface-raised/30 px-3 py-3.5 text-center">
+              <p className="text-xs font-medium text-text-secondary">
+              {!hasScheduledMatches
+                  ? '本周暂无比赛'
+                  : plan.evs.length === 0
+                    ? '本周暂无可安排的未开赛场次'
+                    : '当前预算下暂未选出场次'}
+              </p>
+              {plan.evs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onBudgetChange(Math.min(8, plan.budget + 1))}
+                  disabled={plan.budget >= 8}
+                  className="mt-1.5 rounded-md px-2 py-1 text-2xs font-medium text-accent transition-colors hover:bg-surface-accent disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {plan.budget >= 8 ? '预算已达上限' : '预算增加 1 小时'}
+                </button>
+              )}
+            </div>
           ) : (
             <div className="space-y-1">
               {plan.best.map(e => (
@@ -217,6 +227,11 @@ export default function WeekView({
           hint="柱子高度 = 当天最晚那场球的睡眠成本；颜色与档位徽章同一色阶。"
           right={<Meta>按当日最高档位</Meta>}
         >
+          {!hasScheduledMatches ? (
+            <p className="rounded-lg border border-dashed border-line-hairline px-3 py-4 text-center text-xs text-text-muted">
+              本周暂无未开赛场次，暂无分布数据
+            </p>
+          ) : (
           <div className="flex items-end justify-between gap-1.5">
             {days.map((d, i) => {
               const h = d.count === 0 ? 3 : Math.max(8, (d.cost / 4.5) * 60);
@@ -239,7 +254,10 @@ export default function WeekView({
               );
             })}
           </div>
-          <p className="mt-2.5 text-2xs leading-relaxed text-text-secondary">{advice}</p>
+          )}
+          {hasScheduledMatches && (
+            <p className="mt-2.5 text-2xs leading-relaxed text-text-secondary">{advice}</p>
+          )}
         </Fieldset>
 
         {/* ---- 备选 ---- */}

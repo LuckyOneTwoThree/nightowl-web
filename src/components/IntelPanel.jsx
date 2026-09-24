@@ -222,6 +222,8 @@ function NarrativeSection({ narrative, stories, ev }) {
      拿掉故事线会让「有故事线但无德比」的场次掉到 L3 兜底文案。 */
   const fromStories = new Set(stories.map(s => `${s.name}：${s.desc}`));
   const lines = narrative.lines.filter(l => !fromStories.has(l));
+  // L3 的兜底行会重复标题里的档位，或只重复已展示的联赛轮次；标题本身已完整说明数据有限。
+  const distinctLines = narrative.level === 'L3' ? [] : lines;
   const rivalryShown = ev.rivalry && !narrative.headline.includes(ev.rivalry);
   /* 反向去重：L2 的 headline 常常就是第一条故事线（`${name}：${desc}`），
      而下面的列表又把同一条按 name / desc 渲染一遍 —— 整句原样出现两遍。
@@ -247,9 +249,9 @@ function NarrativeSection({ narrative, stories, ev }) {
       )}
       <p className="text-sm font-medium leading-snug text-text-primary">{narrative.headline}</p>
 
-      {lines.length > 0 && (
+      {distinctLines.length > 0 && (
         <ul className="mt-1.5 space-y-1">
-          {lines.map((line, i) => (
+          {distinctLines.map((line, i) => (
             <li key={i} className="flex gap-2 text-xs leading-relaxed text-text-secondary">
               <span className="mt-2.5 h-px w-2.5 shrink-0 bg-line-control" aria-hidden="true" />
               {line}
