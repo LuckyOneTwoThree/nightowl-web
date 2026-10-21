@@ -421,3 +421,52 @@ openfootball 改用 `tz.mjs` 后，`normalize.js` 的 `localPartsToWall` 再无�
 - v0.1.19：可信基线（打包边界、测试门禁离线化、数据语义、同步失败、赛程一致性、赛季配置化）
 - v0.1.20：UX 与无障碍收尾（开屏、通知开关、对话框语义）
 - 仍未做（按需）：组件拆分、lint、UI 冒烟脚本固化；算法与性能层保持不动。
+
+---
+
+## 七、近期赛事数据审计（2026-10-21）· v0.1.21
+
+### 审计发现
+
+用 ESPN + openfootball 对最近两周做了一次全量比对，发现三类真实缺口：
+
+1. **内置快照落后**：`src/data/fixtures.json` 只有 216 场完赛，而本地用户数据已 390 场。
+   10-10~10-18 的 12 场五大联赛完赛比分在出厂快照中缺失。
+2. **UCL 别名错配**：4 场 UCL 进入 `unmatched`：
+   - `SCP` 在欧冠是葡萄牙体育（SPO），却被跨联赛缩写映射成德甲帕德博恩（SCP）；
+   - `VFK` 是 Viking FK（VIK），别名表缺失。
+   结果是 UCL 第 2 轮两场比分、第 3 轮两场时间无法同步。
+3. **改期被 4 天窗口拒绝**：Levante vs Athletic 官方从 09-17 改到 10-22，
+   时间差 34.9 天，`MATCH_WINDOW_DAYS=4` 把它当成不同场次。
+
+### 修复
+
+- **别名**：`server/espn-alias.json` 修正 `UCL.SCP→SPO`、新增 `UCL.VFK→VIK`；
+  `build-espn-alias.mjs` 的跨联赛分支改为先按 displayName 复核；`test:alias` 增加两条断言。
+- **改期识别**：新增 `RESCHEDULE_WINDOW_DAYS=60`。仅当「同联赛同主客对阵唯一、
+  本地仍未赛且无比分、上游时间可信、状态为 sched/done」时放宽；其余仍按 4 天拒绝。
+  `test:scores` 增加 6 条正反例。
+- **回填模式**：`activeSyncTargets(..., { backfillDays })` + CLI `--backfill=14`。
+  历史 tbd 占位轮超过 3 天守卫后不再展开，这是 12 场缺口没有被自动补上的原因；
+  回填模式把最近 N 天的 tbd 轮重新按 ±3 天展开。`test:scores` 增加 3 条断言。
+- **数据快照**：走 `node tools/sync-scores.mjs --apply` 与 `--backfill=14 --apply`
+  两次脚本更新，未手改 JSON。
+
+### 审计结果
+
+| 项目 | 结果 |
+| :--- | :--- |
+| 内置快照 | done 216 → **392**；tbd 1023 → **940**；总场次 1897 |
+| 同步 unmatched | **0**（修复前 5） |
+| `done + tbd` 矛盾 | **0** |
+| `done` 但无比分 | **0** |
+| UCL 第 2/3 轮 | 第 2 轮全部有赛果；第 3 轮 10-22 场次均在列 |
+| 近期五大联赛 | 10-17~10-20 场次全部有赛果；10-22 待赛场次在列 |
+| 改期 | Levante vs Athletic 已更新为 10-22T02:00 |
+| 回归 | 离线套件 **380 项全过**（test:scores 79） |
+
+### 遗留
+
+- CCTV5 / CCTV5+ 保底频道是**本地签名配置**，签名已过期；不能伪造签名，
+  且 `server/tv-channels.local.json` 不入库、不打包，不影响发布包。需要时从合法来源更新。
+- UCL 淘汰赛仍等 2027-01 抽签后按 runbook 补数据。

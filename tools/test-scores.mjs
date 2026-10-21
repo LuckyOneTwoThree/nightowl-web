@@ -195,6 +195,24 @@ console.log('五·二、★ tbd 占位轮的查询日期展开（防止整轮漏
 
 /* ================================================================== */
 console.log('');
+console.log('五·二·二、★ 回填模式（历史 tbd 占位轮按 ±3 天展开）');
+{
+  const now = new Date('2026-10-21T15:00:00+08:00').getTime();
+  const oldTbd = { id: 'b1', l: 'BL', t: '2026-10-11T02:00', st: 'sched', sc: null, tbd: true };
+  const tooOld = { id: 'b2', l: 'BL', t: '2026-09-30T02:00', st: 'sched', sc: null, tbd: true };
+
+  const base = activeSyncTargets([oldTbd], now).get('BL');
+  ok('默认守卫：10 天前的 tbd 只查占位日', base?.size === 1, `实际 ${base?.size}`);
+
+  const back = activeSyncTargets([oldTbd], now, { backfillDays: 14 }).get('BL');
+  ok('backfill=14：10 天前的 tbd 展开 7 个日期', back?.size === 7, `实际 ${back?.size}`);
+
+  const beyond = activeSyncTargets([tooOld], now, { backfillDays: 14 }).get('BL');
+  ok('backfill 不展开窗口外的 tbd（21 天前）', beyond?.size === 1, `实际 ${beyond?.size}`);
+}
+
+/* ================================================================== */
+console.log('');
 console.log('五·三、★ UCL 淘汰赛接管（不依赖本地场次扫本周比赛日）');
 {
   // 2026-09-16 是周三 → 本周二是 09-15、周三 09-16、周四 09-17（UTC）
@@ -217,6 +235,46 @@ console.log('五·三、★ UCL 淘汰赛接管（不依赖本地场次扫本周
   const base = new Map([['PL', new Set(['20260916'])]]);
   const merged = uclWeeklyTargets(now, base);
   ok('追加到已有 targets 时不覆盖其它联赛', merged.get('PL')?.has('20260916') && merged.get('UCL')?.size === 3);
+}
+
+/* ================================================================== */
+console.log('');
+console.log('五·四、★ 跨轮次改期识别（同对阵唯一 + 本地未赛）');
+{
+  const local = {
+    id: 'T-RS1', l: 'PL', t: '2026-09-01T03:00', st: 'sched', sc: null, h: 'ARS', a: 'CHE'
+  };
+  const ev = {
+    league: 'PL', homeId: 'ARS', awayId: 'CHE', kickoff: '2026-10-06T03:00',
+    kickoffTrusted: true, state: 'sched', sources: ['espn']
+  };
+
+  const r1 = planPatches([ev], [local]);
+  ok('★ 同对阵唯一且本地未赛：允许跨轮次改期',
+    r1.patches.get('T-RS1')?.t === '2026-10-06T03:00' && r1.stats.rescheduled === 1,
+    JSON.stringify([...r1.patches]));
+
+  const r2 = planPatches([{ ...ev, state: 'done', homeScore: '2', awayScore: '1' }], [local]);
+  const p2 = r2.patches.get('T-RS1');
+  ok('改期已完赛：同时写入时间与比分',
+    p2?.t === '2026-10-06T03:00' && p2?.sc === '2-1' && p2?.st === 'done' && r2.stats.rescheduled === 1,
+    JSON.stringify(p2));
+
+  const r3 = planPatches([ev], [{ ...local, st: 'done', sc: '0-0' }]);
+  ok('本地已完赛：不接受 35 天外的时间改写',
+    r3.patches.size === 0 && r3.stats.rescheduled === 0, JSON.stringify([...r3.patches]));
+
+  const r4 = planPatches([ev], [local, { ...local, id: 'T-RS1b', t: '2026-09-15T03:00' }]);
+  ok('同对阵多候选：拒绝改期匹配',
+    r4.patches.size === 0 && r4.stats.rescheduled === 0, JSON.stringify([...r4.patches]));
+
+  const r5 = planPatches([{ ...ev, kickoffTrusted: false }], [local]);
+  ok('时间不可信：拒绝改期匹配',
+    r5.patches.size === 0 && r5.stats.rescheduled === 0, JSON.stringify([...r5.patches]));
+
+  const r6 = planPatches([{ ...ev, kickoff: '2027-01-05T03:00' }], [local]);
+  ok('超过 60 天：仍拒绝改期匹配',
+    r6.patches.size === 0 && r6.stats.rescheduled === 0, JSON.stringify([...r6.patches]));
 }
 
 /* ================================================================== */

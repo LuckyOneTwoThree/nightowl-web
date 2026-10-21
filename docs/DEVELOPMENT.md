@@ -48,7 +48,7 @@ npm run test:sources       # 数据源健康度（联网）
 
 | 脚本 | 项数 | 守住什么 |
 | :--- | ---: | :--- |
-| `test:scores` | 70 | 保鲜折算、写盘失败语义、数据新鲜度、赛季窗口；HTTP 端点走依赖注入 |
+| `test:scores` | 79 | 保鲜折算、写盘失败语义、数据新鲜度、赛季窗口、改期识别、回填模式；HTTP 端点走依赖注入 |
 | `test:owl` | 53 | 视图模型不变量：分区不丢不重、推荐排除自身、只看未来、排序口径 |
 | `test:m3u8` | 31 | M3U8 十类载体的 URI 重写完整性 |
 | `test:tz` | 28 | openfootball 时区换算：夏令时边界、**缺 time 不造假时刻** |
@@ -93,9 +93,14 @@ curl http://127.0.0.1:3100/api/scores/status
 ### 命令行
 
 ```bash
-node tools/sync-scores.mjs            # 预演（不写盘）
-node tools/sync-scores.mjs --apply    # 写入内置快照（发版前的数据更新）
+node tools/sync-scores.mjs                      # 预演（不写盘）
+node tools/sync-scores.mjs --apply              # 写入内置快照（发版前的数据更新）
+node tools/sync-scores.mjs --backfill=14 --apply # 回填最近 14 天的 tbd / 完赛比分
 ```
+
+> 内置快照长期未更新时，历史 tbd 占位轮可能已过 ±3 天展开窗口。`--backfill=N`
+> 会把最近 N 天内的 tbd 占位轮重新按 ±3 天展开；它只影响同步目标，不改变
+> 「数据只走脚本」与写盘校验。
 
 ### 数据落点（重要）
 
@@ -120,6 +125,7 @@ node tools/sync-scores.mjs --apply    # 写入内置快照（发版前的数据�
 ### UCL 淘汰赛与保底频道
 
 - **UCL 淘汰赛**：对阵要等 2027-01 抽签后才确定。同步时拉到本地没有的对阵会进入 `unmatched` 报告，**不自动新增场次**；抽签后按「数据只走脚本」补 fixtures，再跑一次全量同步。
+- **改期识别**：同联赛同主客对阵唯一、本地仍未赛且无比分、上游时间可信时，允许 60 天内的改期（实测 Levante vs Athletic 从 09-17 改到 10-22）；其余情况仍按 4 天窗口拒绝。
 - **保底频道**：`server/tv-channels.local.json` 是本地签名直链（含个人标识），不入库、不打包；失效时按 `server/tv-channels.example.json` 更新。`probeChannels()` 会在 10 分钟 TTL 内探测并在界面提示失效频道。
 
 ---
@@ -138,6 +144,7 @@ server/scraper-alias.json       # 聚合站队名补充（只放机器推不出�
 
 - **别按联赛分组维护** —— 同一缩写在联赛间含义不同：ESPN 的 `MUN` 在英超是曼联、在德甲是拜仁（`FCB`）；`PAR` 是巴黎FC。必须按 `byLeague[league][abbr]` 精确匹配，**不要合并成全局映射**
 - **宁漏勿错** —— 补别名前先确认真实含义（拉一次源数据核对 displayName），猜错比缺失危险得多
+- **跨联赛缩写必须复核名称** —— UCL 的 `SCP` 是葡萄牙体育（`SPO`），不是德甲帕德博恩（`SCP`）；`VFK` 是 Viking FK（`VIK`）。生成器的 UCL 跨联赛分支已改为先按 displayName 复核，`test:alias` 有对应断言
 
 ```bash
 npm run check:scraper      # 看当前匹配率与未匹配清单，据此补别名（联网）

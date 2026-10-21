@@ -262,7 +262,10 @@ console.log('四、ESPN 别名表抽样（离线，与上轮生成结果比对�
     ['FL', 'OLM', 'OM'], ['FL', 'RCL', 'LEN'],
     ['SA', 'ROMA', 'ROM'], ['SA', 'COMO', 'COM'],
     ['PD', 'MCF', 'MAL'],
-    ['UCL', 'SLB', 'SLO'], ['UCL', 'SLP', 'SLA']
+    ['UCL', 'SLB', 'SLO'], ['UCL', 'SLP', 'SLA'],
+    // UCL 的 SCP 是葡萄牙体育（SPO），不是德甲帕德博恩（SCP）；
+    // VFK 是 Viking FK（VIK），此前缺失导致 UCL 场次静默漏配。
+    ['UCL', 'SCP', 'SPO'], ['UCL', 'VFK', 'VIK']
   ];
   const wrong = expect.filter(([lg, abbr, id]) => toTeamId(lg, abbr) !== id)
     .map(([lg, abbr, id]) => `${lg} ${abbr} → ${toTeamId(lg, abbr)}（期望 ${id}）`);

@@ -126,8 +126,20 @@ for (const [key, c] of uniq) {
     ourId = 'FCB';
     how = 'abbr-UCL-拜仁';
   } else if (league === 'UCL' && ourById.has(abbr)) {
-    ourId = abbr;
-    how = 'abbr-跨联赛(UCL)';
+    // 跨联赛缩写必须先按名称复核：
+    // SCP 在德甲是帕德博恩（SCP），在欧冠是葡萄牙体育（SPO）。
+    // 旧逻辑直接取 abbr，导致 UCL SCP 被当成帕德博恩，相关场次永远无法保鲜。
+    const cand =
+      ourByName.get(norm(c.displayName)) ||
+      ourByName.get(norm(c.name)) ||
+      ourByName.get(norm(c.shortName));
+    if (cand) {
+      ourId = cand;
+      how = 'name-UCL';
+    } else {
+      ourId = abbr;
+      how = 'abbr-跨联赛(UCL)';
+    }
   } else {
     // ② displayName 归一化对齐 teams.en
     const cand = ourByName.get(norm(c.displayName)) || ourByName.get(norm(c.name)) || ourByName.get(norm(c.shortName));

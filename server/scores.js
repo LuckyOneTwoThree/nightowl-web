@@ -24,6 +24,16 @@ export const ALLOWED_ST = ['sched', 'done', 'pp'];
 export const MATCH_WINDOW_DAYS = 4;
 
 /**
+ * 改期识别的最大跨度（天）
+ *
+ * 4 天窗口是为了防止「同对阵不同场次」被错配。但联赛确实存在整场改期
+ * （实测 Levante vs Athletic：本地占位 09-17，官方改到 10-22，差 34.9 天）。
+ * 仅当「同联赛同主客对阵唯一、本地仍未赛且无比分、上游时间可信」时放宽到 60 天；
+ * 其余情况仍按 4 天拒绝，宁可漏配也不静默改错。
+ */
+export const RESCHEDULE_WINDOW_DAYS = 60;
+
+/**
  * 赛季覆盖的月份（欧洲主流联赛口径：8 月 — 次年 5 月）
  *
  * 由赛季串派生，不再把 `2027-05` 硬编码进逻辑：
@@ -115,10 +125,14 @@ const TBD_EXPAND_DAYS = 3;
  *
  * 返回：Map<league, Set<string(YYYYMMDD)>>（转为 UTC 日期以匹配上游 API）
  */
-export function activeSyncTargets(fixtures = [], nowTs = Date.now()) {
+export function activeSyncTargets(fixtures = [], nowTs = Date.now(), opts = {}) {
   const targets = new Map();
   const future48h = nowTs + 48 * 3600000;
   const pad = n => String(n).padStart(2, '0');
+  // 回填模式：允许把「过去 N 天内」的 tbd 占位轮也按 ±3 天展开。
+  // 常态同步用默认 3 天守卫防止积压放大请求；只在数据快照落后或手动回填时调大。
+  const backfillDays = Math.max(0, Number(opts.backfillDays) || 0);
+  const tbdFloorDays = Math.max(TBD_EXPAND_DAYS, backfillDays);
 
   for (const m of fixtures) {
     // 已同步完赛比分的记录，100% 排除，绝不重复同步
@@ -142,7 +156,7 @@ export function activeSyncTargets(fixtures = [], nowTs = Date.now()) {
       // 只对「占位日仍可能覆盖真实比赛日」的场次展开 —— ESPN 在开球前数日就公布真实时间，
       // 此时占位日在未来或临近。占位日已过去很久仍为 tbd 的场次（积压），展开窗口早已整体
       // 落在过去，再查也查不到，反而把每个这种场次的 1 个请求永久放大成 7 个，拖慢整轮同步。
-      if (m.tbd && t >= nowTs - TBD_EXPAND_DAYS * 86400000) {
+      if (m.tbd && t >= nowTs - tbdFloorDays * 86400000) {
         for (let i = 1; i <= TBD_EXPAND_DAYS; i++) {
           add(t - i * 86400000);
           add(t + i * 86400000);
@@ -208,7 +222,7 @@ export function planPatches(merged, fixtures, conflicts = []) {
   const stats = {
     done: 0, timeUpdated: 0, tbdCleared: 0, pp: 0,
     skippedLive: 0, noCounterpart: 0, scoreFromSecondary: 0,
-    skippedIncompleteScore: 0
+    skippedIncompleteScore: 0, rescheduled: 0
   };
 
   // 按 (联赛, 主队-客队) 建索引，避免每次全表扫描
@@ -245,7 +259,18 @@ export function planPatches(merged, fixtures, conflicts = []) {
         best = m;
       }
     }
-    if (!best || bestDiff > MATCH_WINDOW_DAYS * 86400000) {
+    const outOfWindow = !best || bestDiff > MATCH_WINDOW_DAYS * 86400000;
+    const canReschedule =
+      outOfWindow &&
+      best &&
+      bestDiff <= RESCHEDULE_WINDOW_DAYS * 86400000 &&
+      cands.length === 1 &&
+      best.st === 'sched' &&
+      !best.sc &&
+      e.kickoffTrusted &&
+      (e.state === 'sched' || e.state === 'done');
+
+    if (outOfWindow && !canReschedule) {
       stats.noCounterpart++;
       unmatched.push({
         league: e.league, h: e.homeId, a: e.awayId, at: e.kickoff, sources: e.sources,
@@ -253,6 +278,7 @@ export function planPatches(merged, fixtures, conflicts = []) {
       });
       continue;
     }
+    if (canReschedule) stats.rescheduled++;
 
     /**
      * 前置校验：声称「完赛」就必须带完整比分
@@ -330,7 +356,7 @@ export function planPatches(merged, fixtures, conflicts = []) {
  * @param {string[]} [opts.months] 限定月份（仅对按月分块的源生效）
  * @param {string[]} [opts.sources] 指定启用的源，默认全部
  */
-export async function syncScores({ fixtures, rules, months, allMonths = false, sources, log = console }) {
+export async function syncScores({ fixtures, rules, months, allMonths = false, sources, backfillDays = 0, log = console }) {
   const cfg = rules.scores || {};
   const season = cfg.season || '2026-27';
   const leagues = Object.keys(cfg.leagues || {});
@@ -369,7 +395,7 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
     }
   } else {
     // 默认常态增量同步：精准提取未同步完赛场次与近期 48 小时比赛的日期，已同步场次完全跳过
-    targets = activeSyncTargets(fixtures);
+    targets = activeSyncTargets(fixtures, Date.now(), { backfillDays });
     list = activeSyncMonths(fixtures);
     // UCL 淘汰赛接管：欧冠查询不依赖本地场次（抽签后才有对阵），直接扫本周比赛日
     if (leagues.includes('UCL')) {

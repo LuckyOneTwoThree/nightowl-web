@@ -307,8 +307,9 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
           const apply = body?.apply === true || searchParams.get('apply') === '1';
           const allMonths = body?.allMonths === true || searchParams.get('all') === '1';
           const months = body?.months || (searchParams.get('months') ? searchParams.get('months').split(',') : null);
+          const backfillDays = Number(body?.backfillDays ?? searchParams.get('backfill') ?? 0) || 0;
           const fixtures = await loadFixturesImpl();
-          const result = await syncScoresImpl({ fixtures, rules, months, allMonths, log });
+          const result = await syncScoresImpl({ fixtures, rules, months, allMonths, backfillDays, log });
 
           let written = null;
           let nextFixtures = null;

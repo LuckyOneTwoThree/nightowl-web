@@ -2,8 +2,8 @@
   "_readme": "ESPN 缩略码 → 本项目球队 id 的别名表。由 tools/build-espn-alias.mjs 从真实数据生成。unresolved 中的条目需人工确认后再补进 byLeague，不要猜。",
   "_generatedAt": "2026-09-12T09:25:46.990Z",
   "_coverage": {
-    "total": 132,
-    "matched": 132,
+    "total": 133,
+    "matched": 133,
     "unresolved": 0
   },
   "byLeague": {
@@ -136,7 +136,8 @@
       "ARS": "ARS",
       "PSG": "PSG",
       "SLB": "SLO",
-      "SCP": "SCP",
+      "SCP": "SPO",
+      "VFK": "VIK",
       "GAL": "GAL",
       "FEN": "FEN",
       "ROMA": "ROM",
@@ -153,5 +154,6 @@
     }
   },
   "unresolved": [],
-  "_note_leagueScope": "同一缩略码在不同联赛含义不同：MUN 英超=曼联(MUN)、德甲=拜仁(FCB)。解析按 byLeague[league][abbr] 精确匹配，不要合并成全局映射。"
+  "_note_leagueScope": "同一缩略码在不同联赛含义不同：MUN 英超=曼联(MUN)、德甲=拜仁(FCB)。解析按 byLeague[league][abbr] 精确匹配，不要合并成全局映射。",
+  "_note_manualOverrides": "UCL SCP→SPO（Sporting CP，不是德甲帕德博恩）；UCL VFK→VIK（Viking FK）。生成器的 UCL 跨联赛缩写分支已改为先按名称复核。"
 }

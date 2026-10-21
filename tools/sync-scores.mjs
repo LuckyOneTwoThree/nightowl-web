@@ -24,20 +24,22 @@ const ROOT = resolve(__dirname, '..');
 const APPLY = process.argv.includes('--apply');
 const monthsArg = process.argv.find(a => a.startsWith('--months='));
 const sourcesArg = process.argv.find(a => a.startsWith('--sources='));
+const backfillArg = process.argv.find(a => a.startsWith('--backfill='));
 const months = monthsArg ? monthsArg.split('=')[1].split(',') : null;
 const sources = sourcesArg ? sourcesArg.split('=')[1].split(',') : null;
+const backfillDays = backfillArg ? Number(backfillArg.split('=')[1]) || 0 : 0;
 
 const fixturesPath = resolve(ROOT, 'src/data/fixtures.json');
 const rules = JSON.parse(readFileSync(resolve(ROOT, 'server/rules.json'), 'utf8'));
 const fixtures = JSON.parse(readFileSync(fixturesPath, 'utf8'));
 
-console.log(`本地赛程 ${fixtures.length} 场 · ${APPLY ? '写盘模式' : '预演模式（不写盘）'}`);
+console.log(`本地赛程 ${fixtures.length} 场 · ${APPLY ? '写盘模式' : '预演模式（不写盘）'}${backfillDays ? ` · 回填 ${backfillDays} 天` : ''}`);
 console.log(`启用数据源：${(sources || Object.keys(SOURCES)).join(', ')}`);
 console.log('开始拉取…');
 console.log('');
 
 const t0 = Date.now();
-const result = await syncScores({ fixtures, rules, months, sources });
+const result = await syncScores({ fixtures, rules, months, sources, backfillDays });
 const secs = ((Date.now() - t0) / 1000).toFixed(1);
 
 console.log(`用时 ${secs}s`);
@@ -55,6 +57,7 @@ console.log(`  统一事件          ${result.merged.length}`);
 console.log(`  完赛场次          ${result.stats.done}`);
 console.log(`  完赛比分写入      ${result.stats.done - result.stats.scoreFromSecondary > 0 ? result.stats.done : result.stats.done}（其中来自副源 ${result.stats.scoreFromSecondary}）`);
 console.log(`  开球时间回填      ${result.stats.timeUpdated}`);
+console.log(`  跨轮次改期        ${result.stats.rescheduled}`);
 console.log(`  解除 tbd          ${result.stats.tbdCleared}`);
 console.log(`  标记改期(pp)      ${result.stats.pp}`);
 console.log(`  跳过进行中(不落库) ${result.stats.skippedLive}`);

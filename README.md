@@ -10,7 +10,7 @@
   <br />
 
   <img src="https://img.shields.io/badge/platform-Windows-2b6cb0?style=flat-square" alt="platform" />
-  <img src="https://img.shields.io/badge/release-v0.1.20-2f855a?style=flat-square" alt="release" />
+  <img src="https://img.shields.io/badge/release-v0.1.21-2f855a?style=flat-square" alt="release" />
   <img src="https://img.shields.io/badge/electron-33-47848f?style=flat-square" alt="electron" />
   <img src="https://img.shields.io/badge/react-19-149eca?style=flat-square" alt="react" />
   <img src="https://img.shields.io/badge/tests-passing-38a169?style=flat-square" alt="tests" />
@@ -166,7 +166,7 @@ spike/           算法基线验证（移植期与原版交叉比对）
 - **时区口径**：数据时间为北京墙钟，全部换算走纯 UTC 算术（禁用设备本地时区解析）
 - **状态只落三值**：`sched` / `done` / `pp`，进行中状态运行时推导，避免落库状态与真实时间打架
 - **打包自检**：跨平台 node 脚本扫描产物内的相对 import 与运行时依赖，并断言本地签名直链与运行期缓存未入包；本地与 CI 共用同一份逻辑（开发环境是 mac，CI 是 Windows——验证脚本必须两边都能跑）
-- **测试即验收**：离线套件与联网检查分离——`npm run test:all` 不联网、不写盘，370+ 项断言串行跑完；`npm run test:online` 单独验证真实上游（含错配零容忍的直播源匹配回归）
+- **测试即验收**：离线套件与联网检查分离——`npm run test:all` 不联网、不写盘，380 项断言串行跑完；`npm run test:online` 单独验证真实上游（含错配零容忍的直播源匹配回归）
 
 详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
