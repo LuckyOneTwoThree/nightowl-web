@@ -24,6 +24,12 @@ export default function SplashScreen({
   // 退出阶段的 450ms 计时器：必须可清理 —— 父级在退出动画期间卸载本组件时，
   // 未清理的计时器会命中「卸载后 setState」并二次触发 onClose。
   const dismissTimerRef = useRef(null);
+  const skipBtnRef = useRef(null);
+
+  // 开屏期间背景已 inert，焦点必须落在唯一可操作元素上。
+  useEffect(() => {
+    skipBtnRef.current?.focus();
+  }, []);
 
   // 快捷跳过处理
   const handleDismiss = useCallback(() => {
@@ -115,9 +121,10 @@ export default function SplashScreen({
       {/* 顶部栏：右上角跳过按钮 */}
       <div className="relative z-10 flex w-full max-w-[1200px] items-center justify-end">
         <button
+          ref={skipBtnRef}
           type="button"
           onClick={handleDismiss}
-          className="group flex items-center gap-1.5 rounded-full border border-line-hairline bg-surface-card/60 px-3.5 py-1.5 text-xs text-text-secondary shadow-lg backdrop-blur-md transition-all hover:border-accent/40 hover:bg-surface-raised/80 hover:text-text-primary cursor-pointer"
+          className="group flex items-center gap-1.5 rounded-full border border-line-hairline bg-surface-card/60 px-3.5 py-1.5 text-xs text-text-secondary shadow-lg backdrop-blur-md transition-all hover:border-accent/40 hover:bg-surface-raised/80 hover:text-text-primary focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
         >
           <span>跳过</span>
           <span className="flex h-4 w-4 items-center justify-center rounded-full bg-accent/20 font-num text-2xs font-semibold text-accent group-hover:bg-accent/30">

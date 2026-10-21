@@ -127,10 +127,12 @@
   --text-primary-rgb: 242 245 249;
   --text-secondary: #bfc8d6;
   --text-secondary-rgb: 191 200 214;
-  --text-muted: #7d8899;
-  --text-muted-rgb: 125 136 153;
-  --text-faint: #7c8798;
-  --text-faint-rgb: 124 135 152;
+  /* 11px 元信息在 card/raised/press 上也要过 WCAG AA（4.5:1），
+     旧的 #7d8899/#7c8798 在 raised/press 上只有 3.9~4.48。 */
+  --text-muted: #94a0b2;
+  --text-muted-rgb: 148 160 178;
+  --text-faint: #8a95a6;
+  --text-faint-rgb: 138 149 166;
 
   /* ---- 品牌：全站唯一强调色。--accent-ink 是其上的文字色 ---- */
   --accent: #f5b942;
@@ -147,21 +149,21 @@
   --resource-rgb: 69 191 174;
   --warn: #e0a82e;
   --warn-rgb: 224 168 46;
-  --danger: #e0483c;
-  --danger-rgb: 224 72 60;
+  --danger: #f2776b;
+  --danger-rgb: 242 119 107;
 
   /* ---- 睡眠档位 S0→S4：单一连续色阶，独占 SleepBadge，与系统警告/错误彻底拉开色相 ----
      取代此前 emerald/teal/amber/orange/purple 五种互不相干的 Tailwind 色。 */
-  --tier-0: #35a06f;
-  --tier-0-rgb: 53 160 111;
+  --tier-0: #3fb37f;
+  --tier-0-rgb: 63 179 127;
   --tier-1: #6bb37a;
   --tier-1-rgb: 107 179 122;
   --tier-2: #d4a028;
   --tier-2-rgb: 212 160 40;
   --tier-3: #e88a3a;
   --tier-3-rgb: 232 138 58;
-  --tier-4: #c83d32;
-  --tier-4-rgb: 200 61 50;
+  --tier-4: #f07068;
+  --tier-4-rgb: 240 112 104;
 
   /* ---- 赛果三态：平局用中性灰而非琥珀色（琥珀与"警告"抢语义） ---- */
   --result-win: #35a06f;
@@ -216,6 +218,13 @@
   .no-drag {
     -webkit-app-region: no-drag;
   }
+
+  /* 全局键盘焦点兜底：自定义按钮（日期条、窗口按钮等）不一定自带 focus 样式。
+     组件自己的 ring 仍然是第一优先，这里只负责没有写 focus-visible 的元素。 */
+  :where(button, a, input, select, textarea, [role='button'], [role='tab'], [role='switch']):focus-visible {
+    outline: 2px solid rgb(var(--accent-rgb) / 0.72);
+    outline-offset: 2px;
+  }
 }
 
 @layer utilities {
@@ -235,6 +244,24 @@
   /* Hint / 浮层入场 */
   .hint-enter {
     animation: hint-enter 0.18s ease-out;
+  }
+
+  /* 横向日期条边缘渐隐：把「半截日期」变成有意为之的边界，同时不遮挡点击 */
+  .date-strip-mask {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 40px,
+      #000 calc(100% - 40px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 40px,
+      #000 calc(100% - 40px),
+      transparent 100%
+    );
   }
 
   /* 极细滚动条，颜色随 token */

@@ -1,7 +1,7 @@
 import { hm, liveMinute } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { ts, MATCH_DURATION_MS } from '../core/engine.js';
-import { Crest, Chip, LiveDot, ScoreText, SleepBadge, Stars } from './atoms.jsx';
+import { Crest, Chip, LiveDot, ScoreText, SleepBadge } from './atoms.jsx';
 import { IconDerby, IconWarn } from './icons.jsx';
 
 /**
@@ -30,7 +30,6 @@ export default function MatchRow({
   spoilerFree = true,
   revealed = false,
   onReveal,
-  star = null,
   rivalry = null,
   minefield = false
 }) {
@@ -83,7 +82,6 @@ export default function MatchRow({
             ) : (
               <SleepBadge match={m} compact />
             )}
-            {star != null && star >= 2 && <Stars star={star} />}
             {rivalry && (
               <span className="inline-flex min-w-0 items-center gap-1 text-2xs text-warn" title={rivalry}>
                 <IconDerby size={11} />

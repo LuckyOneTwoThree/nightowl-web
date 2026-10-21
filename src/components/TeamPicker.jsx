@@ -95,7 +95,13 @@ export default function TeamPicker({
 
       {/* 联赛分类 */}
       <div className="mt-2 flex flex-wrap gap-1">
-        <TogglePill on={league === 'ALL'} onClick={() => setLeague('ALL')} label="全部" count={teams.length} />
+        <TogglePill
+          on={league === 'ALL'}
+          onClick={() => setLeague('ALL')}
+          label="全部"
+          count={teams.length}
+          aria-label="全部联赛"
+        />
         {TABS.map(code => (
           <TogglePill
             key={code}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getFixtures, FOLLOWABLE_LEAGUES, LEAGUE_NAMES, leagueColor } from '../data/index.js';
 import { defaultPrefs } from '../core/prefs.js';
 import { summarizeSyncResponse } from '../core/sync-outcome.js';
@@ -37,6 +37,13 @@ export default function SettingsDrawer({
 }) {
   const leagueCount = prefs.followedLeagues.length;
   const bonusActive = leagueCount > 0 && leagueCount < 6;
+  const closeBtnRef = useRef(null);
+
+  // 抽屉打开时把焦点移进对话框：背景已 inert，若焦点留在原按钮上，
+  // 键盘用户会直接失去可见焦点。
+  useEffect(() => {
+    if (open) closeBtnRef.current?.focus();
+  }, [open]);
 
   const { health, refresh } = useServiceHealth(open);
 
@@ -187,6 +194,7 @@ export default function SettingsDrawer({
             </div>
           </div>
           <button
+            ref={closeBtnRef}
             type="button"
             onClick={onClose}
             aria-label="关闭设置"
@@ -216,7 +224,7 @@ export default function SettingsDrawer({
             <TeamPicker
               selected={prefs.followedTeams}
               onChange={v => patch({ followedTeams: v })}
-              gridClass="grid-cols-6"
+              gridClass="grid-cols-5"
               listClass="max-h-64"
             />
           </Fieldset>

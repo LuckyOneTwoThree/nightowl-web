@@ -83,6 +83,20 @@ export function humanCountdown(cd) {
   return hmsFromSeconds(cd.h * 3600 + cd.m * 60 + cd.s);
 }
 
+/**
+ * 倒计时 → 分钟精度："3 天 04:12" / "04:12"
+ *
+ * 左栏摘要用这个格式：它每 30 秒才随 App 时钟重算，显示秒会与
+ * 播放器内部的秒级倒计时出现肉眼可见的秒差（同一场比赛两个数字）。
+ */
+export function humanCountdownShort(cd) {
+  if (!cd) return '--';
+  if (cd.over) return '已开球';
+  const hh = pad2(cd.h);
+  const mm = pad2(cd.m);
+  return cd.d > 0 ? `${cd.d} 天 ${hh}:${mm}` : `${hh}:${mm}`;
+}
+
 /** 比赛进行分钟（从开球时间推导） */
 export function liveMinute(kickTs, nowTs) {
   const diff = nowTs - kickTs;

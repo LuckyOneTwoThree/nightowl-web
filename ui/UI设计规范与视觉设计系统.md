@@ -60,8 +60,8 @@
 | `line-control` | `rgba(255, 255, 255, 0.12)` | `border-line-control` | 控件描边、按钮边界、强分割线 |
 | `text-primary` | `#edf1f7` | `text-text-primary` | 主标题、队名、关键比分、最高层级文字 |
 | `text-secondary` | `#bfc8d6` | `text-text-secondary` | 正文、主要看点、常规可读文字 |
-| `text-muted` | `#7d8899` | `text-text-muted` | 次要说明、开球时刻、辅助元信息 |
-| `text-faint` | `#7c8798` | `text-text-faint` | 弱提示文字（在 `#0b0e15` 上对比度达 5.03:1，通过 WCAG AA） |
+| `text-muted` | `#94a0b2` | `text-text-muted` | 次要说明、开球时刻、辅助元信息（card/raised 上均 ≥ 5.3:1） |
+| `text-faint` | `#8a95a6` | `text-text-faint` | 弱提示文字（在 `#0b0e15` 上对比度 6.37:1；raised/press 上也 ≥ 4.68:1） |
 
 ### 2.3 品牌与语义状态色（Brand & Status Colors）
 
@@ -79,7 +79,7 @@
 | `live` | `#e2564f` | `text-live`, `bg-live` | **直播进行中**：实时红点（LiveDot）、进行中分钟数 |
 | `resource` | `#45bfae` | `text-resource`, `bg-resource` | **睡眠预算额度**：周视图预算条与额度占用专用色 |
 | `warn` | `#e0a82e` | `text-warn`, `bg-warn` | **系统警告**：德比对决弱警示、聚合源延迟 |
-| `danger` | `#e0483c` | `text-danger`, `bg-danger` | **系统危险/错误**：比赛延期、起播失败、熬夜重度代价预警 |
+| `danger` | `#f2776b` | `text-danger`, `bg-danger` | **系统危险/错误**：比赛延期、起播失败、熬夜重度代价预警 |
 
 ---
 
@@ -89,11 +89,11 @@
 
 | 档位 | 标签 | 成本 | 颜色 Token | 色值 (HEX) | 适用开球时间（北京时间） |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **S0** | `S0 零成本` | 0.0h | `tier-0` | `#35a06f` | 白天至 22:30 之前 |
+| **S0** | `S0 零成本` | 0.0h | `tier-0` | `#3fb37f` | 白天至 22:30 之前 |
 | **S1** | `S1 轻度` | 1.0h | `tier-1` | `#6bb37a` | 22:30–00:30 |
 | **S2** | `S2 黄金修仙` | 2.5h | `tier-2` | `#d4a028` | 00:30–02:30 黄金档 |
 | **S3** | `S3 重度` | 3.5h | `tier-3` | `#e88a3a` | 02:30–04:00 深夜死线档 |
-| **S4** | `S4 极限` | 4.5h | `tier-4` | `#c83d32` | 04:00–07:00 黎明档 |
+| **S4** | `S4 极限` | 4.5h | `tier-4` | `#f07068` | 04:00–07:00 黎明档 |
 
 > [!IMPORTANT]
 > **设计纪律铁律**：

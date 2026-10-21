@@ -39,7 +39,7 @@ import {
  *
  *   对阵标题也不再在这里重复一次 —— 主舞台顶部条是全应用唯一的对阵命名处。
  */
-export default function IntelPanel({ match, prefs, indexHint, intel: propIntel }) {
+export default function IntelPanel({ match, prefs, indexHint, intel: propIntel, isHeroMatch = false }) {
   const [tab, setTab] = useState('decision');
 
   const evalResult = useMemo(() => {
@@ -94,7 +94,7 @@ export default function IntelPanel({ match, prefs, indexHint, intel: propIntel }
         <div className="grid grid-cols-1 gap-x-0 gap-y-0 p-3.5 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
           <div className="space-y-3 lg:pr-6 lg:border-r lg:border-line-hairline">
             <SleepCostSection tier={tier} match={match} />
-            <NarrativeSection narrative={narrative} stories={stories} ev={ev} />
+            <NarrativeSection narrative={narrative} stories={stories} ev={ev} hideHeadline={isHeroMatch} />
           </div>
           <div className="space-y-3 pt-3 lg:pt-0 lg:pl-6">
             <IdentitySection match={match} identity={identity} />
@@ -215,7 +215,7 @@ function SleepCostSection({ tier, match }) {
   );
 }
 
-function NarrativeSection({ narrative, stories, ev }) {
+function NarrativeSection({ narrative, stories, ev, hideHeadline = false }) {
   /* 同屏去重：narrativeOf 的 L2 层会把故事线拼成「名：简介」塞进 lines，
      而本节下面又把同一批故事线渲染成 name / desc 列表 —— 一条内容出现两遍。
      这里只在渲染层过滤，数据层不动：lines 同时是 headline 的候选池，
@@ -229,6 +229,16 @@ function NarrativeSection({ narrative, stories, ev }) {
      而下面的列表又把同一条按 name / desc 渲染一遍 —— 整句原样出现两遍。
      同样只在渲染层处理：headline 与 lines 的候选池关系见上面的注释。 */
   const shownStories = stories.filter(s => `${s.name}：${s.desc}` !== narrative.headline);
+
+  // 当前选中的就是左栏 Hero 场次时，头条已经在 Hero 卡完整展示过；
+  // 这里只补充剩余线索，避免同一句话在左右两栏各出现一次。
+  const hasBody =
+    (!hideHeadline && narrative.headline) ||
+    rivalryShown ||
+    distinctLines.length > 0 ||
+    shownStories.length > 0 ||
+    !!narrative.trivia;
+  if (!hasBody) return null;
 
   return (
     <Block
@@ -247,7 +257,9 @@ function NarrativeSection({ narrative, stories, ev }) {
           {ev.rivalry}
         </p>
       )}
-      <p className="text-sm font-medium leading-snug text-text-primary">{narrative.headline}</p>
+      {!hideHeadline && (
+        <p className="text-sm font-medium leading-snug text-text-primary">{narrative.headline}</p>
+      )}
 
       {distinctLines.length > 0 && (
         <ul className="mt-1.5 space-y-1">
@@ -395,7 +407,7 @@ function FormSection({ match, stats }) {
             </div>
             {form.length > 0 && (
               <ul className="mt-1 space-y-0.5 pl-6">
-                {form.slice(0, 3).map(f => (
+                {form.map(f => (
                   <li key={f.matchId} className="flex items-baseline justify-between gap-2">
                     <span className="min-w-0 truncate text-2xs text-text-muted">
                       {f.isHome ? '主' : '客'} vs {teamName(f.opponent)}

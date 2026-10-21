@@ -59,7 +59,6 @@ export default function TonightView({
         spoilerFree={prefs.spoilerFree}
         revealed={revealed.has(m.id)}
         onReveal={onReveal}
-        star={ev.star}
         rivalry={ev.rivalry}
         minefield={minefieldIds.has(m.id)}
       />

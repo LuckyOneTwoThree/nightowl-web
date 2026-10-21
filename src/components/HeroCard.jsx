@@ -1,4 +1,4 @@
-import { hm, zhDate, weekdayOf, datePart, liveMinute, humanCountdown } from '../core/format.js';
+import { hm, zhDate, weekdayOf, datePart, liveMinute, humanCountdownShort } from '../core/format.js';
 import { teamName, leagueName, teamColor } from '../data/index.js';
 import { ts, sleepTier, countdown as engineCountdown } from '../core/engine.js';
 import { Button, Chip, Crest, Hint, LiveDot, Meta, SleepBadge, Stars } from './atoms.jsx';
@@ -52,7 +52,7 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
   if (!live && state === 'sched' && !m.tbd) {
     const ms = ts(m.t) - now;
     if (ms > 0 && ms < 24 * 3600000) {
-      countdownLabel = humanCountdown(engineCountdown(ts(m.t), now));
+      countdownLabel = humanCountdownShort(engineCountdown(ts(m.t), now));
     }
   }
 
@@ -109,12 +109,12 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
         </div>
       </div>
 
-      {/* 对阵舞台 */}
+      {/* 对阵舞台：队名独占整列宽度，避免 330px 左栏把「拜仁慕尼黑」截成「拜仁…」 */}
       <div className="relative mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
         {/* 主队 */}
-        <div className="flex min-w-0 flex-col items-end gap-1.5">
-          <Crest id={m.h} size={44} className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]" />
-          <span className="w-full truncate text-right text-base font-semibold text-text-primary" title={teamName(m.h)}>
+        <div className="flex min-w-0 flex-col items-center gap-1.5">
+          <Crest id={m.h} size={36} className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]" />
+          <span className="w-full truncate text-center text-sm font-semibold text-text-primary" title={teamName(m.h)}>
             {teamName(m.h)}
           </span>
           <span className="text-2xs text-text-faint">主队</span>
@@ -144,9 +144,9 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
         </div>
 
         {/* 客队 */}
-        <div className="flex min-w-0 flex-col items-start gap-1.5">
-          <Crest id={m.a} size={44} className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]" />
-          <span className="w-full truncate text-base font-semibold text-text-primary" title={teamName(m.a)}>
+        <div className="flex min-w-0 flex-col items-center gap-1.5">
+          <Crest id={m.a} size={36} className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]" />
+          <span className="w-full truncate text-center text-sm font-semibold text-text-primary" title={teamName(m.a)}>
             {teamName(m.a)}
           </span>
           <span className="text-2xs text-text-faint">客队</span>

@@ -29,7 +29,7 @@ function bucketOf(cost) {
 
 /** 背包规划要解释口径，但不该占版面 */
 const PLAN_HINT =
-  '零成本（S0）场次不进背包：它们不熬夜，随便看。背包只有 5 个名额，是「一晚只能看这么多」的上限，不是额度。';
+  '零成本（S0）场次不进背包：它们不熬夜，随便看。背包只有 5 个名额，是本周可安排的场次上限，不是睡眠额度。';
 
 /**
  * 本周视图（Week）
@@ -100,9 +100,9 @@ export default function WeekView({
             />
 
             <div className="mt-1 flex justify-between font-num text-2xs tabular-nums text-text-faint">
-              {['0h', 'S1 1h', 'S2 2.5h', 'S3 3.5h', 'S4 4.5h', '8h'].map(t => (
-                <span key={t}>{t}</span>
-              ))}
+              <span>0h</span>
+              <span>4h</span>
+              <span>8h</span>
             </div>
           </div>
         )}
@@ -158,6 +158,7 @@ export default function WeekView({
               <button
                 type="button"
                 onClick={() => setShowZero(v => !v)}
+                aria-expanded={showZero}
                 className="inline-flex items-center gap-1 text-2xs text-text-muted transition-colors hover:text-text-primary"
               >
                 {plan.zeroCount} 场
@@ -178,7 +179,6 @@ export default function WeekView({
                     spoilerFree={prefs.spoilerFree}
                     revealed={revealed.has(e.m.id)}
                     onReveal={onReveal}
-                    star={e.ev.star}
                     rivalry={e.ev.rivalry}
                   />
                 ))}
@@ -264,7 +264,7 @@ export default function WeekView({
         {plan.alt.length > 0 && (
           <Fieldset
             title="备选"
-            hint="落选原因通常是与已入选场次撞车（同一晚看不完）或成本偏高。"
+            hint="落选通常是因为本周名额或预算已满，或单场睡眠成本偏高。"
             right={<Meta num>{plan.alt.length}</Meta>}
           >
             <div className="space-y-0.5">
@@ -276,7 +276,7 @@ export default function WeekView({
                   className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-colors hover:bg-surface-raised"
                 >
                   <Meta num className="shrink-0">
-                    {zhDate(e.m.t.split('T')[0]).slice(5)} {e.m.t.split('T')[1]}
+                    {e.m.t.slice(5, 10).replace('-', '/')} {e.m.t.split('T')[1]}
                   </Meta>
                   <span className="min-w-0 flex-1 truncate text-xs text-text-secondary">
                     {teamName(e.m.h)} vs {teamName(e.m.a)}
@@ -359,7 +359,7 @@ function PickRow({ e, active, onSelect }) {
             {/* 入选理由只有一处需要解释，所以用文字而不是又一个胶囊 */}
             <span className="min-w-0 truncate text-2xs text-text-faint">{reason}</span>
             <Meta num className="ml-auto shrink-0">
-              {zhDate(m.t.split('T')[0]).slice(5)} · {sleepTier(m.t).cost}h
+              {m.t.slice(5, 10).replace('-', '/')} · {sleepTier(m.t).cost}h
             </Meta>
           </div>
         </div>

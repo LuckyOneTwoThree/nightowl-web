@@ -529,7 +529,7 @@ export default function PlayerStage({
   if (liveInfo?.tvChannelsDown?.length) {
     notices.push({
       tone: 'warn',
-      text: `官方直达失效：${liveInfo.tvChannelsDown.join('、')}（签名过期，刷新线路配置可恢复）`,
+      text: `官方直达暂不可用：${liveInfo.tvChannelsDown.join('、')}（签名已过期）。可改用下方官方平台。`,
       action: null
     });
   }
@@ -719,7 +719,7 @@ export default function PlayerStage({
 
       {lines.length > 0 ? (
         // 列数按容器实际宽度自适应；在桌面端作为 flex-1 弹性填充高度并支持顺畅滚动
-        <div className="scrollbar-thin -mr-1 mt-2.5 grid min-h-[80px] max-h-[220px] xl:max-h-none xl:flex-1 content-start gap-1.5 overflow-y-auto pr-1 [grid-template-columns:repeat(auto-fill,minmax(135px,1fr))]">
+        <div className="scrollbar-thin -mr-1 mt-2.5 grid min-h-[80px] max-h-[220px] xl:max-h-none xl:flex-1 content-start gap-1.5 overflow-y-auto pr-1 [grid-template-columns:1fr]">
           {lines.map(l => (
             <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={selectLine} />
           ))}

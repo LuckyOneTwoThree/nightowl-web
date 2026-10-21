@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { compareSemver } from '../core/semver.js';
 import { BrandLogo, Button, Chip, Meta } from './atoms.jsx';
 import { IconClose, IconWarn } from './icons.jsx';
@@ -26,6 +26,12 @@ export default function UpdateModal({
   onInstall
 }) {
   const isDesktop = !!window.desktop?.isDesktop;
+  const closeBtnRef = useRef(null);
+
+  // 弹窗打开时背景已 inert，焦点必须进入对话框，否则键盘用户会失去焦点。
+  useEffect(() => {
+    if (open) closeBtnRef.current?.focus();
+  }, [open]);
 
   // Web 回退状态（纯浏览器环境通过 GitHub API 探测）
   const [webCheck, setWebCheck] = useState({
@@ -139,6 +145,7 @@ export default function UpdateModal({
             </div>
           </div>
           <button
+            ref={closeBtnRef}
             type="button"
             onClick={onClose}
             aria-label="关闭"
@@ -187,7 +194,7 @@ export default function UpdateModal({
               {/* 更新日志区域 */}
               <div className="flex flex-col gap-1.5">
                 <span className="text-2xs font-medium text-text-muted">更新内容与修复：</span>
-                <div className="scrollbar-thin max-h-36 overflow-y-auto rounded-lg border border-line-hairline bg-stage-bg/60 p-3 text-2xs leading-relaxed text-text-secondary whitespace-pre-line font-num">
+                <div className="scrollbar-thin max-h-36 overflow-y-auto rounded-lg border border-line-hairline bg-stage-bg/60 p-3 text-2xs leading-relaxed text-text-secondary whitespace-pre-line font-body">
                   {releaseNotes}
                 </div>
               </div>

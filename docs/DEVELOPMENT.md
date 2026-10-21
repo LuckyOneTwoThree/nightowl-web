@@ -62,6 +62,7 @@ npm run test:sources       # 数据源健康度（联网）
 | `test:proxy-timeout` | 13 | 三层超时（响应头 / 流静默 / 排队） |
 | `test:alias` | 11+ | 离线别名结构与缓存映射（在线校验走 `test:online`） |
 | `test:sync-outcome` | 7 | 同步结果文案：写盘失败不得冒充「已经是最新」 |
+| `test:contrast` | 23 | Design token 对比度：文本 / danger / 五档徽章在 card/raised/press 上均 ≥ 4.5:1 |
 | `test:online` | — | `test:alias:online` + `check:sources` + `check:scraper`（联网） |
 
 ### 写测试时的三条纪律

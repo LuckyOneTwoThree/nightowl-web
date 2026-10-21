@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getFixtures, setFixtures, storylines } from './data/index.js';
 import { countdown as engineCountdown, ts, MATCH_DURATION_MS, sleepTier } from './core/engine.js';
-import { humanCountdown } from './core/format.js';
+import { humanCountdownShort } from './core/format.js';
 import { loadPrefs, savePrefs } from './core/prefs.js';
 import {
   computeTonight,
@@ -402,7 +402,7 @@ export default function App() {
   // 免得一个次要文本把整个 App 拖进秒级重渲染。
   const countdownText = useMemo(() => {
     if (!tonight.focal) return '--';
-    return humanCountdown(engineCountdown(ts(tonight.focal.m.t), clockTs));
+    return humanCountdownShort(engineCountdown(ts(tonight.focal.m.t), clockTs));
   }, [tonight.focal, clockTs]);
 
   const select = useCallback(id => setActiveMatchId(id), []);
@@ -415,27 +415,32 @@ export default function App() {
     window.history.replaceState(null, '', `?${sp.toString()}`);
   }, [view, activeMatchId]);
 
+  // 任一全屏浮层打开时，背景内容必须同时退出键盘焦点与点击（inert）。
+  // 只靠遮罩挡鼠标，Tab 仍会跑进后面的列表，这是真实的无障碍缺陷。
+  const overlayOpen = settingsOpen || onboardingOpen || updateModalOpen || splashOpen;
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden stage-atmosphere text-text-primary">
-      {/* TopBar 的时钟、PlayerStage 的倒计时各自内部按秒刷新，不走这里 */}
-      <TopBar
-        view={view}
-        onViewChange={setView}
-        liveCount={liveCount}
-        prefs={prefs}
-        onOpenSettings={() => setSettingsOpen(true)}
-        updateAvailable={updateAvailable}
-        updateVersion={updateState.info?.version}
-        onOpenUpdate={() => {
-          setUpdateModalOpen(true);
-          if (updateState.status === 'idle') handleCheckUpdate();
-        }}
-      />
+      <div className="flex min-h-0 flex-1 flex-col" inert={overlayOpen || undefined}>
+        {/* TopBar 的时钟、PlayerStage 的倒计时各自内部按秒刷新，不走这里 */}
+        <TopBar
+          view={view}
+          onViewChange={setView}
+          liveCount={liveCount}
+          prefs={prefs}
+          onOpenSettings={() => setSettingsOpen(true)}
+          updateAvailable={updateAvailable}
+          updateVersion={updateState.info?.version}
+          onOpenUpdate={() => {
+            setUpdateModalOpen(true);
+            if (updateState.status === 'idle') handleCheckUpdate();
+          }}
+        />
 
-      {/* 主工作区：左栏黄金比例（320-340px） + 右栏核心主舞台（~75%） */}
-      <main className="flex min-h-0 flex-1 overflow-hidden">
-        {/* 左栏：决策与列表 */}
-        <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] shrink-0 flex-col overflow-hidden border-r border-line-hairline bg-surface-panel p-3.5 shadow-card">
+        {/* 主工作区：左栏黄金比例（330-390px） + 右栏核心主舞台（~75%） */}
+        <main className="flex min-h-0 flex-1 overflow-hidden">
+          {/* 左栏：决策与列表 */}
+          <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] 2xl:w-[390px] shrink-0 flex-col overflow-hidden border-r border-line-hairline bg-surface-panel p-3.5 shadow-card">
           {view === 'tonight' && (
             <TonightView
               tonight={tonight}
@@ -476,31 +481,38 @@ export default function App() {
               onReveal={reveal}
             />
           )}
-        </section>
+          </section>
 
-        {/* 右栏：观赛大屏 + 情报 + 下方模块区。
+          {/* 右栏：观赛大屏 + 情报 + 下方模块区。
             上半（播放器 + 熬夜看点/双方数据）保持原有纵向排布；
             下半新增模块区：双方后续赛程 & 同夜推荐 —— 宽屏并排两列、窄屏堆叠，
             把全屏时下方的空白用真正有决策价值的信息填满。 */}
-        <section className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto bg-app p-4">
-          <div className="mx-auto flex w-full max-w-[1800px] 2xl:max-w-full flex-col gap-3">
-            <PlayerStage
-              match={activeMatch}
-              state={activeMatch ? stateOf(activeMatch, clockTs) : 'sched'}
-              intel={activeIntel}
-              isOverlayOpen={settingsOpen || onboardingOpen}
-              spoilerFree={prefs.spoilerFree}
-              revealed={activeMatch ? revealed.has(activeMatch.id) : false}
-              onReveal={reveal}
-            />
-            <IntelPanel match={activeMatch} prefs={prefs} intel={activeIntel} indexHint={INDEX_HINT} />
-            <div className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-2">
-              <UpcomingFixtures match={activeMatch} prefs={prefs} />
-              <SameNightPicks match={activeMatch} prefs={prefs} onSelect={select} />
+          <section className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto bg-app p-4">
+            <div className="mx-auto flex w-full max-w-[1800px] 2xl:max-w-full flex-col gap-3">
+              <PlayerStage
+                match={activeMatch}
+                state={activeMatch ? stateOf(activeMatch, clockTs) : 'sched'}
+                intel={activeIntel}
+                isOverlayOpen={overlayOpen}
+                spoilerFree={prefs.spoilerFree}
+                revealed={activeMatch ? revealed.has(activeMatch.id) : false}
+                onReveal={reveal}
+              />
+              <IntelPanel
+                match={activeMatch}
+                prefs={prefs}
+                intel={activeIntel}
+                indexHint={INDEX_HINT}
+                isHeroMatch={!!tonight.hero && activeMatch?.id === tonight.hero.m.id}
+              />
+              <div className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-2">
+                <UpcomingFixtures match={activeMatch} prefs={prefs} />
+                <SameNightPicks match={activeMatch} prefs={prefs} onSelect={select} />
+              </div>
             </div>
-          </div>
-        </section>
-      </main>
+          </section>
+        </main>
+      </div>
 
       <SettingsDrawer
         open={settingsOpen}
@@ -539,7 +551,7 @@ export default function App() {
       />
 
       {/* 发现新版本时的轻量主动浮动提醒（避免用户不知道有更新） */}
-      {updateAvailable && !toastDismissed && !updateModalOpen && (
+      {updateAvailable && !toastDismissed && !updateModalOpen && !settingsOpen && !onboardingOpen && !splashOpen && (
         <aside
           aria-label="版本更新提醒"
           className="fixed bottom-5 right-5 z-modal flex max-w-sm items-center gap-3 rounded-xl border border-accent/40 bg-surface-card/95 p-3.5 shadow-pop backdrop-blur-xl transition-all duration-300"

@@ -222,6 +222,7 @@ export default function ScheduleView({
             type="date"
             value={showAll ? '' : selDate}
             onChange={e => e.target.value && setDate(e.target.value)}
+            tabIndex={-1}
             className="sr-only"
           />
           <button
@@ -242,11 +243,13 @@ export default function ScheduleView({
         </div>
       </div>
 
-      {/* 日期横向滚动导航条（过去 14 天到未来 28 天，安全内边距杜绝边缘裁剪，自动居中当前日期） */}
-      <div
-        ref={stripRef}
-        className="scrollbar-thin flex items-stretch gap-1.5 overflow-x-auto rounded-lg border border-line-hairline bg-surface-panel/80 p-1.5 shadow-card backdrop-blur-sm"
-      >
+      {/* 日期横向滚动导航条（过去 14 天到未来 28 天，自动居中当前日期）。
+          居中滚动必然会在边缘留下半截日期，用左右渐隐把「截断」变成有意为之的边界。 */}
+      <div className="relative">
+        <div
+          ref={stripRef}
+          className="date-strip-mask scrollbar-thin flex items-stretch gap-1.5 overflow-x-auto rounded-lg border border-line-hairline bg-surface-panel/80 p-1.5 shadow-card backdrop-blur-sm"
+        >
         {dayStrip.map(item => {
           const active = !showAll && item.date === selDate;
           const label = item.isToday
@@ -290,6 +293,7 @@ export default function ScheduleView({
           type="button"
           ref={showAll ? activeBtnRef : null}
           onClick={() => setDate('all')}
+          aria-label="全季赛程"
           aria-pressed={showAll}
           className={`shrink-0 rounded-md border px-2.5 py-1 font-body text-2xs transition-all ${
             showAll
@@ -299,6 +303,7 @@ export default function ScheduleView({
         >
           全部
         </button>
+        </div>
       </div>
 
       {/* 联赛筛选：色条即 MatchRow 的联赛身份条，两处同一颜色即同一联赛 */}
@@ -309,6 +314,7 @@ export default function ScheduleView({
           label="全部"
           count={total}
           hint={LEAGUE_HINT}
+          aria-label="全部联赛"
         />
         {LEAGUE_ORDER.map(code => (
           <TogglePill
@@ -343,7 +349,9 @@ export default function ScheduleView({
             hint="开启后已赛场次只给「揭晓」入口，不直接显示比分"
           />
         </div>
-        <Meta num>命中 {matchCount.toLocaleString()} 场</Meta>
+        <Meta num>
+          {showAll ? `全季命中 ${matchCount.toLocaleString()} 场` : `当日 ${dayMatchCount} 场`}
+        </Meta>
       </div>
 
       {/* 列表区：date 模式按联赛分组渲染当日；all 模式虚拟滚动全季 */}
@@ -403,7 +411,6 @@ export default function ScheduleView({
                           spoilerFree={prefs.spoilerFree}
                           revealed={revealed.has(m.id)}
                           onReveal={onReveal}
-                          star={ev.star}
                           rivalry={ev.rivalry}
                         />
                       </div>
@@ -461,7 +468,6 @@ export default function ScheduleView({
                     spoilerFree={prefs.spoilerFree}
                     revealed={revealed.has(m.id)}
                     onReveal={onReveal}
-                    star={ev.star}
                     rivalry={ev.rivalry}
                   />
                 </div>
