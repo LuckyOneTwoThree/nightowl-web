@@ -165,6 +165,7 @@ export default function ScheduleView({
           value={filters.query}
           onChange={e => set({ query: e.target.value })}
           placeholder="搜索球队 / 联赛 / 场次 ID"
+          aria-label="搜索球队、联赛或场次 ID"
           className="w-full rounded-lg border border-line-control bg-surface-card py-1.5 pl-8 pr-8 text-xs text-text-primary placeholder:text-text-faint transition-all focus:border-accent/50 focus:bg-surface-raised focus:outline-none shadow-card"
         />
         {filters.query && (
@@ -187,6 +188,7 @@ export default function ScheduleView({
             type="button"
             onClick={() => stepDate(-1)}
             title="前一天"
+            aria-label="前一天"
             className="inline-flex h-6.5 w-6.5 items-center justify-center rounded-md border border-line-control bg-surface-raised text-text-secondary shadow-card transition-all hover:border-accent/40 hover:bg-surface-press hover:text-text-primary"
           >
             <IconChevronLeft size={12} />
@@ -198,6 +200,7 @@ export default function ScheduleView({
             type="button"
             onClick={() => stepDate(1)}
             title="后一天"
+            aria-label="后一天"
             className="inline-flex h-6.5 w-6.5 items-center justify-center rounded-md border border-line-control bg-surface-raised text-text-secondary shadow-card transition-all hover:border-accent/40 hover:bg-surface-press hover:text-text-primary"
           >
             <IconChevronRight size={12} />
@@ -231,6 +234,7 @@ export default function ScheduleView({
               }
             }}
             title="按日历选择日期"
+            aria-label="按日历选择日期"
             className="inline-flex h-6.5 w-6.5 items-center justify-center rounded-md border border-line-control bg-surface-raised text-text-muted shadow-card transition-all hover:border-accent/40 hover:bg-surface-press hover:text-text-primary"
           >
             <IconCalendar size={12} />

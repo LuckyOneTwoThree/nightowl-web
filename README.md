@@ -10,7 +10,7 @@
   <br />
 
   <img src="https://img.shields.io/badge/platform-Windows-2b6cb0?style=flat-square" alt="platform" />
-  <img src="https://img.shields.io/badge/release-v0.1.19-2f855a?style=flat-square" alt="release" />
+  <img src="https://img.shields.io/badge/release-v0.1.20-2f855a?style=flat-square" alt="release" />
   <img src="https://img.shields.io/badge/electron-33-47848f?style=flat-square" alt="electron" />
   <img src="https://img.shields.io/badge/react-19-149eca?style=flat-square" alt="react" />
   <img src="https://img.shields.io/badge/tests-passing-38a169?style=flat-square" alt="tests" />
@@ -110,7 +110,7 @@
 前往 [Releases](../../releases/latest) 下载 `NightOwl-Terrace-Setup-<版本>.exe` 安装。
 
 - 系统要求：Windows 10 / 11（x64）
-- 首次启动会播放一次开屏动画（可跳过）
+- 首次安装启动会播放一次开屏动画（可跳过，设置中可回放）
 - **比分自动保鲜**：启动后会自动拉取最新比分，无需手动操作；数据更新时间与待录场次可在「设置 → 数据与服务」查看
 - 应用内更新：从 v0.1.8 起，新版本会在应用内提示并支持一键下载安装
 

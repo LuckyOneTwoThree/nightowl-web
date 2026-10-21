@@ -98,6 +98,7 @@ export default function SplashScreen({
   return (
     <div
       role="dialog"
+      aria-modal="true"
       aria-label="夜猫看台开屏画面"
       className={`fixed inset-0 z-splash flex flex-col items-center justify-between overflow-hidden select-none bg-stage-bg px-6 py-8 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
         phase === 'exit'

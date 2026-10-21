@@ -212,10 +212,12 @@ export default function App() {
     }
   }, []);
 
-  // 开屏动画：首次会话展示（避免每次刷新都强行阻断），并支持在设置中主动回放
+  // 开屏动画：只在首次安装启动时展示；之后可在设置中主动回放。
+  // 用 localStorage 而不是 sessionStorage —— 常驻桌面工具每次启动都阻断 2 秒
+  // 与「3 秒决策」的产品目标相冲突。
   const [splashOpen, setSplashOpen] = useState(() => {
     try {
-      return sessionStorage.getItem('nightowl:splash_shown') !== '1';
+      return localStorage.getItem('nightowl:splash_shown') !== '1';
     } catch {
       return true;
     }
@@ -224,7 +226,7 @@ export default function App() {
   const handleCloseSplash = useCallback(() => {
     setSplashOpen(false);
     try {
-      sessionStorage.setItem('nightowl:splash_shown', '1');
+      localStorage.setItem('nightowl:splash_shown', '1');
     } catch {}
   }, []);
 

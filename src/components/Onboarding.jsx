@@ -73,14 +73,21 @@ export default function Onboarding({ open, prefs, onPrefsChange, onClose }) {
     });
 
   return (
-    <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/70 p-6">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="onboarding-title"
+      className="fixed inset-0 z-modal flex items-center justify-center bg-black/70 p-6"
+    >
       <div className="flex max-h-[86vh] w-[580px] flex-col overflow-hidden rounded-2xl border border-line-hairline bg-surface-panel shadow-pop">
         {/* 头部 */}
         <div className="flex items-center justify-between border-b border-line-hairline px-6 py-4">
           <div className="flex items-center gap-3">
             <BrandLogo size={36} rounded="xl" withGlow />
             <div>
-              <h2 className="font-headline text-lg font-semibold text-text-primary">欢迎来到夜猫看台</h2>
+              <h2 id="onboarding-title" className="font-headline text-lg font-semibold text-text-primary">
+                欢迎来到夜猫看台
+              </h2>
               <Meta className="mt-0.5 block">
                 第 {step} / 2 步 · {step === 1 ? '选主队' : '选关注联赛与熬夜额度'}
               </Meta>

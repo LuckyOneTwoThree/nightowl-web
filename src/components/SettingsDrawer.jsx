@@ -21,8 +21,6 @@ const LEAGUE_RULE =
 const FOLLOWED_TEAM_RULE =
   '主队与客队任一方命中即视为「主队出战」：进入今晚之选的高优先区，并在背包规划里预算内必保。';
 
-const NOTIFY_NOTE = '依赖桌面外壳（P5），当前只保存偏好，不会真的弹系统通知。';
-
 const SERVICE_RULE =
   '本机单机产品：赛程与算法只读本地快照，不联网也能完整使用；直播代理与比分保鲜需要本地服务在跑。';
 
@@ -166,6 +164,9 @@ export default function SettingsDrawer({
 
       {/* 抽屉 */}
       <aside
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
         className={`fixed right-0 top-0 z-drawer flex h-full w-[480px] flex-col border-l border-line-hairline bg-surface-panel shadow-pop transition-transform duration-200 ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
@@ -179,7 +180,9 @@ export default function SettingsDrawer({
           <div className="flex items-center gap-2.5">
             <BrandLogo size={24} rounded="md" />
             <div>
-              <h2 className="font-headline text-base font-semibold text-text-primary">偏好与数据</h2>
+              <h2 id="settings-title" className="font-headline text-base font-semibold text-text-primary">
+                偏好与数据
+              </h2>
               <Meta className="mt-0.5 block">决定推荐排序与背包规划的输入</Meta>
             </div>
           </div>
@@ -276,12 +279,6 @@ export default function SettingsDrawer({
                 hint="防剧透：列表与情报面板都只给「揭晓」入口，点开才显示比分。"
                 on={prefs.spoilerFree}
                 onChange={v => patch({ spoilerFree: v })}
-              />
-              <SwitchRow
-                label="赛前 15 分钟系统通知"
-                hint={NOTIFY_NOTE}
-                on={prefs.notifyBefore15}
-                onChange={v => patch({ notifyBefore15: v })}
               />
             </div>
           </Fieldset>
