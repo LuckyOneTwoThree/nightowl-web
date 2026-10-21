@@ -87,6 +87,9 @@ export async function fetchLeague(league, dateOrDates, opts = {}) {
 
       const state = mapState(e.status?.type);
       const ok = v => (v != null && v !== '' ? String(v) : null);
+      // 进行中比分只给 /api/live 的实时视图用；planPatches 在读取比分前就跳过 live，
+      // st 三态铁律不受影响。
+      const hasScore = state === 'done' || state === 'live';
 
       out.push({
         league,
@@ -95,10 +98,17 @@ export async function fetchLeague(league, dateOrDates, opts = {}) {
         kickoff,
         kickoffTrusted: true, // ESPN 的 date 含时区，已换算为北京墙钟，可信
         state,
-        homeScore: state === 'done' ? ok(home.score) : null,
-        awayScore: state === 'done' ? ok(away.score) : null,
+        homeScore: hasScore ? ok(home.score) : null,
+        awayScore: hasScore ? ok(away.score) : null,
         source: id,
-        raw: { id: e.id, name: e.name }
+        raw: {
+          id: e.id,
+          name: e.name,
+          status: e.status?.type?.name || null,
+          displayClock: e.status?.displayClock || null,
+          detail: e.status?.type?.detail || null,
+          completed: e.status?.type?.completed === true
+        }
       });
     }
   }

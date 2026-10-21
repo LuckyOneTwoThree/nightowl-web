@@ -1,0 +1,73 @@
+{
+  "_readme": "TheSportsDB 队名 → 本队 id 的人工补充。只补归一化/同联赛唯一包含仍失败的写法；宁缺勿错，不要用跨队包含猜。已合并 openfootball-alias.json。",
+  "byLeague": {
+    "PL": {
+      "Brighton & Hove Albion": "BHA",
+      "Brighton and Hove Albion": "BHA"
+    },
+    "PD": {
+      "Athletic Club": "ATH",
+      "Club Atlético de Madrid": "ATM",
+      "Atleti": "ATM",
+      "Deportivo de A Coruña": "DEP",
+      "Racing de Santander": "RAC",
+      "RC Celta de Vigo": "CEL",
+      "Celta de Vigo": "CEL",
+      "Real Betis Balompié": "BET",
+      "Real Sociedad de Fútbol": "RSO",
+      "Rayo Vallecano de Madrid": "RAY",
+      "RCD Espanyol de Barcelona": "ESP"
+    },
+    "SA": {
+      "Inter": "INT",
+      "AC Milan": "MIL",
+      "AS Roma": "ROM",
+      "SSC Napoli": "NAP",
+      "SS Lazio": "LAZ",
+      "ACF Fiorentina": "FIO",
+      "Atalanta BC": "ATA",
+      "Bologna FC 1909": "BOL",
+      "Torino FC": "TOR",
+      "Udinese Calcio": "UDI",
+      "Genoa CFC": "GEN",
+      "Cagliari Calcio": "CAG",
+      "Parma Calcio 1913": "PAR",
+      "Como 1907": "COM",
+      "US Lecce": "LEC",
+      "US Sassuolo": "SAS",
+      "Frosinone Calcio": "FRO",
+      "Venezia FC": "VEN",
+      "AC Monza": "MZA"
+    },
+    "BL": {
+      "FC Bayern München": "FCB",
+      "Bayern München": "FCB",
+      "Bayer 04 Leverkusen": "B04",
+      "1. FC Köln": "KOE",
+      "1. FSV Mainz 05": "MAI",
+      "1. FC Union Berlin": "FCU",
+      "TSG 1899 Hoffenheim": "TSG",
+      "SC Paderborn 07": "SCP",
+      "SV 07 Elversberg": "ELV"
+    },
+    "FL": {
+      "Olympique de Marseille": "OM",
+      "Olympique Lyonnais": "OL",
+      "AS Monaco": "MCO",
+      "LOSC Lille": "LIL",
+      "OGC Nice": "NIC",
+      "RC Lens": "LEN",
+      "RC Strasbourg Alsace": "STR",
+      "Stade Rennais": "REN",
+      "Toulouse FC": "TOU",
+      "Stade Brestois 29": "BRT",
+      "AJ Auxerre": "AUX",
+      "Angers SCO": "ANG",
+      "Le Havre AC": "HAV",
+      "FC Lorient": "LOR",
+      "ESTAC Troyes": "TRO",
+      "Le Mans FC": "LEM",
+      "Paris SG": "PSG"
+    }
+  }
+}

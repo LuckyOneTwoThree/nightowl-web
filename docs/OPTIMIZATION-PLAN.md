@@ -504,3 +504,89 @@ openfootball 改用 `tz.mjs` 后，`normalize.js` 的 `localPartsToWall` 再无�
 - `tools/check-contrast.mjs` **23 项全过**（文本 / danger / 五档徽章在 card/raised/press 上均 ≥ 4.5:1）。
 - `inert` 实测：设置打开时 `main` 最近祖先带 `inert`，焦点落在「关闭设置」。
 - 离线套件 **403 项断言全过**；构建通过。
+
+---
+
+## 九、回放与实时比分（2026-10-21）· v0.1.23
+
+### 背景
+
+用户提出「能否增加比赛回放能力，回放视频源是否能找到」。先做了源头验证，再按
+「先集锦、后实时比分」的顺序落地。
+
+### 源头结论
+
+- **全场回放**：没有合法、免费、稳定、可内嵌的公开视频源。版权方平台（咪咕、
+  爱奇艺体育、腾讯体育、央视频、UEFA.tv 等）有回放，但需要登录/会员/地区权限，
+  且没有按场次的公开 API。聚合站有回放入口，但属未授权内容，不接入。
+- **赛后集锦**：可行。TheSportsDB 的 `strVideo` 对五大联赛已完赛场次覆盖良好：
+  抽样 5 轮 48 场，48 场都有链接；48 条全部是 YouTube，45 条 oEmbed 可解析，
+  3 条需要外链兜底。联网复检五大联赛各取最近一场完赛，**5/5 命中且 0 错配**。
+- **UCL**：TheSportsDB 有比赛但 `strVideo` 为空；UEFA 官方比赛 API 也没有视频字段。
+  UCL 集锦回退到官方平台深链，不假装有数据。
+
+实测的国内官方入口：
+
+| 平台 | 回放搜索模板 | 实测 |
+| :--- | :--- | :--- |
+| 央视频 | `yangshipin.cn/search?keyword={q}` | 200 |
+| 咪咕 | `miguvideo.com/mgs/website/prd/search.html?keyword={q}` | 200（JS 渲染，只跳转） |
+| 爱奇艺 | `so.iqiyi.com/so/q_{q}` | 200 |
+| CCTV | `search.cctv.com/search.php?qtext={q}` | 200 |
+| 腾讯体育 | 未找到稳定搜索入口 | 保留首页 |
+
+### 实施
+
+#### P1 赛后集锦
+
+- 新增 `server/highlights.js`：
+  - 按联赛/轮次查 TheSportsDB，按双方队名 + 日期 ±2 天匹配；
+  - 队名三级解析：归一化全等 → 显式别名 → 同联赛唯一包含；歧义返回空，不猜；
+  - 只接受 `youtube.com/watch?v=` / `youtu.be` 规范地址，其他 URL 一律丢弃；
+  - 缓存 7 天（无视频 1 小时），落在用户数据目录 `highlights.json`；
+  - 失败返回 `ok:false`，不阻塞主界面。
+- 新增 `GET /api/highlights?matchId=...`：只对 `st='done'` 的场次查询。
+- 新增 `server/highlights-alias.json`，补 TheSportsDB 特有写法
+  （如 `Deportivo de A Coruña`、`Racing de Santander`、`Bayer 04 Leverkusen`）。
+- UI：
+  - 终场右栏新增「官方集锦」，默认系统浏览器打开，不内嵌、不代理；
+  - 未揭晓比分时不请求、不展示标题（集锦标题会剧透）；
+  - 官方平台入口在终场切换为「官方回放」，搜索词为「主队 客队 回放」；
+  - 聚合导航（直播吧）不再混入「官方回放」列表。
+
+#### P1 实时比分与关键事件
+
+- 新增 `server/live.js`：
+  - ESPN scoreboard 拿比分/状态/时钟，summary 的 `keyEvents` 拿进球/红黄牌；
+  - 缓存 20 秒（终场 60 秒），并发请求复用；
+  - summary 失败时降级为 scoreboard 的比分/分钟，事件为空，不编造；
+  - 不写 fixtures，`st` 仍只有 `sched/done/pp`。
+- `server/sources/espn.js` 的 `fetchLeague` 为进行中事件补比分与
+  `status/displayClock/detail`；`planPatches` 仍会在读取比分前跳过 live，铁律不变。
+- 新增 `GET /api/live?matchId=...`。
+- UI：
+  - 进行中右栏显示实时比分、准确分钟、最近 4 条进球/红黄牌；
+  - 视频画面与顶栏同步比分，受防剧透开关控制；
+  - 30 秒轮询 + 手动刷新；失败静默降级为本地分钟数；
+  - 终场后收起直播线路，避免把回放/下一场误当直播。
+
+### 验证
+
+| 项目 | 结果 |
+| :--- | :--- |
+| 离线套件 | **494 项断言全过**（v0.1.22 的 403 + 集锦 53 + 实时 38） |
+| 集锦联网复检 | 五大联赛 **5/5** 命中，**0** 错配 |
+| 实时联网复检 | 2 场最近完赛比分与本地一致，keyEvents 正常 |
+| 官方源检查 | 16 项全过（含新增回放模板） |
+| 构建 | Vite 通过；主包 635.78KB（gzip 155.77KB），Player 717.73KB |
+| UI 复核 | 1440×900 / 1120×700；集锦隐藏/揭晓、实时隐藏/揭晓均无控制台错误 |
+
+### 已知边界
+
+- UCL 暂无集锦索引；终场只给官方平台回放深链。
+- TheSportsDB 免费 key 30 请求/分钟（请求间隔按 2.2 秒保守限流）；默认 key `123`
+  可被限流。付费 key 用环境变量 `THESPORTSDB_KEY` 或 `server/highlights.local.json`
+  覆盖，不要写进 `rules.json`（会随安装包分发）；失败时 UI 明确降级。
+- 国内网络下 YouTube 可能不可达，此时以咪咕/央视频/爱奇艺/CCTV 深链为主路径。
+- 官方回放深链是站内搜索结果，不是直达播放页；平台登录/会员/地区限制由平台决定。
+- 集锦默认外链，不内嵌 YouTube iframe；因此不触碰现有严格 CSP，也不引入远程脚本。

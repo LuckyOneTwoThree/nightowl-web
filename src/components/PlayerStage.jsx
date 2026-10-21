@@ -3,6 +3,9 @@ import { hm, zhDate, weekdayOf, datePart, liveMinute, humanCountdown } from '../
 import { teamName, teamColor, leagueName } from '../data/index.js';
 import { ts, countdown as engineCountdown } from '../core/engine.js';
 import { Button, Crest, Hint, IconButton, LiveDot, Meta, SectionLabel } from './atoms.jsx';
+import HighlightsPanel from './HighlightsPanel.jsx';
+import LiveMatchPanel from './LiveMatchPanel.jsx';
+import { sourceUrlFor } from '../core/watch-sources.js';
 import {
   IconCalendar,
   IconCheck,
@@ -33,7 +36,8 @@ const FALLBACK_SOURCES = [
     name: '央视频',
     kind: 'deeplink',
     homeUrl: 'https://yangshipin.cn/',
-    searchTemplate: 'https://yangshipin.cn/search?keyword={q}'
+    searchTemplate: 'https://yangshipin.cn/search?keyword={q}',
+    replayTemplate: 'https://yangshipin.cn/search?keyword={q}'
   },
   { id: 'zhibo8', name: '直播吧', kind: 'portal', homeUrl: 'https://www.zhibo8.com/', searchTemplate: null }
 ];
@@ -57,13 +61,6 @@ function useWatchSources() {
     };
   }, []);
   return sources;
-}
-
-export function sourceUrlFor(src, match) {
-  if (src.searchTemplate && match) {
-    return src.searchTemplate.replace('{q}', encodeURIComponent(teamName(match.h)));
-  }
-  return src.homeUrl;
 }
 
 const SHORTCUT_HINT =
@@ -126,18 +123,24 @@ const LineButton = memo(function LineButton({ l, compact = false, active, onSele
   );
 });
 
-function OfficialLinks({ sources, match, limit = 99 }) {
+function OfficialLinks({ sources, match, limit = 99, replay = false }) {
+  // 回放只列真正有回放搜索模板的官方平台；聚合导航（直播吧）不冒充“官方回放”
+  const list = replay ? sources.filter(s => s.replayTemplate) : sources;
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {sources.slice(0, limit).map(s => {
-        const url = sourceUrlFor(s, match);
+      {list.slice(0, limit).map(s => {
+        const url = sourceUrlFor(s, match, { replay });
         return (
           <a
             key={s.id}
             href={url}
             target="_blank"
             rel="noreferrer noopener"
-            title={s.note || s.homeUrl}
+            title={
+              replay && match
+                ? `搜索官方回放：${teamName(match.h)} vs ${teamName(match.a)}`
+                : s.note || s.homeUrl
+            }
             onClick={e => {
               if (window.desktop?.openExternal && url) {
                 e.preventDefault();
@@ -199,7 +202,7 @@ function LineEmptyState({ loading, state, isNearKickoff, scrapeError, onRefresh 
         </span>
         <p className="text-xs font-medium text-text-primary">比赛已终场</p>
         <p className="mt-1 text-2xs leading-relaxed text-text-muted max-w-[210px]">
-          直播已关闭，可通过下方官方平台查看录像与精彩集锦
+          直播已关闭，可在右栏查看官方集锦，或去官方平台搜索本场回放
         </p>
       </div>
     );
@@ -313,6 +316,10 @@ export default function PlayerStage({
   const [activeLineId, setActiveLineId] = useState(null);
   const [liveInfo, setLiveInfo] = useState(null);
 
+  const [liveData, setLiveData] = useState(null);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveRefreshing, setLiveRefreshing] = useState(false);
+
   // 宽屏模式下紧凑单行精选线路（激活线路必在视野内，最多 3 条以确保严格单行不换行）
   const visibleTheaterLines = useMemo(() => {
     if (theaterLinesExpanded || lines.length <= 3) return lines;
@@ -368,6 +375,43 @@ export default function PlayerStage({
 
   const activeLineIdRef = useRef(activeLineId);
   activeLineIdRef.current = activeLineId;
+
+  const liveDataRef = useRef(liveData);
+  liveDataRef.current = liveData;
+
+  /**
+   * 拉取实时比分/事件
+   *
+   * 只在进行中调用；失败不弹错、不阻塞播放——本地分钟数仍是兜底。
+   * 服务端 20 秒缓存，前端 30 秒轮询，不会把 ESPN 打爆。
+   */
+  const loadLive = useCallback(async ({ manual = false } = {}) => {
+    const current = matchRef.current;
+    if (!current || stateRef.current !== 'live') return;
+
+    if (!liveDataRef.current) setLiveLoading(true);
+    if (manual) setLiveRefreshing(true);
+
+    try {
+      const refresh = manual ? '&refresh=1' : '';
+      const res = await fetch(
+        `/api/live?matchId=${encodeURIComponent(current.id)}${refresh}`
+      );
+      if (!res.ok) throw new Error(String(res.status));
+      const j = await res.json();
+      if (matchRef.current?.id !== current.id || stateRef.current !== 'live') return;
+      setLiveData(j?.ok ? j : null);
+    } catch {
+      if (matchRef.current?.id === current.id && stateRef.current === 'live') {
+        setLiveData(null);
+      }
+    } finally {
+      if (matchRef.current?.id === current.id) {
+        setLiveLoading(false);
+        setLiveRefreshing(false);
+      }
+    }
+  }, []);
 
   /**
    * 拉取/刷新直播线路
@@ -425,11 +469,19 @@ export default function PlayerStage({
     [selectLine, stopPlayback]
   );
 
-  // 切换场次时全量重置并拉取
+  // 切换场次时全量重置并拉取；已完赛场次不再抓直播源，避免把回放/下一场当成直播。
+  // 只依赖 match.id：比赛进行中同步为 done 时不要重跑本 effect，否则会中断正在看的画面。
   useEffect(() => {
     if (!match?.id) return;
+    if (match.st === 'done') {
+      stopPlayback();
+      setLines([]);
+      setLiveInfo(null);
+      setTheaterLinesExpanded(false);
+      return;
+    }
     fetchLines({ reset: true, autoPlay: true });
-  }, [match?.id, fetchLines]);
+  }, [match?.id, fetchLines, stopPlayback]);
 
   // 开球瞬间（由 sched 转换为 live 时）自动探测最新推流并起播
   const prevStateRef = useRef(state);
@@ -439,6 +491,19 @@ export default function PlayerStage({
     }
     prevStateRef.current = state;
   }, [state, fetchLines]);
+
+  // 进行中：每 30 秒拉一次比分/关键事件；切场或终场立即停
+  useEffect(() => {
+    if (!match?.id || state !== 'live') {
+      setLiveData(null);
+      setLiveLoading(false);
+      setLiveRefreshing(false);
+      return undefined;
+    }
+    loadLive();
+    const timer = setInterval(() => loadLive(), 30000);
+    return () => clearInterval(timer);
+  }, [match?.id, state, loadLive]);
 
   // 临界窗口自动静默探活机制（赛前 30 分钟 ~ 比赛进行中且缺源）
   useEffect(() => {
@@ -616,12 +681,30 @@ export default function PlayerStage({
           ) : (
             <div className="flex flex-col items-center justify-center gap-2.5">
               {live && (
-                <span className="inline-flex items-center gap-2 rounded-full border border-live/30 bg-live/15 px-3.5 py-1">
-                  <LiveDot />
-                  <span className="font-num text-xs font-semibold tabular-nums text-live">
-                    进行中 {minute}′
+                <>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-live/30 bg-live/15 px-3.5 py-1">
+                    <LiveDot />
+                    <span className="font-num text-xs font-semibold tabular-nums text-live">
+                      {liveData?.statusText || '进行中'} {liveData?.minuteLabel || `${minute}′`}
+                    </span>
                   </span>
-                </span>
+                  {liveData?.ok &&
+                    liveData.state !== 'postponed' &&
+                    (spoilerFree && !revealed ? (
+                      <Button
+                        variant="default"
+                        icon={<IconReveal />}
+                        onClick={() => onReveal?.(match.id)}
+                      >
+                        揭晓实时比分
+                      </Button>
+                    ) : (
+                      <span className="font-num text-3xl font-semibold tabular-nums text-text-primary">
+                        {liveData.score?.h ?? '—'} <span className="text-text-muted">-</span>{' '}
+                        {liveData.score?.a ?? '—'}
+                      </span>
+                    ))}
+                </>
               )}
               {state === 'ended_pending' && <span className="text-xs text-text-muted">已终场，等待比分录入</span>}
               {finished &&
@@ -661,7 +744,16 @@ export default function PlayerStage({
           {live && (
             <span className="inline-flex items-center gap-1.5">
               <LiveDot />
-              <span className="font-num text-2xs font-medium tabular-nums text-live">{minute}′</span>
+              <span className="font-num text-2xs font-medium tabular-nums text-live">
+                {liveData?.minuteLabel || `${minute}′`}
+              </span>
+              {liveData?.ok &&
+                liveData.state !== 'postponed' &&
+                !(spoilerFree && !revealed) && (
+                  <span className="font-num text-2xs font-semibold tabular-nums text-text-primary">
+                    {liveData.score?.h ?? '—'}-{liveData.score?.a ?? '—'}
+                  </span>
+                )}
             </span>
           )}
           <button
@@ -683,6 +775,19 @@ export default function PlayerStage({
   /* ---------------- 右侧协同栏 ---------------- */
   const ControlSidebar = (
     <div className="flex w-full shrink-0 flex-col rounded-xl border border-line-hairline bg-surface-card p-3.5 shadow-card transition-all xl:w-[315px] xl:self-stretch min-h-0">
+      {live && (
+        <LiveMatchPanel
+          match={match}
+          data={liveData}
+          loading={liveLoading}
+          refreshing={liveRefreshing}
+          onRefresh={() => loadLive({ manual: true })}
+          spoilerFree={spoilerFree}
+          revealed={revealed}
+          onReveal={() => onReveal?.(match.id)}
+        />
+      )}
+
       <div className="flex items-center justify-between gap-2 shrink-0">
         <span className="inline-flex items-center gap-2">
           <IconLive className={live ? 'text-live' : 'text-text-faint'} />
@@ -701,23 +806,29 @@ export default function PlayerStage({
               : '待开播'}
           </Meta>
         </span>
-        <div className="flex items-center gap-1">
-          {directLines.length > 1 && (
-            <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
-              换线
-            </Button>
-          )}
-          <IconButton
-            label={loadingLines ? '正在检测线路…' : '刷新线路'}
-            onClick={() => fetchLines({ reset: false, autoPlay: true })}
-            disabled={loadingLines}
-          >
-            <IconReset className={loadingLines ? 'animate-spin text-accent' : ''} size={12} />
-          </IconButton>
-        </div>
+        {!finished && (
+          <div className="flex items-center gap-1">
+            {directLines.length > 1 && (
+              <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
+                换线
+              </Button>
+            )}
+            <IconButton
+              label={loadingLines ? '正在检测线路…' : '刷新线路'}
+              onClick={() => fetchLines({ reset: false, autoPlay: true })}
+              disabled={loadingLines}
+            >
+              <IconReset className={loadingLines ? 'animate-spin text-accent' : ''} size={12} />
+            </IconButton>
+          </div>
+        )}
       </div>
 
-      {lines.length > 0 ? (
+      {finished ? (
+        <div className="mt-2.5 rounded-md border border-dashed border-line-hairline/70 bg-surface-raised/20 px-2.5 py-2 text-2xs leading-relaxed text-text-muted">
+          直播已结束，赛事集锦与回放入口见下方
+        </div>
+      ) : lines.length > 0 ? (
         // 列数按容器实际宽度自适应；在桌面端作为 flex-1 弹性填充高度并支持顺畅滚动
         <div className="scrollbar-thin -mr-1 mt-2.5 grid min-h-[80px] max-h-[220px] xl:max-h-none xl:flex-1 content-start gap-1.5 overflow-y-auto pr-1 [grid-template-columns:1fr]">
           {lines.map(l => (
@@ -742,10 +853,17 @@ export default function PlayerStage({
         </div>
       )}
 
+      <HighlightsPanel
+        match={match}
+        spoilerFree={spoilerFree}
+        revealed={revealed}
+        onReveal={() => onReveal?.(match.id)}
+      />
+
       <div className="mt-2.5 shrink-0 border-t border-line-hairline pt-2.5">
-        <SectionLabel>官方平台</SectionLabel>
+        <SectionLabel>{finished ? '官方回放' : '官方平台'}</SectionLabel>
         <div className="mt-1.5">
-          <OfficialLinks sources={sources} match={match} />
+          <OfficialLinks sources={sources} match={match} replay={finished} />
         </div>
       </div>
 
@@ -836,7 +954,7 @@ export default function PlayerStage({
                 )}
               </div>
               <div className="shrink-0">
-                <OfficialLinks sources={sources} match={match} limit={4} />
+                <OfficialLinks sources={sources} match={match} limit={5} replay={finished} />
               </div>
             </div>
           ) : (
@@ -854,7 +972,7 @@ export default function PlayerStage({
                   )}
                 </span>
                 <span className="flex items-center gap-3">
-                  <OfficialLinks sources={sources} match={match} />
+                  <OfficialLinks sources={sources} match={match} replay={finished} />
                   <Button variant="ghost" icon={<IconChevronUp />} onClick={() => setTheaterLinesExpanded(false)}>
                     收起
                   </Button>
@@ -865,6 +983,17 @@ export default function PlayerStage({
                   <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={selectLine} />
                 ))}
               </div>
+            </div>
+          )}
+
+          {finished && (
+            <div className="w-full rounded-xl border border-line-hairline bg-surface-card px-3 pb-3 shadow-card">
+              <HighlightsPanel
+                match={match}
+                spoilerFree={spoilerFree}
+                revealed={revealed}
+                onReveal={() => onReveal?.(match.id)}
+              />
             </div>
           )}
         </div>

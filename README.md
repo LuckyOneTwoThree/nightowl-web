@@ -10,7 +10,7 @@
   <br />
 
   <img src="https://img.shields.io/badge/platform-Windows-2b6cb0?style=flat-square" alt="platform" />
-  <img src="https://img.shields.io/badge/release-v0.1.22-2f855a?style=flat-square" alt="release" />
+  <img src="https://img.shields.io/badge/release-v0.1.23-2f855a?style=flat-square" alt="release" />
   <img src="https://img.shields.io/badge/electron-33-47848f?style=flat-square" alt="electron" />
   <img src="https://img.shields.io/badge/react-19-149eca?style=flat-square" alt="react" />
   <img src="https://img.shields.io/badge/tests-passing-38a169?style=flat-square" alt="tests" />
@@ -71,7 +71,10 @@
 - **直播源自动抓取与对齐** —— 从聚合站多镜像抓取房间信息，按**双方队名全等匹配**对齐到本地赛程（宁缺勿错：匹配不到只是没有直链，配错是把错误内容当正确结果交付）
 - **本地流代理** —— 只监听 `127.0.0.1`；白名单授权、M3U8 全量 URI 重写（覆盖 10 类载体）、Range 透传、并发闸门、会话授权 TTL 回收
 - **三层超时** —— 等响应头 / 流静默（直播流本就该跑几小时，用空闲超时而非总时长）/ 排队超时，任何一层缺失都可能被上游僵住拖死
-- **官方平台直达** —— 央视频、咪咕、爱奇艺体育、腾讯体育、直播吧，一键跳转系统浏览器
+- **官方平台直达** —— 央视频、咪咕、爱奇艺体育、腾讯体育、CCTV、直播吧，一键跳转系统浏览器
+- **赛后官方集锦** —— 已完赛场次自动索引官方 YouTube 集锦（TheSportsDB 元数据），在系统浏览器打开；UCL 等暂无索引的场次回退到官方平台
+- **官方回放搜索** —— 终场后按「主队 客队 回放」生成咪咕 / 央视频 / 爱奇艺 / CCTV 深链，不抓取、不代理版权视频
+- **实时比分与关键事件** —— 进行中每 30 秒拉取 ESPN 比分、准确分钟与进球/红黄牌；受防剧透开关控制
 - **内联播放器** —— hls.js + ArtPlayer，懒加载（首屏不背播放器的体积）
 
 ### 📅 浏览与组织
@@ -148,6 +151,8 @@ server/
   proxy.js       流代理（白名单 / 会话授权 / Range / 并发闸门）
   m3u8.js        M3U8 全量 URI 重写（10 类载体）
   scores.js      比分保鲜（多源合并 → 补丁；只写 sched/done/pp）
+  highlights.js 赛后集锦解析（TheSportsDB → YouTube 白名单 + 缓存）
+  live.js       进行中比分/事件（ESPN scoreboard + summary，只读不落库）
   scraper.js     直播源抓取与队名对齐
   sources/       多源适配层（espn 主源 + openfootball 副源）
 electron/        桌面外壳（CJS 主进程 + preload 最小桥 + 自动更新）
@@ -175,6 +180,7 @@ spike/           算法基线验证（移植期与原版交叉比对）
 ## 免责声明
 
 - 本项目**不提供、不托管、不存储、不转码**任何直播视频内容，也不含任何直播源地址
+- 集锦与官方回放只提供第三方官方频道的链接，由系统浏览器打开；本项目不下载、不代理、不转码任何视频
 - 直播源信息来自第三方公开索引，其可用性、合法性由来源方负责；本项目仅按用户要求在本机做格式转发
 - 本地服务**只监听 127.0.0.1**，不向局域网或公网提供任何服务
 - 请仅将本项目用于**个人学习与技术研究**，遵守所在地区法律法规及相关内容平台的用户协议

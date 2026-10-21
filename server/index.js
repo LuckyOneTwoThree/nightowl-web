@@ -15,6 +15,8 @@ import { createProxy, loadRules, ProxyError, allowedLocalOrigin } from './proxy.
 import { syncScores, applyPatches, validateFixtures } from './scores.js';
 import { getLiveSourcesForMatch } from './scraper.js';
 import { loadFixtures, saveFixtures, freshness } from './data-store.js';
+import { resolveHighlights } from './highlights.js';
+import { resolveLive } from './live.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -124,6 +126,8 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
   const syncScoresImpl = deps.syncScores || syncScores;
   const loadFixturesImpl = deps.loadFixtures || loadFixtures;
   const saveFixturesImpl = deps.saveFixtures || saveFixtures;
+  const resolveHighlightsImpl = deps.resolveHighlights || resolveHighlights;
+  const resolveLiveImpl = deps.resolveLive || resolveLive;
   const backgroundSync = deps.backgroundSync !== false;
 
   const proxy = createProxy(rules, log);
@@ -167,6 +171,12 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
             enabled: rules.scores?.enabled !== false,
             syncing,
             lastSync
+          },
+          highlights: {
+            enabled: rules.highlights?.enabled !== false
+          },
+          live: {
+            enabled: rules.live?.enabled !== false
           }
         });
         return;
@@ -285,6 +295,50 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
           );
         } catch (err) {
           sendJSON(res, 500, { error: String(err?.message || err) });
+        }
+        return;
+      }
+
+      /* ---------------- 赛后集锦 ---------------- */
+      if (pathname === '/api/highlights' && req.method === 'GET') {
+        if (rejectForeignOrigin(req, res)) return;
+        const matchId = searchParams.get('matchId') || '';
+        try {
+          const fixtures = await loadFixturesImpl();
+          const match = fixtures.find(m => m.id === matchId);
+          if (!match) {
+            sendJSON(res, 404, { ok: false, videos: [], error: '比赛不存在' });
+            return;
+          }
+          if (match.st !== 'done') {
+            sendJSON(res, 200, { ok: false, videos: [], reason: 'not-finished' });
+            return;
+          }
+          const force = searchParams.get('refresh') === '1';
+          const result = await resolveHighlightsImpl(match, { rules, log, force });
+          sendJSON(res, 200, { matchId, ...result });
+        } catch (err) {
+          sendJSON(res, 500, { ok: false, videos: [], error: String(err?.message || err) });
+        }
+        return;
+      }
+
+      /* ---------------- 实时比分与关键事件 ---------------- */
+      if (pathname === '/api/live' && req.method === 'GET') {
+        if (rejectForeignOrigin(req, res)) return;
+        const matchId = searchParams.get('matchId') || '';
+        try {
+          const fixtures = await loadFixturesImpl();
+          const match = fixtures.find(m => m.id === matchId);
+          if (!match) {
+            sendJSON(res, 404, { ok: false, error: '比赛不存在' });
+            return;
+          }
+          const force = searchParams.get('refresh') === '1';
+          const result = await resolveLiveImpl(match, { rules, log, force });
+          sendJSON(res, 200, { matchId, ...result });
+        } catch (err) {
+          sendJSON(res, 500, { ok: false, error: String(err?.message || err) });
         }
         return;
       }

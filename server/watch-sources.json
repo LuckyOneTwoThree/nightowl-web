@@ -14,26 +14,29 @@
       "kind": "deeplink",
       "homeUrl": "https://yangshipin.cn/",
       "searchTemplate": "https://yangshipin.cn/search?keyword={q}",
-      "note": "官方免费源。CSP frame-ancestors 'self'，禁止内嵌，仅支持跳转。",
-      "verifiedAt": "2026-09-12"
+      "replayTemplate": "https://yangshipin.cn/search?keyword={q}",
+      "note": "官方免费源。CSP frame-ancestors 'self'，禁止内嵌，仅支持跳转。回放/集锦需在站内搜索。",
+      "verifiedAt": "2026-10-21"
     },
     {
       "id": "miguvideo",
       "name": "咪咕视频",
       "kind": "deeplink",
       "homeUrl": "https://www.miguvideo.com/",
-      "searchTemplate": null,
-      "note": "官方源。无 CSP 限制可内嵌，但具体赛事页需动态 ID，暂以首页入口接入。",
-      "verifiedAt": "2026-09-12"
+      "searchTemplate": "https://www.miguvideo.com/mgs/website/prd/search.html?keyword={q}",
+      "replayTemplate": "https://www.miguvideo.com/mgs/website/prd/search.html?keyword={q}",
+      "note": "官方源。搜索页可达但为 JS 渲染，只能跳转；具体赛事回放可能需要登录/会员。",
+      "verifiedAt": "2026-10-21"
     },
     {
       "id": "iqiyi-sports",
       "name": "爱奇艺体育",
       "kind": "deeplink",
       "homeUrl": "https://sports.iqiyi.com/",
-      "searchTemplate": null,
-      "note": "官方付费源，部分场次需会员。以首页入口接入。",
-      "verifiedAt": "2026-09-12"
+      "searchTemplate": "https://so.iqiyi.com/so/q_{q}",
+      "replayTemplate": "https://so.iqiyi.com/so/q_{q}",
+      "note": "官方付费源，部分场次需会员。站内搜索可用，具体回放以搜索结果为准。",
+      "verifiedAt": "2026-10-21"
     },
     {
       "id": "qq-sports",
@@ -41,8 +44,19 @@
       "kind": "deeplink",
       "homeUrl": "https://sports.qq.com/",
       "searchTemplate": null,
-      "note": "官方源，部分场次需会员。以首页入口接入。",
-      "verifiedAt": "2026-09-12"
+      "replayTemplate": null,
+      "note": "官方源，部分场次需会员。搜索入口未实测稳定，暂以首页入口接入。",
+      "verifiedAt": "2026-10-21"
+    },
+    {
+      "id": "cctv",
+      "name": "CCTV",
+      "kind": "deeplink",
+      "homeUrl": "https://sports.cctv.com/",
+      "searchTemplate": "https://search.cctv.com/search.php?qtext={q}",
+      "replayTemplate": "https://search.cctv.com/search.php?qtext={q}",
+      "note": "CCTV5/CCTV5+ 官方入口；免费场次可回看，具体以站内搜索结果为准。",
+      "verifiedAt": "2026-10-21"
     }
   ],
 

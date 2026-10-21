@@ -62,6 +62,13 @@ for (const src of registry.official || []) {
     const s = await probe(url);
     ok(`${src.name} 搜索模板可用`, !!s.status && s.status < 400, s.error || `HTTP ${s.status}`);
   }
+
+  if (src.replayTemplate) {
+    const replayQuery = encodeURIComponent('阿森纳 考文垂 回放');
+    const url = src.replayTemplate.replace('{q}', replayQuery);
+    const s = await probe(url);
+    ok(`${src.name} 回放模板可用`, !!s.status && s.status < 400, s.error || `HTTP ${s.status}`);
+  }
 }
 
 /* ================================================================== */
