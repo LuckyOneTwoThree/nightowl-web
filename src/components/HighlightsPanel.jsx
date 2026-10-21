@@ -109,8 +109,9 @@ export default function HighlightsPanel({ match, spoilerFree = true, revealed = 
       </SectionLabel>
 
       {status === 'loading' && (
-        <div className="mt-1.5 rounded-md border border-dashed border-line-hairline bg-surface-raised/30 px-2.5 py-3 text-center text-2xs text-text-muted">
-          正在查找官方集锦…
+        <div className="mt-1.5 space-y-1.5" aria-busy="true" aria-label="正在查找官方集锦">
+          <span className="skeleton block h-9 w-full" />
+          <span className="skeleton block h-2.5 w-2/3" />
         </div>
       )}
 

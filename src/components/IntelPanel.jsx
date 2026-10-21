@@ -70,7 +70,10 @@ export default function IntelPanel({ match, prefs, indexHint, intel: propIntel, 
   const leagueB = leagueBonus(ev, PRODUCT_WEIGHTS);
 
   return (
-    <section className="glass-lift overflow-hidden rounded-xl border border-line-hairline bg-surface-panel shadow-card">
+    <section
+      id="intel-panel"
+      className="glass-lift scroll-mt-4 overflow-hidden rounded-xl border border-line-hairline bg-surface-panel shadow-card"
+    >
       {/* 面板头：只放视图切换，不放对阵信息 */}
       <div className="flex items-center justify-between gap-3 border-b border-line-hairline bg-surface-raised/40 px-3.5 py-2.5">
         <div className="flex items-center gap-1" role="tablist" aria-label="情报视图">
@@ -83,7 +86,7 @@ export default function IntelPanel({ match, prefs, indexHint, intel: propIntel, 
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <Meta>夜猫指数</Meta>
-          <span className="font-num text-sm font-semibold tabular-nums text-accent">
+          <span className="font-num text-sm font-semibold tabular-nums text-text-primary">
             {index.toFixed(1)}
           </span>
           <Hint content={indexHint} side="bottom" align="end" />

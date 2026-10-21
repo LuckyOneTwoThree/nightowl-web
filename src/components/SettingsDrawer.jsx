@@ -395,19 +395,30 @@ export default function SettingsDrawer({
 
         {/* 底部 */}
         <div className="flex items-center justify-between border-t border-line-hairline px-5 py-3">
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" icon={<IconReset size={12} />} onClick={() => onPrefsChange(defaultPrefs())}>
+          <div className="flex min-w-0 items-center gap-2 text-2xs text-text-faint">
+            <button
+              type="button"
+              onClick={() => onPrefsChange(defaultPrefs())}
+              className="inline-flex items-center gap-1 transition-colors hover:text-text-secondary"
+            >
+              <IconReset size={11} />
               恢复默认
-            </Button>
+            </button>
             {onRerunOnboarding && (
-              <Button variant="ghost" onClick={onRerunOnboarding}>
-                重新引导
-              </Button>
+              <>
+                <span aria-hidden="true">·</span>
+                <button type="button" onClick={onRerunOnboarding} className="transition-colors hover:text-text-secondary">
+                  重新引导
+                </button>
+              </>
             )}
             {onReplaySplash && (
-              <Button variant="ghost" onClick={onReplaySplash}>
-                开屏动画
-              </Button>
+              <>
+                <span aria-hidden="true">·</span>
+                <button type="button" onClick={onReplaySplash} className="transition-colors hover:text-text-secondary">
+                  开屏动画
+                </button>
+              </>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -418,17 +429,18 @@ export default function SettingsDrawer({
                 className="group flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-1 text-2xs font-medium text-accent shadow-[0_0_12px_rgba(245,185,66,0.25)] hover:bg-accent/25 transition-all cursor-pointer"
                 title={`发现新版本 v${updateState?.info?.version || ''}`}
               >
-                <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
                 <span>发现新版</span>
               </button>
             ) : (
-              <Button
-                variant="ghost"
+              <button
+                type="button"
                 onClick={onOpenUpdateModal}
                 title="检查 GitHub 最新版本"
+                className="text-2xs text-text-faint transition-colors hover:text-text-secondary"
               >
                 检查更新
-              </Button>
+              </button>
             )}
             {/* 版本号构建期注入。此前顶栏手写「v1.0」而 package.json 是 0.1.3 */}
             <Meta num>v{__APP_VERSION__}</Meta>

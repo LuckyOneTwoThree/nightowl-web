@@ -1,10 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, memo, useRef, useState } from 'react';
-import { hm, zhDate, weekdayOf, datePart, liveMinute, humanCountdown } from '../core/format.js';
-import { teamName, teamColor, leagueName } from '../data/index.js';
+import { datePart, liveMinute, humanCountdown } from '../core/format.js';
+import { teamName, leagueName } from '../data/index.js';
 import { ts, countdown as engineCountdown } from '../core/engine.js';
-import { Button, Crest, Hint, IconButton, LiveDot, Meta, SectionLabel } from './atoms.jsx';
+import { Button, Hint, IconButton, LiveDot, Meta, SectionLabel } from './atoms.jsx';
 import HighlightsPanel from './HighlightsPanel.jsx';
 import LiveMatchPanel from './LiveMatchPanel.jsx';
+import MatchCanvas from './MatchCanvas.jsx';
 import RecapTimeline from './RecapTimeline.jsx';
 import { sourceUrlFor } from '../core/watch-sources.js';
 import { eventKey, shouldNotifyEvent } from '../core/live-events.js';
@@ -19,7 +20,6 @@ import {
   IconKeyboard,
   IconLive,
   IconReset,
-  IconReveal,
   IconSignal,
   IconStop,
   IconSwitchLine,
@@ -83,6 +83,7 @@ const SHORTCUT_HINT =
 function Notice({ n }) {
   return (
     <div
+      role="status"
       className={`flex items-start justify-between gap-2 rounded-md px-2.5 py-1.5 text-2xs leading-relaxed ${
         n.tone === 'danger' ? 'bg-danger/10 text-danger' : 'bg-warn/10 text-warn'
       }`}
@@ -701,6 +702,29 @@ export default function PlayerStage({
     manualSelectLine(directLines[(currIdx + 1) % directLines.length]);
   };
 
+  /** Match Center 的“播放”动作：优先直链，没有直链但有内嵌线路就打开，否则重新检测 */
+  const playFirstLine = () => {
+    const line = lines.find(l => l.isDirect && l.url) || lines.find(l => l.url);
+    if (line) {
+      manualSelectLine(line);
+      return;
+    }
+    fetchLines({ reset: false, autoPlay: true });
+  };
+
+  /** 平滑定位到页内区块；尊重系统减弱动效设置 */
+  const scrollToId = id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+  };
+
+  /** 协同模式滚到右栏线路，剧场模式滚到视频下方的紧凑线路条 */
+  const showLines = () => {
+    scrollToId(document.getElementById('match-lines') ? 'match-lines' : 'match-lines-theater');
+  };
+
   if (!match) {
     return (
       <div className="flex aspect-video max-h-[46vh] w-full items-center justify-center rounded-xl bg-stage-bg">
@@ -765,116 +789,30 @@ export default function PlayerStage({
           <Player src={proxyUrl} kind={streamKind} onError={handlePlayerError} onAspectRatio={setAspectRatio} />
         </Suspense>
       ) : (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-stage-bg">
-          {state === 'sched' ? (
-            <>
-              {/* 赛前画面借用双方队色做低饱和氛围光；只增强视觉识别，不引入虚构比赛信息。 */}
-              <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-                <span
-                  className="absolute -left-24 top-1/2 h-64 w-64 -translate-y-1/2 rounded-full blur-[100px] opacity-[0.16]"
-                  style={{ backgroundColor: teamColor(match.h) }}
-                />
-                <span
-                  className="absolute -right-24 top-1/2 h-64 w-64 -translate-y-1/2 rounded-full blur-[100px] opacity-[0.16]"
-                  style={{ backgroundColor: teamColor(match.a) }}
-                />
-                <span className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(21,27,41,0.5)_0%,rgba(7,9,14,0.82)_72%)]" />
-              </div>
-
-              <div className="relative z-10 flex w-full max-w-lg flex-col items-center justify-center px-6 py-6 text-center select-none">
-                {/* 双方队徽与队名 */}
-                <div className="flex w-full items-center justify-center gap-3 sm:gap-7">
-                  <div className="flex flex-1 min-w-0 items-center justify-end gap-3">
-                    <span className="truncate text-base sm:text-lg font-semibold text-text-primary" title={teamName(match.h)}>
-                      {teamName(match.h)}
-                    </span>
-                    <Crest id={match.h} size={40} />
-                  </div>
-
-                  <span className="rounded-full border border-white/[0.08] bg-white/[0.035] px-2.5 py-1 font-num text-2xs font-semibold text-text-muted uppercase tracking-wider">
-                    vs
-                  </span>
-
-                  <div className="flex flex-1 min-w-0 items-center justify-start gap-3">
-                    <Crest id={match.a} size={40} />
-                    <span className="truncate text-base sm:text-lg font-semibold text-text-primary" title={teamName(match.a)}>
-                      {teamName(match.a)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* 联赛轮次与开球时间 */}
-                <div className="mt-2 flex items-center justify-center gap-2 text-2xs text-text-muted">
-                  <span>{leagueName(match.l)} 第 {match.r} 轮</span>
-                  <span className="text-text-faint">·</span>
-                  <span className="font-num">
-                    {match.tbd ? '时间待定' : `${zhDate(datePart(match.t))} ${weekdayOf(datePart(match.t))} ${hm(match.t)}`}
-                  </span>
-                </div>
-
-                {/* 中部：主焦点倒计时 */}
-                <div className="mt-6 flex flex-col items-center rounded-2xl border border-white/[0.07] bg-black/20 px-8 py-3.5 shadow-inner shadow-black/20">
-                  <span className="text-2xs text-text-faint">距开球倒计时</span>
-                  <span className="mt-1 font-num text-3xl font-semibold tabular-nums text-accent tracking-tight">
-                    {stageCountdown}
-                  </span>
-                </div>
-
-                {/* 睡眠代价与故事看点统一在下方情报面板呈现，主舞台只保留开球信息。 */}
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center gap-2.5">
-              {live && (
-                <>
-                  <span className="inline-flex items-center gap-2 rounded-full border border-live/30 bg-live/15 px-3.5 py-1">
-                    <LiveDot />
-                    <span className="font-num text-xs font-semibold tabular-nums text-live">
-                      {liveData?.statusText || '进行中'} {liveData?.minuteLabel || `${minute}′`}
-                    </span>
-                  </span>
-                  {liveData?.ok &&
-                    liveData.state !== 'postponed' &&
-                    (spoilerFree && !revealed ? (
-                      <Button
-                        variant="default"
-                        icon={<IconReveal />}
-                        onClick={() => onReveal?.(match.id)}
-                      >
-                        揭晓实时比分
-                      </Button>
-                    ) : (
-                      <span className="font-num text-3xl font-semibold tabular-nums text-text-primary">
-                        {liveData.score?.h ?? '—'} <span className="text-text-muted">-</span>{' '}
-                        {liveData.score?.a ?? '—'}
-                      </span>
-                    ))}
-                </>
-              )}
-              {state === 'ended_pending' && <span className="text-xs text-text-muted">已终场，等待比分录入</span>}
-              {finished &&
-                (spoilerFree && !revealed ? (
-                  <Button variant="default" icon={<IconReveal />} onClick={() => onReveal?.(match.id)}>
-                    揭晓比分
-                  </Button>
-                ) : (
-                  <span className="font-num text-3xl font-semibold tabular-nums text-text-primary">
-                    {match.sc || '—'}
-                  </span>
-                ))}
-              {state === 'pp' && <span className="text-xs text-text-muted">本场延期</span>}
-              {!live && !finished && state !== 'ended_pending' && state !== 'pp' && (
-                <span className="text-xs text-text-muted">未开播</span>
-              )}
-            </div>
-          )}
-        </div>
+        <MatchCanvas
+          match={match}
+          state={state}
+          stageCountdown={stageCountdown}
+          isNearKickoff={isNearKickoff}
+          liveData={liveData}
+          lines={lines}
+          loadingLines={loadingLines}
+          spoilerFree={spoilerFree}
+          revealed={revealed}
+          onReveal={() => onReveal?.(match.id)}
+          onPlay={playFirstLine}
+          onRefreshLines={() => fetchLines({ reset: false, autoPlay: true })}
+          onScrollToIntel={() => scrollToId('intel-panel')}
+          onShowLines={showLines}
+          onScrollToRecap={() => scrollToId('match-recap')}
+          onScrollToHighlights={() => scrollToId('match-highlights')}
+        />
       )}
 
       {/* 顶部对阵常驻条 —— 全应用唯一的对阵命名处 */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-overlay flex items-center justify-between gap-2 bg-gradient-to-b from-black/80 via-black/35 to-transparent px-3.5 py-2.5">
+      <div className={`pointer-events-none absolute inset-x-0 top-0 z-overlay flex items-center justify-between gap-2 px-3.5 py-2.5 ${streamUrl ? 'bg-gradient-to-b from-black/80 via-black/35 to-transparent' : ''}`}>
         <div className="flex min-w-0 items-baseline gap-2">
-          {(!state || state !== 'sched' || streamUrl) && (
+          {streamUrl && (
             <>
               <span className="truncate text-sm font-semibold text-text-primary">
                 {teamName(match.h)} vs {teamName(match.a)}
@@ -886,7 +824,7 @@ export default function PlayerStage({
           )}
         </div>
         <div className="pointer-events-auto flex shrink-0 items-center gap-2">
-          {live && (
+          {live && streamUrl && (
             <span className="inline-flex items-center gap-1.5">
               <LiveDot />
               <span className="font-num text-2xs font-medium tabular-nums text-live">
@@ -933,61 +871,57 @@ export default function PlayerStage({
         />
       )}
 
-      <div className="flex items-center justify-between gap-2 shrink-0">
-        <span className="inline-flex items-center gap-2">
-          <IconLive className={live ? 'text-live' : 'text-text-faint'} />
-          <span className="text-xs font-medium text-text-primary">直播线路</span>
-          <Meta num>
-            {lines.length > 0
-              ? `${lines.length} 条`
-              : live
-              ? '无可用'
-              : finished
-              ? '已终场'
-              : postponed
-              ? '已延期'
-              : isNearKickoff
-              ? '接入中'
-              : '待开播'}
-          </Meta>
-        </span>
-        {!finished && (
-          <div className="flex items-center gap-1">
-            {directLines.length > 1 && (
-              <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
-                换线
-              </Button>
-            )}
-            <IconButton
-              label={loadingLines ? '正在检测线路…' : '刷新线路'}
-              onClick={() => fetchLines({ reset: false, autoPlay: true })}
-              disabled={loadingLines}
-            >
-              <IconReset className={loadingLines ? 'animate-spin text-accent' : ''} size={12} />
-            </IconButton>
+      {!finished && (
+        <>
+          <div id="match-lines" className="flex scroll-mt-4 items-center justify-between gap-2 shrink-0">
+            <span className="inline-flex items-center gap-2">
+              <IconLive className={live ? 'text-live' : 'text-text-faint'} />
+              <span className="text-xs font-medium text-text-primary">直播线路</span>
+              <Meta num>
+                {lines.length > 0
+                  ? `${lines.length} 条`
+                  : live
+                    ? '无可用'
+                    : postponed
+                      ? '已延期'
+                      : isNearKickoff
+                        ? '接入中'
+                        : '待开播'}
+              </Meta>
+            </span>
+            <div className="flex items-center gap-1">
+              {directLines.length > 1 && (
+                <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
+                  换线
+                </Button>
+              )}
+              <IconButton
+                label={loadingLines ? '正在检测线路…' : '刷新线路'}
+                onClick={() => fetchLines({ reset: false, autoPlay: true })}
+                disabled={loadingLines}
+              >
+                <IconReset className={loadingLines ? 'animate-spin text-accent' : ''} size={12} />
+              </IconButton>
+            </div>
           </div>
-        )}
-      </div>
 
-      {finished ? (
-        <div className="mt-2.5 rounded-md border border-dashed border-line-hairline/70 bg-surface-raised/20 px-2.5 py-2 text-2xs leading-relaxed text-text-muted">
-          直播已结束，赛事集锦与回放入口见下方
-        </div>
-      ) : lines.length > 0 ? (
-        // 列数按容器实际宽度自适应；在桌面端作为 flex-1 弹性填充高度并支持顺畅滚动
-        <div className="scrollbar-thin -mr-1 mt-2.5 grid min-h-[80px] max-h-[220px] xl:max-h-none xl:flex-1 content-start gap-1.5 overflow-y-auto pr-1 [grid-template-columns:1fr]">
-          {lines.map(l => (
-            <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={manualSelectLine} />
-          ))}
-        </div>
-      ) : (
-        <LineEmptyState
-          loading={loadingLines}
-          state={state}
-          isNearKickoff={isNearKickoff}
-          scrapeError={liveInfo?.scrapeError}
-          onRefresh={() => fetchLines({ reset: false, autoPlay: true })}
-        />
+          {lines.length > 0 ? (
+            // 1120 宽度下用两列压缩高度；xl 协同模式再回到单列
+            <div className="scrollbar-thin -mr-1 mt-2.5 grid min-h-[80px] max-h-[220px] grid-cols-1 content-start gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2 xl:max-h-none xl:flex-1 xl:grid-cols-1">
+              {lines.map(l => (
+                <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={manualSelectLine} />
+              ))}
+            </div>
+          ) : (
+            <LineEmptyState
+              loading={loadingLines}
+              state={state}
+              isNearKickoff={isNearKickoff}
+              scrapeError={liveInfo?.scrapeError}
+              onRefresh={() => fetchLines({ reset: false, autoPlay: true })}
+            />
+          )}
+        </>
       )}
 
       {notices.length > 0 && (
@@ -998,14 +932,18 @@ export default function PlayerStage({
         </div>
       )}
 
-      <RecapTimeline match={match} spoilerFree={spoilerFree} revealed={revealed} />
+      <div id="match-recap" className="shrink-0 scroll-mt-4">
+        <RecapTimeline match={match} spoilerFree={spoilerFree} revealed={revealed} />
+      </div>
 
-      <HighlightsPanel
-        match={match}
-        spoilerFree={spoilerFree}
-        revealed={revealed}
-        onReveal={() => onReveal?.(match.id)}
-      />
+      <div id="match-highlights" className="shrink-0 scroll-mt-4">
+        <HighlightsPanel
+          match={match}
+          spoilerFree={spoilerFree}
+          revealed={revealed}
+          onReveal={() => onReveal?.(match.id)}
+        />
+      </div>
 
       <div className="mt-2.5 shrink-0 border-t border-line-hairline pt-2.5">
         <SectionLabel>{finished ? '官方回放' : '官方平台'}</SectionLabel>
@@ -1048,7 +986,8 @@ export default function PlayerStage({
 
           {!theaterLinesExpanded ? (
             <div
-              className="flex w-full items-center justify-between gap-2.5 rounded-xl border border-line-hairline bg-surface-card px-3 py-2 shadow-card"
+              id="match-lines-theater"
+              className="flex w-full scroll-mt-4 items-center justify-between gap-2.5 rounded-xl border border-line-hairline bg-surface-card px-3 py-2 shadow-card"
             >
               <div className="no-scrollbar flex min-w-0 items-center gap-1.5 overflow-x-auto py-0.5">
                 <span className="mr-1 inline-flex shrink-0 items-center gap-1.5">
@@ -1106,7 +1045,8 @@ export default function PlayerStage({
             </div>
           ) : (
             <div
-              className="w-full rounded-xl border border-line-hairline bg-surface-card p-3 shadow-card"
+              id="match-lines-theater"
+              className="w-full scroll-mt-4 rounded-xl border border-line-hairline bg-surface-card p-3 shadow-card"
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-2">
@@ -1135,13 +1075,17 @@ export default function PlayerStage({
 
           {finished && (
             <div className="w-full rounded-xl border border-line-hairline bg-surface-card px-3 pb-3 shadow-card">
-              <RecapTimeline match={match} spoilerFree={spoilerFree} revealed={revealed} />
-              <HighlightsPanel
-                match={match}
-                spoilerFree={spoilerFree}
-                revealed={revealed}
-                onReveal={() => onReveal?.(match.id)}
-              />
+              <div id="match-recap" className="scroll-mt-4">
+                <RecapTimeline match={match} spoilerFree={spoilerFree} revealed={revealed} />
+              </div>
+              <div id="match-highlights" className="scroll-mt-4">
+                <HighlightsPanel
+                  match={match}
+                  spoilerFree={spoilerFree}
+                  revealed={revealed}
+                  onReveal={() => onReveal?.(match.id)}
+                />
+              </div>
             </div>
           )}
         </div>

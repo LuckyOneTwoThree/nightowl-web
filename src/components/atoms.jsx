@@ -286,12 +286,13 @@ export function Segmented({ items, value, onChange, className = '' }) {
             onClick={() => onChange(it.id)}
             className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs transition-all focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none ${
               active
-                ? 'border border-accent/40 bg-surface-accent font-semibold text-accent shadow-sm'
+                ? 'border border-line-control bg-surface-raised font-semibold text-text-primary shadow-sm'
                 : 'border border-transparent text-text-muted hover:border-line-hairline hover:bg-surface-raised hover:text-text-primary'
             }`}
           >
             {it.icon}
             {it.label}
+            {active && <span className="ml-0.5 h-1 w-1 rounded-full bg-accent" aria-hidden="true" />}
             {it.trailing}
           </button>
         );

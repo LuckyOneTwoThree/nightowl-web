@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getFixtures, setFixtures, storylines } from './data/index.js';
+import { getFixtures, setFixtures, storylines, teamName } from './data/index.js';
 import { countdown as engineCountdown, ts, MATCH_DURATION_MS, sleepTier } from './core/engine.js';
 import { humanCountdownShort } from './core/format.js';
 import { loadPrefs, savePrefs } from './core/prefs.js';
@@ -17,6 +17,7 @@ import {
 import { narrativeOf } from './core/narrative.js';
 
 import TopBar from './components/TopBar.jsx';
+import CommandPalette from './components/CommandPalette.jsx';
 import TonightView, { INDEX_HINT } from './components/TonightView.jsx';
 import WeekView from './components/WeekView.jsx';
 import ScheduleView from './components/ScheduleView.jsx';
@@ -30,6 +31,7 @@ import SplashScreen from './components/SplashScreen.jsx';
 import UpdateModal from './components/UpdateModal.jsx';
 import { IconClose } from './components/icons.jsx';
 import { compareSemver } from './core/semver.js';
+import { VIEW_COMMANDS, ACTION_COMMANDS, buildMatchCommands } from './core/command-palette.js';
 
 /**
  * 比赛 id → 记录（O(1) 取用）
@@ -98,6 +100,7 @@ export default function App() {
     }
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [revealed, setRevealed] = useState(() => new Set());
   const [filters, setFilters] = useState(() => defaultScheduleFilters());
 
@@ -458,9 +461,60 @@ export default function App() {
     window.history.replaceState(null, '', `?${sp.toString()}`);
   }, [view, activeMatchId]);
 
+  // 命令面板：视图/操作 + 全量比赛；列表数据只随 dataRev 重建
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const paletteItems = useMemo(
+    () => [...VIEW_COMMANDS, ...ACTION_COMMANDS, ...buildMatchCommands(getFixtures())],
+    [dataRev, paletteOpen]
+  );
+
+  useEffect(() => {
+    const onKey = e => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'k') return;
+      e.preventDefault();
+      if (paletteOpen) {
+        setPaletteOpen(false);
+        return;
+      }
+      if (settingsOpen || onboardingOpen || updateModalOpen || splashOpen) return;
+      setPaletteOpen(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [paletteOpen, settingsOpen, onboardingOpen, updateModalOpen, splashOpen]);
+
+  const runPaletteItem = useCallback(item => {
+    const action = item?.action;
+    if (!action) return;
+    setPaletteOpen(false);
+    if (action.type === 'view') {
+      setView(action.view);
+      return;
+    }
+    if (action.type === 'settings') {
+      setSettingsOpen(true);
+      return;
+    }
+    if (action.type === 'sync') {
+      triggerSync();
+      return;
+    }
+    if (action.type === 'match') {
+      const id = action.matchId;
+      setActiveMatchId(id);
+      const m = getFixtures().find(x => x.id === id);
+      if (m && tonight.slice.some(x => x.id === id)) {
+        setView('tonight');
+      } else if (m) {
+        setView('schedule');
+        setFilters({ ...defaultScheduleFilters(), date: 'all', query: teamName(m.h) });
+      }
+    }
+  }, [tonight, triggerSync]);
+
   // 任一全屏浮层打开时，背景内容必须同时退出键盘焦点与点击（inert）。
   // 只靠遮罩挡鼠标，Tab 仍会跑进后面的列表，这是真实的无障碍缺陷。
-  const overlayOpen = settingsOpen || onboardingOpen || updateModalOpen || splashOpen;
+  const overlayOpen = settingsOpen || onboardingOpen || updateModalOpen || splashOpen || paletteOpen;
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden stage-atmosphere text-text-primary">
@@ -472,6 +526,7 @@ export default function App() {
           liveCount={liveCount}
           prefs={prefs}
           onOpenSettings={() => setSettingsOpen(true)}
+          onOpenPalette={() => setPaletteOpen(true)}
           updateAvailable={updateAvailable}
           updateVersion={updateState.info?.version}
           onOpenUpdate={() => {
@@ -484,47 +539,49 @@ export default function App() {
         <main className="flex min-h-0 flex-1 overflow-hidden">
           {/* 左栏：决策与列表 */}
           <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] 2xl:w-[390px] shrink-0 flex-col overflow-hidden border-r border-line-hairline bg-surface-panel p-3.5 shadow-card">
-          {view === 'tonight' && (
-            <TonightView
-              tonight={tonight}
-              now={clockTs}
-              activeMatchId={activeMatchId}
-              onSelect={select}
-              prefs={prefs}
-              revealed={revealed}
-              onReveal={reveal}
-              countdownText={countdownText}
-              replayPicks={replayPicks}
-            />
-          )}
+          <div key={view} className="animate-view-enter flex h-full min-h-0 flex-col">
+            {view === 'tonight' && (
+              <TonightView
+                tonight={tonight}
+                now={clockTs}
+                activeMatchId={activeMatchId}
+                onSelect={select}
+                prefs={prefs}
+                revealed={revealed}
+                onReveal={reveal}
+                countdownText={countdownText}
+                replayPicks={replayPicks}
+              />
+            )}
 
-          {view === 'week' && week && (
-            <WeekView
-              week={week}
-              prefs={prefs}
-              now={clockTs}
-              activeMatchId={activeMatchId}
-              onSelect={select}
-              onBudgetChange={v => setPrefs({ ...prefs, weeklyBudget: v })}
-              revealed={revealed}
-              onReveal={reveal}
-            />
-          )}
+            {view === 'week' && week && (
+              <WeekView
+                week={week}
+                prefs={prefs}
+                now={clockTs}
+                activeMatchId={activeMatchId}
+                onSelect={select}
+                onBudgetChange={v => setPrefs({ ...prefs, weeklyBudget: v })}
+                revealed={revealed}
+                onReveal={reveal}
+              />
+            )}
 
-          {view === 'schedule' && (
-            <ScheduleView
-              rows={scheduleRows}
-              filters={filters}
-              onFiltersChange={setFilters}
-              prefs={prefs}
-              onPrefsChange={setPrefs}
-              now={clockTs}
-              activeMatchId={activeMatchId}
-              onSelect={select}
-              revealed={revealed}
-              onReveal={reveal}
-            />
-          )}
+            {view === 'schedule' && (
+              <ScheduleView
+                rows={scheduleRows}
+                filters={filters}
+                onFiltersChange={setFilters}
+                prefs={prefs}
+                onPrefsChange={setPrefs}
+                now={clockTs}
+                activeMatchId={activeMatchId}
+                onSelect={select}
+                revealed={revealed}
+                onReveal={reveal}
+              />
+            )}
+          </div>
           </section>
 
           {/* 右栏：观赛大屏 + 情报 + 下方模块区。
@@ -558,6 +615,14 @@ export default function App() {
           </section>
         </main>
       </div>
+
+      {paletteOpen && (
+        <CommandPalette
+          items={paletteItems}
+          onClose={() => setPaletteOpen(false)}
+          onRun={runPaletteItem}
+        />
+      )}
 
       <SettingsDrawer
         open={settingsOpen}
@@ -601,10 +666,7 @@ export default function App() {
           aria-label="版本更新提醒"
           className="fixed bottom-5 right-5 z-modal flex max-w-sm items-center gap-3 rounded-xl border border-accent/40 bg-surface-card/95 p-3.5 shadow-pop backdrop-blur-xl transition-all duration-300"
         >
-          <div className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
-          </div>
+          <span className="h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden="true" />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-text-primary">
               发现新版本 {updateState.info?.version ? `v${updateState.info.version}` : ''}

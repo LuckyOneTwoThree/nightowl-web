@@ -93,10 +93,12 @@ export default function MatchRow({
               </span>
             )}
             {minefield && (
-              <Chip tone="danger">
-                <IconWarn size={11} />
-                建议睡觉
-              </Chip>
+              <span title="凌晨场次，建议睡觉">
+                <Chip tone="warn">
+                  <IconWarn size={11} />
+                  雷区
+                </Chip>
+              </span>
             )}
             {badge}
 
@@ -125,7 +127,7 @@ export default function MatchRow({
           {/* 对阵行：独占整行宽度 */}
           <div className="mt-1.5 flex items-center gap-2">
             <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
-              <span className="truncate text-xs font-medium text-text-primary" title={teamName(m.h)}>
+              <span className="truncate text-sm font-medium text-text-primary" title={teamName(m.h)}>
                 {teamName(m.h)}
               </span>
               <Crest id={m.h} size={16} />
@@ -133,7 +135,7 @@ export default function MatchRow({
             <span className="shrink-0 font-num text-2xs text-text-faint">vs</span>
             <div className="flex min-w-0 flex-1 items-center gap-1.5">
               <Crest id={m.a} size={16} />
-              <span className="truncate text-xs font-medium text-text-primary" title={teamName(m.a)}>
+              <span className="truncate text-sm font-medium text-text-primary" title={teamName(m.a)}>
                 {teamName(m.a)}
               </span>
             </div>

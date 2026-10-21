@@ -21,7 +21,7 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   darkMode: 'class',
   theme: {
-    /* 覆盖默认字号刻度：只允许下面这几档 */
+    /* 覆盖默认字号刻度：只允许下面这几档；display 仅给比赛中心大比分/倒计时 */
     fontSize: {
       '2xs': ['0.6875rem', { lineHeight: '1rem' }], // 11px 元信息 / 标签，可读性下限
       xs: ['0.75rem', { lineHeight: '1.125rem' }], // 12px 列表正文
@@ -30,7 +30,8 @@ export default {
       lg: ['1.0625rem', { lineHeight: '1.5rem' }], // 17px 模态标题
       xl: ['1.25rem', { lineHeight: '1.75rem' }], // 20px 关键数字
       '2xl': ['1.75rem', { lineHeight: '2rem' }], // 28px 倒计时
-      '3xl': ['2.125rem', { lineHeight: '2.5rem' }] // 34px
+      '3xl': ['2.125rem', { lineHeight: '2.5rem' }], // 34px
+      display: ['2.75rem', { lineHeight: '1' }] // 44px 比赛中心大比分
     },
     /* 统一圆角设计规范刻度（从微控件到浮层弹窗的严格阶梯）：
        sm(2px) 赛果块/微小条柱 · DEFAULT(4px) 小标签 · md(6px) 按钮/输入框/胶囊控件 ·
@@ -131,10 +132,39 @@ export default {
         'live-pulse': {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.4' }
+        },
+        'soft-pulse': {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.55' }
+        },
+        'score-pop': {
+          '0%': { transform: 'scale(1)' },
+          '32%': { transform: 'scale(1.06)' },
+          '100%': { transform: 'scale(1)' }
+        },
+        'view-enter': {
+          from: { opacity: '0' },
+          to: { opacity: '1' }
+        },
+        skeleton: {
+          '0%': { backgroundPosition: '200% 0' },
+          '100%': { backgroundPosition: '-200% 0' }
         }
       },
       animation: {
-        'live-pulse': 'live-pulse 1.8s ease-in-out infinite'
+        'live-pulse': 'live-pulse 1.8s ease-in-out infinite',
+        'soft-pulse': 'soft-pulse 2.4s ease-in-out infinite',
+        'score-pop': 'score-pop 520ms cubic-bezier(0.22, 1, 0.36, 1)',
+        'view-enter': 'view-enter 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+        skeleton: 'skeleton 1.4s ease-in-out infinite'
+      },
+      transitionDuration: {
+        fast: '120ms',
+        base: '180ms',
+        slow: '280ms'
+      },
+      transitionTimingFunction: {
+        out: 'cubic-bezier(0.22, 1, 0.36, 1)'
       }
     }
   },

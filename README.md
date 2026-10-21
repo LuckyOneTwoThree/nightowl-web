@@ -10,7 +10,7 @@
   <br />
 
   <img src="https://img.shields.io/badge/platform-Windows-2b6cb0?style=flat-square" alt="platform" />
-  <img src="https://img.shields.io/badge/release-v0.1.24-2f855a?style=flat-square" alt="release" />
+  <img src="https://img.shields.io/badge/release-v0.1.25-2f855a?style=flat-square" alt="release" />
   <img src="https://img.shields.io/badge/electron-33-47848f?style=flat-square" alt="electron" />
   <img src="https://img.shields.io/badge/react-19-149eca?style=flat-square" alt="react" />
   <img src="https://img.shields.io/badge/tests-passing-38a169?style=flat-square" alt="tests" />
@@ -79,6 +79,9 @@
 - **断流自愈** —— 播放器致命错误自动切下一条直链，保留时间轴，最多自动尝试 2 次并提示已切换
 - **实时比分与关键事件** —— 进行中每 30 秒拉取 ESPN 比分、准确分钟与进球/红黄牌；受防剧透开关控制
 - **内联播放器** —— hls.js + ArtPlayer，懒加载（首屏不背播放器的体积）
+- **比赛中心** —— 右栏赛前/进行中/终场画布：真实近况、交锋、赛季数据；进行中比分与事件 ticker；终场直接看回顾
+- **命令面板** —— `Ctrl / Cmd + K` 搜索球队、比赛、视图与操作，支持 ↑↓ / Enter / Esc
+- **动效与状态** —— 比分变化、视图切换、骨架屏、平滑滚动，并尊重系统 reduced-motion
 
 ### 📅 浏览与组织
 

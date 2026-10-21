@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { bjClock, bjDate } from '../core/format.js';
 import { teamName } from '../data/index.js';
 import { BrandLogo, Crest, LiveDot, Segmented } from './atoms.jsx';
-import { IconSchedule, IconSettings, IconTonight, IconWeek, IconWinClose, IconWinMax, IconWinMin, IconWinRestore } from './icons.jsx';
+import { IconSchedule, IconSearch, IconSettings, IconTonight, IconWeek, IconWinClose, IconWinMax, IconWinMin, IconWinRestore } from './icons.jsx';
 
 /**
  * 自绘窗口按钮（仅桌面版的 Windows/Linux —— macOS 用系统交通灯）
@@ -80,7 +80,8 @@ export default function TopBar({
   onOpenSettings,
   updateAvailable = false,
   updateVersion = null,
-  onOpenUpdate
+  onOpenUpdate,
+  onOpenPalette
 }) {
   // 时钟是全应用唯一需要秒级显示的地方，把 tick 隔离在本地：
   // 否则 App 每秒重渲染会连带重建赛程视图的 2000+ 列表元素（实测约 9% CPU）。
@@ -134,6 +135,16 @@ export default function TopBar({
       </div>
 
       <div className="no-drag flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onOpenPalette}
+          title="搜索球队、比赛或功能（Ctrl+K）"
+          aria-label="搜索"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary"
+        >
+          <IconSearch size={14} />
+        </button>
+        <span className="mx-0.5 h-4 w-px bg-line-hairline" aria-hidden="true" />
         {primaryTeam ? (
           <button
             type="button"
@@ -167,10 +178,7 @@ export default function TopBar({
             title={updateVersion ? `新版本 v${updateVersion} 可用，点击查看` : '有新版本可用，点击查看'}
             className="inline-flex items-center gap-1.5 rounded-full border border-accent/45 bg-accent/15 px-2.5 py-1 text-2xs font-medium text-accent shadow-[0_0_12px_rgba(245,185,66,0.28)] transition-colors hover:bg-accent/25 cursor-pointer"
           >
-            <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-70" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
-            </span>
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
             {updateVersion ? `新版本 v${updateVersion}` : '新版本'}
           </button>
         )}

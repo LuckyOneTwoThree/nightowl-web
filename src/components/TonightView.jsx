@@ -49,7 +49,9 @@ export default function TonightView({
 
   const jumpToReplay = () => {
     const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    el.scrollTo({ top: el.scrollHeight, behavior: reduce ? 'auto' : 'smooth' });
   };
 
   const renderRow = m => {
@@ -86,7 +88,7 @@ export default function TonightView({
       rivalry={p.ev.rivalry}
       minefield={false}
       dateLabel={zhDate(datePart(p.m.t))}
-      badge={<Chip tone={p.reason === '近期赛果' ? 'neutral' : 'accent'}>{p.reason}</Chip>}
+      badge={<Chip tone={p.followed ? 'accent' : 'neutral'}>{p.reason}</Chip>}
       showSleep={false}
     />
   );
@@ -127,7 +129,7 @@ export default function TonightView({
                 type="button"
                 onClick={jumpToReplay}
                 aria-label="跳到最近值得补看"
-                className="text-2xs text-accent underline-offset-2 hover:underline"
+                className="text-2xs text-text-secondary underline-offset-2 hover:text-text-primary hover:underline"
               >
                 补看 {replayPicks.length}
               </button>

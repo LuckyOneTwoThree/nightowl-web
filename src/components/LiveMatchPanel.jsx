@@ -10,7 +10,10 @@ function TeamRow({ id, score }) {
         <Crest id={id} size={16} />
         <span className="truncate text-2xs font-medium text-text-primary">{teamName(id)}</span>
       </span>
-      <span className="font-num text-sm font-semibold tabular-nums text-text-primary">
+      <span
+        key={score == null ? '—' : score}
+        className="animate-score-pop font-num text-sm font-semibold tabular-nums text-text-primary"
+      >
         {score == null ? '—' : score}
       </span>
     </div>
@@ -98,7 +101,7 @@ export default function LiveMatchPanel({
 
       {ok && !hidden && !postponed && (
         <>
-          <div className="mt-2 space-y-1">
+          <div className="mt-2 space-y-1" aria-live="polite" aria-atomic="true">
             <TeamRow id={match.h} score={data.score?.h} />
             <TeamRow id={match.a} score={data.score?.a} />
           </div>

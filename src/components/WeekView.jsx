@@ -206,9 +206,9 @@ export default function WeekView({
                     <Meta num className="shrink-0">
                       {zhDate(e.m.t.split('T')[0])} {e.m.t.split('T')[1]}
                     </Meta>
-                    <Chip tone="danger" className="ml-auto shrink-0">
+                    <Chip tone="warn" className="ml-auto shrink-0">
                       <IconWarn size={11} />
-                      建议睡觉
+                      雷区
                     </Chip>
                   </div>
                   <p className="mt-1 truncate text-xs text-text-secondary">

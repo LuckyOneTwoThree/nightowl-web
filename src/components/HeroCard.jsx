@@ -81,7 +81,7 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
             {copy.label}
           </span>
           <Stars star={ev.star} />
-          {ev.isFollowed && <Chip tone="accent">主队</Chip>}
+          {ev.isFollowed && <Chip tone="neutral">主队</Chip>}
           {live && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-live/12 px-2 py-0.5">
               <LiveDot />
@@ -127,17 +127,15 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
               <span className="font-num text-2xl font-bold leading-none tabular-nums text-live">{minute}′</span>
               <span className="mt-1 text-2xs font-medium text-live">进行中</span>
             </>
-          ) : countdownLabel ? (
-            <>
-              <span className="font-num text-2xl font-bold leading-none tabular-nums text-accent">{countdownLabel}</span>
-              <span className="mt-1 text-2xs text-text-faint">距开球</span>
-            </>
           ) : (
             <>
+              {/* 大倒计时交给右侧 Match Center；Hero 只保留开球时刻与一行短倒计时，避免双大数字 */}
               <span className="font-num text-2xl font-bold leading-none tabular-nums text-text-primary">
                 {m.tbd ? '--:--' : hm(m.t)}
               </span>
-              <span className="mt-1 text-2xs text-text-faint">{m.tbd ? '时间待定' : '开球'}</span>
+              <span className="mt-1 text-2xs text-text-faint">
+                {m.tbd ? '时间待定' : countdownLabel ? `距开球 ${countdownLabel}` : '开球'}
+              </span>
             </>
           )}
           <span className="mt-1 font-num text-2xs text-text-faint">VS</span>

@@ -84,8 +84,10 @@ export default function RecapTimeline({ match, spoilerFree = true, revealed = fa
       </SectionLabel>
 
       {status === 'loading' && (
-        <div className="mt-1.5 rounded-md border border-dashed border-line-hairline bg-surface-raised/30 px-2.5 py-2.5 text-center text-2xs text-text-muted">
-          正在加载关键事件…
+        <div className="mt-1.5 space-y-1.5" aria-busy="true" aria-label="正在加载比赛回顾">
+          <span className="skeleton block h-7 w-full" />
+          <span className="skeleton block h-2.5 w-full" />
+          <span className="skeleton block h-2.5 w-4/5" />
         </div>
       )}
 

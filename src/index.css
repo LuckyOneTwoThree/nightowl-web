@@ -94,7 +94,7 @@
  *      需要新色就在此处加 token 并说明语义，不要在 className 里发明。
  *   2. 颜色只表达**语义**（品牌 / 直播 / 额度 / 警告 / 档位 / 赛果 / 联赛），
  *      不做装饰性上色。一屏之内强调元素不超过一个。
- *   3. 字号只允许 tailwind.config.js `theme.fontSize` 里的 8 档（2xs…3xl）；
+ *   3. 字号只允许 tailwind.config.js `theme.fontSize` 里的 9 档（2xs…3xl + display）；
  *      禁止 text-[Npx] 任意值。
  *      可读性下限是 11px —— 中文回退 PingFang SC 后 10px 以下会糊。
  * ==================================================================== */
@@ -246,6 +246,19 @@
     animation: hint-enter 0.18s ease-out;
   }
 
+  /* 骨架屏：只在加载态出现，避免文字跳动 */
+  .skeleton {
+    border-radius: 6px;
+    background-image: linear-gradient(
+      90deg,
+      rgb(var(--surface-raised-rgb)) 25%,
+      rgb(var(--surface-press-rgb)) 37%,
+      rgb(var(--surface-raised-rgb)) 63%
+    );
+    background-size: 200% 100%;
+    animation: skeleton 1.4s ease-in-out infinite;
+  }
+
   /* 横向日期条边缘渐隐：把「半截日期」变成有意为之的边界，同时不遮挡点击 */
   .date-strip-mask {
     -webkit-mask-image: linear-gradient(
@@ -305,6 +318,15 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes skeleton {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
   }
 }
 
