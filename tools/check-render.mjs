@@ -88,6 +88,7 @@ app.whenReady().then(async () => {
       localStorage.setItem('onboardingDone','1');
       localStorage.setItem('nightowl:splash_shown','1');
       localStorage.setItem('followedTeams','["ARS"]');
+      localStorage.setItem('spoilerFree','false');
       true
     `);
     await win.webContents.reload();
@@ -151,6 +152,33 @@ app.whenReady().then(async () => {
     ok('点击比赛后应用仍存活', rowClicked && after.rootChildren >= 1, JSON.stringify(after));
     ok(
       '点击后无新增致命错误',
+      !errors.some(m => /Uncaught|ReferenceError|TypeError|is not defined|Cannot read/i.test(m)),
+      errors.join(' | ')
+    );
+
+    await waitLoad(win, `${base}/?view=tonight&match=PL-7-NFO-ARS`);
+    await sleep(1800);
+    const detail = await win.webContents.executeJavaScript(`
+      (() => {
+        const root = document.getElementById('match-highlights');
+        return {
+          rootChildren: document.getElementById('root')?.children.length || 0,
+          text: root?.innerText || '',
+          links: root ? [...root.querySelectorAll('a')].map(a => ({
+            label: (a.textContent || '').trim(),
+            href: decodeURIComponent(a.getAttribute('href') || '')
+          })) : []
+        };
+      })()
+    `);
+    const domestic = detail.links.filter(l => ['央视频', '咪咕视频', '爱奇艺体育', 'CCTV'].some(n => l.label.includes(n)));
+    ok('★ 完赛详情渲染国内官方集锦入口', detail.rootChildren >= 1 && domestic.length >= 2, JSON.stringify(detail));
+    ok(
+      '★ 国内集锦链接带双方队名与“集锦”',
+      domestic.length > 0 && domestic.every(l => l.href.includes('集锦') && l.href.includes('阿森纳')),
+      JSON.stringify(detail.links)
+    );
+    ok('★ 完赛详情仍无致命错误',
       !errors.some(m => /Uncaught|ReferenceError|TypeError|is not defined|Cannot read/i.test(m)),
       errors.join(' | ')
     );

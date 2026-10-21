@@ -10,7 +10,7 @@
   <br />
 
   <img src="https://img.shields.io/badge/platform-Windows-2b6cb0?style=flat-square" alt="platform" />
-  <img src="https://img.shields.io/badge/release-v0.1.26-2f855a?style=flat-square" alt="release" />
+  <img src="https://img.shields.io/badge/release-v0.1.27-2f855a?style=flat-square" alt="release" />
   <img src="https://img.shields.io/badge/electron-33-47848f?style=flat-square" alt="electron" />
   <img src="https://img.shields.io/badge/react-19-149eca?style=flat-square" alt="react" />
   <img src="https://img.shields.io/badge/tests-passing-38a169?style=flat-square" alt="tests" />
@@ -72,7 +72,7 @@
 - **本地流代理** —— 只监听 `127.0.0.1`；白名单授权、M3U8 全量 URI 重写（覆盖 10 类载体）、Range 透传、并发闸门、会话授权 TTL 回收
 - **三层超时** —— 等响应头 / 流静默（直播流本就该跑几小时，用空闲超时而非总时长）/ 排队超时，任何一层缺失都可能被上游僵住拖死
 - **官方平台直达** —— 央视频、咪咕、爱奇艺体育、腾讯体育、CCTV、直播吧，一键跳转系统浏览器
-- **赛后官方集锦** —— 已完赛场次自动索引官方 YouTube 集锦（TheSportsDB 元数据），在系统浏览器打开；UCL 等暂无索引的场次回退到官方平台
+- **赛后官方集锦** —— 国内官方入口优先（咪咕 / 爱奇艺体育 / 央视频 / CCTV 站内搜索「双方队名 + 集锦」），YouTube 作为国际源；已完赛场次自动索引官方 YouTube 集锦（TheSportsDB 元数据），在系统浏览器打开；UCL 等暂无索引的场次回退到官方平台
 - **官方回放搜索** —— 终场后按「主队 客队 回放」生成咪咕 / 央视频 / 爱奇艺 / CCTV 深链，不抓取、不代理版权视频
 - **赛后补看** —— 最近 96 小时「值得补看」列表（关注球队 / 人工标记 / 高看点），点开即看比分、进球红黄牌时间线与官方集锦
 - **通知闭环** —— 赛前 15 分钟、进球/红牌、终场系统通知；窗口在前台时自动抑制实时事件提醒，防剧透未揭晓时全部静默

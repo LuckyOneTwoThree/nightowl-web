@@ -67,7 +67,7 @@ export default function RecapTimeline({ match, spoilerFree = true, revealed = fa
       <SectionLabel
         right={
           <span className="inline-flex items-center gap-1.5">
-            <Meta>ESPN · 终场</Meta>
+            <Meta>ESPN · 文字事件</Meta>
             {status !== 'loading' && (
               <IconButton
                 label="刷新比赛回顾"

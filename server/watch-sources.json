@@ -4,7 +4,8 @@
     "纪律：只登记【已实测可达】的条目；每条带 verifiedAt。",
     "改这里不需要重新构建；改动后跑 `node tools/check-sources.mjs` 复核。",
     "第三方聚合站如需接入：在 watch 下新增条目（kind=portal 或 embed），",
-    "先跑 check-sources 确认可达，再由 P5 抓取模块对齐。"
+    "先跑 check-sources 确认可达，再由 P5 抓取模块对齐。",
+    "highlightTemplate 只是官方站内搜索深链，不解析视频；leagues 仅用于排序，不代表版权承诺。"
   ],
 
   "official": [
@@ -15,6 +16,8 @@
       "homeUrl": "https://yangshipin.cn/",
       "searchTemplate": "https://yangshipin.cn/search?keyword={q}",
       "replayTemplate": "https://yangshipin.cn/search?keyword={q}",
+      "highlightTemplate": "https://yangshipin.cn/search?keyword={q}",
+      "leagues": ["PL", "PD", "SA", "BL", "FL", "UCL"],
       "note": "官方免费源。CSP frame-ancestors 'self'，禁止内嵌，仅支持跳转。回放/集锦需在站内搜索。",
       "verifiedAt": "2026-10-21"
     },
@@ -25,6 +28,8 @@
       "homeUrl": "https://www.miguvideo.com/",
       "searchTemplate": "https://www.miguvideo.com/mgs/website/prd/search.html?keyword={q}",
       "replayTemplate": "https://www.miguvideo.com/mgs/website/prd/search.html?keyword={q}",
+      "highlightTemplate": "https://www.miguvideo.com/mgs/website/prd/search.html?keyword={q}",
+      "leagues": ["PL", "PD", "SA", "FL"],
       "note": "官方源。搜索页可达但为 JS 渲染，只能跳转；具体赛事回放可能需要登录/会员。",
       "verifiedAt": "2026-10-21"
     },
@@ -35,6 +40,8 @@
       "homeUrl": "https://sports.iqiyi.com/",
       "searchTemplate": "https://so.iqiyi.com/so/q_{q}",
       "replayTemplate": "https://so.iqiyi.com/so/q_{q}",
+      "highlightTemplate": "https://so.iqiyi.com/so/q_{q}",
+      "leagues": ["UCL", "PD"],
       "note": "官方付费源，部分场次需会员。站内搜索可用，具体回放以搜索结果为准。",
       "verifiedAt": "2026-10-21"
     },
@@ -45,6 +52,8 @@
       "homeUrl": "https://sports.qq.com/",
       "searchTemplate": null,
       "replayTemplate": null,
+      "highlightTemplate": null,
+      "leagues": [],
       "note": "官方源，部分场次需会员。搜索入口未实测稳定，暂以首页入口接入。",
       "verifiedAt": "2026-10-21"
     },
@@ -55,7 +64,9 @@
       "homeUrl": "https://sports.cctv.com/",
       "searchTemplate": "https://search.cctv.com/search.php?qtext={q}",
       "replayTemplate": "https://search.cctv.com/search.php?qtext={q}",
-      "note": "CCTV5/CCTV5+ 官方入口；免费场次可回看，具体以站内搜索结果为准。",
+      "highlightTemplate": "https://search.cctv.com/search.php?qtext={q}",
+      "leagues": ["PL", "PD", "SA", "BL", "FL", "UCL"],
+      "note": "CCTV5/CCTV5+ 官方入口；免费场次可回看，具体以站内搜索结果为准。搜索按节目索引，不保证每场都有。",
       "verifiedAt": "2026-10-21"
     }
   ],

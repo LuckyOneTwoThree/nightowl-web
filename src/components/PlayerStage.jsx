@@ -41,7 +41,9 @@ const FALLBACK_SOURCES = [
     kind: 'deeplink',
     homeUrl: 'https://yangshipin.cn/',
     searchTemplate: 'https://yangshipin.cn/search?keyword={q}',
-    replayTemplate: 'https://yangshipin.cn/search?keyword={q}'
+    replayTemplate: 'https://yangshipin.cn/search?keyword={q}',
+    highlightTemplate: 'https://yangshipin.cn/search?keyword={q}',
+    leagues: ['PL', 'PD', 'SA', 'BL', 'FL', 'UCL']
   },
   { id: 'zhibo8', name: '直播吧', kind: 'portal', homeUrl: 'https://www.zhibo8.com/', searchTemplate: null }
 ];
@@ -939,6 +941,7 @@ export default function PlayerStage({
       <div id="match-highlights" className="shrink-0 scroll-mt-4">
         <HighlightsPanel
           match={match}
+          sources={sources}
           spoilerFree={spoilerFree}
           revealed={revealed}
           onReveal={() => onReveal?.(match.id)}
@@ -946,7 +949,7 @@ export default function PlayerStage({
       </div>
 
       <div className="mt-2.5 shrink-0 border-t border-line-hairline pt-2.5">
-        <SectionLabel>{finished ? '官方回放' : '官方平台'}</SectionLabel>
+        <SectionLabel>{finished ? '官方全场回放' : '官方平台'}</SectionLabel>
         <div className="mt-1.5">
           <OfficialLinks sources={sources} match={match} replay={finished} />
         </div>
@@ -1081,6 +1084,7 @@ export default function PlayerStage({
               <div id="match-highlights" className="scroll-mt-4">
                 <HighlightsPanel
                   match={match}
+                  sources={sources}
                   spoilerFree={spoilerFree}
                   revealed={revealed}
                   onReveal={() => onReveal?.(match.id)}

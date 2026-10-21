@@ -17,7 +17,7 @@ import {
   cacheEntryFresh,
   resolveHighlights
 } from '../server/highlights.js';
-import { sourceUrlFor, replayQuery } from '../src/core/watch-sources.js';
+import { sourceUrlFor, replayQuery, highlightQuery, highlightSources } from '../src/core/watch-sources.js';
 import { createServer } from '../server/index.js';
 import { loadRules } from '../server/proxy.js';
 
@@ -217,12 +217,13 @@ console.log('六、resolveHighlights：抓取 / 解析 / 失败降级');
 
 /* ================================================================== */
 console.log('');
-console.log('七、官方回放深链');
+console.log('七、官方回放 / 国内集锦深链');
 {
   const match = { h: 'ARS', a: 'COV' };
   const src = {
     searchTemplate: 'https://example.com/search?q={q}',
     replayTemplate: 'https://example.com/replay?q={q}',
+    highlightTemplate: 'https://example.com/highlight?q={q}',
     homeUrl: 'https://example.com/'
   };
   const q = replayQuery(match);
@@ -239,6 +240,39 @@ console.log('七、官方回放深链');
 
   const home = sourceUrlFor({ homeUrl: src.homeUrl }, match, { replay: true });
   ok('无模板时退回首页', home === src.homeUrl);
+
+  const hq = highlightQuery(match);
+  ok('集锦搜索词包含双方队名与“集锦”', hq === '阿森纳 考文垂 集锦', hq);
+  ok('★ 集锦搜索词不含比分（防剧透）', !/\d+\s*[-:]\s*\d+/.test(hq), hq);
+
+  const highlightUrl = sourceUrlFor(src, match, { highlight: true });
+  ok('★ 集锦模板使用双方队名', highlightUrl === `https://example.com/highlight?q=${encodeURIComponent(hq)}`, highlightUrl);
+
+  const noHighlight = sourceUrlFor(
+    { searchTemplate: src.searchTemplate, homeUrl: src.homeUrl },
+    match,
+    { highlight: true }
+  );
+  ok('无 highlightTemplate 时退回 searchTemplate', noHighlight.startsWith('https://example.com/search?q='), noHighlight);
+
+  const sources = [
+    { id: 'a', kind: 'deeplink', searchTemplate: 'https://a.example/?q={q}' },
+    { id: 'b', kind: 'deeplink', highlightTemplate: 'https://b.example/?q={q}', leagues: ['UCL'] },
+    { id: 'c', kind: 'portal', homeUrl: 'https://c.example/' },
+    { id: 'd', kind: 'deeplink', highlightTemplate: 'https://d.example/?q={q}', leagues: ['PL'] },
+    { id: 'e', kind: 'deeplink' }
+  ];
+  const ordered = highlightSources(sources, 'PL');
+  ok('★ 本联赛平台排前，其余保持注册表顺序', ordered.map(s => s.id).join(',') === 'd,a,b', ordered.map(s => s.id).join(','));
+  ok('聚合导航与无搜索模板的源不进入集锦入口', ordered.length === 3, ordered.map(s => s.id).join(','));
+  ok('无联赛信息时保持注册表顺序', highlightSources(sources, '').map(s => s.id).join(',') === 'a,b,d');
+  ok('空源列表安全', highlightSources(null, 'PL').length === 0);
+
+  const registry = JSON.parse(readFileSync(resolve(ROOT, 'server/watch-sources.json'), 'utf8'));
+  ok('每个官方源都声明 highlightTemplate 字段', registry.official.every(s => 'highlightTemplate' in s));
+  ok('集锦模板只允许 https 或 null', registry.official.every(s => s.highlightTemplate === null || /^https:\/\//.test(s.highlightTemplate)));
+  ok('leagues 只含已知联赛码', registry.official.every(s => (s.leagues || []).every(l => ['PL', 'PD', 'SA', 'BL', 'FL', 'UCL'].includes(l))));
+  ok('国内集锦入口至少覆盖两家官方平台', highlightSources(registry.official, 'PL').length >= 2);
 }
 
 /* ================================================================== */

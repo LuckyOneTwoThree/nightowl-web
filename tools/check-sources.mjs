@@ -69,6 +69,13 @@ for (const src of registry.official || []) {
     const s = await probe(url);
     ok(`${src.name} 回放模板可用`, !!s.status && s.status < 400, s.error || `HTTP ${s.status}`);
   }
+
+  if (src.highlightTemplate) {
+    const highlightQuery = encodeURIComponent('阿森纳 考文垂 集锦');
+    const url = src.highlightTemplate.replace('{q}', highlightQuery);
+    const s = await probe(url);
+    ok(`${src.name} 集锦模板可用`, !!s.status && s.status < 400, s.error || `HTTP ${s.status}`);
+  }
 }
 
 /* ================================================================== */
