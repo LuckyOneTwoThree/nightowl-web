@@ -1,37 +1,7 @@
 import { teamName } from '../data/index.js';
+import { EVENT_LABEL, EVENT_TONE, eventSummary } from '../core/live-events.js';
 import { Button, Chip, Crest, IconButton, LiveDot, Meta } from './atoms.jsx';
 import { IconReset, IconReveal, IconWarn } from './icons.jsx';
-
-const EVENT_LABEL = {
-  goal: '进球',
-  own: '乌龙',
-  red: '红牌',
-  yellow: '黄牌',
-  penalty: '点球',
-  var: 'VAR'
-};
-
-const EVENT_TONE = {
-  goal: 'accent',
-  own: 'danger',
-  red: 'danger',
-  yellow: 'warn',
-  penalty: 'neutral',
-  var: 'neutral'
-};
-
-/** ESPN 原文是英文长句；主界面只给中文摘要，完整原文留在 title 里 */
-function eventSummary(ev, match) {
-  const team = ev.side === 'h' ? teamName(match.h) : ev.side === 'a' ? teamName(match.a) : '';
-  const label = EVENT_LABEL[ev.type] || '事件';
-  if (!team) return label;
-  if (ev.type === 'goal') return `${team}进球`;
-  if (ev.type === 'own') return `${team}乌龙`;
-  if (ev.type === 'red') return `${team}红牌`;
-  if (ev.type === 'yellow') return `${team}黄牌`;
-  if (ev.type === 'var') return `VAR · ${team}`;
-  return `${team}${label}`;
-}
 
 function TeamRow({ id, score }) {
   return (

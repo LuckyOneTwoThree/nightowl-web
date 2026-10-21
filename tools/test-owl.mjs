@@ -20,10 +20,12 @@ import {
   liveCountAt,
   groupTonight,
   sameNightPicks,
-  upcomingForTeams
+  upcomingForTeams,
+  rankReplayPicks
 } from '../src/core/owl.js';
 import { getFixtures } from '../src/data/index.js';
 import { compareSemver, isNewerVersion } from '../src/core/semver.js';
+import { datePart, zhDate } from '../src/core/format.js';
 
 /** 运行时数据源（与界面一致：保鲜同步后可替换） */
 const fixtures = getFixtures();
@@ -228,6 +230,45 @@ console.log('六、右栏模块区（后续赛程 / 同夜推荐）');
   ok('★ 同夜推荐按夜猫指数降序', picks.every((p, i) => i === 0 || picks[i - 1].index >= p.index));
   ok('同夜推荐不超过 3 条', picks.length <= 3);
   ok('同夜推荐与锚点同一夜猫日', picks.every(p => E.owlDay(p.m.t) === E.owlDay(anchor.t)));
+}
+
+console.log('');
+console.log('六·二、最近值得补看');
+{
+  const now = E.ts('2026-10-21T12:00');
+  const prefs = {
+    followedTeams: ['RMA'],
+    followedLeagues: ['PL', 'PD'],
+    weeklyBudget: 4,
+    spoilerFree: true,
+    notifyBefore15: true,
+    notifyLiveEvents: true
+  };
+  const mk = (id, h, a, t, extra = {}) => ({
+    id, l: 'PD', r: 1, t, tbd: false, st: 'done', sc: '1-0', h, a, ...extra
+  });
+  const list = [
+    mk('PD-1-RMA-RSO', 'RMA', 'RSO', '2026-10-21T03:00'), // 关注 + replay
+    mk('PD-1-BAR-ATH', 'BAR', 'ATH', '2026-10-21T04:00'), // replay，非关注
+    mk('PL-1-ARS-COV', 'ARS', 'COV', '2026-10-21T05:00', { l: 'PL' }), // 高看点
+    mk('PD-1-ALA-GET', 'ALA', 'GET', '2026-10-21T05:30'), // 低看点
+    mk('PD-2-ELC-BAR', 'ELC', 'BAR', '2026-10-21T07:00'), // 今晚已列出，排除
+    mk('PD-1-SEV-RAY', 'SEV', 'RAY', '2026-10-16T03:00'), // 超出 96h
+    mk('PD-1-VAL-BET', 'VAL', 'BET', '2026-10-21T03:00', { st: 'sched', sc: null }) // 未完赛
+  ];
+
+  const picks = rankReplayPicks(list, now, prefs, 3);
+  ok('返回不超过 limit', picks.length <= 3);
+  ok('★ 关注球队排第一', picks[0]?.m.id === 'PD-1-RMA-RSO' && picks[0].reason === '关注球队', picks[0]?.reason);
+  ok('★ replay 标记的非关注场次进入列表', picks.some(p => p.m.id === 'PD-1-BAR-ATH' && p.reason === '值得补看'));
+  ok('高看点场次进入列表', picks.some(p => p.m.id === 'PL-1-ARS-COV'));
+  ok('★ 今晚已列出的场次不重复', !picks.some(p => p.m.id === 'PD-2-ELC-BAR'));
+  ok('超过 48h 的旧赛果不进入', !picks.some(p => p.m.id === 'PD-1-SEV-RAY'));
+  ok('未完赛不进入', !picks.some(p => p.m.id === 'PD-1-VAL-BET'));
+  ok('低看点无关注无 replay 不进入', !picks.some(p => p.m.id === 'PD-1-ALA-GET'));
+  ok('空输入返回空', rankReplayPicks([], now, prefs, 3).length === 0);
+  ok('limit=1 只返回一场', rankReplayPicks(list, now, prefs, 1).length === 1);
+  ok('★ 补看日期标签先取 datePart（避免 10月NaN日）', zhDate(datePart('2026-10-19T23:30')) === '10月19日');
 }
 
 console.log('');

@@ -3,6 +3,7 @@ import { getFixtures, setFixtures, storylines } from './data/index.js';
 import { countdown as engineCountdown, ts, MATCH_DURATION_MS, sleepTier } from './core/engine.js';
 import { humanCountdownShort } from './core/format.js';
 import { loadPrefs, savePrefs } from './core/prefs.js';
+import { isPrematchDue, prematchNotification } from './core/notifications.js';
 import {
   computeTonight,
   computeWeek,
@@ -10,7 +11,8 @@ import {
   defaultScheduleFilters,
   liveCountAt,
   stateOf,
-  evalOne
+  evalOne,
+  computeReplayPicks
 } from './core/owl.js';
 import { narrativeOf } from './core/narrative.js';
 
@@ -355,6 +357,47 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const tonight = useMemo(() => computeTonight(Date.now(), prefs), [minuteKey, prefs, dataRev]);
 
+  // 最近值得补看：只扫描最近 48h，排除今晚已在赛程里的场次；不新增数据源
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const replayPicks = useMemo(() => computeReplayPicks(Date.now(), prefs, 3), [minuteKey, prefs, dataRev]);
+
+  // 赛前 15 分钟提醒：关注球队 + 今晚之选；同一场只提醒一次
+  const notifiedPrematchRef = useRef(new Set());
+  useEffect(() => {
+    if (!prefs.notifyBefore15 || !window.desktop?.notify) return;
+    const now = Date.now();
+    const followed = new Set(prefs.followedTeams);
+    const heroId = tonight.hero?.m.id || null;
+
+    for (const m of getFixtures()) {
+      if (m.st !== 'sched' || m.tbd) continue;
+      const isHero = m.id === heroId;
+      const isFollowed = followed.has(m.h) || followed.has(m.a);
+      if (!isHero && !isFollowed) continue;
+      if (!isPrematchDue(m, now)) continue;
+      if (notifiedPrematchRef.current.has(m.id)) continue;
+
+      notifiedPrematchRef.current.add(m.id);
+      const msg = prematchNotification(m, { isHero });
+      window.desktop.notify({
+        ...msg,
+        matchId: m.id,
+        kind: 'prematch',
+        silentWhenFocused: false
+      });
+    }
+  }, [clockTs, dataRev, prefs.notifyBefore15, prefs.followedTeams, tonight.hero]);
+
+  // 点击系统通知 → 回到对应比赛
+  useEffect(() => {
+    if (!window.desktop?.onNotificationFocus) return undefined;
+    return window.desktop.onNotificationFocus(payload => {
+      if (!payload?.matchId) return;
+      setView('tonight');
+      setActiveMatchId(payload.matchId);
+    });
+  }, []);
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const week = useMemo(
     () => (view === 'week' ? computeWeek(Date.now(), prefs) : null),
@@ -451,6 +494,7 @@ export default function App() {
               revealed={revealed}
               onReveal={reveal}
               countdownText={countdownText}
+              replayPicks={replayPicks}
             />
           )}
 
@@ -497,6 +541,7 @@ export default function App() {
                 spoilerFree={prefs.spoilerFree}
                 revealed={activeMatch ? revealed.has(activeMatch.id) : false}
                 onReveal={reveal}
+                notifyLiveEvents={prefs.notifyLiveEvents}
               />
               <IntelPanel
                 match={activeMatch}

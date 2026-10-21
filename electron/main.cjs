@@ -15,7 +15,7 @@
  *   注意 .cjs 后缀是必须的 —— 否则会被 "type":"module" 当成 ESM。
  */
 
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell, Notification } = require('electron');
 const path = require('node:path');
 
 const PORT_CANDIDATES = [3100, 3101, 3102, 3103, 3104];
@@ -182,6 +182,47 @@ ipcMain.on('win:close', () => mainWindow?.close());
 ipcMain.on('win:open-external', (_event, url) => {
   if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
     shell.openExternal(url);
+  }
+});
+
+/**
+ * 系统通知（赛前 / 进球红牌 / 终场）
+ *
+ * 渲染层只传文案和 matchId；是否在前台抑制由主进程判断 ——
+ * 用户正在看应用时，进球提醒只会打断，不应再弹一次系统通知。
+ */
+ipcMain.on('app:notify', (_event, payload) => {
+  try {
+    if (!Notification.isSupported() || !mainWindow || mainWindow.isDestroyed()) return;
+
+    const title = String(payload?.title || '').trim().slice(0, 120);
+    const body = String(payload?.body || '').trim().slice(0, 300);
+    if (!title) return;
+
+    const focused = mainWindow.isFocused() && !mainWindow.isMinimized();
+    if (payload?.silentWhenFocused && focused) return;
+
+    const matchId = typeof payload?.matchId === 'string' ? payload.matchId.slice(0, 120) : null;
+    const kind = typeof payload?.kind === 'string' ? payload.kind.slice(0, 32) : null;
+
+    const notice = new Notification({
+      title,
+      body,
+      icon: path.join(__dirname, '../build/icon.png'),
+      silent: false
+    });
+
+    notice.on('click', () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+      mainWindow.webContents.send('notification:focus', { matchId, kind });
+    });
+
+    notice.show();
+  } catch (err) {
+    console.warn('[main] 系统通知发送失败:', err?.message || err);
   }
 });
 

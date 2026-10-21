@@ -15,6 +15,7 @@ const KEY = {
   budget: 'weeklyBudget',
   spoilerFree: 'spoilerFree',
   notify: 'notifyBefore15',
+  liveNotify: 'notifyLiveEvents',
   theme: 'theme'
 };
 
@@ -31,6 +32,7 @@ export const defaultPrefs = () => ({
   weeklyBudget: DEFAULT_BUDGET_HOURS,
   spoilerFree: true,
   notifyBefore15: true,
+  notifyLiveEvents: true,
   theme: DEFAULT_THEME
 });
 
@@ -86,6 +88,7 @@ export function loadPrefs() {
     weeklyBudget: readNumber(KEY.budget, d.weeklyBudget),
     spoilerFree: readJSON(KEY.spoilerFree, d.spoilerFree) !== false,
     notifyBefore15: readJSON(KEY.notify, d.notifyBefore15) !== false,
+    notifyLiveEvents: readJSON(KEY.liveNotify, d.notifyLiveEvents) !== false,
     theme: 'dark'
   };
 }
@@ -97,6 +100,7 @@ export function savePrefs(p) {
     localStorage.setItem(KEY.budget, String(p.weeklyBudget));
     localStorage.setItem(KEY.spoilerFree, JSON.stringify(p.spoilerFree));
     localStorage.setItem(KEY.notify, JSON.stringify(p.notifyBefore15));
+    localStorage.setItem(KEY.liveNotify, JSON.stringify(p.notifyLiveEvents));
     localStorage.setItem(KEY.theme, 'dark');
   } catch {
     // 存储不可用时静默降级：本次会话仍可用，只是不持久化

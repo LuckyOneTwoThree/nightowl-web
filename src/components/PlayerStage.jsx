@@ -5,7 +5,11 @@ import { ts, countdown as engineCountdown } from '../core/engine.js';
 import { Button, Crest, Hint, IconButton, LiveDot, Meta, SectionLabel } from './atoms.jsx';
 import HighlightsPanel from './HighlightsPanel.jsx';
 import LiveMatchPanel from './LiveMatchPanel.jsx';
+import RecapTimeline from './RecapTimeline.jsx';
 import { sourceUrlFor } from '../core/watch-sources.js';
+import { eventKey, shouldNotifyEvent } from '../core/live-events.js';
+import { liveEventNotification, fullTimeNotification } from '../core/notifications.js';
+import { autoSwitchDecision } from '../core/line-switch.js';
 import {
   IconCalendar,
   IconCheck,
@@ -283,7 +287,8 @@ export default function PlayerStage({
   isOverlayOpen = false,
   spoilerFree = true,
   revealed = false,
-  onReveal
+  onReveal,
+  notifyLiveEvents = true
 }) {
   // 秒级刷新只存在于本组件（倒计时文本与进行中的分钟数）。
   // 若由 App 供秒级 now，每秒重渲染会波及整个视图树 —— 赛程视图会每秒
@@ -319,6 +324,7 @@ export default function PlayerStage({
   const [liveData, setLiveData] = useState(null);
   const [liveLoading, setLiveLoading] = useState(false);
   const [liveRefreshing, setLiveRefreshing] = useState(false);
+  const [lineNotice, setLineNotice] = useState(null);
 
   // 宽屏模式下紧凑单行精选线路（激活线路必在视野内，最多 3 条以确保严格单行不换行）
   const visibleTheaterLines = useMemo(() => {
@@ -376,8 +382,80 @@ export default function PlayerStage({
   const activeLineIdRef = useRef(activeLineId);
   activeLineIdRef.current = activeLineId;
 
+  const linesRef = useRef(lines);
+  linesRef.current = lines;
+
+  const autoSwitchRef = useRef({ matchId: null, count: 0 });
+
   const liveDataRef = useRef(liveData);
   liveDataRef.current = liveData;
+
+  /** 用户主动换线：重置自动换线计数，避免手动操作后仍被“已尝试 2 次”卡住 */
+  const manualSelectLine = useCallback(
+    line => {
+      autoSwitchRef.current.count = 0;
+      selectLine(line);
+    },
+    [selectLine]
+  );
+
+  /**
+   * 播放器错误：优先自动切下一条直链
+   *
+   * 只对直链生效；最多自动尝试 2 次，之后保留错误让用户手动处理。
+   * 600ms 延迟 + 当前线路校验：用户在这段时间手动换线时不再抢切。
+   */
+  const handlePlayerError = useCallback(
+    message => {
+      const msg = String(message || '播放失败');
+      const currentMatch = matchRef.current;
+      const expectedLineId = activeLineIdRef.current;
+      const decision = autoSwitchDecision({
+        lines: linesRef.current,
+        activeId: expectedLineId,
+        attempts: autoSwitchRef.current.count,
+        maxAttempts: 2
+      });
+
+      if (!decision.switch) {
+        setError(
+          decision.reason === 'exhausted' ? `${msg}（已自动尝试 2 条线路）` : msg
+        );
+        return;
+      }
+
+      autoSwitchRef.current.count += 1;
+      setError(null);
+      setLineNotice(`当前线路中断，已自动切换到备用线路（${autoSwitchRef.current.count}/2）`);
+
+      setTimeout(() => {
+        if (matchRef.current?.id !== currentMatch?.id) return;
+        if (activeLineIdRef.current !== expectedLineId) return;
+        selectLine(decision.line);
+      }, 600);
+    },
+    [selectLine]
+  );
+
+  // 切场时重置自动换线计数与提示
+  useEffect(() => {
+    autoSwitchRef.current = { matchId: match?.id || null, count: 0 };
+    setLineNotice(null);
+  }, [match?.id]);
+
+  // 自动切换提示 6 秒后消失，不长期占据线路区
+  useEffect(() => {
+    if (!lineNotice) return undefined;
+    const timer = setTimeout(() => setLineNotice(null), 6000);
+    return () => clearTimeout(timer);
+  }, [lineNotice]);
+
+  const liveNotifyRef = useRef({
+    matchId: null,
+    initialized: false,
+    keys: new Set(),
+    state: null
+  });
 
   /**
    * 拉取实时比分/事件
@@ -505,6 +583,70 @@ export default function PlayerStage({
     return () => clearInterval(timer);
   }, [match?.id, state, loadLive]);
 
+  /**
+   * 进球/红牌/终场系统通知
+   *
+   * 第一次快照只做基线，不补发历史事件；之后只对新增事件提醒。
+   * 防剧透未揭晓时全部静默；窗口在前台时由主进程再抑制一次。
+   */
+  useEffect(() => {
+    if (!liveData?.ok || !match) return;
+    const ref = liveNotifyRef.current;
+
+    if (ref.matchId !== match.id) {
+      ref.matchId = match.id;
+      ref.initialized = false;
+      ref.keys = new Set();
+      ref.state = liveData.state;
+    }
+
+    const events = liveData.events || [];
+    const keys = events.map(eventKey);
+
+    if (!ref.initialized) {
+      ref.initialized = true;
+      ref.keys = new Set(keys);
+      ref.state = liveData.state;
+      return;
+    }
+
+    const canNotify =
+      notifyLiveEvents &&
+      !(spoilerFree && !revealed) &&
+      Boolean(window.desktop?.notify);
+
+    if (canNotify) {
+      for (const ev of events) {
+        const key = eventKey(ev);
+        if (ref.keys.has(key)) continue;
+        ref.keys.add(key);
+        if (!shouldNotifyEvent(ev)) continue;
+        const msg = liveEventNotification(match, liveData, ev);
+        window.desktop.notify({
+          ...msg,
+          matchId: match.id,
+          kind: 'live-event',
+          silentWhenFocused: true
+        });
+      }
+
+      if (ref.state !== 'finished' && liveData.state === 'finished') {
+        const msg = fullTimeNotification(match, liveData);
+        window.desktop.notify({
+          ...msg,
+          matchId: match.id,
+          kind: 'fulltime',
+          silentWhenFocused: true
+        });
+      }
+    } else {
+      // 静默时也要把新事件记入基线，避免用户揭晓后把旧事件一次性补发
+      for (const key of keys) ref.keys.add(key);
+    }
+
+    ref.state = liveData.state;
+  }, [liveData, match?.id, notifyLiveEvents, spoilerFree, revealed]);
+
   // 临界窗口自动静默探活机制（赛前 30 分钟 ~ 比赛进行中且缺源）
   useEffect(() => {
     if (!match?.t) return;
@@ -556,7 +698,7 @@ export default function PlayerStage({
     const directLines = lines.filter(l => l.isDirect && l.url);
     if (!directLines.length) return;
     const currIdx = directLines.findIndex(l => l.id === activeLineId);
-    selectLine(directLines[(currIdx + 1) % directLines.length]);
+    manualSelectLine(directLines[(currIdx + 1) % directLines.length]);
   };
 
   if (!match) {
@@ -584,6 +726,9 @@ export default function PlayerStage({
       text: error,
       action: directLines.length > 1 ? { label: '换一条线路', onClick: nextLine } : null
     });
+  }
+  if (lineNotice) {
+    notices.push({ tone: 'warn', text: lineNotice, action: null });
   }
   if (liveInfo?.scrapeError && (live || isNearKickoff)) {
     notices.push({ tone: 'warn', text: '聚合站未响应，已回退到官方平台直达', action: null });
@@ -617,7 +762,7 @@ export default function PlayerStage({
             </div>
           }
         >
-          <Player src={proxyUrl} kind={streamKind} onError={setError} onAspectRatio={setAspectRatio} />
+          <Player src={proxyUrl} kind={streamKind} onError={handlePlayerError} onAspectRatio={setAspectRatio} />
         </Suspense>
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-stage-bg">
@@ -832,7 +977,7 @@ export default function PlayerStage({
         // 列数按容器实际宽度自适应；在桌面端作为 flex-1 弹性填充高度并支持顺畅滚动
         <div className="scrollbar-thin -mr-1 mt-2.5 grid min-h-[80px] max-h-[220px] xl:max-h-none xl:flex-1 content-start gap-1.5 overflow-y-auto pr-1 [grid-template-columns:1fr]">
           {lines.map(l => (
-            <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={selectLine} />
+            <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={manualSelectLine} />
           ))}
         </div>
       ) : (
@@ -852,6 +997,8 @@ export default function PlayerStage({
           ))}
         </div>
       )}
+
+      <RecapTimeline match={match} spoilerFree={spoilerFree} revealed={revealed} />
 
       <HighlightsPanel
         match={match}
@@ -911,7 +1058,7 @@ export default function PlayerStage({
                 {lines.length > 0 ? (
                   <>
                     {visibleTheaterLines.map(l => (
-                      <LineButton key={l.id} l={l} compact active={activeLineId === l.id} onSelect={selectLine} />
+                      <LineButton key={l.id} l={l} compact active={activeLineId === l.id} onSelect={manualSelectLine} />
                     ))}
                     {lines.length > 3 && (
                       <Button variant="ghost" icon={<IconChevronDown />} onClick={() => setTheaterLinesExpanded(true)}>
@@ -980,7 +1127,7 @@ export default function PlayerStage({
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 {lines.map(l => (
-                  <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={selectLine} />
+                  <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={manualSelectLine} />
                 ))}
               </div>
             </div>
@@ -988,6 +1135,7 @@ export default function PlayerStage({
 
           {finished && (
             <div className="w-full rounded-xl border border-line-hairline bg-surface-card px-3 pb-3 shadow-card">
+              <RecapTimeline match={match} spoilerFree={spoilerFree} revealed={revealed} />
               <HighlightsPanel
                 match={match}
                 spoilerFree={spoilerFree}

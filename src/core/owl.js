@@ -234,6 +234,62 @@ export function evalOne(m, prefs) {
   return { ev, index: E.owlIndex(ev, m, E.PRODUCT_WEIGHTS) };
 }
 
+/** 补看窗口：只回看最近两天，避免把整季旧赛果变成推荐噪声 */
+export const REPLAY_WINDOW_MS = 96 * 3600000;
+
+/**
+ * 最近值得补看
+ *
+ * 不含「今晚」已出现在赛程里的场次（由 TonightView 的已结束分区负责），
+ * 只看最近 96h 内、已完赛、且至少满足一项的场次：
+ *   关注球队 / 人工 replay 标记 / 看点 ≥2 星。
+ * 排序：关注球队 → replay 标记 → 星级 → 夜猫指数 → 新鲜度。
+ */
+export function rankReplayPicks(matches, nowTs, prefs, limit = 3) {
+  const currentNight = E.nightOf(nowTs);
+  const currentIds = new Set(
+    (matches || []).filter(m => E.owlDay(m.t) === currentNight).map(m => m.id)
+  );
+
+  const picks = [];
+  for (const m of matches || []) {
+    if (!m || m.st !== 'done' || !m.sc) continue;
+    const kick = E.ts(m.t);
+    if (!Number.isFinite(kick)) continue;
+    const age = nowTs - kick;
+    if (age < 0 || age > REPLAY_WINDOW_MS) continue;
+    if (currentIds.has(m.id)) continue;
+
+    const { ev, index } = evalOne(m, prefs);
+    const replayFlag = !!ev.rec?.replay;
+    if (!ev.isFollowed && !replayFlag && ev.star < 2) continue;
+
+    const reason = ev.isFollowed
+      ? '关注球队'
+      : replayFlag
+        ? '值得补看'
+        : ev.star >= 3
+          ? '高看点'
+          : '近期赛果';
+    const score =
+      (ev.isFollowed ? 1000 : 0) +
+      (replayFlag ? 500 : 0) +
+      ev.star * 100 +
+      index +
+      (age <= 24 * 3600000 ? 20 : 0);
+
+    picks.push({ m, ev, index, reason, followed: ev.isFollowed, replayFlag, age, score });
+  }
+
+  picks.sort((a, b) => b.score - a.score || a.age - b.age);
+  return picks.slice(0, Math.max(0, limit));
+}
+
+/** App 层入口：从当前 fixtures 计算最近值得补看 */
+export function computeReplayPicks(nowTs, prefs, limit = 3) {
+  return rankReplayPicks(getFixtures(), nowTs, prefs, limit);
+}
+
 /** 当前进行中的场次计数（用于顶栏指示） */
 export function liveCountAt(nowTs) {
   let n = 0;

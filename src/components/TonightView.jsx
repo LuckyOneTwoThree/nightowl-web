@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
-import { zhDate, weekdayOf } from '../core/format.js';
+import { useMemo, useRef, useState } from 'react';
+import { datePart, zhDate, weekdayOf } from '../core/format.js';
 import { narrativeOf } from '../core/narrative.js';
 import { evalOne, stateOf, heroTier, groupTonight } from '../core/owl.js';
 import { storylines } from '../data/index.js';
 import HeroCard, { NoMatchCard } from './HeroCard.jsx';
 import MatchRow from './MatchRow.jsx';
-import { EmptyState, LiveDot, SectionLabel } from './atoms.jsx';
+import { Chip, EmptyState, LiveDot, SectionLabel } from './atoms.jsx';
 import { IconEmpty } from './icons.jsx';
 
 /** 夜猫指数口径说明 —— 从常驻版面收进 Hint（P2：界面不再解释自己） */
@@ -28,7 +28,8 @@ export default function TonightView({
   prefs,
   revealed,
   onReveal,
-  countdownText
+  countdownText,
+  replayPicks = []
 }) {
   const { night, slice, hero, focal, minefieldIds } = tonight;
 
@@ -44,6 +45,12 @@ export default function TonightView({
   // 场次会和真正未开赛的排在一起。
   const groups = useMemo(() => groupTonight(slice, now), [slice, now]);
   const [showFinished, setShowFinished] = useState(false);
+  const listRef = useRef(null);
+
+  const jumpToReplay = () => {
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  };
 
   const renderRow = m => {
     const { ev } = evalOne(m, prefs);
@@ -64,6 +71,25 @@ export default function TonightView({
       />
     );
   };
+
+  const renderReplayRow = p => (
+    <MatchRow
+      key={p.m.id}
+      m={p.m}
+      state="finished"
+      active={p.m.id === activeMatchId}
+      now={now}
+      onSelect={onSelect}
+      spoilerFree={prefs.spoilerFree}
+      revealed={revealed.has(p.m.id)}
+      onReveal={onReveal}
+      rivalry={p.ev.rivalry}
+      minefield={false}
+      dateLabel={zhDate(datePart(p.m.t))}
+      badge={<Chip tone={p.reason === '近期赛果' ? 'neutral' : 'accent'}>{p.reason}</Chip>}
+      showSleep={false}
+    />
+  );
 
   const SectionHead = ({ label, count, live }) => (
     <div className="flex items-center gap-1.5 pt-2 pb-1">
@@ -95,20 +121,32 @@ export default function TonightView({
 
       <SectionLabel
         right={
-          groups.live.length > 0 ? (
-            <span className="inline-flex items-center gap-1.5 text-2xs text-live">
-              <LiveDot />
-              {groups.live.length} 场进行中
-            </span>
-          ) : (
-            <span className="font-num text-2xs tabular-nums text-text-faint">{total} 场</span>
-          )
+          <span className="inline-flex items-center gap-2">
+            {replayPicks.length > 0 && (
+              <button
+                type="button"
+                onClick={jumpToReplay}
+                aria-label="跳到最近值得补看"
+                className="text-2xs text-accent underline-offset-2 hover:underline"
+              >
+                补看 {replayPicks.length}
+              </button>
+            )}
+            {groups.live.length > 0 ? (
+              <span className="inline-flex items-center gap-1.5 text-2xs text-live">
+                <LiveDot />
+                {groups.live.length} 场进行中
+              </span>
+            ) : (
+              <span className="font-num text-2xs tabular-nums text-text-faint">{total} 场</span>
+            )}
+          </span>
         }
       >
         今晚赛程 · {zhDate(night)} {weekdayOf(night)}
       </SectionLabel>
 
-      <div className="scrollbar-thin -mr-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1">
+      <div ref={listRef} className="scrollbar-thin -mr-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1">
         {total === 0 ? (
           <EmptyState
             icon={<IconEmpty size={24} />}
@@ -150,6 +188,13 @@ export default function TonightView({
                 {showFinished && groups.finished.map(renderRow)}
               </>
             )}
+          </>
+        )}
+
+        {replayPicks.length > 0 && (
+          <>
+            <SectionHead label="最近值得补看" count={replayPicks.length} />
+            {replayPicks.map(renderReplayRow)}
           </>
         )}
       </div>

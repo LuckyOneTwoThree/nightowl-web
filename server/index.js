@@ -343,6 +343,30 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
         return;
       }
 
+      /* ---------------- 赛后回顾（与实时同一份 ESPN 解析，只对已完赛开放） ---------------- */
+      if (pathname === '/api/recap' && req.method === 'GET') {
+        if (rejectForeignOrigin(req, res)) return;
+        const matchId = searchParams.get('matchId') || '';
+        try {
+          const fixtures = await loadFixturesImpl();
+          const match = fixtures.find(m => m.id === matchId);
+          if (!match) {
+            sendJSON(res, 404, { ok: false, error: '比赛不存在' });
+            return;
+          }
+          if (match.st !== 'done') {
+            sendJSON(res, 200, { ok: false, reason: 'not-finished', events: [] });
+            return;
+          }
+          const force = searchParams.get('refresh') === '1';
+          const result = await resolveLiveImpl(match, { rules, log, force });
+          sendJSON(res, 200, { matchId, ...result });
+        } catch (err) {
+          sendJSON(res, 500, { ok: false, events: [], error: String(err?.message || err) });
+        }
+        return;
+      }
+
       if (pathname === '/api/scores/sync' && req.method === 'POST') {
         if (rejectForeignOrigin(req, res)) return;
         if (rules.scores?.enabled === false) {

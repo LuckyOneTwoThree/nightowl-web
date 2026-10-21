@@ -31,7 +31,10 @@ export default function MatchRow({
   revealed = false,
   onReveal,
   rivalry = null,
-  minefield = false
+  minefield = false,
+  dateLabel = null,
+  badge = null,
+  showSleep = true
 }) {
   const live = state === 'live';
   const minute = live ? liveMinute(ts(m.t), now) : 0;
@@ -77,10 +80,11 @@ export default function MatchRow({
           {/* 元信息行 */}
           <div className="flex items-center gap-2">
             <span className="shrink-0 text-2xs text-text-muted">{leagueName(m.l)}</span>
+            {dateLabel && <span className="shrink-0 text-2xs text-text-faint">{dateLabel}</span>}
             {m.tbd ? (
               <span className="shrink-0 text-2xs text-text-faint">时间待定</span>
             ) : (
-              <SleepBadge match={m} compact />
+              showSleep && <SleepBadge match={m} compact />
             )}
             {rivalry && (
               <span className="inline-flex min-w-0 items-center gap-1 text-2xs text-warn" title={rivalry}>
@@ -94,6 +98,7 @@ export default function MatchRow({
                 建议睡觉
               </Chip>
             )}
+            {badge}
 
             <span className="ml-auto shrink-0">
               {live ? (

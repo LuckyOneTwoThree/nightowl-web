@@ -340,6 +340,59 @@ console.log('七、HTTP 端点');
   }
 }
 
+/* ================================================================== */
+console.log('');
+console.log('八、/api/recap：只对已完赛开放');
+{
+  const rules = loadRules();
+  const silent = { log: () => {}, warn: () => {}, error: () => {} };
+  const done = fixtures.find(m => m.st === 'done');
+  const sched = fixtures.find(m => m.st === 'sched');
+  ok('找到完赛/未开赛样本', !!(done && sched));
+
+  let called = 0;
+  const fake = {
+    ok: true,
+    state: 'finished',
+    statusText: '已终场',
+    minuteLabel: 'FT',
+    score: { h: 1, a: 0 },
+    events: [{ clock: "61'", type: 'goal', text: 'Goal!', side: 'h' }]
+  };
+  const server = createServer(rules, silent, {
+    backgroundSync: false,
+    loadFixtures: async () => fixtures,
+    resolveLive: async () => {
+      called++;
+      return fake;
+    }
+  });
+  const port = await new Promise((res, rej) => {
+    server.listen(0, '127.0.0.1', () => res(server.address().port));
+    server.on('error', rej);
+  });
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/api/recap?matchId=${done.id}`);
+    const j = await r.json();
+    ok('已完赛返回 200 与事件', r.status === 200 && j.ok === true && j.events.length === 1);
+    ok('递归解析器调用一次', called === 1);
+
+    const r2 = await fetch(`http://127.0.0.1:${port}/api/recap?matchId=${sched.id}`);
+    const j2 = await r2.json();
+    ok('★ 未开赛不查上游', r2.status === 200 && j2.ok === false && j2.reason === 'not-finished' && called === 1);
+
+    const r3 = await fetch(`http://127.0.0.1:${port}/api/recap?matchId=NOT-A-MATCH`);
+    ok('不存在返回 404', r3.status === 404);
+
+    const r4 = await fetch(`http://127.0.0.1:${port}/api/recap?matchId=${done.id}`, {
+      headers: { Origin: 'https://evil.example' }
+    });
+    ok('外部网页来源被拒绝', r4.status === 403 && called === 1);
+  } finally {
+    await new Promise(r => server.close(r));
+  }
+}
+
 console.log('');
 console.log('────────────────────────────────────────────────────');
 console.log(`通过 ${pass} 项，失败 ${fail} 项`);

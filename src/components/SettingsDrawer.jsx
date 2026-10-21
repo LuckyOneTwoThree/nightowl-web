@@ -291,6 +291,24 @@ export default function SettingsDrawer({
             </div>
           </Fieldset>
 
+          {/* 通知：偏好早就在，v0.1.24 真正接上系统通知 */}
+          <Fieldset title="提醒" hint="通知仅在应用运行时生效；点击通知会回到对应比赛。">
+            <div className="space-y-1.5">
+              <SwitchRow
+                label="赛前 15 分钟提醒"
+                hint="只提醒关注球队和今晚之选；窗口在前台也会提示。"
+                on={prefs.notifyBefore15}
+                onChange={v => patch({ notifyBefore15: v })}
+              />
+              <SwitchRow
+                label="进球 / 红牌 / 终场提醒"
+                hint="比赛进行中且窗口不在前台时提醒；防剧透开启且未揭晓时不提醒。"
+                on={prefs.notifyLiveEvents}
+                onChange={v => patch({ notifyLiveEvents: v })}
+              />
+            </div>
+          </Fieldset>
+
           {/* 数据状态：一律显示真实状态，不得写「未接入」这类与实现脱节的固定文案 */}
           <Fieldset title="数据与服务" hint={SERVICE_RULE}>
             <div className="space-y-1.5 rounded-lg border border-line-hairline bg-surface-card px-3 py-2.5 font-num text-2xs leading-relaxed tabular-nums text-text-secondary">
