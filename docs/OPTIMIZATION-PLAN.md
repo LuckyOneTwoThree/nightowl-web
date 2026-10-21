@@ -750,3 +750,66 @@ v0.1.23 已经补齐「赛前决策 → 赛中直播/比分 → 赛后集锦」�
 - 命令面板索引在打开时重建；应用长时间不关时，重新打开会刷新「最近未来」排序。
 - 视图切换时 virtua 虚拟列表偶发一条浏览器级 `ResizeObserver loop` 提示，未观察到布局异常或功能故障。
 - 新增 `display` 字号仅用于比赛中心，不扩散到普通卡片。
+
+---
+
+## 十二、v0.1.25 黑屏事故与 v0.1.26 热修复（2026-10-21）
+
+### 现象
+
+v0.1.25 安装后点击界面直接黑屏。不是视频区域黑，而是整个渲染根节点消失，只剩窗口底色。
+
+### 根因
+
+`MatchCanvas` 在实现「赛前查看线路」时新增了 `onShowLines` 调用，但**忘记把它写进组件解构参数**：
+
+```js
+export default function MatchCanvas({
+  ...
+  onRefreshLines,
+  // onShowLines 缺失
+  onScrollToIntel,
+  ...
+}) {
+  const runPrimary = ... : onShowLines;
+```
+
+生产构建把它保留成自由变量，渲染时抛出：
+
+```
+Uncaught ReferenceError: onShowLines is not defined
+```
+
+React 没有错误边界，整棵树卸载，`#root` 变成 0 个子节点 → 黑屏。
+
+### 为什么之前没拦住
+
+- Node 离线测试不渲染 React 组件，构建也不会检查自由变量；
+- UI 截图是在这次“查看线路”改动之前拍的；
+- 最终只跑了构建与离线测试，没有在生产 dist 上做一次真实打开。
+
+### 修复
+
+- `MatchCanvas` 补上 `onShowLines` 解构。
+- 顺手修复命令面板 `bg-surface-panel/98` 未生成（Tailwind 默认透明度没有 98 档）的问题，改为 `/95`。
+- 新增 `tools/check-render.mjs`（`npm run check:render`）：
+  - 无头 Electron + 本地服务加载**真实 dist**；
+  - 断言 `#root` 已渲染、首屏含「今晚观赛」；
+  - 无 `Uncaught / ReferenceError / TypeError`；
+  - 命令面板能打开/关闭；
+  - 点击第一场比赛后应用仍存活。
+- CI 在 `Run tests` 后新增 `Render smoke (headless Electron)` 步骤；本地发版前同样执行。
+
+### 验证
+
+| 项目 | 结果 |
+| :--- | :--- |
+| `npm run check:render` | **7/7** 通过（修复前同一脚本 `#root` 为 0） |
+| 离线套件 | **571 项全过** |
+| 打包自检 | **15/15** |
+| 生产 dist 实机点击 | 首屏/比赛行/搜索面板正常，无致命 console 错误 |
+
+### 发布
+
+- **v0.1.25 是坏包，请直接升级 v0.1.26**；`latest.yml` 会指向修复版。
+- 事故教训：构建通过 ≠ 应用能打开；所有发版必须过真实 dist 的渲染冒烟。

@@ -51,6 +51,12 @@ jobs:
         shell: bash
         run: npm run test:all
 
+      # v0.1.25 曾出现「构建与 Node 测试全过、生产首屏 ReferenceError 黑屏」。
+      # 用无头 Electron 加载真实 dist，断言根节点已渲染且无致命 console 错误。
+      - name: Render smoke (headless Electron)
+        shell: bash
+        run: npm run check:render
+
       # 注入 tag 版本到包元数据：exe 文件名（artifactName 的 ${version}）随 tag 对齐，
       # 否则 package.json 里的 version 不动，文件名会一直停在旧版本号
       # 注入 tag 版本到包元数据：exe 文件名（artifactName 的 ${version}）随 tag 对齐。

@@ -56,6 +56,7 @@ export default function MatchCanvas({
   onReveal,
   onPlay,
   onRefreshLines,
+  onShowLines,
   onScrollToIntel,
   onScrollToRecap,
   onScrollToHighlights

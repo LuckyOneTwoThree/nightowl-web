@@ -90,7 +90,7 @@ export default function CommandPalette({ items = [], onClose, onRun }) {
         role="dialog"
         aria-modal="true"
         aria-label="命令面板"
-        className="animate-view-enter w-full max-w-xl overflow-hidden rounded-2xl border border-line-control bg-surface-panel/98 shadow-pop"
+        className="animate-view-enter w-full max-w-xl overflow-hidden rounded-2xl border border-line-control bg-surface-panel/95 shadow-pop"
         onKeyDown={onKeyDown}
       >
         <div className="flex items-center gap-2 border-b border-line-hairline px-4 py-3">

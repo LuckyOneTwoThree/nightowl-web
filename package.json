@@ -1,7 +1,7 @@
 {
   "name": "nightowl-web",
   "private": true,
-  "version": "0.1.25",
+  "version": "0.1.26",
   "type": "module",
   "description": "夜猫看台 · 纯净观赛桌面版（本地单机）",
   "main": "electron/main.cjs",
@@ -34,6 +34,7 @@
     "test:palette": "node tools/test-palette.mjs",
     "test:highlights:online": "node tools/check-highlights.mjs",
     "check:live": "node tools/check-live.mjs",
+    "check:render": "electron tools/check-render.mjs",
     "test:sources": "node tools/check-sources.mjs",
     "test:playback": "node tools/test-playback.mjs",
     "test:media": "node tools/test-media.mjs",
