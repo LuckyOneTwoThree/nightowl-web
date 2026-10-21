@@ -1,0 +1,86 @@
+{
+  "_readme": "本地服务配置。改这里不需要重新构建。proxy.allowedHosts 必须显式列出目标直播域名——留空时 /api/proxy 一律拒绝（安全默认）。timeoutMs 只管「等到响应头」，streamIdleTimeoutMs 管 body 阶段「静默无数据」，两者缺一不可（上游僵住会永久占住并发槽位）。highlights.apiKey 是 TheSportsDB 免费测试 key；付费 key 请用环境变量 THESPORTSDB_KEY 或 server/highlights.local.json（不入库、不打包），不要写进这里。",
+
+  "listen": {
+    "host": "127.0.0.1",
+    "port": 3100
+  },
+
+  "proxy": {
+    "allowedHosts": [],
+    "allowedHostSuffixes": [
+      ".cmvideo.cn",
+      ".miguvideo.com",
+      ".aarray.cn",
+      ".rtmpcdn.com",
+      ".lmqvw.com",
+      ".71edge.com",
+      ".ooo0ooo.top",
+      ".sportsteam368.com",
+      ".88player.top",
+      ".tiyucdn.com",
+      ".dyrur1.com"
+    ],
+    "forwardHeaders": [
+      "Range",
+      "If-Range",
+      "If-Modified-Since",
+      "If-None-Match",
+      "Accept",
+      "Accept-Language"
+    ],
+    "upstreamHeaders": {
+      "Referer": "",
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      "Origin": ""
+    },
+    "timeoutMs": 15000,
+    "streamIdleTimeoutMs": 30000,
+    "queueTimeoutMs": 30000,
+    "maxConcurrent": 16,
+    "maxPlaylistBytes": 4194304
+  },
+
+  "scores": {
+    "enabled": true,
+    "season": "2026-27",
+    "baseUrl": "https://site.api.espn.com/apis/site/v2/sports/soccer",
+    "leagues": {
+      "PL": "eng.1",
+      "PD": "esp.1",
+      "SA": "ita.1",
+      "BL": "ger.1",
+      "FL": "fra.1",
+      "UCL": "uefa.champions"
+    },
+    "timeoutMs": 30000,
+    "maxConcurrentLeagues": 3,
+    "requestDelayMs": 400
+  },
+
+  "highlights": {
+    "enabled": true,
+    "provider": "thesportsdb",
+    "baseUrl": "https://www.thesportsdb.com/api/v1/json",
+    "apiKey": "123",
+    "leagues": {
+      "PL": 4328,
+      "PD": 4335,
+      "SA": 4332,
+      "BL": 4331,
+      "FL": 4334
+    },
+    "timeoutMs": 8000,
+    "minRequestIntervalMs": 2200,
+    "cacheTtlMs": 604800000,
+    "missTtlMs": 3600000
+  },
+
+  "live": {
+    "enabled": true,
+    "baseUrl": "https://site.api.espn.com/apis/site/v2/sports/soccer",
+    "timeoutMs": 12000,
+    "cacheTtlMs": 20000,
+    "finishedCacheTtlMs": 60000
+  }
+}

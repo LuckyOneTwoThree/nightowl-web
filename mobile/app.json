@@ -1,0 +1,77 @@
+{
+  "expo": {
+    "name": "夜猫看台",
+    "slug": "nightowl-terrace",
+    "version": "0.1.0",
+    "orientation": "default",
+    "icon": "./assets/brand/icon.png",
+    "scheme": "nightowl",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B0E15",
+    "android": {
+      "package": "com.nightowl.terrace.mobile",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0E15",
+        "foregroundImage": "./assets/brand/icon.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.SCHEDULE_EXACT_ALARM"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": false,
+          "supportsPictureInPicture": true
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B0E15",
+          "image": "./assets/brand/logo.png",
+          "imageWidth": 150
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true,
+            "buildArchs": [
+              "arm64-v8a"
+            ]
+          }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#F5B942"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "platforms": [
+      "android"
+    ],
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "fb973411-0920-4bda-992c-9fccc67e8cc9"
+      }
+    },
+    "owner": "luckyonetwothree"
+  }
+}

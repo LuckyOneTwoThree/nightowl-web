@@ -1,0 +1,53 @@
+{
+  "_readme": "openfootball 球队名 → 本项目球队 id。openfootball 用全称（含俱乐部前缀与地名），本项目用简称，故需映射。98.9% 的名字可精确归一化命中，余下 37 个在此显式声明。改这里不需要重新构建；改动后请跑 `node tools/test-team-alias.mjs` 校验。",
+  "_why_explicit": "曾经用「名称包含」兜底自动匹配，把 openfootball 的 RCD Espanyol de Barcelona 误配成了巴萨（BAR）——静默错配比匹配失败危险得多。故改为显式表 + 校验脚本。",
+  "byLeague": {
+    "PL": {
+      "Brighton & Hove Albion FC": "BHA"
+    },
+    "PD": {
+      "Athletic Club": "ATH",
+      "CA Osasuna": "OSA",
+      "Club Atlético de Madrid": "ATM",
+      "Deportivo Alavés": "ALA",
+      "RC Celta de Vigo": "CEL",
+      "RCD Espanyol de Barcelona": "ESP",
+      "Rayo Vallecano de Madrid": "RAY",
+      "Real Betis Balompié": "BET",
+      "Real Racing Club de Santander": "RAC",
+      "Real Sociedad de Fútbol": "RSO"
+    },
+    "SA": {
+      "ACF Fiorentina": "FIO",
+      "Atalanta BC": "ATA",
+      "Bologna FC 1909": "BOL",
+      "Como 1907": "COM",
+      "FC Internazionale Milano": "INT",
+      "Genoa CFC": "GEN",
+      "Parma Calcio 1913": "PAR"
+    },
+    "BL": {
+      "1. FC Köln": "KOE",
+      "1. FC Union Berlin": "FCU",
+      "1. FSV Mainz 05": "MAI",
+      "Bayer 04 Leverkusen": "B04",
+      "FC Bayern München": "FCB",
+      "SC Paderborn 07": "SCP",
+      "SV 07 Elversberg": "ELV",
+      "TSG 1899 Hoffenheim": "TSG"
+    },
+    "FL": {
+      "AJ Auxerre": "AUX",
+      "Angers SCO": "ANG",
+      "ES Troyes AC": "TRO",
+      "Lille OSC": "LIL",
+      "OGC Nice": "NIC",
+      "Olympique Lyonnais": "OL",
+      "Olympique de Marseille": "OM",
+      "RC Strasbourg Alsace": "STR",
+      "Racing Club de Lens": "LEN",
+      "Stade Brestois 29": "BRT",
+      "Stade Rennais FC 1901": "REN"
+    }
+  }
+}

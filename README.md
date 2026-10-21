@@ -5,22 +5,24 @@
 
   **熬夜看球之前，先让算法替你算一算 —— 今晚该看哪场、值不值得熬。**
 
-  <sub>本机运行的观赛决策工作台 · 赛程 / 比分 / 情报 / 直播源，一个窗口看全</sub>
+  <sub>本机运行的观赛决策工作台 · 桌面 Windows + 手机 Android · 赛程 / 比分 / 情报 / 直播入口，一屏看全</sub>
 
   <br />
 
-  <img src="https://img.shields.io/badge/platform-Windows-2b6cb0?style=flat-square" alt="platform" />
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Android-2b6cb0?style=flat-square" alt="platform" />
   <img src="https://img.shields.io/badge/release-v0.1.27-2f855a?style=flat-square" alt="release" />
   <img src="https://img.shields.io/badge/electron-33-47848f?style=flat-square" alt="electron" />
+  <img src="https://img.shields.io/badge/expo%20sdk-58-000020?style=flat-square" alt="expo" />
   <img src="https://img.shields.io/badge/react-19-149eca?style=flat-square" alt="react" />
   <img src="https://img.shields.io/badge/tests-passing-38a169?style=flat-square" alt="tests" />
 
   <br />
 
-  <a href="../../releases/latest"><b>下载安装</b></a> ·
+  <a href="../../releases/latest"><b>桌面端下载</b></a> ·
+  <a href="#android-手机端">Android 手机端</a> ·
   <a href="#它解决什么问题">它解决什么</a> ·
   <a href="#功能">功能</a> ·
-  <a href="#从源码运行">从源码运行</a> ·
+  <a href="#快速开始">从源码运行</a> ·
   <a href="docs/DEVELOPMENT.md">开发文档</a>
 </div>
 
@@ -50,6 +52,8 @@
 
 ## 功能
 
+> 以下主要描述 Windows 桌面端；Android 端的页面形态与能力差异见 [Android 手机端](#android-手机端)。
+
 ### 🧠 决策大脑（纯函数算法，可回归测试）
 
 - **今晚之选** —— 关注球队优先（硬比较），依次看点星级、夜猫指数
@@ -66,7 +70,7 @@
 - **数据落点分级** —— 内置快照（只读出厂数据）+ 用户数据目录（可写），升级覆盖安装不丢比分
 - **防剧透** —— 已结束场次默认只显示「揭晓」，点开才看比分
 
-### 🎬 观赛链路（本机代理）
+### 🎬 观赛链路（桌面端本机代理）
 
 - **直播源自动抓取与对齐** —— 从聚合站多镜像抓取房间信息，按**双方队名全等匹配**对齐到本地赛程（宁缺勿错：匹配不到只是没有直链，配错是把错误内容当正确结果交付）
 - **本地流代理** —— 只监听 `127.0.0.1`；白名单授权、M3U8 全量 URI 重写（覆盖 10 类载体）、Range 透传、并发闸门、会话授权 TTL 回收
@@ -112,9 +116,49 @@
 
 ---
 
+## Android 手机端
+
+手机端不是桌面双栏的缩版，而是「**赛前 3 秒做决定、赛后 10 秒看结果**」的决策遥控器：
+
+- **四 Tab**：今晚 / 赛程 / 规划 / 我的；比赛详情分「情报 / 数据 / 观看」，另有球队页与全局搜索
+- **同一套算法**：夜猫指数、睡眠分档、背包规划直接复用桌面端纯函数 core，手机端不 fork
+- **离线优先**：内置全量赛程快照，启动后台增量同步 ESPN / openfootball；进行中比赛每 30 秒刷新比分与事件
+- **原生播放**：HLS 直连、线路切换、断流自动换线、PiP、横屏；无本地 / 远程代理
+- **防剧透**：默认隐藏已结束比分，通知文案也不含比分
+- **赛前提醒**：本地通知，开球前 15 分钟；需安装 APK（Expo Go 不支持通知原生模块）
+
+### 双端对照
+
+| 能力 | Windows 桌面 | Android 手机 |
+| :--- | :--- | :--- |
+| 决策算法 | 唯一权威实现 | 构建时同步同一份 core |
+| 赛程 / 比分 / 情报 / 规划 | 支持 | 支持 |
+| 直播播放 | 本机 `127.0.0.1` 代理 + 内联播放器 | 原生播放器直连 HLS |
+| 直播源 | 抓取 + 本地代理 + 保底频道 | 只抓公开直链；不内置签名频道 |
+| 通知 | 赛前 + 进球 / 红牌 / 终场 | 仅赛前 15 分钟本地提醒 |
+| 集锦 / 回放 | 官方链接 + 系统浏览器 | 相同，不代理、不下载 |
+| 命令面板 / 多栏 | 支持 | 无，改为四 Tab + 搜索 |
+
+> 手机端不包含桌面端的本地流代理与远程服务，也不内置任何直播直链或账号凭据；播放器只打开运行时抓到的第三方公开直链。
+>
+> 构建 APK、共享层同步、真机验收与排障详见 [mobile/README.md](mobile/README.md)。
+
+### 构建 Android APK（摘要）
+
+```bash
+cd mobile
+npm install
+npx eas-cli@latest login   # 仅首次
+npm run eas:preview        # EAS 云构建 arm64 内测 APK
+```
+
+> 未上架应用商店，当前以 EAS 内测 APK 侧载；不支持 iOS。
+
+---
+
 ## 快速开始
 
-### 下载安装（推荐）
+### 桌面端 · 下载安装（推荐）
 
 前往 [Releases](../../releases/latest) 下载 `NightOwl-Terrace-Setup-<版本>.exe` 安装。
 
@@ -123,7 +167,7 @@
 - **比分自动保鲜**：启动后会自动拉取最新比分，无需手动操作；数据更新时间与待录场次可在「设置 → 数据与服务」查看
 - 应用内更新：从 v0.1.8 起，新版本会在应用内提示并支持一键下载安装
 
-### 从源码运行
+### 桌面端 · 从源码运行
 
 ```bash
 git clone https://github.com/LuckyOneTwoThree/nightowl-web.git
@@ -138,6 +182,18 @@ npm run electron:dev               # 以 Electron 桌面外壳启动
 ```
 
 > 前端与本地服务跑在同一个 127.0.0.1 上。服务只监听本机，不对外提供任何端口。
+
+### 手机端 · 从源码运行
+
+```bash
+cd mobile
+npm install
+npm start          # Expo 开发服务器；prestart 会自动同步共享算法层与队徽
+```
+
+- 仅支持 Android；用 Expo Go 可预览 UI 与数据
+- 通知、PiP、HLS 等原生能力需安装 EAS development / preview APK
+- 构建命令与验收清单见 [mobile/README.md](mobile/README.md)
 
 ---
 
@@ -166,6 +222,14 @@ server/
 electron/        桌面外壳（CJS 主进程 + preload 最小桥 + 自动更新）
 tools/           数据迁移 / 保鲜同步 / 别名生成 / 离线测试与联网检查
 spike/           算法基线验证（移植期与原版交叉比对）
+mobile/          Android 客户端（Expo SDK 58 + React Native）
+  src/app/       Expo Router：今晚 / 赛程 / 规划 / 我的 / 比赛 / 球队 / 播放器
+  src/shared/    由桌面端同步生成的 core / data / server（禁止手改）
+  src/data/      赛程持久化、数据同步、实时比分、集锦、直链抓取
+  src/components/ WatchSheet / TeamPicker / LiveTimeline
+  src/ui/        设计系统与基础组件
+  scripts/       sync-shared / verify-shared / sync-crests
+  assets/crests/ 队徽（由 public/crests 同步）
 ```
 
 ---
@@ -176,6 +240,8 @@ spike/           算法基线验证（移植期与原版交叉比对）
 
 - **单一权威源**：做什么看 PRD、显示什么数据看对账表、算法只有 `engine.js` 一处实现（`spike/` 直接引用它，不留副本）
 - **算法零偏差**：迁移期在 1,897 场真实赛程上与原版逐场交叉比对，0 处偏差后才继续
+- **双端一套算法**：Android 端从桌面端 `src/core` / `src/data` / `server/*.json` 生成副本，禁止手改；`verify:shared` 漂移检查失败即阻断提交
+- **手机端不做代理**：不内置签名频道、不跑本地 / 远程中转，只直连运行时抓到的公开直链；原生能力（通知 / PiP / 明文 HTTP）必须以真机 APK 验收
 - **时区口径**：数据时间为北京墙钟，全部换算走纯 UTC 算术（禁用设备本地时区解析）
 - **状态只落三值**：`sched` / `done` / `pp`，进行中状态运行时推导，避免落库状态与真实时间打架
 - **打包自检**：跨平台 node 脚本扫描产物内的相对 import 与运行时依赖，并断言本地签名直链与运行期缓存未入包；本地与 CI 共用同一份逻辑（开发环境是 mac，CI 是 Windows——验证脚本必须两边都能跑）
@@ -187,10 +253,10 @@ spike/           算法基线验证（移植期与原版交叉比对）
 
 ## 免责声明
 
-- 本项目**不提供、不托管、不存储、不转码**任何直播视频内容，也不含任何直播源地址
+- 本项目**不提供、不托管、不存储、不转码**任何直播视频内容，也不**内置**任何直播直链
 - 集锦与官方回放只提供第三方官方频道的链接，由系统浏览器打开；本项目不下载、不代理、不转码任何视频
-- 直播源信息来自第三方公开索引，其可用性、合法性由来源方负责；本项目仅按用户要求在本机做格式转发
-- 本地服务**只监听 127.0.0.1**，不向局域网或公网提供任何服务
+- 直播源信息来自第三方公开索引，其可用性、合法性由来源方负责；桌面端仅按用户要求在本机做格式转发，手机端由原生播放器直接打开直链
+- 桌面端本地服务**只监听 127.0.0.1**，不向局域网或公网提供任何服务；手机端**不包含**本地或远程代理服务
 - 请仅将本项目用于**个人学习与技术研究**，遵守所在地区法律法规及相关内容平台的用户协议
 - 项目内所有比赛数据、球队名称与队徽版权归各自权利人所有
 

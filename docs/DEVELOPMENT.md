@@ -10,9 +10,11 @@
 | :--- | :--- | :--- |
 | Node | ≥ 20 | 开发环境（本项目在 mac 上开发，CI 在 Windows 上打包） |
 | npm | ≥ 10 | 依赖安装与脚本执行 |
-| Python | ≥ 3.9 | 仅图标生成脚本用到（Pillow） |
+| Python | ≥ 3.9 | 仅桌面端图标生成脚本用到（Pillow） |
+| Expo 账号 | — | 仅 Android 云构建（EAS）需要 |
+| Android 真机 | arm64 | 通知 / PiP / HLS / 安全区验收 |
 
-> **开发环境是 mac、分发目标是 Windows** —— 这个错位是本项目很多工程决策的起点（见「验证阶梯」）。
+> **开发环境是 mac、桌面分发目标是 Windows、手机分发目标是 Android** —— 这个错位是本项目很多工程决策的起点（见「验证阶梯」）。
 
 ---
 
@@ -39,6 +41,43 @@ npm run test:scraper-parse # 抓取器 HTML 解析（离线，含改版探活回
 npm run check:scraper      # 直播源抓取实测（联网，含 P0 误配回归）
 npm run test:sources       # 数据源健康度（联网）
 ```
+
+---
+
+## 手机端（Android）
+
+手机端位于 `mobile/`，Expo SDK 58 + React Native 0.88 + Expo Router，只打包 `arm64-v8a`。它是桌面算法的消费者，不是第二套实现。功能、真机验收清单与排障见 [mobile/README.md](../mobile/README.md)。
+
+### 命令
+
+```bash
+cd mobile
+npm install
+npm start                  # Expo 开发服务器；prestart 自动同步共享层与队徽
+npm run typecheck          # tsc --noEmit
+npm run verify:shared      # 共享层漂移检查（提交前必跑）
+npm run export:android     # 验证 Android JS bundle 可产出（不是 APK）
+npm run eas:dev            # development APK（通知 / PiP / HLS 真机调试）
+npm run eas:preview        # 内测 APK（arm64，用于真机验收）
+```
+
+### 共享层
+
+`mobile/src/shared/{core,data,server}`、`mobile/src/data/sync/tz.js`、`mobile/src/data/crests.ts` 与 `mobile/assets/crests/` 都是生成物：
+
+```bash
+npm run sync:shared   # ../src/core + ../src/data + ../server/*.json → src/shared
+npm run sync:crests   # ../public/crests → assets/crests + src/data/crests.ts
+```
+
+改动必须先落在桌面端源文件，再同步；不要在 `mobile/src/shared` 里直接改。`prestart` / `pretypecheck` / `preexport:android` 已挂同步，`verify:shared` 负责发现漂移。
+
+### 原生能力与构建门禁
+
+- **通知**：`expo-notifications` 动态导入，仅在 `EXPO_PUBLIC_NOTIFICATIONS_ENABLED === '1'` 且非 Expo Go 时启用；EAS 的三个 profile 都设置了该变量。Expo Go 只用于 UI / 数据预览。
+- **播放器**：`expo-video` 原生 HLS + 自定义 UA + PiP；`app.json` 开启 `usesCleartextTraffic`，仅打包 `arm64-v8a`。
+- **无代理**：手机端不运行桌面 `server/`，不内置签名频道；直链直接交给系统播放器。
+- **真机门禁**：改动涉及通知、PiP、HLS、明文 HTTP 或安全区时，必须安装 EAS APK 在真机走一遍，`typecheck` / `export` 不能替代。
 
 ---
 
@@ -192,9 +231,10 @@ CI（`.github/workflows/build-windows.yml`）会自动：跑全量测试 → 打
 | 工作区验证（`npm run dev`） | 静置 CPU 占用、字体阻塞渲染 |
 | 构建与产物验证 | `files` 漏 `src/core`、Windows 保留设备名 `AUX.png` |
 | 真实 Windows CI | 打包输入写进产物断言、默认图标未生效 |
-| 用户真机 | 端口回退、安装版模块缺失 |
+| 用户真机（桌面） | 端口回退、安装版模块缺失 |
+| Android 真机（EAS APK） | Expo Go 原生模块缺失、通知权限 / 精确闹钟、HLS 直连与 PiP、顶部安全区 |
 
-**结论**：每引入一层新的验证环境，都会翻出上一层看不见的问题。改动涉及打包 / 外壳 / 依赖时，至少走到「产物验证」这一层再提交。
+**结论**：每引入一层新的验证环境，都会翻出上一层看不见的问题。改动涉及打包 / 外壳 / 依赖时，至少走到「产物验证」这一层再提交；改动涉及手机原生能力时，至少走到「EAS APK + 真机」这一层。
 
 ---
 
