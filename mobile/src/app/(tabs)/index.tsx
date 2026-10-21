@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -63,6 +63,8 @@ export default function TonightScreen() {
   const now = useNow(30_000);
   const { syncing, syncError } = useSyncState();
   const [showFinished, setShowFinished] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshNote, setRefreshNote] = useState<string | null>(null);
 
   const tonight = useMemo(
     () => computeTonight(now, prefs),
@@ -110,6 +112,26 @@ export default function TonightScreen() {
     }
   }, []);
 
+  const pullRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const outcome = await syncNow({ quick: true });
+      setRefreshNote(
+        outcome.changed > 0 ? `已更新 ${outcome.changed} 场比分` : '暂无比分更新'
+      );
+    } catch {
+      setRefreshNote(null);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!refreshNote) return undefined;
+    const timer = setTimeout(() => setRefreshNote(null), 2400);
+    return () => clearTimeout(timer);
+  }, [refreshNote]);
+
   const openMatch = useCallback(
     (id: string) => router.push({ pathname: '/match/[id]', params: { id } }),
     [router]
@@ -129,7 +151,7 @@ export default function TonightScreen() {
   const todayLabel = `${bjDate(now)} ${weekdayOf(bjDate(now))}`;
 
   return (
-    <Screen scroll refreshing={syncing} onRefresh={refresh}>
+    <Screen scroll refreshing={refreshing} onRefresh={pullRefresh}>
       <View style={styles.header}>
         <View style={styles.brandBlock}>
           <Image
@@ -155,11 +177,18 @@ export default function TonightScreen() {
       </View>
 
       <View style={styles.contextRow}>
-        <View style={styles.contextDot} />
+        {syncing ? (
+          <ActivityIndicator size="small" color={colors.accent} />
+        ) : (
+          <View style={styles.contextDot} />
+        )}
         <Text style={styles.contextText}>
-          今晚 {tonight.slice.length} 场
-          {liveCount > 0 ? ` · ${liveCount} 场进行中` : ''}
-          {freshness.pendingCount > 0 ? ` · ${freshness.pendingCount} 场待录` : ''}
+          {syncing
+            ? '正在更新比分…'
+            : refreshNote ??
+              `今晚 ${tonight.slice.length} 场${
+                liveCount > 0 ? ` · ${liveCount} 场进行中` : ''
+              }${freshness.pendingCount > 0 ? ` · ${freshness.pendingCount} 场待录` : ''}`}
         </Text>
       </View>
 
@@ -172,11 +201,6 @@ export default function TonightScreen() {
           <Pressable onPress={refresh} hitSlop={8}>
             <Text style={styles.errorAction}>重试</Text>
           </Pressable>
-        </View>
-      ) : syncing ? (
-        <View style={styles.syncRow}>
-          <ActivityIndicator size="small" color={colors.accent} />
-          <Text style={styles.syncText}>正在更新比分…</Text>
         </View>
       ) : null}
 
@@ -524,13 +548,6 @@ const styles = StyleSheet.create({
   },
   errorText: { flex: 1, color: colors.textSecondary, fontSize: fontSize.xs },
   errorAction: { color: colors.accent, fontSize: fontSize.xs, fontWeight: '700' },
-  syncRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.xs,
-  },
-  syncText: { color: colors.textMuted, fontSize: fontSize.xs },
   hero: {
     borderRadius: radius.xxxl,
     borderWidth: 1,

@@ -20,7 +20,6 @@ import {
 import { nightOf } from '@core/engine.js';
 import { weekdayOf, zhDate } from '@core/format.js';
 import { syncNow } from '@/data/sync/run';
-import { useSyncState } from '@/data/sync/useSync';
 import { useNow } from '@/lib/useNow';
 import { useDataRev } from '@/state/app';
 import { usePrefs } from '@/state/prefs';
@@ -59,11 +58,12 @@ export default function ScheduleScreen() {
   const prefs = usePrefs();
   const rev = useDataRev();
   const now = useNow(60_000);
-  const { syncing } = useSyncState();
 
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [selectedDate, setSelectedDate] = useState<string | 'all' | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshNote, setRefreshNote] = useState<string | null>(null);
   const appliedParams = useRef<string | null>(null);
 
   const today = nightOf(now);
@@ -126,12 +126,24 @@ export default function ScheduleScreen() {
   }, [visibleRows]);
 
   const refresh = useCallback(async () => {
+    setRefreshing(true);
     try {
-      await syncNow();
+      const outcome = await syncNow({ quick: true });
+      setRefreshNote(
+        outcome.changed > 0 ? `已更新 ${outcome.changed} 场比分` : '暂无比分更新'
+      );
     } catch {
-      // 同步错误由 useSyncState 提供
+      setRefreshNote('比分更新失败，沿用本地数据');
+    } finally {
+      setRefreshing(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!refreshNote) return undefined;
+    const timer = setTimeout(() => setRefreshNote(null), 2400);
+    return () => clearTimeout(timer);
+  }, [refreshNote]);
 
   const allLeaguesSelected = filters.leagues.length === LEAGUE_ORDER.length;
   const leagueFilterLabel = allLeaguesSelected
@@ -156,7 +168,9 @@ export default function ScheduleScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>赛程</Text>
-          <Text style={styles.subline}>全季赛程 · 北京时间 · 夜猫日口径</Text>
+          <Text style={[styles.subline, refreshNote && styles.sublineNote]}>
+            {refreshNote ?? '全季赛程 · 北京时间 · 夜猫日口径'}
+          </Text>
         </View>
         <Pressable
           onPress={() => router.push('/search')}
@@ -266,7 +280,7 @@ export default function ScheduleScreen() {
           keyExtractor={item => item.id}
           showsVerticalScrollIndicator={false}
           stickySectionHeadersEnabled
-          refreshing={syncing}
+          refreshing={refreshing}
           onRefresh={() => {
             void refresh();
           }}
@@ -361,6 +375,7 @@ const styles = StyleSheet.create({
   },
   title: { color: colors.text, fontSize: fontSize.xxl, fontWeight: '800', letterSpacing: 0.3 },
   subline: { color: colors.textFaint, fontSize: fontSize.xs, marginTop: 2 },
+  sublineNote: { color: colors.textMuted },
   iconButton: {
     width: 38,
     height: 38,

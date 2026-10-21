@@ -204,6 +204,35 @@ export function uclWeeklyTargets(nowTs = Date.now(), targets = new Map()) {
   return targets;
 }
 
+/** 下拉快检只回看最近 72 小时，避免一次手势带来全季历史扫描 */
+export const QUICK_SYNC_WINDOW_MS = 72 * 3600000;
+
+/**
+ * 下拉刷新用的轻量目标：只查最近 72 小时内已开球的场次。
+ *
+ * 不复用 activeSyncTargets：后者还包含未来 48h、tbd ±3 天展开和本周 UCL，
+ * 每次下拉都可能产生多次请求；tbd 的占位时间也不适合直接当查询日期。
+ * 完整保鲜仍走启动 / 回前台 / 我的-立即同步。
+ */
+export function quickSyncTargets(fixtures = [], nowTs = Date.now()) {
+  const targets = new Map();
+  const pad = n => String(n).padStart(2, '0');
+  const floor = nowTs - QUICK_SYNC_WINDOW_MS;
+
+  for (const m of fixtures) {
+    if (m.st !== 'sched' || m.tbd) continue;
+    const t = ts(m.t);
+    if (Number.isNaN(t) || t > nowTs || t < floor) continue;
+
+    const d = new Date(t);
+    const ymd = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
+    if (!targets.has(m.l)) targets.set(m.l, new Set());
+    targets.get(m.l).add(ymd);
+  }
+
+  return targets;
+}
+
 /* ------------------------------------------------------------------ */
 /* 折算补丁                                                            */
 /* ------------------------------------------------------------------ */
@@ -355,18 +384,23 @@ export function planPatches(merged, fixtures, conflicts = []) {
  * @param {object} opts.rules    server/rules.json
  * @param {string[]} [opts.months] 限定月份（仅对按月分块的源生效）
  * @param {string[]} [opts.sources] 指定启用的源，默认全部
+ * @param {boolean} [opts.quick] 下拉快检：只查近 72h 已开球场次，且只用 ESPN
  */
-export async function syncScores({ fixtures, rules, months, allMonths = false, sources, backfillDays = 0, log = console }) {
+export async function syncScores({ fixtures, rules, months, allMonths = false, sources, backfillDays = 0, quick = false, log = console }) {
   const cfg = rules.scores || {};
   const season = cfg.season || '2026-27';
   const leagues = Object.keys(cfg.leagues || {});
-  const order = (sources && sources.length ? sources : DEFAULT_ORDER).filter(s => DEFAULT_ORDER.includes(s));
+  // 下拉快检走 ESPN 单源：openfootball 是整季文件，不适合高频手势触发
+  const order = quick ? ['espn'] : (sources && sources.length ? sources : DEFAULT_ORDER).filter(s => DEFAULT_ORDER.includes(s));
   const pad = n => String(n).padStart(2, '0');
   
   let list = null;
   let targets = null;
 
-  if (months && months.length && months !== 'all') {
+  if (quick) {
+    targets = quickSyncTargets(fixtures, Date.now());
+    list = [];
+  } else if (months && months.length && months !== 'all') {
     list = Array.isArray(months) ? months : [months];
     // 指定月份模式：提取指定月份内涉及的比赛日期
     targets = new Map();
@@ -403,6 +437,14 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
     }
   }
 
+  if (quick && targets.size === 0) {
+    return {
+      patches: new Map(), merged: [], conflicts: [], unmatched: [], incompleteScore: [],
+      bySource: {}, errors: [], stats: {}, months: [], targets, sources: order,
+      quick: true, attempted: false
+    };
+  }
+
   const { events, bySource, errors } = await fetchAllEvents({
     leagues, months: list, targets, order, log, season
   });
@@ -416,7 +458,9 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
     stats,
     months: list,
     targets,
-    sources: order
+    sources: order,
+    quick,
+    attempted: true
   };
 }
 
