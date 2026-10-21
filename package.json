@@ -1,7 +1,7 @@
 {
   "name": "nightowl-web",
   "private": true,
-  "version": "0.1.18",
+  "version": "0.1.19",
   "type": "module",
   "description": "夜猫看台 · 纯净观赛桌面版（本地单机）",
   "main": "electron/main.cjs",
@@ -22,7 +22,10 @@
     "test:m3u8": "node tools/test-m3u8.mjs",
     "test:proxy": "node tools/test-proxy.mjs",
     "test:proxy-timeout": "node tools/test-proxy-timeout.mjs",
-    "test:alias": "node tools/test-team-alias.mjs",
+    "test:alias": "node tools/test-team-alias.mjs --offline",
+    "test:alias:online": "node tools/test-team-alias.mjs",
+    "test:online": "npm run test:alias:online && npm run test:sources && npm run check:scraper",
+    "test:sync-outcome": "node tools/test-sync-outcome.mjs",
     "test:sources": "node tools/check-sources.mjs",
     "test:playback": "node tools/test-playback.mjs",
     "test:media": "node tools/test-media.mjs",
@@ -34,7 +37,7 @@
     "test:owl": "node tools/test-owl.mjs",
     "test:tz": "node tools/test-tz.mjs",
     "test:scraper-parse": "node tools/test-scraper-parse.mjs",
-    "test:all": "npm run verify:algo && npm run test:m3u8 && npm run test:proxy && npm run test:proxy-timeout && npm run test:playback && npm run test:media && npm run test:scraper-match && npm run test:scraper-parse && npm run test:session && npm run test:scores && npm run test:owl && npm run test:alias && npm run test:sources && npm run test:stats && npm run test:tz && npm run check:scraper"
+    "test:all": "npm run verify:algo && npm run test:m3u8 && npm run test:proxy && npm run test:proxy-timeout && npm run test:playback && npm run test:media && npm run test:scraper-match && npm run test:scraper-parse && npm run test:session && npm run test:scores && npm run test:owl && npm run test:alias && npm run test:stats && npm run test:tz && npm run test:sync-outcome"
   },
   "dependencies": {
     "artplayer": "^5.4.0",
@@ -72,6 +75,8 @@
       "dist/**/*",
       "electron/**/*",
       "server/**/*",
+      "!server/cache/**",
+      "!server/*.local.json",
       "src/core/**/*",
       "src/data/**/*",
       "build/icon.png",

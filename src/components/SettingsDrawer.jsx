@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getFixtures, FOLLOWABLE_LEAGUES, LEAGUE_NAMES, leagueColor } from '../data/index.js';
 import { defaultPrefs } from '../core/prefs.js';
+import { summarizeSyncResponse } from '../core/sync-outcome.js';
 import { BrandLogo, Button, Chip, Fieldset, Hint, Meta, Switch, TogglePill } from './atoms.jsx';
 import { IconClose, IconReset } from './icons.jsx';
 import TeamPicker from './TeamPicker.jsx';
@@ -44,6 +45,7 @@ export default function SettingsDrawer({
   /* ---- 数据新鲜度与一键同步 ----
      快照是构建期内联的，桌面端同步后写在 userData；这里负责显示陈旧程度并触发同步。 */
   const [fresh, setFresh] = useState(null);
+  const [lastSync, setLastSync] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState(null);
 
@@ -53,8 +55,10 @@ export default function SettingsDrawer({
       if (!r.ok) return;
       const j = await r.json();
       setFresh(j?.freshness || null);
+      setLastSync(j?.lastSync || null);
     } catch {
       setFresh(null);
+      setLastSync(null);
     }
   }, []);
 
@@ -86,12 +90,12 @@ export default function SettingsDrawer({
         setSyncMsg({ ok: false, text: j?.error || '同步失败' });
         return;
       }
-      const changed = j?.summary?.written?.changed ?? 0;
-      // 拉新数据替换内存里的快照（同步完不刷新页面，视图也要跟着变）
-      await onDataRefresh?.();
+      const outcome = summarizeSyncResponse(j);
+      setSyncMsg(outcome);
+      // 只有真正写盘成功才替换内存快照；失败时仍刷新状态，让用户看到失败原因
+      if (outcome.ok) await onDataRefresh?.();
       await loadFreshness();
       refresh();
-      setSyncMsg({ ok: true, text: changed > 0 ? `已更新 ${changed} 场比分` : '已经是最新' });
     } catch (err) {
       setSyncMsg({ ok: false, text: err?.message || '同步失败' });
     } finally {
@@ -100,12 +104,23 @@ export default function SettingsDrawer({
   };
 
   const freshText = useMemo(() => {
-    if (!fresh?.lastScoreAt) return '未知';
+    if (!fresh?.lastScoreAt) return '暂无已录比分';
     const h = fresh.staleHours ?? 0;
     if (h < 1) return '刚刚';
     if (h < 24) return `${h.toFixed(1)} 小时前`;
     return `${Math.floor(h / 24)} 天前`;
   }, [fresh]);
+
+  const syncText = useMemo(() => {
+    if (!lastSync?.at) return '本次启动后未同步';
+    const t = Date.parse(lastSync.at);
+    if (!Number.isFinite(t)) return '时间未知';
+    const h = (Date.now() - t) / 3600000;
+    if (h < 1 / 60) return '刚刚';
+    if (h < 1) return `${Math.max(1, Math.round(h * 60))} 分钟前`;
+    if (h < 24) return `${h.toFixed(1)} 小时前`;
+    return `${Math.floor(h / 24)} 天前`;
+  }, [lastSync]);
   // ⚠️ 不能用模块级 import { fixtures }：setFixtures 换的是 data/index.js 内部的
   // _fixtures，那个绑定永远停在构建期快照。这里取 getFixtures()，并在新鲜度
   // 刷新后（抽屉打开 / 同步完成）重算，保证与列表的「命中 N 场」口径一致。
@@ -311,9 +326,18 @@ export default function SettingsDrawer({
                       现在直接把陈旧程度和一键同步摆出来。 */}
                   <div className="mt-1.5 border-t border-line-hairline pt-1.5">
                     <p>
-                      数据更新于 <span className="text-text-primary">{freshText}</span>
+                      最新赛果 <span className="text-text-primary">{freshText}</span>
                       {fresh?.pendingCount > 0 && (
                         <span className="text-warn"> · {fresh.pendingCount} 场待录比分</span>
+                      )}
+                    </p>
+                    <p className="mt-0.5">
+                      上次同步 <span className="text-text-primary">{syncText}</span>
+                      {lastSync?.written?.ok === false && (
+                        <span className="text-warn">
+                          {' '}
+                          · 上次写盘失败：{lastSync.written.reason || '未知原因'}
+                        </span>
                       )}
                     </p>
                     <div className="mt-1 flex items-center gap-2">

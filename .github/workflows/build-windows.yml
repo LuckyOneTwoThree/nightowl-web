@@ -46,22 +46,10 @@ jobs:
         run: npm run build
 
       - name: Run tests
-        # 打包前先证明代码是好的；scraper 两项依赖外网，
-        # 在 CI 环境不稳定，单独放行（test:all 里它们排最后，失败不影响前面的验证）
+        # test:all 现在只跑离线套件（不联网、不写盘），CI 与本地共用同一份门禁。
+        # 需要真实上游的检查（test:online）不在 CI 里跑，避免网络波动造成假红。
         shell: bash
-        run: |
-          npm run verify:algo
-          npm run test:m3u8
-          npm run test:proxy
-          npm run test:proxy-timeout
-          npm run test:playback
-          npm run test:media
-          npm run test:scraper-match
-          npm run test:session
-          npm run test:scores
-          npm run test:owl
-          npm run test:alias
-          npm run test:stats
+        run: npm run test:all
 
       # 注入 tag 版本到包元数据：exe 文件名（artifactName 的 ${version}）随 tag 对齐，
       # 否则 package.json 里的 version 不动，文件名会一直停在旧版本号

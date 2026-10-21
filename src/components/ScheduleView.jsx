@@ -1,8 +1,8 @@
-import { useMemo, useState, useRef, useEffect } from 'react';
+import { useMemo, useRef, useEffect } from 'react';
 import { VList } from 'virtua';
 import { weekdayOf } from '../core/format.js';
 import { getFixtures, LEAGUE_ORDER, LEAGUE_NAMES, leagueColor } from '../data/index.js';
-import { evalOne, stateOf, defaultScheduleFilters, dayCounts, owlDayOffset } from '../core/owl.js';
+import { evalOne, stateOf, defaultScheduleFilters, owlDayOffset } from '../core/owl.js';
 import * as E from '../core/engine.js';
 import MatchRow from './MatchRow.jsx';
 import { EmptyState, Meta, TogglePill } from './atoms.jsx';
@@ -53,7 +53,9 @@ export default function ScheduleView({
      主流产品（FotMob / 懂球帝）的赛程页都是「日期条 + 当日比赛」，
      而不是 1897 场的瀑布流。date=null 表示今天；'all' 保留全季列表（规划视图）。 */
   const todayDate = useMemo(() => owlDayOffset(0, now), [now]);
-  const [showAll, setShowAll] = useState(filters.date === 'all');
+  // 由筛选条件派生，避免本地状态与 filters 各说各话：
+  // 外部重置筛选（如空态里的「重置筛选」）时，视图必须一起回到今天。
+  const showAll = filters.date === 'all';
 
   const selDate = filters.date && filters.date !== 'all' ? filters.date : todayDate;
 
@@ -73,7 +75,12 @@ export default function ScheduleView({
   }, [selDate, showAll]);
 
   const dayStrip = useMemo(() => {
-    const counts = dayCounts();
+    // 计数必须来自已应用联赛 / 关注 / 搜索筛选的 rows，
+    // 否则日期条显示「10 场」、点进去列表只剩 2 场。
+    const counts = new Map();
+    for (const row of rows) {
+      if (row.type === 'date') counts.set(row.date, row.count);
+    }
     // 覆盖过去 14 天到未来 28 天（支持翻阅历史赛程与昨日、前天比分）
     const list = [];
     for (let i = -14; i <= 28; i++) {
@@ -81,14 +88,14 @@ export default function ScheduleView({
       list.push({
         offset: i,
         date: d,
-        count: counts[d] || 0,
+        count: counts.get(d) || 0,
         isToday: i === 0,
         isYesterday: i === -1,
         isBeforeYesterday: i === -2
       });
     }
     return list;
-  }, [now]);
+  }, [rows, now]);
 
   // 当日比赛按联赛分组（date 模式不用虚拟滚动 —— 一天就十几场）
   const dayGroups = useMemo(() => {
@@ -125,15 +132,7 @@ export default function ScheduleView({
 
   const set = patch => onFiltersChange({ ...filters, ...patch });
 
-  const setDate = d => {
-    if (d === 'all') {
-      setShowAll(true);
-      set({ date: 'all' });
-    } else {
-      setShowAll(false);
-      set({ date: d });
-    }
-  };
+  const setDate = d => set({ date: d });
 
   const stepDate = direction => {
     const base = selDate || todayDate;

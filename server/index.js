@@ -118,7 +118,14 @@ function readJsonBody(req, limit = 8192) {
   });
 }
 
-export function createServer(rules = loadRules(), log = console) {
+export function createServer(rules = loadRules(), log = console, deps = {}) {
+  // 依赖注入：让集成测试可以用假数据验证端点语义，而不是真的联网 + 写盘。
+  // 生产调用（server/index.js 直接运行、electron/main.cjs）不传 deps，行为不变。
+  const syncScoresImpl = deps.syncScores || syncScores;
+  const loadFixturesImpl = deps.loadFixtures || loadFixtures;
+  const saveFixturesImpl = deps.saveFixtures || saveFixtures;
+  const backgroundSync = deps.backgroundSync !== false;
+
   const proxy = createProxy(rules, log);
   let syncing = false;
   let lastSync = null;
@@ -245,12 +252,13 @@ export function createServer(rules = loadRules(), log = console) {
       // 而不是让用户误以为应用坏了
       if (pathname === '/api/scores/status' && req.method === 'GET') {
         try {
-          const fixtures = await loadFixtures();
+          const fixtures = await loadFixturesImpl();
+          const fresh = freshness(fixtures);
           sendJSON(res, 200, {
             ok: true,
-            freshness: freshness(fixtures),
+            freshness: fresh,
             lastSync,
-            note: freshness(fixtures).writable
+            note: fresh.writable
               ? '可写数据目录已就绪，支持在应用内同步比分'
               : '当前没有可写的数据目录（纯预览模式），同步结果不会保存'
           });
@@ -263,7 +271,7 @@ export function createServer(rules = loadRules(), log = console) {
       // 当前生效的赛程数据（前端启动时拉取，用于把静态快照热更新为最新数据）
       if (pathname === '/api/fixtures' && req.method === 'GET') {
         try {
-          const fixtures = await loadFixtures();
+          const fixtures = await loadFixturesImpl();
           sendJSON(
             res,
             200,
@@ -299,8 +307,8 @@ export function createServer(rules = loadRules(), log = console) {
           const apply = body?.apply === true || searchParams.get('apply') === '1';
           const allMonths = body?.allMonths === true || searchParams.get('all') === '1';
           const months = body?.months || (searchParams.get('months') ? searchParams.get('months').split(',') : null);
-          const fixtures = await loadFixtures();
-          const result = await syncScores({ fixtures, rules, months, allMonths, log });
+          const fixtures = await loadFixturesImpl();
+          const result = await syncScoresImpl({ fixtures, rules, months, allMonths, log });
 
           let written = null;
           let nextFixtures = null;
@@ -311,9 +319,11 @@ export function createServer(rules = loadRules(), log = console) {
               // 与 CLI 一致：校验不通过就绝不写盘，宁可这次不同步
               written = { ok: false, reason: '校验未通过，已放弃写盘', issues: issues.slice(0, 5) };
             } else {
-              const saved = saveFixtures(next);
+              const saved = saveFixturesImpl(next) || { ok: false, reason: '写盘结果缺失' };
               written = { ...saved, changed };
-              nextFixtures = next;
+              // 只有真正写盘成功才把新数据回传前端。
+              // 否则前端会拿未落盘的比分替换内存数据 —— 界面显示已更新，重启后却回滚。
+              if (saved.ok === true) nextFixtures = next;
             }
           } else if (apply) {
             written = { ok: true, changed: 0, note: '没有需要写入的补丁' };
@@ -323,7 +333,7 @@ export function createServer(rules = loadRules(), log = console) {
             at: new Date().toISOString(),
             ms: Date.now() - startedAt,
             patches: result.patches.size,
-            applied: !!apply,
+            applied: !!apply && written?.ok === true,
             written,
             errors: result.errors.length,
             stats: result.stats,
@@ -410,16 +420,16 @@ export function createServer(rules = loadRules(), log = console) {
     try {
       syncing = true;
       const startedAt = Date.now();
-      const fixtures = await loadFixtures();
-      const result = await syncScores({ fixtures, rules, log });
+      const fixtures = await loadFixturesImpl();
+      const result = await syncScoresImpl({ fixtures, rules, log });
       if (result.patches.size > 0) {
         const { fixtures: next, changed } = applyPatches(fixtures, result.patches);
         const issues = validateFixtures(next);
         if (!issues.length) {
-          const saved = saveFixtures(next);
+          const saved = saveFixturesImpl(next) || { ok: false, reason: '写盘结果缺失' };
           // ⚠️ 不能不看 saved.ok 就报「完成」：数据目录不可写时 saveFixtures 返回
           //    {ok:false, reason}，此时日志在撒谎、lastSync.applied 也错报为 true。
-          const ok = saved?.ok !== false;
+          const ok = saved.ok === true;
           log[ok ? 'log' : 'warn']?.(
             ok
               ? `[scores] 后台自动保鲜完成：写入 ${changed} 场新完赛比分 (${Date.now() - startedAt}ms)`
@@ -443,12 +453,17 @@ export function createServer(rules = loadRules(), log = console) {
     }
   };
 
-  const startupTimer = setTimeout(runBackgroundSync, 500);
-  const cronTimer = setInterval(runBackgroundSync, 30 * 60 * 1000);
+  // 测试注入 backgroundSync:false 时不启动定时器，避免假数据被后台任务干扰。
+  let startupTimer = null;
+  let cronTimer = null;
+  if (backgroundSync) {
+    startupTimer = setTimeout(runBackgroundSync, 500);
+    cronTimer = setInterval(runBackgroundSync, 30 * 60 * 1000);
+  }
 
   server.on('close', () => {
-    clearTimeout(startupTimer);
-    clearInterval(cronTimer);
+    if (startupTimer) clearTimeout(startupTimer);
+    if (cronTimer) clearInterval(cronTimer);
   });
 
   return server;

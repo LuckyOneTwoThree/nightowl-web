@@ -43,6 +43,7 @@
 
   "scores": {
     "enabled": true,
+    "season": "2026-27",
     "baseUrl": "https://site.api.espn.com/apis/site/v2/sports/soccer",
     "leagues": {
       "PL": "eng.1",

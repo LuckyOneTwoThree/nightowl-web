@@ -23,20 +23,28 @@ export const ALLOWED_ST = ['sched', 'done', 'pp'];
 /** 单场最多允许的匹配时间偏差（天）——超过则视为不同场次，拒绝匹配 */
 export const MATCH_WINDOW_DAYS = 4;
 
-/** 本地 Season 覆盖的月份（2026-08 ～ 2027-05） */
-export function seasonMonths(now = new Date()) {
+/**
+ * 赛季覆盖的月份（欧洲主流联赛口径：8 月 — 次年 5 月）
+ *
+ * 由赛季串派生，不再把 `2027-05` 硬编码进逻辑：
+ * 2026-27 → 202608…202612 + 202701…202705，共 10 个月。
+ *
+ * @param {string} season 形如 '2026-27'
+ * @returns {string[]} YYYYMM 列表；赛季串非法时返回空数组
+ */
+export function seasonMonths(season = '2026-27') {
+  const m = String(season || '').match(/^(\d{4})-(\d{2})$/);
+  if (!m) return [];
+
+  const startYear = Number(m[1]);
+  const endYear = startYear + 1;
+  // 赛季串必须连续：2026-27 合法，2026-28 视为配置错误，不猜
+  if (Number(m[2]) !== endYear % 100) return [];
+
+  const pad = n => String(n).padStart(2, '0');
   const out = [];
-  let y = now.getUTCFullYear();
-  let m = now.getUTCMonth() + 1;
-  for (let i = 0; i < 15; i++) {
-    out.push(`${y}${String(m).padStart(2, '0')}`);
-    m++;
-    if (m > 12) {
-      m = 1;
-      y++;
-    }
-    if (y > 2027 || (y === 2027 && m > 5)) break;
-  }
+  for (let month = 8; month <= 12; month++) out.push(`${startYear}${pad(month)}`);
+  for (let month = 1; month <= 5; month++) out.push(`${endYear}${pad(month)}`);
   return out;
 }
 
@@ -324,6 +332,7 @@ export function planPatches(merged, fixtures, conflicts = []) {
  */
 export async function syncScores({ fixtures, rules, months, allMonths = false, sources, log = console }) {
   const cfg = rules.scores || {};
+  const season = cfg.season || '2026-27';
   const leagues = Object.keys(cfg.leagues || {});
   const order = (sources && sources.length ? sources : DEFAULT_ORDER).filter(s => DEFAULT_ORDER.includes(s));
   const pad = n => String(n).padStart(2, '0');
@@ -348,7 +357,7 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
       }
     }
   } else if (allMonths || months === 'all') {
-    list = seasonMonths();
+    list = seasonMonths(season);
     targets = new Map();
     for (const m of fixtures) {
       const t = ts(m.t);
@@ -369,8 +378,7 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
   }
 
   const { events, bySource, errors } = await fetchAllEvents({
-    leagues, months: list, targets, order, log,
-    season: cfg.season || '2026-27'
+    leagues, months: list, targets, order, log, season
   });
 
   const { merged, conflicts } = mergeEvents(events, order);

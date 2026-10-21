@@ -12,9 +12,11 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { planPatches, applyPatches, validateFixtures, ALLOWED_ST, activeSyncTargets, uclWeeklyTargets } from '../server/scores.js';
+import { planPatches, applyPatches, validateFixtures, ALLOWED_ST, activeSyncTargets, uclWeeklyTargets, seasonMonths } from '../server/scores.js';
 import { createServer } from '../server/index.js';
 import { loadRules } from '../server/proxy.js';
+import { freshness } from '../server/data-store.js';
+import { ts } from '../src/core/engine.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixtures = JSON.parse(readFileSync(resolve(ROOT, 'src/data/fixtures.json'), 'utf8'));
@@ -219,44 +221,179 @@ console.log('五·三、★ UCL 淘汰赛接管（不依赖本地场次扫本周
 
 /* ================================================================== */
 console.log('');
-console.log('六、HTTP API 端点集成（防 written 变量未声明与 500 回归）');
+console.log('六、HTTP API 端点集成（依赖注入，离线且不写盘）');
 {
   const rules = loadRules();
-  const server = createServer(rules, { log: () => {}, warn: () => {}, error: () => {} });
-  const port = await new Promise((res, rej) => {
-    server.listen(0, '127.0.0.1', () => res(server.address().port));
-    server.on('error', rej);
-  });
+  const silent = { log: () => {}, warn: () => {}, error: () => {} };
+  const target = fixtures.find(m => m.st === 'sched' && !m.tbd) || fixtures.find(m => m.st === 'sched');
+  ok('找到可用于打补丁的测试样本', !!target, target?.id);
 
-  try {
-    // 1. GET /api/scores/status
+  const successPatch = new Map([[target.id, { st: 'done', sc: '2-1', tbd: false }]]);
+  const incompletePatch = new Map([[target.id, { st: 'done' }]]);
+
+  /** 启动一个注入了假依赖的服务，跑完自动关闭；绝不联网、绝不写盘 */
+  async function withServer(overrides, fn) {
+    let saveCalls = 0;
+    let saved = null;
+    const server = createServer(rules, silent, {
+      backgroundSync: false,
+      loadFixtures: async () => fixtures,
+      syncScores: async () => ({
+        patches: successPatch,
+        errors: [],
+        stats: { done: 1 },
+        bySource: {},
+        conflicts: [],
+        incompleteScore: [],
+        unmatched: []
+      }),
+      saveFixtures: next => {
+        saveCalls++;
+        saved = next;
+        return { ok: true, path: '/tmp/nightowl-fixtures.json', bytes: 1 };
+      },
+      ...overrides
+    });
+    const port = await new Promise((res, rej) => {
+      server.listen(0, '127.0.0.1', () => res(server.address().port));
+      server.on('error', rej);
+    });
+    try {
+      return await fn({ port, getSaveCalls: () => saveCalls, getSaved: () => saved });
+    } finally {
+      await new Promise(r => server.close(r));
+    }
+  }
+
+  // 1. 状态与 fixtures 端点
+  await withServer({}, async ({ port }) => {
     const rStatus = await fetch(`http://127.0.0.1:${port}/api/scores/status`);
     const jStatus = await rStatus.json();
     ok('GET /api/scores/status 返回 200', rStatus.status === 200);
     ok('状态包含 freshness 对象', !!jStatus.freshness);
+    ok('启动后 lastSync 为 null（未运行过同步）', jStatus.lastSync === null);
 
-    // 2. POST /api/scores/sync（dryRun）
-    const rDry = await fetch(`http://127.0.0.1:${port}/api/scores/sync`, {
+    const rFixtures = await fetch(`http://127.0.0.1:${port}/api/fixtures`);
+    const jFixtures = await rFixtures.json();
+    ok('GET /api/fixtures 返回假数据总数', rFixtures.status === 200 && jFixtures.count === fixtures.length);
+  });
+
+  // 2. dryRun 不写盘
+  await withServer({}, async ({ port, getSaveCalls }) => {
+    const r = await fetch(`http://127.0.0.1:${port}/api/scores/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ apply: false })
     });
-    const jDry = await rDry.json();
-    ok('POST /api/scores/sync (dryRun) 返回 200', rDry.status === 200);
-    ok('dryRun 标志为 true', jDry.dryRun === true);
+    const j = await r.json();
+    ok('POST /api/scores/sync (dryRun) 返回 200', r.status === 200);
+    ok('dryRun 标志为 true', j.dryRun === true);
+    ok('dryRun 不调用写盘', getSaveCalls() === 0);
+  });
 
-    // 3. POST /api/scores/sync (apply=true, 关键回归：written 未声明曾导致 ReferenceError 500)
-    const rApply = await fetch(`http://127.0.0.1:${port}/api/scores/sync`, {
+  // 3. apply=true 成功：written.ok / changed / fixtures 回传
+  await withServer({}, async ({ port, getSaveCalls, getSaved }) => {
+    const r = await fetch(`http://127.0.0.1:${port}/api/scores/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ apply: true })
     });
-    const jApply = await rApply.json();
-    ok('★ POST /api/scores/sync (apply=true) 返回 200 且无 500 ReferenceError', rApply.status === 200, jApply.error);
-    ok('落盘摘要 written 对象有效', !!jApply.summary?.written && jApply.summary.written.ok === true);
-  } finally {
-    await new Promise(r => server.close(r));
-  }
+    const j = await r.json();
+    ok('★ POST /api/scores/sync (apply=true) 返回 200 且无 500', r.status === 200, j.error);
+    ok('写盘成功：written.ok=true 且 changed=1',
+      j.summary?.written?.ok === true && j.summary?.written?.changed === 1);
+    ok('写盘成功：applied=true', j.summary?.applied === true);
+    ok('写盘成功：回传的新 fixtures 已含补丁',
+      Array.isArray(j.fixtures) && j.fixtures.find(m => m.id === target.id)?.sc === '2-1');
+    ok('写盘只调用一次', getSaveCalls() === 1);
+    ok('写盘内容确实是应用补丁后的数据', getSaved()?.find(m => m.id === target.id)?.sc === '2-1');
+  });
+
+  // 4. 写盘失败：不得回传新 fixtures、不得标记 applied
+  await withServer(
+    { saveFixtures: () => ({ ok: false, reason: '磁盘只读' }) },
+    async ({ port }) => {
+      const r = await fetch(`http://127.0.0.1:${port}/api/scores/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apply: true })
+      });
+      const j = await r.json();
+      ok('写盘失败：HTTP 仍为 200（同步本身成功，写盘是后置步骤）', r.status === 200);
+      ok('★ 写盘失败：written.ok=false 且带 reason',
+        j.summary?.written?.ok === false && /磁盘只读/.test(j.summary?.written?.reason || ''));
+      ok('★ 写盘失败：applied=false', j.summary?.applied === false);
+      ok('★ 写盘失败：不回传新 fixtures（避免内存假装成功）', !j.fixtures);
+    }
+  );
+
+  // 5. 校验失败：绝不写盘，绝不回传新 fixtures
+  await withServer(
+    {
+      syncScores: async () => ({
+        patches: incompletePatch,
+        errors: [],
+        stats: { done: 1 },
+        bySource: {},
+        conflicts: [],
+        incompleteScore: [],
+        unmatched: []
+      })
+    },
+    async ({ port, getSaveCalls }) => {
+      const r = await fetch(`http://127.0.0.1:${port}/api/scores/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apply: true })
+      });
+      const j = await r.json();
+      ok('校验失败：written.ok=false 且说明校验未通过',
+        j.summary?.written?.ok === false && /校验未通过/.test(j.summary?.written?.reason || ''));
+      ok('校验失败：列出具体 issues', Array.isArray(j.summary?.written?.issues) && j.summary.written.issues.length > 0);
+      ok('校验失败：不调用写盘', getSaveCalls() === 0);
+      ok('校验失败：不回传新 fixtures', !j.fixtures);
+    }
+  );
+}
+
+/* ================================================================== */
+console.log('');
+console.log('七、数据新鲜度语义（lastScoreAt 是赛果时间，不是同步时间）');
+{
+  const now = new Date('2026-09-16T15:00:00+08:00').getTime();
+  const sample = [
+    { id: 'd1', l: 'PL', t: '2026-09-15T03:00', st: 'done', sc: '2-1' },
+    { id: 'p1', l: 'PL', t: '2026-09-16T03:00', st: 'sched', sc: null }, // 已过完赛窗口 → 待录
+    { id: 'l1', l: 'PL', t: '2026-09-16T14:00', st: 'sched', sc: null }, // 进行中窗口
+    { id: 'f1', l: 'PL', t: '2026-09-18T03:00', st: 'sched', sc: null }  // 未来 → 不计
+  ];
+  const f = freshness(sample, now);
+  ok('★ lastScoreAt 取最近完赛的开球时间',
+    f.lastScoreAt === new Date(ts('2026-09-15T03:00')).toISOString(), f.lastScoreAt);
+  ok('pendingCount 只计已过完赛窗口的 sched 场次', f.pendingCount === 1, `实际 ${f.pendingCount}`);
+  ok('liveCount 只计进行中窗口的 sched 场次', f.liveCount === 1, `实际 ${f.liveCount}`);
+  ok('freshness 字段完整',
+    ['source', 'lastScoreAt', 'staleHours', 'pendingCount', 'liveCount', 'writable']
+      .every(k => k in f));
+}
+
+/* ================================================================== */
+console.log('');
+console.log('八、赛季窗口配置化（不再硬编码 2027-05）');
+{
+  const s2627 = seasonMonths('2026-27');
+  ok('2026-27 覆盖 10 个月（8 月—次年 5 月）', s2627.length === 10, `实际 ${s2627.length}`);
+  ok('2026-27 从 2026-08 开始', s2627[0] === '202608', s2627[0]);
+  ok('2026-27 到 2027-05 结束', s2627[s2627.length - 1] === '202705', s2627[s2627.length - 1]);
+
+  const s2728 = seasonMonths('2027-28');
+  ok('2027-28 正确跨年',
+    s2728[0] === '202708' && s2728[9] === '202805',
+    `${s2728[0]} … ${s2728[9]}`);
+
+  ok('非法 / 不连续赛季串返回空',
+    seasonMonths('2026-28').length === 0 && seasonMonths('bad').length === 0);
+  ok('默认赛季仍是 2026-27', JSON.stringify(seasonMonths()) === JSON.stringify(s2627));
 }
 
 console.log('');

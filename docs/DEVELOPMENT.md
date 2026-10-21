@@ -23,8 +23,9 @@ npm run dev            # 开发模式：Vite 5173，/api 代理到 3100
 npm run build          # 生产构建到 dist/
 npm run server         # 只跑本地服务（:3100，只监听 127.0.0.1）
 npm run electron:dev   # 桌面外壳 + 开发模式
-npm run test:all       # 串行跑全部 13 个测试脚本（提交前必跑）
-npm run verify:algo    # 算法回归（与原版的偏差比对）
+npm run test:all       # 离线回归（提交前必跑；不联网、不写盘）
+npm run test:online    # 联网检查（数据源健康度 / 抓取匹配率，单独跑）
+npm run verify:algo    # 历史基线比对（参考项目已解耦，当前仅放行）
 ```
 
 ### 单点命令
@@ -43,30 +44,31 @@ npm run test:sources       # 数据源健康度（联网）
 
 ## 测试体系
 
-**15 个脚本、346 项断言**，`npm run test:all` 串行执行。它们不是形式化的覆盖率，而是每一条都对应过一次真实事故或一条不能破的纪律：
+**离线套件与联网检查分离**：`npm run test:all` 只跑可重复的离线脚本（不联网、不写盘）；`npm run test:online` 单独跑数据源健康度与抓取匹配率。它们不是形式化的覆盖率，而是每一条都对应过一次真实事故或一条不能破的纪律：
 
 | 脚本 | 项数 | 守住什么 |
 | :--- | ---: | :--- |
+| `test:scores` | 70 | 保鲜折算、写盘失败语义、数据新鲜度、赛季窗口；HTTP 端点走依赖注入 |
 | `test:owl` | 53 | 视图模型不变量：分区不丢不重、推荐排除自身、只看未来、排序口径 |
-| `test:scores` | 44 | 保鲜折算：只写三值状态、比分不全不落库；tbd 轮展开；UCL 接管 |
 | `test:m3u8` | 31 | M3U8 十类载体的 URI 重写完整性 |
+| `test:tz` | 28 | openfootball 时区换算：夏令时边界、**缺 time 不造假时刻** |
 | `test:session` | 27 | 代理会话授权与回收（TTL / revoke 幂等） |
 | `test:proxy` | 26 | 白名单拒绝、并发闸门、失败语义 |
 | `test:media` | 24 | 媒体类型判定（显式 `kind`，不靠 URL 嗅探） |
 | `test:scraper-match` | 22 | 直播源匹配：**只做双方全等，禁止单队兜底** |
-| `test:scraper-parse` | 20 | 抓取器 HTML 解析：**改版时必须抛错，不能静默返回空** |
+| `test:scraper-parse` | 22 | 抓取器 HTML 解析：**改版时必须抛错，不能静默返回空** |
 | `test:stats` | 19 | 统计口径：不含本场与未来场次（防剧透） |
 | `test:playback` | 18 | 播放链路参数完整性 |
 | `test:proxy-timeout` | 13 | 三层超时（响应头 / 流静默 / 排队） |
-| `test:tz` | 28 | openfootball 时区换算：夏令时边界、**缺 time 不造假时刻** |
-| `test:team-alias` | 11 | 队名别名一致性与覆盖率 |
-| `check:sources` | 8 | 数据源健康度（联网） |
-| `check:scraper` | 7 | 抓取实测 + **P0 误配零容忍回归**（联网） |
+| `test:alias` | 11+ | 离线别名结构与缓存映射（在线校验走 `test:online`） |
+| `test:sync-outcome` | 7 | 同步结果文案：写盘失败不得冒充「已经是最新」 |
+| `test:online` | — | `test:alias:online` + `check:sources` + `check:scraper`（联网） |
 
-### 写测试时的两条纪律
+### 写测试时的三条纪律
 
 1. **断言里不要硬编码场次 ID** —— 数据会被保鲜模块更新，硬编码的样本迟早失效（用动态选样）
 2. **匹配函数必须被测试直接调用** —— 曾出现过 `check-scraper` 自己重写了一遍匹配逻辑，结构上不可能发现匹配本身的缺陷
+3. **`test:all` 里不得引入网络或写盘** —— 需要真实上游的检查放进 `test:online`；HTTP 端点测试通过 `createServer(rules, log, deps)` 注入假依赖
 
 ---
 
@@ -106,6 +108,20 @@ node tools/sync-scores.mjs --apply    # 写入内置快照（发版前的数据�
 
 > ⚠️ 新增依赖数据源的模块时，记得走 `src/data/index.js` 的 `getFixtures()`，不要直接 `import fixtures.json` —— 否则会锁在构建期快照上（曾因此出现「左栏有比分、右栏说等待录入」的自相矛盾）。
 
+### 赛季配置
+
+`server/rules.json` 的 `scores.season` 决定两件事：
+
+1. openfootball 拉取哪个赛季文件（`2026-27` → `.../master/2026-27/...`）
+2. `allMonths` 全量同步的月份窗口（`seasonMonths()` 从赛季串派生 8 月—次年 5 月）
+
+换赛季时只改配置并更新 fixtures 数据，不要在代码里硬编码年份。当前 `seasonMonths()` 对不连续的赛季串（如 `2026-28`）返回空数组，属于显式配置错误，不会猜。
+
+### UCL 淘汰赛与保底频道
+
+- **UCL 淘汰赛**：对阵要等 2027-01 抽签后才确定。同步时拉到本地没有的对阵会进入 `unmatched` 报告，**不自动新增场次**；抽签后按「数据只走脚本」补 fixtures，再跑一次全量同步。
+- **保底频道**：`server/tv-channels.local.json` 是本地签名直链（含个人标识），不入库、不打包；失效时按 `server/tv-channels.example.json` 更新。`probeChannels()` 会在 10 分钟 TTL 内探测并在界面提示失效频道。
+
 ---
 
 ## 队名别名的维护
@@ -124,8 +140,9 @@ server/scraper-alias.json       # 聚合站队名补充（只放机器推不出�
 - **宁漏勿错** —— 补别名前先确认真实含义（拉一次源数据核对 displayName），猜错比缺失危险得多
 
 ```bash
-npm run check:scraper    # 看当前匹配率与未匹配清单，据此补别名
-npm run test:alias       # 别名一致性与覆盖率
+npm run check:scraper      # 看当前匹配率与未匹配清单，据此补别名（联网）
+npm run test:alias         # 离线别名结构 + 本地缓存映射
+npm run test:alias:online  # 在线全量名字映射（会刷新 server/cache）
 ```
 
 ---
@@ -139,9 +156,9 @@ npx electron-builder --win --dir --publish never
 node tools/verify-package.mjs release/win-arm64-unpacked/resources/app
 ```
 
-自检做两件事：扫描产物内 `server/` 与 `electron/` 的**相对 import 是否都可解析**、断言关键运行时文件（`src/core`、`src/data`、`dist`）与打包输入（`build/icon.ico`）存在。
+自检做三件事：扫描产物内 `server/` 与 `electron/` 的**相对 import 是否都可解析**、断言关键运行时文件（`src/core`、`src/data`、`dist`）与打包输入（`build/icon.ico`）存在、**断言本地敏感文件未进入产物**（`server/*.local.json`、`server/cache`）。
 
-> 这两个检查各自抓到过真问题：一次是 `package.json` 的 `files` 漏了 `src/core`（安装版启动即报 `ERR_MODULE_NOT_FOUND`），一次是自检自己把打包输入写进了产物断言。
+> 这三类检查各自抓到过真问题：一次是 `package.json` 的 `files` 漏了 `src/core`（安装版启动即报 `ERR_MODULE_NOT_FOUND`），一次是自检自己把打包输入写进了产物断言，一次是 `server/**/*` 把本地签名直链与用户缓存打进了安装包。
 
 ### 发布
 

@@ -328,3 +328,85 @@ openfootball 改用 `tz.mjs` 后，`normalize.js` 的 `localPartsToWall` 再无�
 
 **每一步都必须**：`npm run test:all` 全过后再提交（13 脚本 / 271 项断言）。
 新增优化需同步补测试——本仓的纪律是每条断言对应一次真实事故。
+
+---
+
+## 六、第二轮优化（2026-10-21）· v0.1.19
+
+### 背景
+
+深度复核发现：优先修「信任」而不是「性能」。实测热路径仍在 2ms 内，
+但有三类问题会直接损害用户信任或重复出现：
+
+1. **本地打包泄露**：`files: ["server/**/*"]` 会把 `server/tv-channels.local.json`
+   （会话级签名 / 个人标识）与 `server/cache/**`（运行期数据）带进安装包。
+   electron-builder 不读 `.gitignore`，现有本地产物中已确认存在。
+2. **测试门禁不可重复**：`test:all` 名义离线，实际 `test:scores` 会真实联网并写盘，
+   `test:team-alias` 会在线拉取，末尾还包含两个联网脚本；CI 与本地门禁也不一致。
+3. **界面数据语义不实**：设置抽屉把「最近完赛场次的开球时间」显示成「数据更新于」；
+   写盘失败时服务端仍回传新 fixtures、前端仍替换内存数据、UI 显示「已经是最新」。
+4. **赛程视图状态分裂**：`showAll` 同时存在本地 state 与 `filters.date` 两个真相，
+   「重置筛选」不会退出全季；日期条计数不跟随联赛 / 搜索筛选。
+
+### 实施
+
+#### P0-1 打包边界
+
+- `package.json` 的 `files` 增加 `!server/cache/**`、`!server/*.local.json`
+- `tools/verify-package.mjs` 新增「本地敏感文件不得进入产物」断言
+- 实测：重新生成 `release/win-arm64-unpacked/resources/app` 后，
+  `*.local.json` 与 `server/cache` 均不存在；自检 **15 项全过**
+
+> 本机（arm64 Mac）在 electron-builder 的 Wine/rcedit 步骤失败（Wine 二进制 CPU 类型不兼容），
+> 但 app 目录已完整生成并完成自检；Windows NSIS 由 CI 在 `windows-latest` 上构建。
+
+#### P0-2 测试门禁离线化
+
+- `createServer(rules, log, deps)` 支持注入 `syncScores / loadFixtures / saveFixtures / backgroundSync`
+- `test:scores` 的 HTTP 集成测试改用假依赖：不再联网、不再写盘，覆盖
+  dryRun / 写盘成功 / 写盘失败 / 校验失败四种路径
+- `test:team-alias` 增加 `--offline`，`test:alias` 默认离线，在线部分改为 `test:alias:online`
+- `test:all` 只保留离线套件；新增 `test:online`
+- `check:scraper` 的 25% 匹配率改为**提示**，保留「P0 误配 = 0」红线，
+  并增加「至少匹配 5 场」的崩塌守卫
+- CI 改为直接 `npm run test:all`，与本地共用同一份门禁
+
+#### P0-3 数据新鲜度与同步失败语义
+
+- 设置抽屉拆分为「最新赛果」（`lastScoreAt`）与「上次同步」（`lastSync.at`）
+- 服务端写盘失败时不再回传 `fixtures`，`lastSync.applied=false`
+- 前端 `triggerSync` 增加 `written.ok` 校验，不再用未落盘的数据替换内存
+- 新增纯函数 `src/core/sync-outcome.js` + `tools/test-sync-outcome.mjs`（7 项）
+- `test:scores` 增加写盘失败 / 校验失败 / 数据新鲜度断言
+
+#### P0-4 赛程视图一致性
+
+- `showAll` 由 `filters.date === 'all'` 派生，删除重复 state
+- 日期条计数来自已筛选的 `rows`
+- 「重置筛选」自然回到今天模式
+
+#### P1 赛季配置化
+
+- `server/rules.json` 增加 `scores.season`
+- `seasonMonths(season)` 从赛季串推导 8 月—次年 5 月，不再硬编码 `2027-05`
+- 非法 / 不连续赛季串返回空数组，显式失败而不是猜
+- `test:scores` 增加 2026-27 / 2027-28 / 非法赛季断言
+
+### 验证结果
+
+| 项目 | 结果 |
+| :--- | :--- |
+| 离线套件 | **371 项断言全过**（test:scores 70、sync-outcome 7、owl 53…） |
+| 联网检查 | `test:online` 7 项全过；匹配率 20%（仅提示）；P0 误配 **0** |
+| 打包自检 | 15 项全过；产物不含 `*.local.json` / `server/cache` |
+| 构建 | Vite 构建通过；主包 625KB（gzip 153KB），Player 懒加载 718KB |
+| UI 复核 | 设置抽屉显示「最新赛果 / 上次同步」；筛选英超命中 380，日期条计数同步；重置筛选回到今天并清空搜索 |
+
+**遗留外部项**：CCTV5 / CCTV5+ 保底频道签名已过期，需更新
+`server/tv-channels.local.json`（不入库、不打包）；UCL 淘汰赛待 2027-01 抽签后按 runbook 补数据。
+
+### 下一步（Phase 2 / 3）
+
+- Phase 2 已随 v0.1.19 完成：赛季配置化 + UCL / 保底频道 runbook。
+- Phase 3（v0.1.20）：开屏动画改为首次安装展示、移除未实现的赛前通知开关、
+  无障碍小修与视觉打磨。

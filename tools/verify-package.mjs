@@ -121,6 +121,19 @@ const hasChunks =
   readdirSync(assets).some(f => f.startsWith('index-') && (f.endsWith('.js') || f.endsWith('.css')));
 ok('dist chunk（index-*.js / *.css）', hasChunks);
 
+/* ---------- ②b 本地敏感文件不得进入产物 ---------- */
+// `files: ["server/**/*"]` 会连本地运行时文件一起带走：
+// tv-channels.local.json 含会话级签名与个人标识，server/cache 是保鲜写出的用户数据。
+// .gitignore 只约束 git，electron-builder 不读它 —— 必须在这里显式挡住。
+console.log('');
+console.log('二·二、本地敏感文件（不得进入产物）');
+const serverDir = join(appDir, 'server');
+const localJsonFiles = existsSync(serverDir)
+  ? readdirSync(serverDir).filter(f => f.endsWith('.local.json'))
+  : [];
+ok('产物不含 *.local.json（签名 / 个人标识）', localJsonFiles.length === 0, localJsonFiles.join('、'));
+ok('产物不含 server/cache（运行时数据）', !existsSync(join(serverDir, 'cache')));
+
 /* ---------- ③ 打包输入（在仓库根，不在产物内） ---------- */
 console.log('');
 console.log('三、打包输入（仓库根）');

@@ -35,6 +35,8 @@ const teams = loadTeams();
 const byId = new Map(teams.map(t => [t.id, t]));
 const nameIndex = buildNameIndex(teams);
 const RAW_BASE = 'https://raw.githubusercontent.com/openfootball/football.json/master/2026-27';
+/** `--offline`：不访问外网，只用本地缓存；test:all 用这个模式保证确定性 */
+const OFFLINE = process.argv.includes('--offline');
 
 /* ================================================================== */
 console.log('一、别名表自身结构校验（离线）');
@@ -95,7 +97,7 @@ const espnAlias = JSON.parse(readFileSync(resolve(ROOT, 'server/espn-alias.json'
 
 /* ================================================================== */
 console.log('');
-console.log('二、openfootball 全量名字映射（在线优先，失败回退缓存）');
+console.log(`二、openfootball 全量名字映射（${OFFLINE ? '离线模式 · 只用本地缓存' : '在线优先，失败回退缓存'}）`);
 
 /**
  * 该部分依赖外网。为避免「网络不通 → 测试挂死/误报」：
@@ -124,7 +126,7 @@ async function probeGitHubRaw() {
   }
 }
 
-const online = await probeGitHubRaw();
+const online = OFFLINE ? false : await probeGitHubRaw();
 
 async function fetchAllOnline() {
   const fetched = {};
@@ -177,9 +179,17 @@ if (!ofMatches && existsSync(CACHE_PATH)) {
 const hasData = !!ofMatches && Object.values(ofMatches).some(a => Array.isArray(a) && a.length > 0);
 
 if (!hasData) {
-  console.log('  ⏭️  跳过：无法访问 openfootball，且本地缓存为空或不存在。');
+  console.log(
+    OFFLINE
+      ? '  ⏭️  跳过：离线模式且本地缓存为空或不存在。'
+      : '  ⏭️  跳过：无法访问 openfootball，且本地缓存为空或不存在。'
+  );
   console.log('      （不做校验 —— 对空集合校验等于假通过，没有意义）');
-  console.log('      补齐方式：网络恢复后重跑本测试（会自动生成缓存）。');
+  console.log(
+    OFFLINE
+      ? '      联网校验请运行：npm run test:alias:online'
+      : '      补齐方式：网络恢复后重跑本测试（会自动生成缓存）。'
+  );
 } else {
   console.log(`  数据来源：${sourceLabel}`);
   const unresolved = new Set();

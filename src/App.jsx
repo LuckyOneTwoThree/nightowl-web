@@ -302,10 +302,12 @@ export default function App() {
       });
       if (r.ok) {
         const j = await r.json();
+        // 写盘失败时服务端不再回传 fixtures；这里再守一道，避免旧响应让内存假装成功
+        const writtenOk = j?.summary?.written?.ok !== false;
         // 若后端直接在同步响应中回传了新 fixtures，即刻替换并触发重绘
-        if (j?.fixtures?.length && setFixtures(j.fixtures)) {
+        if (writtenOk && j?.fixtures?.length && setFixtures(j.fixtures)) {
           setDataRev(v => v + 1);
-        } else if (j?.summary?.written?.changed > 0) {
+        } else if (writtenOk && j?.summary?.written?.changed > 0) {
           refreshData();
         }
       } else if (r.status === 409) {
