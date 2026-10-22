@@ -19,6 +19,7 @@ import { useDataRev } from '@/state/app';
 import { useNow } from '@/lib/useNow';
 import { Chip } from '@/ui/Chip';
 import { Crest } from '@/ui/Crest';
+import { SegmentedControl } from '@/ui/SegmentedControl';
 import { colors, fontSize, radius, spacing } from '@/ui/theme';
 import type { Match, StandingsRow } from '@/types';
 
@@ -112,18 +113,29 @@ export default function StandingsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Pressable
-          onPress={() => router.back()}
-          style={styles.headerButton}
-          accessibilityLabel="返回"
-        >
-          <ChevronLeft size={20} color={colors.text} />
-        </Pressable>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>积分榜</Text>
-          <Text style={styles.subline}>本地已同步赛果 · 同分简化排序</Text>
+        <View style={styles.headerTop}>
+          <Pressable
+            onPress={() => router.back()}
+            style={styles.headerButton}
+            accessibilityLabel="返回"
+          >
+            <ChevronLeft size={20} color={colors.text} />
+          </Pressable>
+          <View style={styles.modeControl}>
+            <SegmentedControl
+              value="standings"
+              onChange={value => {
+                if (value === 'schedule') router.dismissTo('/schedule');
+              }}
+              options={[
+                { key: 'schedule', label: '赛程' },
+                { key: 'standings', label: '积分榜' },
+              ]}
+            />
+          </View>
+          <View style={styles.headerSpacer} />
         </View>
-        <View style={styles.headerSpacer} />
+        <Text style={styles.subline}>本地已同步赛果 · 同分简化排序</Text>
       </View>
 
       <ScrollView
@@ -222,11 +234,15 @@ export default function StandingsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   header: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
+    gap: 2,
+  },
+  headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
   },
   headerButton: {
     width: 38,
@@ -239,9 +255,8 @@ const styles = StyleSheet.create({
     borderColor: colors.hairline,
   },
   headerSpacer: { width: 38, height: 38 },
-  headerText: { flex: 1, gap: 2 },
-  title: { color: colors.text, fontSize: fontSize.lg, fontWeight: '700' },
-  subline: { color: colors.textMuted, fontSize: fontSize.xxs },
+  modeControl: { flex: 1, minWidth: 0 },
+  subline: { color: colors.textFaint, fontSize: fontSize.xs, marginTop: 2 },
   leagueScroll: { flexGrow: 0 },
   leagueStrip: {
     flexDirection: 'row',

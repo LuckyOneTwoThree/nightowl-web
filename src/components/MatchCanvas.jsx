@@ -187,7 +187,7 @@ export default function MatchCanvas({
               <span
                 key={stageCountdown}
                 aria-live="polite"
-                className="font-num text-display font-bold leading-none tracking-tight text-accent"
+                className="font-num text-display font-bold leading-none tracking-tight text-text-primary"
               >
                 {stageCountdown}
               </span>

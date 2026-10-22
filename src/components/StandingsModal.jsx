@@ -40,6 +40,7 @@ function fmtGd(n) {
  */
 export default function StandingsModal({ open, onClose, initialLeague, match, now, dataRev }) {
   const closeRef = useRef(null);
+  const scrollRef = useRef(null);
   const [league, setLeague] = useState(initialLeague || 'PL');
 
   useEffect(() => {
@@ -68,6 +69,11 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
     return computeStandings(activeLeague, getFixtures(), { asOfTs });
   }, [activeLeague, historical, match, nowTs, dataRev]);
 
+  // 切联赛后回到榜首，避免停在上一联赛的滚动位置
+  useEffect(() => {
+    if (open && scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [activeLeague, open]);
+
   if (!open) return null;
 
   const rows = table.rows;
@@ -89,7 +95,7 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
 
   return (
     <div
-      className="fixed inset-0 z-modal flex items-center justify-center bg-black/75 px-4 backdrop-blur-md"
+      className="fixed inset-0 z-modal flex animate-view-enter items-center justify-center bg-black/75 px-4 backdrop-blur-md motion-reduce:animate-none"
       onMouseDown={e => {
         if (e.target === e.currentTarget) onClose?.();
       }}
@@ -98,7 +104,7 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
         role="dialog"
         aria-modal="true"
         aria-labelledby="standings-title"
-        className="relative flex h-[86vh] max-h-[820px] w-[min(1120px,calc(100vw-48px))] flex-col overflow-hidden rounded-2xl border border-line-control bg-surface-card/95 shadow-[0_24px_70px_rgba(0,0,0,0.75)]"
+        className="relative flex h-[86vh] max-h-[820px] w-[min(1120px,calc(100vw-48px))] animate-panel-enter flex-col overflow-hidden rounded-2xl border border-line-control bg-surface-card/95 shadow-[0_24px_70px_rgba(0,0,0,0.75)] motion-reduce:animate-none"
       >
         <div className="flex items-center justify-between border-b border-line-hairline px-5 py-3">
           <div>
@@ -133,7 +139,7 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
                   onClick={() => setLeague(code)}
                   className={`rounded-lg border px-2.5 py-1 text-xs transition-colors focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none ${
                     active
-                      ? 'border-accent/40 bg-surface-accent font-semibold text-accent'
+                      ? 'border-line-control bg-surface-raised font-semibold text-text-primary'
                       : 'border-transparent text-text-muted hover:border-line-hairline hover:bg-surface-raised hover:text-text-primary'
                   }`}
                 >
@@ -166,87 +172,109 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
           </p>
         </div>
 
-        <div className="scrollbar-thin min-h-0 flex-1 overflow-auto border-t border-line-hairline">
-          {rows.length === 0 ? (
-            <div className="flex h-40 items-center justify-center text-xs text-text-muted">
-              {table.note || '本联赛暂无已同步赛果'}
-            </div>
-          ) : (
-            <table className="w-full table-fixed border-collapse text-left" aria-label={`${leagueName(activeLeague)}积分榜`}>
-              <colgroup>
-                <col style={{ width: 44 }} />
-                <col />
-                <col style={{ width: 48 }} />
-                <col style={{ width: 48 }} />
-                <col style={{ width: 48 }} />
-                <col style={{ width: 48 }} />
-                <col style={{ width: 52 }} />
-                <col style={{ width: 52 }} />
-                <col style={{ width: 56 }} />
-                <col style={{ width: 52 }} />
-              </colgroup>
-              <thead className="sticky top-0 z-10 bg-surface-panel">
-                <tr className="border-b border-line-hairline">
-                  <th className="px-2 py-2 text-right text-2xs font-medium text-text-faint">#</th>
-                  <th className="px-2 py-2 text-left text-2xs font-medium text-text-faint">球队</th>
-                  <th className="px-2 py-2 text-right text-2xs font-medium text-text-faint">赛</th>
-                  <th className="px-2 py-2 text-right text-2xs font-medium text-text-faint">胜</th>
-                  <th className="px-2 py-2 text-right text-2xs font-medium text-text-faint">平</th>
-                  <th className="px-2 py-2 text-right text-2xs font-medium text-text-faint">负</th>
-                  <th className="px-2 py-2 text-right text-2xs font-medium text-text-faint">进</th>
-                  <th className="px-2 py-2 text-right text-2xs font-medium text-text-faint">失</th>
-                  <th className="px-2 py-2 text-right text-2xs font-medium text-text-faint">净</th>
-                  <th className="px-2 py-2 text-right text-2xs font-medium text-text-faint">分</th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayRows(rows, activeLeague).map(item => {
-                  if (item.type === 'group') {
+        <div className="relative min-h-0 flex-1">
+          <div ref={scrollRef} className="scrollbar-thin h-full overflow-auto border-t border-line-hairline">
+            {rows.length === 0 ? (
+              <div className="flex h-40 items-center justify-center text-xs text-text-muted">
+                {table.note || '本联赛暂无已同步赛果'}
+              </div>
+            ) : (
+              <table
+                key={activeLeague}
+                className="w-full table-fixed animate-view-enter border-collapse text-left motion-reduce:animate-none"
+                aria-label={`${leagueName(activeLeague)}积分榜`}
+              >
+                <colgroup>
+                  <col style={{ width: 44 }} />
+                  <col />
+                  <col style={{ width: 48 }} />
+                  <col style={{ width: 48 }} />
+                  <col style={{ width: 48 }} />
+                  <col style={{ width: 48 }} />
+                  <col style={{ width: 52 }} />
+                  <col style={{ width: 52 }} />
+                  <col style={{ width: 56 }} />
+                  <col style={{ width: 52 }} />
+                  <col style={{ width: 190 }} />
+                </colgroup>
+                <thead className="sticky top-0 z-10 bg-surface-panel">
+                  <tr className="border-b border-line-hairline">
+                    <th scope="col" className="px-2 py-2 text-right text-2xs font-medium text-text-faint">#</th>
+                    <th scope="col" className="px-2 py-2 text-left text-2xs font-medium text-text-faint">球队</th>
+                    <th scope="col" className="px-2 py-2 text-right text-2xs font-medium text-text-faint">赛</th>
+                    <th scope="col" className="px-2 py-2 text-right text-2xs font-medium text-text-faint">胜</th>
+                    <th scope="col" className="px-2 py-2 text-right text-2xs font-medium text-text-faint">平</th>
+                    <th scope="col" className="px-2 py-2 text-right text-2xs font-medium text-text-faint">负</th>
+                    <th scope="col" className="px-2 py-2 text-right text-2xs font-medium text-text-faint">进</th>
+                    <th scope="col" className="px-2 py-2 text-right text-2xs font-medium text-text-faint">失</th>
+                    <th scope="col" className="px-2 py-2 text-right text-2xs font-medium text-text-faint">净</th>
+                    <th scope="col" className="px-2 py-2 text-right text-2xs font-medium text-text-faint">分</th>
+                    <th scope="col" className="px-2 py-2 text-left text-2xs font-medium text-text-faint">位置</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayRows(rows, activeLeague).map(item => {
+                    if (item.type === 'group') {
+                      return (
+                        <tr key={item.key}>
+                          <td
+                            colSpan={11}
+                            className="border-t border-line-hairline bg-surface-panel px-2 py-1.5 text-2xs font-medium tracking-wide text-text-faint"
+                          >
+                            {item.label}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    const row = item.row;
+                    const focused = focusIds.has(row.teamId);
                     return (
-                      <tr key={item.key}>
-                        <td
-                          colSpan={10}
-                          className="border-t border-line-hairline bg-surface-panel px-2 py-1.5 text-2xs font-medium tracking-wide text-text-faint"
-                        >
-                          {item.label}
+                      <tr
+                        key={row.teamId}
+                        data-team-id={row.teamId}
+                        className={`border-t border-line-hairline/70 ${focused ? 'bg-surface-raised/70' : ''}`}
+                      >
+                        <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-muted">
+                          {row.rank}
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Crest id={row.teamId} size={16} />
+                            <span className="min-w-0 truncate text-xs text-text-primary">
+                              {teamName(row.teamId)}
+                            </span>
+                            {focused && <Chip tone="neutral">本场</Chip>}
+                          </div>
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.played}</td>
+                        <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.won}</td>
+                        <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.drawn}</td>
+                        <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.lost}</td>
+                        <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.gf}</td>
+                        <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.ga}</td>
+                        <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{fmtGd(row.gd)}</td>
+                        <td className="px-2 py-1.5 text-right font-num text-xs font-semibold tabular-nums text-text-primary">{row.points}</td>
+                        <td className="truncate px-2 py-1.5 text-2xs text-text-muted" title={row.context?.secondary || ''}>
+                          {row.context?.primary || '—'}
                         </td>
                       </tr>
                     );
-                  }
-
-                  const row = item.row;
-                  const focused = focusIds.has(row.teamId);
-                  return (
-                    <tr
-                      key={row.teamId}
-                      data-team-id={row.teamId}
-                      className={`border-t border-line-hairline/70 ${focused ? 'bg-surface-raised/70' : ''}`}
-                    >
-                      <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-muted">
-                        {row.rank}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <Crest id={row.teamId} size={16} />
-                          <span className="min-w-0 truncate text-xs text-text-primary">
-                            {teamName(row.teamId)}
-                          </span>
-                          {focused && <Chip tone="neutral">本场</Chip>}
-                        </div>
-                      </td>
-                      <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.played}</td>
-                      <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.won}</td>
-                      <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.drawn}</td>
-                      <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.lost}</td>
-                      <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.gf}</td>
-                      <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.ga}</td>
-                      <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{fmtGd(row.gd)}</td>
-                      <td className="px-2 py-1.5 text-right font-num text-xs font-semibold tabular-nums text-text-primary">{row.points}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+          {rows.length > 0 && (
+            <>
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-surface-card via-surface-card/80 to-transparent"
+              />
+              <div className="pointer-events-none absolute bottom-2 right-3 text-2xs text-text-faint">
+                共 {rows.length} 队 · 滚动查看
+              </div>
+            </>
           )}
         </div>
       </div>

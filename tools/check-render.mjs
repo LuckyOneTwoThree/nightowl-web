@@ -235,6 +235,35 @@ app.whenReady().then(async () => {
     );
     ok('完整积分榜可关闭', fullClosed);
 
+    const topbarOpened = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = document.querySelector('header button[aria-label="积分榜"]');
+        if (!btn) return false;
+        btn.click();
+        return true;
+      })()
+    `);
+    await sleep(400);
+    const topbarModal = await win.webContents.executeJavaScript(`
+      (() => {
+        const modal = document.querySelector('[aria-labelledby="standings-title"]');
+        return {
+          open: !!modal,
+          rows: modal ? modal.querySelectorAll('[data-team-id]').length : 0,
+          text: modal ? modal.innerText.slice(0, 120) : ''
+        };
+      })()
+    `);
+    ok(
+      '★ 顶栏积分榜入口打开当前联赛',
+      topbarOpened && topbarModal.open && topbarModal.rows === 20 && topbarModal.text.includes('英超'),
+      JSON.stringify(topbarModal)
+    );
+    await win.webContents.executeJavaScript(
+      `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); true`
+    );
+    await sleep(250);
+
     const detail = await win.webContents.executeJavaScript(`
       (() => {
         const root = document.getElementById('match-highlights');

@@ -176,35 +176,38 @@ export default function ScheduleScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <View style={styles.headerMain}>
-          <SegmentedControl
-            value="schedule"
-            onChange={value => {
-              if (value === 'standings') {
-                router.push({
-                  pathname: '/standings/[league]',
-                  params: { league: standingsLeague },
-                });
-              }
-            }}
-            options={[
-              { key: 'schedule', label: '赛程' },
-              { key: 'standings', label: '积分榜' },
-            ]}
-          />
-          <Text style={[styles.subline, (checking || refreshNote) && styles.sublineNote]}>
-            {checking
-              ? '正在检查比分…'
-              : refreshNote ?? '全季赛程 · 北京时间 · 夜猫日口径'}
-          </Text>
+        <View style={styles.headerTop}>
+          <View style={styles.modeControl}>
+            <SegmentedControl
+              value="schedule"
+              onChange={value => {
+                if (value === 'standings') {
+                  router.push({
+                    pathname: '/standings/[league]',
+                    params: { league: standingsLeague },
+                  });
+                }
+              }}
+              options={[
+                { key: 'schedule', label: '赛程' },
+                { key: 'standings', label: '积分榜' },
+              ]}
+            />
+          </View>
+          <Pressable
+            onPress={() => router.push('/search')}
+            style={styles.iconButton}
+            hitSlop={2}
+            accessibilityLabel="搜索球队或比赛"
+          >
+            <Search size={18} color={colors.textSecondary} />
+          </Pressable>
         </View>
-        <Pressable
-          onPress={() => router.push('/search')}
-          style={styles.iconButton}
-          accessibilityLabel="搜索球队或比赛"
-        >
-          <Search size={18} color={colors.textSecondary} />
-        </Pressable>
+        <Text style={[styles.subline, (checking || refreshNote) && styles.sublineNote]}>
+          {checking
+            ? '正在检查比分…'
+            : refreshNote ?? '全季赛程 · 北京时间 · 夜猫日口径'}
+        </Text>
       </View>
 
       <ScrollView
@@ -390,19 +393,22 @@ export default function ScheduleScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,
     paddingBottom: spacing.sm,
+    gap: 2,
   },
-  headerMain: { flex: 1, minWidth: 0, gap: 2 },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  modeControl: { flex: 1, minWidth: 0 },
   subline: { color: colors.textFaint, fontSize: fontSize.xs, marginTop: 2 },
   sublineNote: { color: colors.textMuted },
   iconButton: {
-    width: 38,
-    height: 38,
+    width: 40,
+    height: 40,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -426,7 +432,7 @@ const styles = StyleSheet.create({
   allCard: { width: 58 },
   reset: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' },
   dateCardToday: { borderColor: colors.control },
-  dateCardActive: { borderColor: colors.accent, backgroundColor: colors.goldSoft },
+  dateCardActive: { borderColor: colors.control, backgroundColor: colors.raised },
   dateWeekday: { color: colors.textFaint, fontSize: fontSize.xs },
   dateDay: {
     color: colors.text,
@@ -435,8 +441,8 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   dateCount: { color: colors.textFaint, fontSize: fontSize.xxs },
-  dateActiveText: { color: colors.accent },
-  dateActiveCount: { color: colors.accent },
+  dateActiveText: { color: colors.text },
+  dateActiveCount: { color: colors.textSecondary },
   filterBlock: { paddingTop: spacing.sm, gap: spacing.sm },
   filterRow: {
     flexDirection: 'row',

@@ -172,7 +172,7 @@ function PanelTab({ active, onClick, icon, children }) {
       onClick={onClick}
       className={`inline-flex items-center rounded-lg px-3 py-1.5 text-xs transition-all ${
         active
-          ? 'bg-surface-accent border border-accent/40 font-semibold text-accent shadow-sm'
+          ? 'border border-line-control bg-surface-raised font-semibold text-text-primary shadow-sm'
           : 'border border-transparent text-text-muted hover:border-line-hairline hover:bg-surface-raised hover:text-text-primary'
       }`}
     >

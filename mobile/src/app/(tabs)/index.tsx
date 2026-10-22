@@ -337,7 +337,7 @@ export default function TonightScreen() {
                 style={({ pressed }) => [styles.replayCard, pressed && styles.pressed]}
               >
                 <View style={styles.replayTop}>
-                  <Chip tone="accent">{pick.reason}</Chip>
+                  <Chip tone="default">{pick.reason}</Chip>
                   <Text style={styles.replayIndex}>{pick.index.toFixed(1)}</Text>
                 </View>
                 <View style={styles.replayTeams}>

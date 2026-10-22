@@ -327,7 +327,7 @@ export function TogglePill({
       title={hint || undefined}
       className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-2xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-text-muted ${
         on
-          ? 'bg-surface-accent font-medium text-accent'
+          ? 'bg-surface-raised font-medium text-text-primary'
           : 'text-text-muted hover:bg-surface-raised hover:text-text-secondary'
       } ${className}`}
       {...rest}
@@ -341,7 +341,7 @@ export function TogglePill({
       )}
       {label}
       {count != null && (
-        <span className={`font-num tabular-nums ${on ? 'text-accent/70' : 'text-text-faint'}`}>{count}</span>
+        <span className={`font-num tabular-nums ${on ? 'text-text-secondary' : 'text-text-faint'}`}>{count}</span>
       )}
     </button>
   );

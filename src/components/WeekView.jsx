@@ -318,7 +318,7 @@ function PickRow({ e, active, onSelect }) {
       onClick={() => onSelect(m.id)}
       aria-current={active ? 'true' : undefined}
       className={`relative w-full overflow-hidden rounded-lg py-2 pr-2.5 pl-3 text-left transition-colors ${
-        active ? 'bg-surface-accent' : 'hover:bg-surface-raised'
+        active ? 'bg-surface-raised' : 'hover:bg-surface-raised'
       }`}
     >
       <span

@@ -32,7 +32,7 @@ export function Chip({
   style,
 }: Props) {
   const palette = selected
-    ? { fg: colors.text, bg: colors.raised, border: colors.accent }
+    ? { fg: colors.text, bg: colors.raised, border: colors.control }
     : TONE_COLORS[tone];
   const content = (
     <View

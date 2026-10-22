@@ -243,7 +243,7 @@ export function NoMatchCard({ focal, countdown, onSelect }) {
 
       <div className="relative mt-3 flex flex-col items-center border-t border-line-hairline pt-2.5">
         <span className="text-2xs text-text-faint">距开球</span>
-        <span className="font-num text-2xl font-bold tabular-nums text-accent">{countdown}</span>
+        <span className="font-num text-xl font-bold tabular-nums text-text-primary">{countdown}</span>
         <Meta num className="mt-0.5">
           {zhDate(datePart(m.t))} {weekdayOf(datePart(m.t))} {hm(m.t)} · {leagueName(m.l)}
         </Meta>

@@ -88,7 +88,7 @@ export default function TonightView({
       rivalry={p.ev.rivalry}
       minefield={false}
       dateLabel={zhDate(datePart(p.m.t))}
-      badge={<Chip tone={p.followed ? 'accent' : 'neutral'}>{p.reason}</Chip>}
+      badge={<Chip tone="neutral">{p.reason}</Chip>}
       showSleep={false}
     />
   );
@@ -134,14 +134,17 @@ export default function TonightView({
                 补看 {replayPicks.length}
               </button>
             )}
+            {replayPicks.length > 0 && (groups.live.length > 0 || total > 0) && (
+              <span className="text-text-faint" aria-hidden="true">·</span>
+            )}
             {groups.live.length > 0 ? (
               <span className="inline-flex items-center gap-1.5 text-2xs text-live">
                 <LiveDot />
                 {groups.live.length} 场进行中
               </span>
-            ) : (
+            ) : total > 0 ? (
               <span className="font-num text-2xs tabular-nums text-text-faint">{total} 场</span>
-            )}
+            ) : null}
           </span>
         }
       >

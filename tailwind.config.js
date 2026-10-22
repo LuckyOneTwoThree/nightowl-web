@@ -146,6 +146,10 @@ export default {
           from: { opacity: '0' },
           to: { opacity: '1' }
         },
+        'panel-enter': {
+          from: { opacity: '0', transform: 'translateY(6px) scale(0.985)' },
+          to: { opacity: '1', transform: 'translateY(0) scale(1)' }
+        },
         skeleton: {
           '0%': { backgroundPosition: '200% 0' },
           '100%': { backgroundPosition: '-200% 0' }
@@ -156,6 +160,7 @@ export default {
         'soft-pulse': 'soft-pulse 2.4s ease-in-out infinite',
         'score-pop': 'score-pop 520ms cubic-bezier(0.22, 1, 0.36, 1)',
         'view-enter': 'view-enter 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+        'panel-enter': 'panel-enter 180ms cubic-bezier(0.22, 1, 0.36, 1)',
         skeleton: 'skeleton 1.4s ease-in-out infinite'
       },
       transitionDuration: {

@@ -229,7 +229,7 @@ export default function ScheduleView({
             <button
               type="button"
               onClick={() => setDate(todayDate)}
-              className="rounded-md border border-accent/40 bg-surface-accent px-2 py-0.5 text-2xs font-medium text-accent shadow-card transition-all hover:border-accent/60 hover:bg-accent/20"
+              className="rounded-md border border-line-control bg-surface-raised px-2 py-0.5 text-2xs font-medium text-text-secondary shadow-card transition-all hover:border-line-control hover:bg-surface-press hover:text-text-primary"
             >
               回到今天
             </button>
@@ -285,15 +285,15 @@ export default function ScheduleView({
               aria-pressed={active}
               className={`relative shrink-0 rounded-md border px-2.5 py-1 text-center transition-all ${
                 active
-                  ? 'border-accent/60 bg-gradient-to-b from-accent/30 via-accent/15 to-accent/5 shadow-[0_0_14px_rgba(245,185,66,0.22)]'
+                  ? 'border-line-control bg-surface-raised shadow-card'
                   : item.isToday
-                    ? 'border-accent/30 bg-surface-accent hover:border-accent/50'
+                    ? 'border-line-control/70 bg-surface-raised/40 hover:border-line-control'
                     : 'border-line-hairline bg-surface-card hover:border-line-control hover:bg-surface-raised'
               }`}
             >
               <div
                 className={`font-num text-2xs font-semibold tabular-nums ${
-                  active ? 'text-accent' : item.isToday ? 'text-accent' : 'text-text-secondary'
+                  active ? 'text-text-primary' : item.isToday ? 'text-text-secondary' : 'text-text-secondary'
                 }`}
               >
                 {label}
@@ -314,8 +314,8 @@ export default function ScheduleView({
           aria-pressed={showAll}
           className={`shrink-0 rounded-md border px-2.5 py-1 font-body text-2xs transition-all ${
             showAll
-              ? 'border-accent/60 bg-gradient-to-b from-accent/25 to-accent/10 text-accent font-semibold shadow-sm'
-              : 'border-line-hairline bg-surface-card text-text-secondary hover:border-accent/40'
+              ? 'border-line-control bg-surface-raised text-text-primary font-semibold shadow-card'
+              : 'border-line-hairline bg-surface-card text-text-secondary hover:border-line-control'
           }`}
         >
           全部

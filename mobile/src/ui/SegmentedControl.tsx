@@ -19,6 +19,7 @@ export function SegmentedControl({ options, value, onChange }: Props) {
           <Pressable
             key={option.key}
             onPress={() => onChange(option.key)}
+            hitSlop={{ top: 6, bottom: 6 }}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             style={({ pressed }) => [

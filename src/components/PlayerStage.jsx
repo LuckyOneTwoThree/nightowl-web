@@ -236,14 +236,9 @@ function LineEmptyState({ loading, state, isNearKickoff, scrapeError, onRefresh 
     }
 
     return (
-      <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline/70 bg-surface-raised/20 p-3 text-center">
-        <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.04] text-text-muted">
-          <IconCalendar size={14} />
-        </span>
-        <p className="text-xs font-medium text-text-primary">比赛尚未开始</p>
-        <p className="mt-1 text-2xs leading-relaxed text-text-muted max-w-[215px]">
-          直播线路通常在赛前 15~30 分钟陆续上线，开赛临近时系统将自动同步
-        </p>
+      <div className="my-1.5 flex items-center gap-2 rounded-md border border-line-hairline/70 bg-surface-raised/20 px-2.5 py-2 text-2xs leading-relaxed text-text-muted">
+        <IconCalendar size={12} className="shrink-0 text-text-faint" />
+        <span>线路通常在赛前 15~30 分钟接入；临近开赛时自动同步</span>
       </div>
     );
   }
@@ -762,7 +757,7 @@ export default function PlayerStage({
   if (liveInfo?.matchAmbiguous) {
     notices.push({ tone: 'warn', text: '同一对阵存在多个房间，已按开球时间选择，请确认画面', action: null });
   }
-  if (liveInfo?.tvChannelsDown?.length) {
+  if (liveInfo?.tvChannelsDown?.length && (live || isNearKickoff)) {
     notices.push({
       tone: 'warn',
       text: `官方直达暂不可用：${liveInfo.tvChannelsDown.join('、')}（签名已过期）。可改用下方官方平台。`,
@@ -777,8 +772,8 @@ export default function PlayerStage({
         aspectRatio: `${aspectRatio}`
       }}
       className={`relative isolate z-0 w-full overflow-hidden rounded-xl bg-stage-bg border border-line-hairline shadow-2xl transition-all duration-200 ${
-        isOverlayOpen ? 'pointer-events-none select-none' : ''
-      }`}
+        !streamUrl ? 'max-h-[42vh] min-h-[280px]' : ''
+      } ${isOverlayOpen ? 'pointer-events-none select-none' : ''}`}
     >
       {streamUrl ? (
         <Suspense
@@ -859,7 +854,7 @@ export default function PlayerStage({
 
   /* ---------------- 右侧协同栏 ---------------- */
   const ControlSidebar = (
-    <div className="flex w-full shrink-0 flex-col rounded-xl border border-line-hairline bg-surface-card p-3.5 shadow-card transition-all xl:w-[315px] xl:self-stretch min-h-0">
+    <div className="flex w-full shrink-0 flex-col rounded-xl border border-line-hairline bg-surface-card p-3 shadow-card transition-all xl:w-[315px] xl:self-stretch xl:p-3.5 min-h-0">
       {live && (
         <LiveMatchPanel
           match={match}
@@ -909,7 +904,7 @@ export default function PlayerStage({
 
           {lines.length > 0 ? (
             // 1120 宽度下用两列压缩高度；xl 协同模式再回到单列
-            <div className="scrollbar-thin -mr-1 mt-2.5 grid min-h-[80px] max-h-[220px] grid-cols-1 content-start gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2 xl:max-h-none xl:flex-1 xl:grid-cols-1">
+            <div className="scrollbar-thin -mr-1 mt-2.5 grid min-h-[48px] max-h-[220px] grid-cols-1 content-start gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2 xl:min-h-[80px] xl:grid-cols-1">
               {lines.map(l => (
                 <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={manualSelectLine} />
               ))}
@@ -955,19 +950,19 @@ export default function PlayerStage({
         </div>
       </div>
 
-      <div className="mt-auto flex shrink-0 items-center justify-between border-t border-line-hairline pt-2.5">
-        <span className="inline-flex items-center gap-1.5">
-          <Hint content={SHORTCUT_HINT} align="start">
-            <IconKeyboard size={12} />
-          </Hint>
-          <Meta>快捷键</Meta>
-        </span>
-        {streamUrl && (
+      {streamUrl && (
+        <div className="mt-auto flex shrink-0 items-center justify-between border-t border-line-hairline pt-2.5">
+          <span className="inline-flex items-center gap-1.5">
+            <Hint content={SHORTCUT_HINT} align="start">
+              <IconKeyboard size={12} />
+            </Hint>
+            <Meta>快捷键</Meta>
+          </span>
           <Button variant="danger" icon={<IconStop />} onClick={stopPlayback}>
             停止
           </Button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 

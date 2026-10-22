@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { bjClock, bjDate } from '../core/format.js';
 import { teamName } from '../data/index.js';
 import { BrandLogo, Crest, LiveDot, Segmented } from './atoms.jsx';
-import { IconSchedule, IconSearch, IconSettings, IconTonight, IconWeek, IconWinClose, IconWinMax, IconWinMin, IconWinRestore } from './icons.jsx';
+import { IconSchedule, IconSearch, IconSettings, IconStandings, IconTonight, IconWeek, IconWinClose, IconWinMax, IconWinMin, IconWinRestore } from './icons.jsx';
 
 /**
  * 自绘窗口按钮（仅桌面版的 Windows/Linux —— macOS 用系统交通灯）
@@ -81,7 +81,8 @@ export default function TopBar({
   updateAvailable = false,
   updateVersion = null,
   onOpenUpdate,
-  onOpenPalette
+  onOpenPalette,
+  onOpenStandings
 }) {
   // 时钟是全应用唯一需要秒级显示的地方，把 tick 隔离在本地：
   // 否则 App 每秒重渲染会连带重建赛程视图的 2000+ 列表元素（实测约 9% CPU）。
@@ -143,6 +144,15 @@ export default function TopBar({
           className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary"
         >
           <IconSearch size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={onOpenStandings}
+          title="查看完整积分榜"
+          aria-label="积分榜"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary"
+        >
+          <IconStandings size={14} />
         </button>
         <span className="mx-0.5 h-4 w-px bg-line-hairline" aria-hidden="true" />
         {primaryTeam ? (

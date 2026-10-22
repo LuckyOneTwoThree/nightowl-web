@@ -147,7 +147,7 @@ export default function TeamScreen() {
             <Text style={styles.en}>{team.en}</Text>
             <View style={styles.tags}>
               <Chip>{leagueName(team.league)}</Chip>
-              {team.tag ? <Chip tone="accent">{team.tag}</Chip> : null}
+              {team.tag ? <Chip tone="default">{team.tag}</Chip> : null}
             </View>
           </View>
           <Pressable

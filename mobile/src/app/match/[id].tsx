@@ -521,7 +521,7 @@ function IntelTab({
         {intel.ev.bonuses.length > 0 ? (
           <View style={styles.chips}>
             {intel.ev.bonuses.map(bonus => (
-              <Chip key={bonus} tone="accent">
+              <Chip key={bonus} tone="default">
                 {bonus}
               </Chip>
             ))}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getFixtures, setFixtures, storylines, teamName } from './data/index.js';
 import { countdown as engineCountdown, ts, MATCH_DURATION_MS, sleepTier } from './core/engine.js';
 import { humanCountdownShort } from './core/format.js';
+import { STANDINGS_LEAGUES } from './core/standings.js';
 import { loadPrefs, savePrefs } from './core/prefs.js';
 import { isPrematchDue, prematchNotification } from './core/notifications.js';
 import {
@@ -504,6 +505,10 @@ export default function App() {
     setStandingsState({ league, matchId });
   }, []);
   const closeStandings = useCallback(() => setStandingsState(null), []);
+  const openStandingsForActive = useCallback(() => {
+    const league = activeMatch && STANDINGS_LEAGUES.includes(activeMatch.l) ? activeMatch.l : 'PL';
+    openStandings(league, league === activeMatch?.l ? activeMatch.id : null);
+  }, [activeMatch, openStandings]);
 
   // 视图与选中同步到 URL（可分享 / 可刷新定位）
   useEffect(() => {
@@ -586,6 +591,7 @@ export default function App() {
             setUpdateModalOpen(true);
             if (updateState.status === 'idle') handleCheckUpdate();
           }}
+          onOpenStandings={openStandingsForActive}
         />
 
         {/* 主工作区：左栏黄金比例（330-390px） + 右栏核心主舞台（~75%） */}
@@ -647,10 +653,13 @@ export default function App() {
               {activeMatch && !activeInView && (
                 <div
                   role="status"
-                  className="flex items-center justify-between gap-3 rounded-lg border border-line-hairline bg-surface-raised/40 px-3 py-1.5"
+                  className="sticky top-0 z-20 flex animate-view-enter items-center justify-between gap-3 rounded-lg border border-line-hairline bg-surface-panel/95 px-3 py-1.5 shadow-card backdrop-blur-xl motion-reduce:animate-none"
                 >
-                  <span className="min-w-0 truncate text-2xs text-text-muted">
-                    正在预览 · 不在当前列表
+                  <span className="min-w-0 truncate text-2xs text-text-secondary">
+                    正在查看：{teamName(activeMatch.h)} vs {teamName(activeMatch.a)}
+                    <span className="text-text-faint">
+                      {' '}· {activeMatch.t.slice(5, 10).replace('-', '/')} {activeMatch.t.split('T')[1]}
+                    </span>
                   </span>
                   <button
                     type="button"
