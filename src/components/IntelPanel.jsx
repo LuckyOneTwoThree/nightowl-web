@@ -47,6 +47,7 @@ export default function IntelPanel({
   intel: propIntel,
   isHeroMatch = false,
   onSelect,
+  onOpenStandings,
   now
 }) {
   const [tab, setTab] = useState('decision');
@@ -143,7 +144,11 @@ export default function IntelPanel({
             </div>
           </div>
           <div className="mt-3 border-t border-line-hairline pt-2.5">
-            <StandingsSection standings={standings} match={match} />
+            <StandingsSection
+              standings={standings}
+              match={match}
+              onOpenStandings={onOpenStandings}
+            />
           </div>
           <div className="mt-3 border-t border-line-hairline pt-2.5">
             <H2HSection stats={stats} onSelect={onSelect} />
@@ -455,7 +460,7 @@ function FormSection({ match, stats, onSelect }) {
  * 积分榜位置：只展示当前比赛双方，不展开完整联赛表。
  * 数据按开球时点截止；已完赛场次不显示之后的结果。
  */
-function StandingsSection({ standings, match }) {
+function StandingsSection({ standings, match, onOpenStandings }) {
   if (!standings || !standings.supported) return null;
 
   const asOfText = standings.historical
@@ -529,6 +534,17 @@ function StandingsSection({ standings, match }) {
               )}
             </div>
           ))}
+        </div>
+      )}
+      {onOpenStandings && standings.rows.length > 0 && (
+        <div className="mt-1.5 flex justify-end">
+          <button
+            type="button"
+            onClick={() => onOpenStandings(standings.league, match.id)}
+            className="rounded-md px-1.5 py-0.5 text-2xs font-medium text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none"
+          >
+            查看完整积分榜 →
+          </button>
         </div>
       )}
     </Block>

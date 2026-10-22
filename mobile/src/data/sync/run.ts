@@ -16,6 +16,8 @@ export type SyncOutcome = {
   months: string[];
   quick: boolean;
   attempted: boolean;
+  /** 完整同步正在进行，快检没有等待它，直接返回 busy */
+  busy?: boolean;
 };
 
 type SyncOptions = { quick?: boolean };
@@ -27,9 +29,26 @@ export function syncNow(options: SyncOptions = {}): Promise<SyncOutcome> {
   const quick = !!options.quick;
 
   if (inFlight) {
+    // 完整同步在飞时，下拉快检不能陪它一起等：手势应立即结束，
+    // 由完整同步在后台继续写盘。否则用户会看到“正在检查比分…”卡很久。
+    if (quick && !inFlightQuick) {
+      return Promise.resolve({
+        changed: 0,
+        checkedAt: Date.now(),
+        errors: [],
+        stats: {},
+        months: [],
+        quick: true,
+        attempted: false,
+        busy: true
+      });
+    }
     if (!quick && inFlightQuick) {
+      // 用户显式点了完整同步：先告诉界面“正在更新”，等快检结束后再启动完整同步
+      useAppStore.getState().setSyncing(true);
       return inFlight.catch(() => undefined).then(() => syncNow());
     }
+    if (!quick) useAppStore.getState().setSyncing(true);
     return inFlight;
   }
 
@@ -69,8 +88,9 @@ export function syncNow(options: SyncOptions = {}): Promise<SyncOutcome> {
     const errors = result.errors ?? [];
     if (changed > 0) {
       useAppStore.getState().bump({ source, checkedAt, syncedAt: checkedAt });
-    } else if (!quick) {
-      // 没有补丁时只更新检查时间，不递增 rev：避免整页数据重算造成下拉卡顿
+    } else {
+      // 快检无变化也必须推进 lastCheckedAt，否则每次回前台都会再查一次；
+      // 只更新时间、不递增 rev，避免整页数据重算。
       useAppStore.getState().setMeta({ lastCheckedAt: checkedAt });
     }
     if (quick && attempted && errors.length === 0) {

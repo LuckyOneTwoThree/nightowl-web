@@ -10,7 +10,7 @@
   <br />
 
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Android-2b6cb0?style=flat-square" alt="platform" />
-  <img src="https://img.shields.io/badge/release-v0.1.28-2f855a?style=flat-square" alt="release" />
+  <img src="https://img.shields.io/badge/release-v0.1.29-2f855a?style=flat-square" alt="release" />
   <img src="https://img.shields.io/badge/electron-33-47848f?style=flat-square" alt="electron" />
   <img src="https://img.shields.io/badge/expo%20sdk-58-000020?style=flat-square" alt="expo" />
   <img src="https://img.shields.io/badge/react-19-149eca?style=flat-square" alt="react" />
@@ -61,7 +61,7 @@
 - **睡眠成本分档** —— 运行时按开球时间计算（S0 白天 / S1 轻度 / S2 中度 / S3 重度 / S4 极限），不读数据里的静态字段，改时间不会失真
 - **背包规划** —— 每周睡眠预算下的二维动态规划，输出最优观赛组合
 - **看点三层供给** —— L1 人工精修（每周 1–2 条核心场次）/ L2 规则合成（德比、争冠、连败等）/ L3 通用兜底，永不空窗
-- **积分榜位置** —— 只用本地已同步赛果计算双方排名、积分与分差；桌面在「双方数据」，手机在比赛详情「数据」；不做出线概率
+- **积分榜位置与完整积分榜** —— 本场位置保留在「双方数据」；桌面/手机赛程页顶部「赛程 | 积分榜」分段入口，桌面宽表 / 手机全屏表查看全部球队排名、胜平负、进失球与分区；不做出线概率
 
 ### 💾 数据自己会更新
 

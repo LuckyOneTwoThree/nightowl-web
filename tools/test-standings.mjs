@@ -18,7 +18,7 @@ import {
   UCL_ZONES,
   DOMESTIC_ZONES
 } from '../src/core/standings.js';
-import { ts } from '../src/core/engine.js';
+import { MATCH_DURATION_MS, ts } from '../src/core/engine.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixtures = JSON.parse(readFileSync(resolve(__dirname, '../src/data/fixtures.json'), 'utf8'));
@@ -74,8 +74,10 @@ ok('S3 本身不进入截止点之前的榜', !beforeS3.rows.some(row => row.tea
 ok('截止前 A 仍为第一', beforeS3.rows[0].teamId === 'A' && beforeS3.rows[0].points === 3);
 ok('截止前最后赛果时间正确', beforeS3.lastResultAt === ts('2026-08-01T22:00'));
 
-const afterS3 = computeStandings('PL', synthetic, { asOfTs: ts('2026-08-08T20:00') + 1 });
-ok('截止点后 1ms 才纳入 S3', afterS3.doneCount === 3, `实际 ${afterS3.doneCount}`);
+const afterS3 = computeStandings('PL', synthetic, {
+  asOfTs: ts('2026-08-08T20:00') + MATCH_DURATION_MS + 1
+});
+ok('S3 完赛后 1ms 才纳入', afterS3.doneCount === 3, `实际 ${afterS3.doneCount}`);
 ok('纳入 S3 后 C 升到第一', afterS3.rows[0].teamId === 'C');
 
 const historical = computeMatchStandings(synthetic[2], synthetic, {
@@ -86,8 +88,32 @@ ok('已完赛场次截止到本场开球', historical.asOfTs === ts('2026-08-08T
 ok('已完赛场次不含本场结果', historical.home.played === 1 && historical.away.played === 1);
 ok('已完赛场次主队排名按截止前计算', historical.home.rank === 1, `实际第 ${historical.home.rank}`);
 
+// 20:00 开球、22:00 才结束的比赛，在 20:30 开球的旧比赛视图里还不能算已知
+const strictEarly = {
+  id: 'STRICT-EARLY',
+  l: 'PL',
+  r: 1,
+  t: '2026-08-01T20:00',
+  st: 'done',
+  h: 'C',
+  a: 'D',
+  sc: '1-0'
+};
+const strictSelected = {
+  id: 'STRICT-SELECTED',
+  l: 'PL',
+  r: 1,
+  t: '2026-08-01T20:30',
+  st: 'done',
+  h: 'A',
+  a: 'B',
+  sc: '0-0'
+};
+const strict = computeMatchStandings(strictSelected, [strictEarly, strictSelected]);
+ok('开球早于本场但尚未终场的赛果不进入截止视图', strict.doneCount === 0, `实际 ${strict.doneCount}`);
+
 const future = computeMatchStandings(synthetic[4], synthetic, {
-  nowTs: ts('2026-08-08T22:00') + 1
+  nowTs: ts('2026-08-08T22:00') + MATCH_DURATION_MS + 1
 });
 ok('未赛按当前时间截止', future.historical === false && future.doneCount === 4);
 ok('未赛主队排名正确', future.home.rank === 2, `实际第 ${future.home.rank}`);
@@ -103,13 +129,13 @@ const liveMatch = {
   a: 'B'
 };
 const liveTable = computeMatchStandings(liveMatch, synthetic, {
-  nowTs: ts('2026-08-08T22:00') + 1
+  nowTs: ts('2026-08-08T22:00') + MATCH_DURATION_MS + 1
 });
 ok('进行中按当前时间截止', liveTable.historical === false && liveTable.doneCount === 4);
 
 const tbdMatch = { ...liveMatch, id: 'TBD', tbd: true, t: '2026-08-09T04:00' };
 const tbdTable = computeMatchStandings(tbdMatch, synthetic, {
-  nowTs: ts('2026-08-08T22:00') + 1
+  nowTs: ts('2026-08-08T22:00') + MATCH_DURATION_MS + 1
 });
 ok('tbd 按当前时间截止', tbdTable.historical === false && tbdTable.doneCount === 4);
 

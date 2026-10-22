@@ -184,6 +184,57 @@ app.whenReady().then(async () => {
     ok('★ 双方数据渲染积分榜位置', statsClicked && standings.ok, JSON.stringify(standings));
     ok('★ 积分榜面板无横向溢出', statsClicked && !standings.overflow, JSON.stringify(standings));
 
+    // 完整积分榜：从本场位置入口打开，PL 20 行；切 UCL 36 行；Escape 可关闭
+    const fullOpen = await win.webContents.executeJavaScript(`
+      (() => {
+        const panel = document.querySelector('#intel-panel');
+        const btn = panel && [...panel.querySelectorAll('button')].find(b => (b.textContent || '').includes('查看完整积分榜'));
+        if (!btn) return false;
+        btn.click();
+        return true;
+      })()
+    `);
+    await sleep(450);
+    const fullPl = await win.webContents.executeJavaScript(`
+      (() => {
+        const modal = document.querySelector('[aria-labelledby="standings-title"]');
+        if (!modal) return { open: false, rows: 0, overflow: true };
+        const scroller = modal.querySelector('.overflow-auto');
+        return {
+          open: true,
+          rows: modal.querySelectorAll('[data-team-id]').length,
+          overflow: scroller ? scroller.scrollWidth > scroller.clientWidth + 1 : true
+        };
+      })()
+    `);
+    ok('★ 完整积分榜打开且英超 20 行', fullOpen && fullPl.open && fullPl.rows === 20, JSON.stringify(fullPl));
+    ok('★ 完整积分榜无横向溢出', fullOpen && !fullPl.overflow, JSON.stringify(fullPl));
+
+    const uclTabClicked = await win.webContents.executeJavaScript(`
+      (() => {
+        const modal = document.querySelector('[aria-labelledby="standings-title"]');
+        if (!modal) return false;
+        const tab = [...modal.querySelectorAll('[role="tab"]')].find(n => (n.textContent || '').includes('欧冠'));
+        if (!tab) return false;
+        tab.click();
+        return true;
+      })()
+    `);
+    await sleep(350);
+    const fullUcl = await win.webContents.executeJavaScript(
+      `document.querySelector('[aria-labelledby="standings-title"]')?.querySelectorAll('[data-team-id]').length || 0`
+    );
+    ok('★ 欧冠积分榜 36 行', uclTabClicked && fullUcl === 36, `实际 ${fullUcl}`);
+
+    await win.webContents.executeJavaScript(
+      `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); true`
+    );
+    await sleep(300);
+    const fullClosed = await win.webContents.executeJavaScript(
+      `!document.querySelector('[aria-labelledby="standings-title"]')`
+    );
+    ok('完整积分榜可关闭', fullClosed);
+
     const detail = await win.webContents.executeJavaScript(`
       (() => {
         const root = document.getElementById('match-highlights');

@@ -117,6 +117,10 @@ export default function TonightScreen() {
     setRefreshNote(null);
     void syncNow({ quick: true })
       .then(outcome => {
+        if (outcome.busy) {
+          setRefreshNote('后台同步中，稍后再试');
+          return;
+        }
         setRefreshNote(
           outcome.changed > 0 ? `已更新 ${outcome.changed} 场比分` : '暂无比分更新'
         );

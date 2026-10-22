@@ -59,6 +59,7 @@ function AppShell() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="match/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="team/[id]" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="standings/[league]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen
             name="search"
             options={{ presentation: 'modal', animation: 'slide_from_bottom' }}

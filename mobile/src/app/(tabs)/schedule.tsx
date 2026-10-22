@@ -26,6 +26,7 @@ import { usePrefs } from '@/state/prefs';
 import { Chip } from '@/ui/Chip';
 import { EmptyState } from '@/ui/EmptyState';
 import { MatchRow } from '@/ui/MatchRow';
+import { SegmentedControl } from '@/ui/SegmentedControl';
 import { Sheet } from '@/ui/Sheet';
 import { colors, fontSize, radius, spacing } from '@/ui/theme';
 import type { Match } from '@/types';
@@ -130,6 +131,10 @@ export default function ScheduleScreen() {
     setRefreshNote(null);
     void syncNow({ quick: true })
       .then(outcome => {
+        if (outcome.busy) {
+          setRefreshNote('后台同步中，稍后再试');
+          return;
+        }
         setRefreshNote(
           outcome.changed > 0 ? `已更新 ${outcome.changed} 场比分` : '暂无比分更新'
         );
@@ -147,6 +152,10 @@ export default function ScheduleScreen() {
   }, [refreshNote]);
 
   const allLeaguesSelected = filters.leagues.length === LEAGUE_ORDER.length;
+  const standingsLeague = useMemo(() => {
+    const supported = filters.leagues.filter(code => code !== 'SCG');
+    return supported.length === 1 ? supported[0] : 'PL';
+  }, [filters.leagues]);
   const leagueFilterLabel = allLeaguesSelected
     ? '全部联赛'
     : filters.leagues.length === 0
@@ -167,8 +176,22 @@ export default function ScheduleScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>赛程</Text>
+        <View style={styles.headerMain}>
+          <SegmentedControl
+            value="schedule"
+            onChange={value => {
+              if (value === 'standings') {
+                router.push({
+                  pathname: '/standings/[league]',
+                  params: { league: standingsLeague },
+                });
+              }
+            }}
+            options={[
+              { key: 'schedule', label: '赛程' },
+              { key: 'standings', label: '积分榜' },
+            ]}
+          />
           <Text style={[styles.subline, (checking || refreshNote) && styles.sublineNote]}>
             {checking
               ? '正在检查比分…'
@@ -374,7 +397,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
     paddingBottom: spacing.sm,
   },
-  title: { color: colors.text, fontSize: fontSize.xxl, fontWeight: '800', letterSpacing: 0.3 },
+  headerMain: { flex: 1, minWidth: 0, gap: 2 },
   subline: { color: colors.textFaint, fontSize: fontSize.xs, marginTop: 2 },
   sublineNote: { color: colors.textMuted },
   iconButton: {

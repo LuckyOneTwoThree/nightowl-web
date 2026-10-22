@@ -118,6 +118,56 @@ console.log('六、历史交锋的时间边界（防剧透：不能出现当前�
   ok('限时间后仍是合法的交锋结构', typeof bounded.summary.total === 'number' && bounded.summary.total >= 0);
 }
 
+/* ================================================================== */
+console.log('');
+console.log('七、严格防剧透：先开球、后终场的赛果不能提前出现');
+{
+  const strictFixtures = [
+    {
+      id: 'STRICT-EARLY',
+      l: 'PL',
+      r: 1,
+      t: '2026-08-01T18:00',
+      st: 'done',
+      h: 'A',
+      a: 'D',
+      sc: '1-0'
+    },
+    {
+      id: 'STRICT-LATE',
+      l: 'PL',
+      r: 1,
+      t: '2026-08-01T20:00',
+      st: 'done',
+      h: 'A',
+      a: 'D',
+      sc: '2-2'
+    },
+    {
+      id: 'STRICT-SELECTED',
+      l: 'PL',
+      r: 1,
+      t: '2026-08-01T20:30',
+      st: 'done',
+      h: 'A',
+      a: 'D',
+      sc: '0-0'
+    }
+  ];
+  const strictStats = computeMatchStats(strictFixtures[2], strictFixtures);
+  ok(
+    '近况只纳入本场开球前已结束的比赛',
+    strictStats.home.form.length === 1 && strictStats.home.form[0].matchId === 'STRICT-EARLY',
+    JSON.stringify(strictStats.home.form)
+  );
+  ok('赛季统计同样按完赛时间截止', strictStats.home.season.played === 1);
+  ok(
+    '交锋只纳入本场开球前已结束的比赛',
+    strictStats.h2h.summary.total === 1 && strictStats.h2h.meetings[0].id === 'STRICT-EARLY',
+    JSON.stringify(strictStats.h2h)
+  );
+}
+
 console.log('────────────────────────────────────────────────────');
 console.log(`通过 ${pass} 项，失败 ${fail} 项`);
 if (fail > 0) {

@@ -11,7 +11,7 @@
  */
 
 import { getFixtures } from '../data/index.js';
-import { isFinished, ts } from './engine.js';
+import { isFinished, MATCH_DURATION_MS, ts } from './engine.js';
 
 export const STANDINGS_LEAGUES = ['PL', 'PD', 'SA', 'BL', 'FL', 'UCL'];
 
@@ -204,8 +204,9 @@ export function computeStandings(league, allFixtures = null, opts = {}) {
 
     const kick = ts(match.t);
     if (!Number.isFinite(kick)) continue;
-    // 严格早于截止点：已完赛场次查看时排除本场及之后，避免剧透
-    if (kick >= asOfTs) continue;
+    // 只有「截止点之前已经结束」的赛果才算已知；先开球、后终场的比赛
+    // 不能在旧比赛视图里提前出现。联赛赛制无加时，120min 是保守完赛近似。
+    if (kick + MATCH_DURATION_MS > asOfTs) continue;
 
     const score = parseScore(match.sc);
     if (!score) continue;
@@ -272,8 +273,8 @@ export function computeStandings(league, allFixtures = null, opts = {}) {
 /**
  * 截止点：已完赛按开球时点，其余按当前时间
  *
- * 已完赛用开球时点，是为了让「点开一场旧比赛」看到的是当时的榜，
- * 而不是把之后几轮的结果提前透出来。
+ * 已完赛用开球时点，是为了让「点开一场旧比赛」看到的是当时的榜；
+ * computeStandings 再要求赛果在该时点前已经结束，避免把当时仍在进行的比分算进来。
  */
 export function standingsCutoff(match, nowTs = Date.now()) {
   const now = Number.isFinite(nowTs) ? nowTs : Date.now();

@@ -5,7 +5,7 @@ import { getFixtures, LEAGUE_ORDER, LEAGUE_NAMES, leagueColor } from '../data/in
 import { evalOne, stateOf, defaultScheduleFilters, owlDayOffset } from '../core/owl.js';
 import * as E from '../core/engine.js';
 import MatchRow from './MatchRow.jsx';
-import { EmptyState, Meta, TogglePill } from './atoms.jsx';
+import { EmptyState, Meta, Segmented, TogglePill } from './atoms.jsx';
 import { IconCalendar, IconChevronLeft, IconChevronRight, IconClose, IconSearch } from './icons.jsx';
 
 /**
@@ -34,10 +34,15 @@ export default function ScheduleView({
   activeMatchId,
   onSelect,
   revealed,
-  onReveal
+  onReveal,
+  onOpenStandings
 }) {
   const allSelected = filters.leagues.length === LEAGUE_ORDER.length;
   const matchCount = useMemo(() => rows.filter(r => r.type === 'match').length, [rows]);
+  const standingsLeague = useMemo(() => {
+    const supported = filters.leagues.filter(code => code !== 'SCG');
+    return supported.length === 1 ? supported[0] : 'PL';
+  }, [filters.leagues]);
 
   // rows 由父组件按 dataRev 重建，数据变化时随之重算，与列表口径保持一致
   const { leagueTotals, total } = useMemo(() => {
@@ -157,6 +162,18 @@ export default function ScheduleView({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2.5 overflow-hidden">
+      {/* 赛程 / 积分榜：全表是联赛级参考视图，主入口放在数据视图顶部，而不是比赛详情里 */}
+      <Segmented
+        items={[
+          { id: 'schedule', label: '赛程' },
+          { id: 'standings', label: '积分榜' }
+        ]}
+        value="schedule"
+        onChange={id => {
+          if (id === 'standings') onOpenStandings?.(standingsLeague);
+        }}
+      />
+
       {/* 搜索 */}
       <div className="relative flex items-center">
         <IconSearch size={13} className="pointer-events-none absolute left-2.5 text-text-faint" />

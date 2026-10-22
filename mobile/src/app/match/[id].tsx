@@ -414,6 +414,12 @@ export default function MatchScreen() {
             onOpenMatch={matchId =>
               router.push({ pathname: '/match/[id]', params: { id: matchId } })
             }
+            onOpenStandings={league =>
+              router.push({
+                pathname: '/standings/[league]',
+                params: { league, matchId: match.id },
+              })
+            }
           />
         )}
       </ScrollView>
@@ -605,11 +611,13 @@ function StatsTab({
   stats,
   standings,
   onOpenMatch,
+  onOpenStandings,
 }: {
   match: Match;
   stats: StatsData;
   standings: MatchStandings;
   onOpenMatch: (id: string) => void;
+  onOpenStandings: (league: string) => void;
 }) {
   const homeForm = summaryOf(stats.home.form);
   const awayForm = summaryOf(stats.away.form);
@@ -649,7 +657,11 @@ function StatsTab({
         />
       </Card>
 
-      <StandingsCard match={match} standings={standings} />
+      <StandingsCard
+        match={match}
+        standings={standings}
+        onOpenStandings={onOpenStandings}
+      />
 
       <Card style={styles.cardGap}>
         <Text style={styles.cardEyebrow}>历史交锋</Text>
@@ -697,11 +709,14 @@ function StatsTab({
 function StandingsCard({
   match,
   standings,
+  onOpenStandings,
 }: {
   match: Match;
   standings: MatchStandings;
+  onOpenStandings: (league: string) => void;
 }) {
-  if (!standings.supported) return null;
+  const league = standings.league;
+  if (!standings.supported || !league) return null;
 
   const asOfText = standings.historical
     ? '截至本场开球前'
@@ -719,8 +734,7 @@ function StandingsCard({
     <Card style={styles.cardGap}>
       <Text style={styles.cardEyebrow}>积分榜位置</Text>
       <Text style={styles.standingsAsOf}>
-        {standings.league ? `${leagueName(standings.league)} · ` : ''}
-        {metaText}
+        {leagueName(league)} · {metaText}
       </Text>
       {standings.rows.length === 0 ? (
         <Text style={styles.cardLine}>{standings.note || '本联赛暂无已同步赛果'}</Text>
@@ -765,6 +779,15 @@ function StandingsCard({
           <Text style={styles.standingsHint}>
             排名按积分 → 净胜球 → 进球数简化排序；国内分区为参考线，欧冠按赛制。
           </Text>
+          <Pressable
+            onPress={() => onOpenStandings(league)}
+            accessibilityRole="button"
+            accessibilityLabel="查看完整积分榜"
+            style={({ pressed }) => [styles.standingsLink, pressed && styles.pressed]}
+          >
+            <Text style={styles.standingsLinkText}>查看完整积分榜</Text>
+            <ChevronRight size={14} color={colors.textSecondary} />
+          </Pressable>
         </View>
       )}
     </Card>
@@ -1293,6 +1316,20 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xxs,
     lineHeight: 15,
     marginTop: spacing.sm,
+  },
+  standingsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 4,
+    marginTop: spacing.xs,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  standingsLinkText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    fontWeight: '600',
   },
   meetingDate: { width: 48, color: colors.textFaint, fontSize: fontSize.xxs },
   meetingTeams: { flex: 1, color: colors.textSecondary, fontSize: fontSize.xs },

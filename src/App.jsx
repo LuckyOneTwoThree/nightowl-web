@@ -22,6 +22,7 @@ import TonightView, { INDEX_HINT } from './components/TonightView.jsx';
 import WeekView from './components/WeekView.jsx';
 import ScheduleView from './components/ScheduleView.jsx';
 import IntelPanel from './components/IntelPanel.jsx';
+import StandingsModal from './components/StandingsModal.jsx';
 import PlayerStage from './components/PlayerStage.jsx';
 import UpcomingFixtures from './components/UpcomingFixtures.jsx';
 import SameNightPicks from './components/SameNightPicks.jsx';
@@ -103,6 +104,8 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [revealed, setRevealed] = useState(() => new Set());
   const [filters, setFilters] = useState(() => defaultScheduleFilters());
+  // 完整积分榜是参考视图：{ league, matchId }；matchId 为空表示从赛程入口全局查看
+  const [standingsState, setStandingsState] = useState(null);
 
   // 首次引导：未完成标记且未设主队时展示（跳过或完成都会写入标记，不再骚扰）
   const [onboardingOpen, setOnboardingOpen] = useState(() => shouldShowOnboarding(prefs));
@@ -497,6 +500,11 @@ export default function App() {
 
   const select = useCallback(id => setActiveMatchId(id), []);
 
+  const openStandings = useCallback((league, matchId = null) => {
+    setStandingsState({ league, matchId });
+  }, []);
+  const closeStandings = useCallback(() => setStandingsState(null), []);
+
   // 视图与选中同步到 URL（可分享 / 可刷新定位）
   useEffect(() => {
     const sp = new URLSearchParams();
@@ -520,12 +528,12 @@ export default function App() {
         setPaletteOpen(false);
         return;
       }
-      if (settingsOpen || onboardingOpen || updateModalOpen || splashOpen) return;
+      if (settingsOpen || onboardingOpen || updateModalOpen || splashOpen || standingsState) return;
       setPaletteOpen(true);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [paletteOpen, settingsOpen, onboardingOpen, updateModalOpen, splashOpen]);
+  }, [paletteOpen, settingsOpen, onboardingOpen, updateModalOpen, splashOpen, standingsState]);
 
   const runPaletteItem = useCallback(item => {
     const action = item?.action;
@@ -558,7 +566,8 @@ export default function App() {
 
   // 任一全屏浮层打开时，背景内容必须同时退出键盘焦点与点击（inert）。
   // 只靠遮罩挡鼠标，Tab 仍会跑进后面的列表，这是真实的无障碍缺陷。
-  const overlayOpen = settingsOpen || onboardingOpen || updateModalOpen || splashOpen || paletteOpen;
+  const overlayOpen =
+    settingsOpen || onboardingOpen || updateModalOpen || splashOpen || paletteOpen || !!standingsState;
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden stage-atmosphere text-text-primary">
@@ -623,6 +632,7 @@ export default function App() {
                 onSelect={select}
                 revealed={revealed}
                 onReveal={reveal}
+                onOpenStandings={openStandings}
               />
             )}
           </div>
@@ -669,6 +679,7 @@ export default function App() {
                 indexHint={INDEX_HINT}
                 isHeroMatch={!!tonight.hero && activeMatch?.id === tonight.hero.m.id}
                 onSelect={select}
+                onOpenStandings={openStandings}
                 now={clockTs}
               />
               <div className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-2">
@@ -714,6 +725,15 @@ export default function App() {
 
       {splashOpen && <SplashScreen onClose={handleCloseSplash} />}
 
+      <StandingsModal
+        open={!!standingsState}
+        initialLeague={standingsState?.league}
+        match={standingsState?.matchId ? matchMap[standingsState.matchId] || null : null}
+        now={clockTs}
+        dataRev={dataRev}
+        onClose={closeStandings}
+      />
+
       <UpdateModal
         open={updateModalOpen}
         onClose={() => setUpdateModalOpen(false)}
@@ -725,7 +745,7 @@ export default function App() {
       />
 
       {/* 发现新版本时的轻量主动浮动提醒（避免用户不知道有更新） */}
-      {updateAvailable && !toastDismissed && !updateModalOpen && !settingsOpen && !onboardingOpen && !splashOpen && (
+      {updateAvailable && !toastDismissed && !updateModalOpen && !settingsOpen && !onboardingOpen && !splashOpen && !standingsState && (
         <aside
           aria-label="版本更新提醒"
           className="fixed bottom-5 right-5 z-modal flex max-w-sm items-center gap-3 rounded-xl border border-accent/40 bg-surface-card/95 p-3.5 shadow-pop backdrop-blur-xl transition-all duration-300"

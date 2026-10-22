@@ -1,5 +1,5 @@
 import { getFixtures } from '../data/index.js';
-import { ts } from './engine.js';
+import { isFinished, MATCH_DURATION_MS, ts } from './engine.js';
 
 /**
  * 解析比赛时间为时间戳
@@ -8,6 +8,20 @@ import { ts } from './engine.js';
  */
 function parseTime(t) {
   return t ? ts(t) : 0;
+}
+
+/**
+ * 查看一场已完赛比赛时，只有「在该场开球前已经结束」的赛果才算已知。
+ *
+ * 只看开球时间不够：20:00 开球、20:30 查看时，那场其实还在踢，
+ * 终场比分不能在 20:30 的视图里出现。用开球 + 120min 作为完赛近似。
+ * 未赛/进行中/时间待定的当前比赛，所有 done 赛果都已经是已知历史。
+ */
+function knownByTs(currentMatch) {
+  if (!currentMatch?.t) return Infinity;
+  if (!isFinished(currentMatch)) return Infinity;
+  const kick = parseTime(currentMatch.t);
+  return Number.isFinite(kick) ? kick : Infinity;
 }
 
 /**
@@ -24,16 +38,16 @@ export function computeTeamForm(teamId, currentMatch, allFixtures = null, limit 
   allFixtures = allFixtures || getFixtures();
   if (!teamId) return [];
 
-  const currentTs = currentMatch?.t ? parseTime(currentMatch.t) : Infinity;
+  const knownTs = knownByTs(currentMatch);
 
-  // 筛选该球队所有已完赛且有比分的场次，优先取开球时间早于当前比赛的场次
+  // 只取「当前比赛开球时已经结束」的场次：开球早但还没终场的比赛不能算已知
   const teamDoneMatches = allFixtures.filter(
     m =>
       (m.h === teamId || m.a === teamId) &&
       m.st === 'done' &&
       m.sc &&
       m.id !== currentMatch?.id &&
-      parseTime(m.t) <= currentTs
+      parseTime(m.t) + MATCH_DURATION_MS <= knownTs
   );
 
   // 按时间倒序排序（最近的在最前）
@@ -75,7 +89,7 @@ export function computeTeamForm(teamId, currentMatch, allFixtures = null, limit 
  * @param {string} leagueCode - 联赛编码（如 PL, PD）
  * @param {Array} allFixtures - 全量赛程
  */
-export function computeSeasonStats(teamId, leagueCode, allFixtures = null) {
+export function computeSeasonStats(teamId, leagueCode, allFixtures = null, cutoffTs = Infinity) {
   allFixtures = allFixtures || getFixtures();
   if (!teamId) {
     return {
@@ -96,7 +110,12 @@ export function computeSeasonStats(teamId, leagueCode, allFixtures = null) {
   }
 
   const leagueMatches = allFixtures.filter(
-    m => (m.h === teamId || m.a === teamId) && m.l === leagueCode && m.st === 'done' && m.sc
+    m =>
+      (m.h === teamId || m.a === teamId) &&
+      m.l === leagueCode &&
+      m.st === 'done' &&
+      m.sc &&
+      parseTime(m.t) + MATCH_DURATION_MS <= cutoffTs
   );
 
   let wins = 0;
@@ -163,9 +182,8 @@ export function computeSeasonStats(teamId, leagueCode, allFixtures = null) {
 /**
  * 计算两队在数据集中的直接交手记录（Head to Head）
  *
- * 口径与 computeTeamForm 一致：传入 currentMatch 时，只算它**开球之前**、
- * 且不含它自身的交手。此前这里把数据集里所有 done 场次都收进来，
- * 意味着查看一场已完赛的比赛时，可能把它之后才踢的那场结果剧透出来。
+ * 口径与 computeTeamForm 一致：传入 currentMatch 时，只算在它**开球前已经结束**、
+ * 且不含它自身的交手。只看开球时间会把「先开球、后终场」的赛果提前透出来。
  *
  * @param {object|null} currentMatch 当前查看的比赛；为空表示不限时间
  * @param {number} limit 最多返回几场（按时间倒序）
@@ -174,7 +192,7 @@ export function computeHeadToHead(team1, team2, allFixtures = null, currentMatch
   allFixtures = allFixtures || getFixtures();
   if (!team1 || !team2) return { meetings: [], summary: { t1Wins: 0, draws: 0, t2Wins: 0, total: 0 } };
 
-  const cutoff = currentMatch?.t ? parseTime(currentMatch.t) : Infinity;
+  const cutoff = knownByTs(currentMatch);
 
   const meetings = allFixtures
     .filter(
@@ -183,7 +201,7 @@ export function computeHeadToHead(team1, team2, allFixtures = null, currentMatch
         m.st === 'done' &&
         m.sc &&
         m.id !== currentMatch?.id &&
-        parseTime(m.t) < cutoff
+        parseTime(m.t) + MATCH_DURATION_MS <= cutoff
     )
     .sort((a, b) => parseTime(b.t) - parseTime(a.t));
 
@@ -235,16 +253,17 @@ export function computeMatchStats(match, allFixtures = null) {
   allFixtures = allFixtures || getFixtures();
   if (!match) return null;
 
+  const cutoff = knownByTs(match);
   return {
     home: {
       id: match.h,
       form: computeTeamForm(match.h, match, allFixtures),
-      season: computeSeasonStats(match.h, match.l, allFixtures)
+      season: computeSeasonStats(match.h, match.l, allFixtures, cutoff)
     },
     away: {
       id: match.a,
       form: computeTeamForm(match.a, match, allFixtures),
-      season: computeSeasonStats(match.a, match.l, allFixtures)
+      season: computeSeasonStats(match.a, match.l, allFixtures, cutoff)
     },
     h2h: computeHeadToHead(match.h, match.a, allFixtures, match)
   };
