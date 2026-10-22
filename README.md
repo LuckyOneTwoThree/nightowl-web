@@ -28,7 +28,7 @@
 
 <br />
 
-![开屏动画](docs/images/01-splash.png)
+![开屏动画](docs/images/01-splash-v0130.png)
 
 ---
 
@@ -101,23 +101,23 @@
 
 ### 今晚观赛 —— 分区 + 唯一推荐
 
-![今晚观赛](docs/images/02-tonight.png)
+![今晚观赛](docs/images/02-tonight-v0130.png)
 
 ### 赛程日历 —— 日期条 + 联赛分组
 
-![赛程日历](docs/images/03-schedule.png)
+![赛程日历](docs/images/03-schedule-v0130.png)
 
 ### 比赛情报与后续赛程
 
-![比赛情报与后续赛程](docs/images/04-modules.png)
+![比赛情报与后续赛程](docs/images/04-modules-v0130.png)
 
 ### 数据视角 —— 近况 / 赛季攻防 / 积分榜位置 / 交锋
 
-![数据视角](docs/images/05-intel.png)
+![数据视角](docs/images/05-intel-v0130.png)
 
 ### 完整积分榜 —— 联赛 / 欧冠全表与分区
 
-![完整积分榜](docs/images/06-standings.png)
+![完整积分榜](docs/images/06-standings-v0130.png)
 
 ---
 
