@@ -20,6 +20,8 @@ import {
 import { nightOf } from '@core/engine.js';
 import { weekdayOf, zhDate } from '@core/format.js';
 import { syncNow } from '@/data/sync/run';
+import StandingsPanel from '@/components/StandingsPanel';
+import { animateLayout } from '@/lib/layoutAnimation';
 import { useNow } from '@/lib/useNow';
 import { useDataRev } from '@/state/app';
 import { usePrefs } from '@/state/prefs';
@@ -62,6 +64,8 @@ export default function ScheduleScreen() {
 
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [selectedDate, setSelectedDate] = useState<string | 'all' | null>(null);
+  const [mode, setMode] = useState<'schedule' | 'standings'>('schedule');
+  const [tableLeague, setTableLeague] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [checking, setChecking] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
@@ -90,13 +94,13 @@ export default function ScheduleScreen() {
   );
 
   const rows = useMemo(() => {
-    if (filters.leagues.length === 0) return [] as Row[];
+    if (mode === 'standings' || filters.leagues.length === 0) return [] as Row[];
     return computeScheduleRows(now, prefs, {
       leagues: filters.leagues,
       onlyFollowed: filters.onlyFollowed,
       query: filters.query,
     }) as Row[];
-  }, [now, prefs, filters, rev]);
+  }, [mode, now, prefs, filters, rev]);
 
   const visibleRows = useMemo(() => {
     if (activeDate === 'all') return rows;
@@ -156,6 +160,11 @@ export default function ScheduleScreen() {
     const supported = filters.leagues.filter(code => code !== 'SCG');
     return supported.length === 1 ? supported[0] : 'PL';
   }, [filters.leagues]);
+  // 在赛程页内切换模式时保留榜单联赛选择；筛选条件变化后再回到筛选联赛
+  useEffect(() => {
+    setTableLeague(null);
+  }, [standingsLeague]);
+  const activeTableLeague = tableLeague ?? standingsLeague;
   const leagueFilterLabel = allLeaguesSelected
     ? '全部联赛'
     : filters.leagues.length === 0
@@ -179,14 +188,10 @@ export default function ScheduleScreen() {
         <View style={styles.headerTop}>
           <View style={styles.modeControl}>
             <SegmentedControl
-              value="schedule"
+              value={mode}
               onChange={value => {
-                if (value === 'standings') {
-                  router.push({
-                    pathname: '/standings/[league]',
-                    params: { league: standingsLeague },
-                  });
-                }
+                animateLayout();
+                setMode(value === 'standings' ? 'standings' : 'schedule');
               }}
               options={[
                 { key: 'schedule', label: '赛程' },
@@ -203,12 +208,22 @@ export default function ScheduleScreen() {
             <Search size={18} color={colors.textSecondary} />
           </Pressable>
         </View>
-        <Text style={[styles.subline, (checking || refreshNote) && styles.sublineNote]}>
-          {checking
-            ? '正在检查比分…'
-            : refreshNote ?? '全季赛程 · 北京时间 · 夜猫日口径'}
+        <Text style={[styles.subline, mode === 'schedule' && (checking || refreshNote) && styles.sublineNote]}>
+          {mode === 'standings'
+            ? '本地已同步赛果 · 同分简化排序'
+            : checking
+              ? '正在检查比分…'
+              : refreshNote ?? '全季赛程 · 北京时间 · 夜猫日口径'}
         </Text>
       </View>
+
+      {mode === 'standings' ? (
+        <StandingsPanel
+          initialLeague={activeTableLeague}
+          onLeagueChange={setTableLeague}
+        />
+      ) : (
+        <>
 
       <ScrollView
         horizontal
@@ -349,6 +364,8 @@ export default function ScheduleScreen() {
           }
         />
       </View>
+        </>
+      )}
 
       <Sheet visible={filtersOpen} onClose={() => setFiltersOpen(false)} title="筛选联赛">
         <View style={styles.sheetHeader}>

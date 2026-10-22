@@ -223,7 +223,7 @@ export function Button({
   return (
     <button
       type={type}
-      className={`no-drag inline-flex items-center justify-center gap-1.5 rounded-md transition-colors active:translate-y-px focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 ${
+      className={`no-drag inline-flex items-center justify-center gap-1.5 rounded-md transition-all duration-150 active:translate-y-px active:scale-[0.99] focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 ${
         variants[variant] || variants.default
       } ${sizes[size] || sizes.sm} ${className}`}
       {...rest}
@@ -241,7 +241,7 @@ export function IconButton({ children, label, className = '', ...rest }) {
       type="button"
       aria-label={label}
       title={label}
-      className={`no-drag inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none ${className}`}
+      className={`no-drag inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-all duration-150 hover:bg-surface-raised hover:text-text-primary active:scale-95 focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none ${className}`}
       {...rest}
     >
       {children}

@@ -597,7 +597,7 @@ export default function App() {
         {/* 主工作区：左栏黄金比例（330-390px） + 右栏核心主舞台（~75%） */}
         <main className="flex min-h-0 flex-1 overflow-hidden">
           {/* 左栏：决策与列表 */}
-          <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] 2xl:w-[390px] shrink-0 flex-col overflow-hidden border-r border-line-hairline bg-surface-panel p-3.5 shadow-card">
+          <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] 2xl:w-[390px] shrink-0 flex-col overflow-hidden border-r border-white/[0.05] bg-surface-panel p-4">
           <div key={view} className="animate-view-enter flex h-full min-h-0 flex-col">
             {view === 'tonight' && (
               <TonightView
@@ -648,7 +648,7 @@ export default function App() {
             上半（播放器 + 熬夜看点/双方数据）保持原有纵向排布；
             下半新增模块区：双方后续赛程 & 同夜推荐 —— 宽屏并排两列、窄屏堆叠，
             把全屏时下方的空白用真正有决策价值的信息填满。 */}
-          <section className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto bg-app p-4">
+          <section className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
             <div className="mx-auto flex w-full max-w-[1800px] 2xl:max-w-full flex-col gap-3">
               {activeMatch && !activeInView && (
                 <div

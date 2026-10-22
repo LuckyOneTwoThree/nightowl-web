@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { bjClock, bjDate } from '../core/format.js';
 import { teamName } from '../data/index.js';
-import { BrandLogo, Crest, LiveDot, Segmented } from './atoms.jsx';
+import { BrandLogo, Crest, LiveDot } from './atoms.jsx';
 import { IconSchedule, IconSearch, IconSettings, IconStandings, IconTonight, IconWeek, IconWinClose, IconWinMax, IconWinMin, IconWinRestore } from './icons.jsx';
 
 /**
@@ -114,14 +114,38 @@ export default function TopBar({
           </span>
         </div>
 
-        <nav className="no-drag" aria-label="视图切换">
-          <Segmented items={VIEWS} value={view} onChange={onViewChange} />
+        <nav className="no-drag flex items-center gap-0.5" aria-label="视图切换" role="tablist">
+          {VIEWS.map(it => {
+            const active = it.id === view;
+            return (
+              <button
+                key={it.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => onViewChange(it.id)}
+                className={`relative inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none ${
+                  active
+                    ? 'font-semibold text-text-primary'
+                    : 'text-text-muted hover:bg-white/[0.04] hover:text-text-primary'
+                }`}
+              >
+                <span className={active ? 'text-accent/80' : 'text-text-faint'}>{it.icon}</span>
+                {it.label}
+                {active && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-x-3 -bottom-[11px] h-px bg-accent/70"
+                  />
+                )}
+              </button>
+            );
+          })}
         </nav>
       </div>
 
       <div className="no-drag hidden items-center gap-3 lg:flex">
         <div className="flex items-baseline gap-2">
-          <span className="text-2xs text-text-faint">北京时间</span>
           <span className="font-num text-sm font-semibold tabular-nums text-text-primary">
             {bjClock(now)}
           </span>

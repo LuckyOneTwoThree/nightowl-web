@@ -113,12 +113,12 @@ const LineButton = memo(function LineButton({ l, compact = false, active, onSele
       type="button"
       onClick={() => onSelect(l)}
       aria-pressed={active}
-      className={`inline-flex items-center justify-between gap-1.5 rounded-md px-2.5 py-1.5 text-2xs transition-colors cursor-pointer ${
+      className={`inline-flex items-center justify-between gap-1.5 rounded-lg px-2.5 py-1.5 text-2xs transition-colors cursor-pointer ${
         compact ? 'shrink-0 whitespace-nowrap' : 'w-full'
       } ${
         active
-          ? 'bg-surface-accent font-semibold text-accent shadow-[0_0_8px_rgba(245,185,66,0.25)]'
-          : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
+          ? 'bg-accent/10 font-semibold text-accent ring-1 ring-accent/20'
+          : 'text-text-secondary hover:bg-white/[0.04] hover:text-text-primary'
       }`}
     >
       <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
@@ -154,7 +154,7 @@ function OfficialLinks({ sources, match, limit = 99, replay = false }) {
                 window.desktop.openExternal(url);
               }
             }}
-            className="inline-flex items-center gap-1 rounded-md border border-line-control bg-surface-raised px-2.5 py-1 text-2xs text-text-secondary transition-colors hover:border-line-control hover:bg-surface-accent hover:text-text-primary"
+            className="inline-flex items-center gap-1 rounded-lg border border-transparent bg-white/[0.035] px-2.5 py-1 text-2xs text-text-muted transition-colors hover:bg-white/[0.06] hover:text-text-primary"
           >
             <IconExternal size={11} />
             {s.name}
@@ -772,7 +772,7 @@ export default function PlayerStage({
         aspectRatio: `${aspectRatio}`
       }}
       className={`relative isolate z-0 w-full overflow-hidden rounded-xl bg-stage-bg border border-line-hairline shadow-2xl transition-all duration-200 ${
-        !streamUrl ? 'max-h-[42vh] min-h-[280px]' : ''
+        !streamUrl ? 'max-h-[36vh] min-h-[280px]' : ''
       } ${isOverlayOpen ? 'pointer-events-none select-none' : ''}`}
     >
       {streamUrl ? (
@@ -854,7 +854,7 @@ export default function PlayerStage({
 
   /* ---------------- 右侧协同栏 ---------------- */
   const ControlSidebar = (
-    <div className="flex w-full shrink-0 flex-col rounded-xl border border-line-hairline bg-surface-card p-3 shadow-card transition-all xl:w-[315px] xl:self-stretch xl:p-3.5 min-h-0">
+    <div className="broadcast-sheen flex w-full shrink-0 flex-col rounded-2xl border border-white/[0.055] bg-surface-panel/55 p-3 shadow-card backdrop-blur-xl transition-all xl:w-[315px] xl:self-stretch xl:p-4 min-h-0">
       {live && (
         <LiveMatchPanel
           match={match}
@@ -904,7 +904,7 @@ export default function PlayerStage({
 
           {lines.length > 0 ? (
             // 1120 宽度下用两列压缩高度；xl 协同模式再回到单列
-            <div className="scrollbar-thin -mr-1 mt-2.5 grid min-h-[48px] max-h-[220px] grid-cols-1 content-start gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2 xl:min-h-[80px] xl:grid-cols-1">
+            <div className="scrollbar-thin -mr-1 mt-2.5 grid min-h-[48px] max-h-[220px] grid-cols-1 content-start gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2 xl:min-h-[56px] xl:grid-cols-1">
               {lines.map(l => (
                 <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={manualSelectLine} />
               ))}
@@ -943,15 +943,21 @@ export default function PlayerStage({
         />
       </div>
 
-      <div className="mt-2.5 shrink-0 border-t border-line-hairline pt-2.5">
+      <div className="mt-2.5 shrink-0 border-t border-white/[0.06] pt-3">
         <SectionLabel>{finished ? '官方全场回放' : '官方平台'}</SectionLabel>
         <div className="mt-1.5">
           <OfficialLinks sources={sources} match={match} replay={finished} />
         </div>
       </div>
 
+      {!streamUrl && (
+        <div className="mt-auto flex shrink-0 items-center border-t border-white/[0.06] pt-3">
+          <Meta>官方平台直达 · 本机代理仅转发公开线路</Meta>
+        </div>
+      )}
+
       {streamUrl && (
-        <div className="mt-auto flex shrink-0 items-center justify-between border-t border-line-hairline pt-2.5">
+        <div className="mt-auto flex shrink-0 items-center justify-between border-t border-white/[0.06] pt-3">
           <span className="inline-flex items-center gap-1.5">
             <Hint content={SHORTCUT_HINT} align="start">
               <IconKeyboard size={12} />

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   Pressable,
-  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -108,6 +108,7 @@ export default function MatchScreen() {
   const [watchOpen, setWatchOpen] = useState(params.watch === '1');
   const [reminderSet, setReminderSet] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   const match = useMemo(
     () => getFixtures().find((item: Match) => item.id === id) as Match | undefined,
@@ -231,13 +232,47 @@ export default function MatchScreen() {
         <Pressable onPress={() => router.back()} style={styles.headerButton} accessibilityLabel="返回">
           <ChevronLeft size={20} color={colors.text} />
         </Pressable>
-        <Text style={styles.headerTitle}>比赛详情</Text>
+        <View style={styles.headerTitleWrap}>
+          <Animated.Text
+            style={[
+              styles.headerTitle,
+              {
+                opacity: scrollY.interpolate({
+                  inputRange: [0, 72],
+                  outputRange: [1, 0],
+                  extrapolate: 'clamp',
+                }),
+              },
+            ]}
+          >
+            比赛详情
+          </Animated.Text>
+          <Animated.Text
+            numberOfLines={1}
+            style={[
+              styles.headerTitleCompact,
+              {
+                opacity: scrollY.interpolate({
+                  inputRange: [96, 164],
+                  outputRange: [0, 1],
+                  extrapolate: 'clamp',
+                }),
+              },
+            ]}
+          >
+            {finishedNow && finalScore
+              ? `${teamName(match.h)} ${finalScore} ${teamName(match.a)}`
+              : liveNow && liveScoreText
+                ? `${teamName(match.h)} ${liveScoreText} ${teamName(match.a)}`
+                : `${teamName(match.h)} vs ${teamName(match.a)}`}
+          </Animated.Text>
+        </View>
         <Pressable onPress={share} style={styles.headerButton} accessibilityLabel="分享比赛">
           <Share2 size={18} color={colors.text} />
         </Pressable>
       </View>
 
-      <ScrollView
+      <Animated.ScrollView
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
@@ -245,6 +280,11 @@ export default function MatchScreen() {
         ]}
         showsVerticalScrollIndicator={false}
         stickyHeaderIndices={[1]}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
       >
         <LinearGradient
           colors={[withAlpha(teamColor(match.h), 0.2), colors.card, colors.card]}
@@ -388,7 +428,10 @@ export default function MatchScreen() {
         <View style={styles.segmentWrap}>
           <SegmentedControl
             value={tab}
-            onChange={value => setTab(value as Tab)}
+            onChange={value => {
+              animateLayout();
+              setTab(value as Tab);
+            }}
             options={[
               { key: 'intel', label: '情报' },
               { key: 'stats', label: '数据' },
@@ -422,7 +465,7 @@ export default function MatchScreen() {
             }
           />
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       {liveNow ? (
         <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, 10) }]}>
@@ -978,13 +1021,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.hairline,
   },
-  headerTitle: { color: colors.text, fontSize: fontSize.base, fontWeight: '700' },
+  headerTitleWrap: { flex: 1, minWidth: 0, marginHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { color: colors.text, fontSize: fontSize.base, fontWeight: '700', textAlign: 'center' },
+  headerTitleCompact: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+  },
   scroll: { flex: 1 },
   content: { paddingHorizontal: spacing.lg, gap: spacing.md },
   hero: {
     borderRadius: radius.xxl,
     borderWidth: 1,
-    borderColor: colors.control,
+    borderColor: withAlpha(colors.text, 0.08),
     padding: spacing.lg,
     gap: spacing.md,
     overflow: 'hidden',
@@ -1101,7 +1154,9 @@ const styles = StyleSheet.create({
   stateAction: { color: colors.accent, fontSize: fontSize.sm, fontWeight: '700' },
   segmentWrap: {
     backgroundColor: colors.bg,
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.hairline,
     zIndex: 2,
   },
   metrics: {

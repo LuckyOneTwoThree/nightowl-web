@@ -86,6 +86,26 @@ console.log('三、实时事件摘要与通知文案');
   ok('点球摘要', eventSummary({ type: 'penalty', side: 'h' }, match) === '阿森纳点球');
   ok('VAR 摘要', eventSummary({ type: 'var', side: 'a' }, match) === 'VAR · 考文垂');
   ok('黄牌标签存在', EVENT_LABEL.yellow === '黄牌');
+  ok(
+    '★ 头球进球补中文细节',
+    eventSummary({ ...goal, typeText: 'Goal - Header' }, match) === '阿森纳进球 · 头球',
+    eventSummary({ ...goal, typeText: 'Goal - Header' }, match)
+  );
+  ok(
+    '★ 点球进球补中文细节',
+    eventSummary({ type: 'goal', side: 'h', typeText: 'Penalty - Scored' }, match) === '阿森纳进球 · 点球',
+    eventSummary({ type: 'goal', side: 'h', typeText: 'Penalty - Scored' }, match)
+  );
+  ok(
+    '★ 点球未进不显示成进球',
+    eventSummary({ type: 'penalty', side: 'h', typeText: 'Penalty - Missed' }, match) === '阿森纳点球未进',
+    eventSummary({ type: 'penalty', side: 'h', typeText: 'Penalty - Missed' }, match)
+  );
+  ok(
+    '★ 第二张黄牌区分',
+    eventSummary({ type: 'yellow', side: 'a', typeText: 'Second Yellow Card' }, match) === '考文垂第二张黄牌',
+    eventSummary({ type: 'yellow', side: 'a', typeText: 'Second Yellow Card' }, match)
+  );
 
   const gn = liveEventNotification(match, live, goal);
   ok('★ 进球通知标题含类型与比分', gn.title === '进球 · 阿森纳 2-1 考文垂', gn.title);

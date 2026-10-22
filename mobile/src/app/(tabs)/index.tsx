@@ -39,6 +39,7 @@ import { narrativeOf } from '@core/narrative.js';
 import { syncNow } from '@/data/sync/run';
 import { useSyncState } from '@/data/sync/useSync';
 import { freshnessOf } from '@/data/fixtures';
+import { impactFeedback } from '@/lib/feedback';
 import { animateLayout } from '@/lib/layoutAnimation';
 import { useNow } from '@/lib/useNow';
 import { useAppStore, useDataRev } from '@/state/app';
@@ -400,7 +401,10 @@ function HeroCard({
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        impactFeedback();
+        onPress();
+      }}
       accessibilityRole="button"
       accessibilityLabel={`今晚之选，${teamName(hero.m.h)} 对 ${teamName(hero.m.a)}`}
       style={({ pressed }) => [pressed && styles.pressed]}
@@ -412,10 +416,13 @@ function HeroCard({
         style={styles.hero}
       >
         <View style={styles.heroTop}>
-          <Text style={styles.heroLeague}>
-            {leagueName(hero.m.l)}
-            {hero.m.r ? ` · 第 ${hero.m.r} 轮` : ''}
-          </Text>
+          <View style={styles.heroTopLeft}>
+            <Text style={styles.heroEyebrow}>今晚之选</Text>
+            <Text style={styles.heroLeague}>
+              {leagueName(hero.m.l)}
+              {hero.m.r ? ` · 第 ${hero.m.r} 轮` : ''}
+            </Text>
+          </View>
           <View style={[styles.tierPill, { borderColor: color }]}>
             <Text style={[styles.tierText, { color }]}>
               {tier.label} {tier.zh} · {tier.cost}h
@@ -425,7 +432,7 @@ function HeroCard({
 
         <View style={styles.teams}>
           <View style={styles.team}>
-            <Crest id={hero.m.h} size={56} />
+            <Crest id={hero.m.h} size={62} />
             <Text style={styles.teamName} numberOfLines={1}>
               {teamName(hero.m.h)}
             </Text>
@@ -448,7 +455,7 @@ function HeroCard({
             )}
           </View>
           <View style={styles.team}>
-            <Crest id={hero.m.a} size={56} />
+            <Crest id={hero.m.a} size={62} />
             <Text style={styles.teamName} numberOfLines={1}>
               {teamName(hero.m.a)}
             </Text>
@@ -457,10 +464,19 @@ function HeroCard({
 
         <View style={styles.metrics}>
           <View style={styles.metric}>
-            <Sparkles size={14} color={colors.accent} />
-            <Text style={styles.metricAccent}>夜猫指数 {hero.index.toFixed(1)}</Text>
+            <Text style={styles.metricLabel}>夜猫指数</Text>
+            <Text style={styles.metricAccent}>{hero.index.toFixed(1)}</Text>
           </View>
-          <Text style={styles.metricMuted}>看点 {hero.ev.star} 星</Text>
+          <View style={styles.metricDivider} />
+          <View style={styles.metric}>
+            <Text style={styles.metricLabel}>看点</Text>
+            <Text style={styles.metricValue}>{hero.ev.star} 星</Text>
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.metric}>
+            <Text style={styles.metricLabel}>开球</Text>
+            <Text style={styles.metricValue}>{hm(hero.m.t)}</Text>
+          </View>
         </View>
 
         {narrative ? (
@@ -558,14 +574,21 @@ const styles = StyleSheet.create({
   hero: {
     borderRadius: radius.xxxl,
     borderWidth: 1,
-    borderColor: colors.control,
+    borderColor: withAlpha(colors.text, 0.08),
     padding: spacing.lg,
     gap: spacing.md,
     overflow: 'hidden',
   },
-  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  heroTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  heroTopLeft: { gap: 3 },
+  heroEyebrow: {
+    color: colors.textFaint,
+    fontSize: fontSize.xxs,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
   heroLeague: {
-    color: colors.textMuted,
+    color: colors.textSecondary,
     fontSize: fontSize.sm,
     fontWeight: '600',
     letterSpacing: 0.3,
@@ -611,7 +634,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   countdown: {
-    color: colors.accent,
+    color: colors.textSecondary,
     fontSize: fontSize.sm,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
@@ -619,28 +642,33 @@ const styles = StyleSheet.create({
   metrics: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.hairline,
+    borderTopColor: withAlpha(colors.text, 0.07),
     paddingTop: spacing.md,
   },
-  metric: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  metric: { flex: 1, gap: 3 },
+  metricLabel: { color: colors.textFaint, fontSize: fontSize.xxs, letterSpacing: 0.4 },
   metricAccent: {
     color: colors.accent,
+    fontSize: fontSize.base,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  metricValue: {
+    color: colors.textSecondary,
     fontSize: fontSize.md,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
-  metricMuted: { color: colors.textMuted, fontSize: fontSize.sm },
+  metricDivider: { width: StyleSheet.hairlineWidth, height: 22, backgroundColor: withAlpha(colors.text, 0.1) },
   narrative: {
-    backgroundColor: colors.panel,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.hairline,
-    padding: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: withAlpha(colors.text, 0.07),
+    paddingTop: spacing.md,
     gap: spacing.xs,
   },
-  headline: { color: colors.text, fontSize: fontSize.md, fontWeight: '600', lineHeight: 19 },
+  headline: { color: colors.text, fontSize: fontSize.base, fontWeight: '600', lineHeight: 21 },
   line: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },
   weakNotice: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   weakText: { color: colors.textMuted, fontSize: fontSize.xs },
@@ -718,5 +746,5 @@ const styles = StyleSheet.create({
   replayMeta: { color: colors.textFaint, fontSize: fontSize.xs },
   footer: { gap: 3, paddingTop: spacing.sm },
   footerText: { color: colors.textFaint, fontSize: fontSize.xs, textAlign: 'center' },
-  pressed: { opacity: 0.8 },
+  pressed: { opacity: 0.9, transform: [{ scale: 0.995 }] },
 });

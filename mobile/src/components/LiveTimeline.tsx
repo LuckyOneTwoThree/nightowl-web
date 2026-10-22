@@ -1,13 +1,12 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { EVENT_LABEL, EVENT_TONE, eventSummary } from '@core/live-events.js';
+import { EVENT_TONE, eventSummary } from '@core/live-events.js';
 
 import { colors, fontSize, radius, spacing } from '@/ui/theme';
 import type { Match } from '@/types';
 import type { LiveEvent } from '@/data/useLiveMatch';
 
 const TONES = EVENT_TONE as Record<string, string>;
-const LABELS = EVENT_LABEL as Record<string, string>;
 
 const TONE: Record<string, string> = {
   accent: colors.accent,
@@ -48,12 +47,6 @@ export function LiveTimeline({
                 <Text style={[styles.summary, { color: tone }]}>
                   {eventSummary(event, match)}
                 </Text>
-                {event.text ? (
-                  <Text style={styles.text} numberOfLines={2}>
-                    {event.text}
-                  </Text>
-                ) : null}
-                <Text style={styles.type}>{LABELS[event.type] || '事件'}</Text>
               </View>
             </View>
           );
@@ -93,6 +86,4 @@ const styles = StyleSheet.create({
   marker: { width: 3, borderRadius: radius.full, opacity: 0.9 },
   body: { flex: 1, gap: 2 },
   summary: { fontSize: fontSize.sm, fontWeight: '700' },
-  text: { color: colors.textMuted, fontSize: fontSize.xs, lineHeight: 17 },
-  type: { color: colors.textFaint, fontSize: fontSize.xxs, letterSpacing: 0.5 },
 });

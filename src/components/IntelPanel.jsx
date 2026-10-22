@@ -73,7 +73,7 @@ export default function IntelPanel({
 
   if (!match || !ev || !tier || !narrative || !identity) {
     return (
-      <section className="flex min-h-[200px] flex-1 items-center justify-center rounded-xl border border-line-hairline bg-surface-card">
+      <section className="broadcast-sheen flex min-h-[200px] flex-1 items-center justify-center rounded-2xl border border-white/[0.055] bg-surface-panel/70">
         <p className="text-xs text-text-muted">从左侧选择一场比赛，查看熬夜代价与赛前情报</p>
       </section>
     );
@@ -86,10 +86,10 @@ export default function IntelPanel({
   return (
     <section
       id="intel-panel"
-      className="glass-lift scroll-mt-4 overflow-hidden rounded-xl border border-line-hairline bg-surface-panel shadow-card"
+      className="broadcast-sheen glass-lift scroll-mt-4 animate-reveal-up overflow-hidden rounded-2xl border border-white/[0.055] bg-surface-panel/70 shadow-card backdrop-blur-xl motion-reduce:animate-none"
     >
       {/* 面板头：只放视图切换，不放对阵信息 */}
-      <div className="flex items-center justify-between gap-3 border-b border-line-hairline bg-surface-raised/40 px-3.5 py-2.5">
+      <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
         <div className="flex items-center gap-1" role="tablist" aria-label="情报视图">
           <PanelTab active={tab === 'decision'} onClick={() => setTab('decision')} icon={<IconCost />}>
             熬夜代价与看点
@@ -98,9 +98,9 @@ export default function IntelPanel({
             双方数据
           </PanelTab>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-baseline gap-1.5">
           <Meta>夜猫指数</Meta>
-          <span className="font-num text-sm font-semibold tabular-nums text-text-primary">
+          <span className="font-num text-lg font-semibold tracking-tight tabular-nums text-text-primary">
             {index.toFixed(1)}
           </span>
           <Hint content={indexHint} side="bottom" align="end" />
@@ -108,12 +108,12 @@ export default function IntelPanel({
       </div>
 
       {tab === 'decision' ? (
-        <div className="grid grid-cols-1 gap-x-0 gap-y-0 p-3.5 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
-          <div className="space-y-3 lg:pr-6 lg:border-r lg:border-line-hairline">
+        <div className="grid grid-cols-1 gap-x-0 gap-y-0 p-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+          <div className="space-y-4 lg:border-r lg:border-white/[0.06] lg:pr-6">
             <SleepCostSection tier={tier} match={match} />
             <NarrativeSection narrative={narrative} stories={stories} ev={ev} hideHeadline={isHeroMatch} />
           </div>
-          <div className="space-y-3 pt-3 lg:pt-0 lg:pl-6">
+          <div className="space-y-4 pt-4 lg:pl-6 lg:pt-0">
             <IdentitySection match={match} identity={identity} />
             <AttributionSection
               ev={ev}
@@ -134,23 +134,23 @@ export default function IntelPanel({
            剩下的宽度全部让给对比条。
            历史交锋则降级为整幅横条：快照里 1,738 场未开赛有 91.5% 交锋为 0 场，
            其余也只有 1 场（快照只含一个赛季，同联赛一对最多两回合）。 */
-        <div className="p-3.5">
+        <div className="p-4">
           <div className="grid grid-cols-1 gap-x-0 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-            <div className="lg:pr-6 lg:border-r lg:border-line-hairline">
+            <div className="lg:pr-6 lg:border-r lg:border-white/[0.06]">
               <FormSection match={match} stats={stats} onSelect={onSelect} />
             </div>
             <div className="pt-3 lg:pt-0 lg:pl-6">
               <SeasonSection match={match} stats={stats} />
             </div>
           </div>
-          <div className="mt-3 border-t border-line-hairline pt-2.5">
+          <div className="mt-4 border-t border-white/[0.06] pt-3">
             <StandingsSection
               standings={standings}
               match={match}
               onOpenStandings={onOpenStandings}
             />
           </div>
-          <div className="mt-3 border-t border-line-hairline pt-2.5">
+          <div className="mt-4 border-t border-white/[0.06] pt-3">
             <H2HSection stats={stats} onSelect={onSelect} />
           </div>
         </div>

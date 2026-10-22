@@ -58,10 +58,10 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
 
   return (
     <article
-      className={`no-drag relative overflow-hidden rounded-xl p-4 transition-all duration-300 ${
+      className={`no-drag card-lift relative overflow-hidden rounded-2xl p-4 ${
         isHighlight
-          ? 'border border-accent/45 bg-surface-card shadow-[0_8px_28px_-6px_rgba(245,185,66,0.18)]'
-          : 'border border-line-hairline bg-surface-card shadow-card'
+          ? 'bg-gradient-to-br from-accent/[0.10] via-surface-card/95 to-surface-panel ring-1 ring-accent/20'
+          : 'bg-gradient-to-br from-white/[0.035] via-surface-card/90 to-surface-panel ring-1 ring-white/[0.06]'
       }`}
     >
       {/* 主客环境光 */}
@@ -90,21 +90,14 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
           )}
         </div>
 
-        {/* 夜猫指数 · 仪表盘式 */}
+        {/* 夜猫指数 · 只留数字，不再叠第二根进度条 */}
         <div className="flex shrink-0 flex-col items-end">
-          <span className="text-2xs text-text-faint">夜猫指数</span>
+          <span className="text-2xs tracking-wide text-text-faint">夜猫指数</span>
           <div className="flex items-baseline gap-0.5">
-            <span className={`font-num text-3xl font-bold leading-none tabular-nums ${isWeak ? 'text-text-secondary' : 'text-accent'}`}>
+            <span className={`font-num text-3xl font-bold leading-none tracking-tight tabular-nums ${isWeak ? 'text-text-secondary' : 'text-accent'}`}>
               {hero.index.toFixed(1)}
             </span>
             <Hint title="夜猫指数说明" content={indexHint} side="bottom" align="end" />
-          </div>
-          {/* 指数刻度条 */}
-          <div className="mt-1.5 h-1 w-16 overflow-hidden rounded-full bg-line-control">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${isWeak ? 'bg-text-muted' : 'bg-accent'}`}
-              style={{ width: `${Math.min(100, (hero.index / 30) * 100)}%` }}
-            />
           </div>
         </div>
       </div>
@@ -113,8 +106,8 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
       <div className="relative mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
         {/* 主队 */}
         <div className="flex min-w-0 flex-col items-center gap-1.5">
-          <Crest id={m.h} size={36} className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]" />
-          <span className="w-full truncate text-center text-sm font-semibold text-text-primary" title={teamName(m.h)}>
+          <Crest id={m.h} size={42} className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]" />
+          <span className="w-full truncate text-center text-base font-semibold tracking-tight text-text-primary" title={teamName(m.h)}>
             {teamName(m.h)}
           </span>
           <span className="text-2xs text-text-faint">主队</span>
@@ -143,8 +136,8 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
 
         {/* 客队 */}
         <div className="flex min-w-0 flex-col items-center gap-1.5">
-          <Crest id={m.a} size={36} className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]" />
-          <span className="w-full truncate text-center text-sm font-semibold text-text-primary" title={teamName(m.a)}>
+          <Crest id={m.a} size={42} className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]" />
+          <span className="w-full truncate text-center text-base font-semibold tracking-tight text-text-primary" title={teamName(m.a)}>
             {teamName(m.a)}
           </span>
           <span className="text-2xs text-text-faint">客队</span>
@@ -164,43 +157,27 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
       </div>
 
       {/* 主看点 */}
-      <div className="relative mt-3 border-t border-line-hairline pt-2.5">
+      <div className="relative mt-3 border-t border-white/[0.06] pt-3">
         <p className="text-sm font-medium leading-relaxed text-text-primary">{narrative.headline}</p>
       </div>
 
-      {/* 底部：睡眠代价 + CTA */}
-      <div className="relative mt-3.5 flex items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <SleepBadge match={m} />
-            {tierCost >= 3.5 && (
-              <span className="inline-flex items-center gap-1 text-2xs text-danger">
-                <IconWarn size={11} />
-                熬夜代价高
-              </span>
-            )}
-          </div>
-          {/* 档位色阶细条：让睡眠成本一眼可感 */}
-          <div className="flex h-1 w-28 gap-0.5" aria-hidden="true">
-            {[0, 1, 2, 3, 4].map(i => {
-              const on = Number((tierInfo.label || 'S0').replace('S', '')) >= i;
-              const colors = ['bg-tier-0', 'bg-tier-1', 'bg-tier-2', 'bg-tier-3', 'bg-tier-4'];
-              return (
-                <span
-                  key={i}
-                  className={`h-full flex-1 rounded-full ${on ? colors[i] : 'bg-line-control'}`}
-                  style={{ opacity: on ? 0.95 : 0.5 }}
-                />
-              );
-            })}
-          </div>
+      {/* 底部：睡眠代价 + 全宽主行动 */}
+      <div className="relative mt-3.5 space-y-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <SleepBadge match={m} />
+          {tierCost >= 3.5 && (
+            <span className="inline-flex items-center gap-1 text-2xs text-danger">
+              <IconWarn size={11} />
+              熬夜代价高
+            </span>
+          )}
         </div>
         <Button
           variant={copy.ctaVariant}
           size="md"
           icon={<IconPlay />}
           onClick={() => onWatch(m.id)}
-          className={copy.ctaVariant === 'primary' ? 'min-w-[112px] shadow-pop' : 'min-w-[112px]'}
+          className={`w-full ${copy.ctaVariant === 'primary' ? 'shadow-pop' : ''}`}
         >
           {copy.cta}
         </Button>
@@ -222,36 +199,44 @@ export function NoMatchCard({ focal, countdown, onSelect }) {
 
   const m = focal.m;
   return (
-    <article className="no-drag relative overflow-hidden rounded-xl border border-line-hairline bg-surface-card p-4 shadow-card">
+    <article className="no-drag card-lift relative overflow-hidden rounded-2xl bg-gradient-to-br from-white/[0.035] via-surface-card/90 to-surface-panel p-4 ring-1 ring-white/[0.06]">
       <TeamAura color={teamColor(m.h)} side="home" />
       <div className="relative flex items-center justify-between gap-2">
-        <span className="text-2xs font-semibold text-text-muted">今夜无球 · 下一场焦点</span>
+        <span className="text-2xs font-semibold tracking-wide text-text-muted">今夜无球 · 下一场焦点</span>
         <Stars star={focal.ev.star} />
       </div>
 
-      <div className="relative mt-3 flex items-center justify-center gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <Crest id={m.h} size={28} />
-          <span className="truncate text-sm font-semibold text-text-primary">{teamName(m.h)}</span>
+      <div className="relative mt-3.5 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+        <div className="flex min-w-0 flex-col items-center gap-1.5">
+          <Crest id={m.h} size={34} />
+          <span className="w-full truncate text-center text-base font-semibold tracking-tight text-text-primary" title={teamName(m.h)}>
+            {teamName(m.h)}
+          </span>
         </div>
         <span className="font-num text-2xs text-text-faint">VS</span>
-        <div className="flex min-w-0 items-center gap-2">
-          <Crest id={m.a} size={28} />
-          <span className="truncate text-sm font-semibold text-text-primary">{teamName(m.a)}</span>
+        <div className="flex min-w-0 flex-col items-center gap-1.5">
+          <Crest id={m.a} size={34} />
+          <span className="w-full truncate text-center text-base font-semibold tracking-tight text-text-primary" title={teamName(m.a)}>
+            {teamName(m.a)}
+          </span>
         </div>
       </div>
 
-      <div className="relative mt-3 flex flex-col items-center border-t border-line-hairline pt-2.5">
-        <span className="text-2xs text-text-faint">距开球</span>
-        <span className="font-num text-xl font-bold tabular-nums text-text-primary">{countdown}</span>
-        <Meta num className="mt-0.5">
-          {zhDate(datePart(m.t))} {weekdayOf(datePart(m.t))} {hm(m.t)} · {leagueName(m.l)}
+      <div className="relative mt-3 flex items-center justify-between gap-2 border-t border-white/[0.06] pt-3">
+        <Meta num>
+          {zhDate(datePart(m.t))} {weekdayOf(datePart(m.t))} {hm(m.t)}
+        </Meta>
+        <Meta>
+          {leagueName(m.l)} · 距开球 {countdown}
         </Meta>
       </div>
 
-      <Button variant="default" size="md" className="relative mt-3 w-full" onClick={() => onSelect(m.id)}>
-        查看赛前情报
-      </Button>
+      <div className="relative mt-3 flex items-center justify-between gap-2">
+        <SleepBadge match={m} />
+        <Button variant="ghost" size="md" onClick={() => onSelect(m.id)}>
+          查看赛前情报
+        </Button>
+      </div>
     </article>
   );
 }

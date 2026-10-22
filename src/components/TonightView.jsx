@@ -5,8 +5,7 @@ import { evalOne, stateOf, heroTier, groupTonight } from '../core/owl.js';
 import { storylines } from '../data/index.js';
 import HeroCard, { NoMatchCard } from './HeroCard.jsx';
 import MatchRow from './MatchRow.jsx';
-import { Chip, EmptyState, LiveDot, SectionLabel } from './atoms.jsx';
-import { IconEmpty } from './icons.jsx';
+import { Chip, LiveDot, SectionLabel } from './atoms.jsx';
 
 /** 夜猫指数口径说明 —— 从常驻版面收进 Hint（P2：界面不再解释自己） */
 export const INDEX_HINT =
@@ -152,13 +151,7 @@ export default function TonightView({
       </SectionLabel>
 
       <div ref={listRef} className="scrollbar-thin -mr-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1">
-        {total === 0 ? (
-          <EmptyState
-            icon={<IconEmpty size={24} />}
-            title="今晚没有比赛"
-            desc="赛程已排至 2027 年 5 月，但当夜无排期。"
-          />
-        ) : (
+        {total > 0 && (
           <>
             {groups.live.length > 0 && (
               <>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import {
+  AccessibilityInfo,
   Animated,
   RefreshControl,
   ScrollView,
@@ -11,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, spacing } from './theme';
+import { durations, easeOut } from './motion';
 
 type Props = {
   children: ReactNode;
@@ -32,18 +34,39 @@ export function Screen({
   edges = ['top'],
 }: Props) {
   const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(6)).current;
 
   useEffect(() => {
-    Animated.timing(opacity, {
-      toValue: 1,
-      duration: 180,
-      useNativeDriver: true,
-    }).start();
-  }, [opacity]);
+    let alive = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then(reduce => {
+      if (!alive || reduce) {
+        opacity.setValue(1);
+        translateY.setValue(0);
+        return;
+      }
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: durations.base,
+          easing: easeOut,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: durations.base,
+          easing: easeOut,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+    return () => {
+      alive = false;
+    };
+  }, [opacity, translateY]);
 
   return (
     <SafeAreaView style={styles.safe} edges={edges}>
-      <Animated.View style={[styles.flex, { opacity }]}>
+      <Animated.View style={[styles.flex, { opacity, transform: [{ translateY }] }]}>
       {scroll ? (
         <ScrollView
           style={styles.flex}
@@ -82,6 +105,6 @@ const styles = StyleSheet.create({
   padded: { paddingHorizontal: spacing.lg },
   scrollContent: {
     paddingBottom: spacing.xxl,
-    gap: spacing.md,
+    gap: spacing.lg,
   },
 });

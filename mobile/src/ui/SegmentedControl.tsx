@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { selectionFeedback } from '@/lib/feedback';
 import { colors, fontSize, radius, spacing } from './theme';
 
 type Option = { key: string; label: string };
@@ -18,7 +19,10 @@ export function SegmentedControl({ options, value, onChange }: Props) {
         return (
           <Pressable
             key={option.key}
-            onPress={() => onChange(option.key)}
+            onPress={() => {
+              selectionFeedback();
+              onChange(option.key);
+            }}
             hitSlop={{ top: 6, bottom: 6 }}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}

@@ -116,7 +116,7 @@ export default function LiveMatchPanel({
                   <Chip tone={EVENT_TONE[ev.type] || 'neutral'} className="shrink-0">
                     {EVENT_LABEL[ev.type] || '事件'}
                   </Chip>
-                  <span className="truncate text-2xs text-text-secondary" title={ev.text}>
+                  <span className="truncate text-2xs text-text-secondary">
                     {eventSummary(ev, match)}
                   </span>
                 </div>

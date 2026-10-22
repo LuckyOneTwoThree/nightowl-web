@@ -7,6 +7,7 @@ import { sleepTier, ts } from '@core/engine.js';
 import { hm, liveMinute } from '@core/format.js';
 import { leagueColor, leagueName, teamName } from '@data/index.js';
 
+import { selectionFeedback } from '@/lib/feedback';
 import { Crest } from '@/ui/Crest';
 import { colors, fontSize, radius, spacing } from '@/ui/theme';
 import type { Prefs } from '@/state/prefs';
@@ -31,7 +32,10 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        selectionFeedback();
+        onPress();
+      }}
       android_ripple={{ color: colors.press }}
       accessibilityRole="button"
       accessibilityLabel={`${teamName(match.h)} 对 ${teamName(match.a)}，${hm(match.t)}，${leagueName(match.l)}`}

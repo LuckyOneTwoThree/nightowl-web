@@ -143,8 +143,12 @@ export default {
           '100%': { transform: 'scale(1)' }
         },
         'view-enter': {
-          from: { opacity: '0' },
-          to: { opacity: '1' }
+          from: { opacity: '0', transform: 'translateY(4px)' },
+          to: { opacity: '1', transform: 'translateY(0)' }
+        },
+        'reveal-up': {
+          from: { opacity: '0', transform: 'translateY(10px)' },
+          to: { opacity: '1', transform: 'translateY(0)' }
         },
         'panel-enter': {
           from: { opacity: '0', transform: 'translateY(6px) scale(0.985)' },
@@ -159,7 +163,8 @@ export default {
         'live-pulse': 'live-pulse 1.8s ease-in-out infinite',
         'soft-pulse': 'soft-pulse 2.4s ease-in-out infinite',
         'score-pop': 'score-pop 520ms cubic-bezier(0.22, 1, 0.36, 1)',
-        'view-enter': 'view-enter 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+        'view-enter': 'view-enter 220ms cubic-bezier(0.22, 1, 0.36, 1)',
+        'reveal-up': 'reveal-up 280ms cubic-bezier(0.22, 1, 0.36, 1)',
         'panel-enter': 'panel-enter 180ms cubic-bezier(0.22, 1, 0.36, 1)',
         skeleton: 'skeleton 1.4s ease-in-out infinite'
       },
