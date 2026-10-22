@@ -28,7 +28,7 @@
 
 <br />
 
-![开屏与主界面](docs/images/01-splash.png)
+![开屏动画](docs/images/01-splash.png)
 
 ---
 
