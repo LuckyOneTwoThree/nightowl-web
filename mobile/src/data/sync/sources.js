@@ -64,7 +64,7 @@ const STRATEGY = {
  * 拉取所有源的事件
  * @returns {{ events: object[], bySource: object, errors: object[] }}
  */
-export async function fetchAllEvents({ leagues, months, targets, targetDates, season, order = DEFAULT_ORDER, log = console }) {
+export async function fetchAllEvents({ leagues, months, targets, targetDates, season, order = DEFAULT_ORDER, log = console, fetchOptions = {} }) {
   const events = [];
   const bySource = {};
   const errors = [];
@@ -88,7 +88,7 @@ export async function fetchAllEvents({ leagues, months, targets, targetDates, se
   for (const r of requests) {
     bySource[r.sid].requests++;
     try {
-      const evs = await r.strat.fetch(r.league, r.unit, { log, season });
+      const evs = await r.strat.fetch(r.league, r.unit, { log, season, ...fetchOptions });
       events.push(...evs);
       bySource[r.sid].events += evs.length;
       bySource[r.sid].ok++;

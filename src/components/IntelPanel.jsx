@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { hm, datePart } from '../core/format.js';
-import { storylines, teamName, TEAM_MAP } from '../data/index.js';
+import { hm, datePart, bjDate } from '../core/format.js';
+import { storylines, teamName, TEAM_MAP, leagueName } from '../data/index.js';
 import { sleepTier, storyBonus, followedBonus, leagueBonus, PRODUCT_WEIGHTS, WATCH_COST } from '../core/engine.js';
+import { computeMatchStandings } from '../core/standings.js';
 import {
   narrativeOf,
   tierAdviceOf,
@@ -39,7 +40,15 @@ import {
  *
  *   对阵标题也不再在这里重复一次 —— 主舞台顶部条是全应用唯一的对阵命名处。
  */
-export default function IntelPanel({ match, prefs, indexHint, intel: propIntel, isHeroMatch = false }) {
+export default function IntelPanel({
+  match,
+  prefs,
+  indexHint,
+  intel: propIntel,
+  isHeroMatch = false,
+  onSelect,
+  now
+}) {
   const [tab, setTab] = useState('decision');
 
   const evalResult = useMemo(() => {
@@ -56,6 +65,10 @@ export default function IntelPanel({ match, prefs, indexHint, intel: propIntel, 
   const stories = useMemo(() => (match ? storylinesOf(match, storylines) : []), [match]);
   const identity = useMemo(() => (match ? seasonIdentityOf(match) : null), [match]);
   const stats = useMemo(() => (match ? computeMatchStats(match) : null), [match]);
+  const standings = useMemo(
+    () => (match ? computeMatchStandings(match, null, { nowTs: now }) : null),
+    [match, now]
+  );
 
   if (!match || !ev || !tier || !narrative || !identity) {
     return (
@@ -123,14 +136,17 @@ export default function IntelPanel({ match, prefs, indexHint, intel: propIntel, 
         <div className="p-3.5">
           <div className="grid grid-cols-1 gap-x-0 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
             <div className="lg:pr-6 lg:border-r lg:border-line-hairline">
-              <FormSection match={match} stats={stats} />
+              <FormSection match={match} stats={stats} onSelect={onSelect} />
             </div>
             <div className="pt-3 lg:pt-0 lg:pl-6">
               <SeasonSection match={match} stats={stats} />
             </div>
           </div>
           <div className="mt-3 border-t border-line-hairline pt-2.5">
-            <H2HSection stats={stats} />
+            <StandingsSection standings={standings} match={match} />
+          </div>
+          <div className="mt-3 border-t border-line-hairline pt-2.5">
+            <H2HSection stats={stats} onSelect={onSelect} />
           </div>
         </div>
       )}
@@ -375,7 +391,7 @@ function AttributionSection({ ev, tier, index, storyB, followedB, leagueB }) {
 /* 数据视图                                                            */
 /* ------------------------------------------------------------------ */
 
-function FormSection({ match, stats }) {
+function FormSection({ match, stats, onSelect }) {
   return (
     <Block icon={<IconForm />} title="近 5 场走势">
       {/* 16rem 的收口：让两队的比分列与队名行右缘对齐。
@@ -411,11 +427,19 @@ function FormSection({ match, stats }) {
             {form.length > 0 && (
               <ul className="mt-1 space-y-0.5 pl-6">
                 {form.map(f => (
-                  <li key={f.matchId} className="flex items-baseline justify-between gap-2">
-                    <span className="min-w-0 truncate text-2xs text-text-muted">
-                      {f.isHome ? '主' : '客'} vs {teamName(f.opponent)}
-                    </span>
-                    <span className="font-num text-2xs tabular-nums text-text-secondary">{f.score}</span>
+                  <li key={f.matchId}>
+                    <button
+                      type="button"
+                      onClick={() => f.matchId && onSelect?.(f.matchId)}
+                      title="查看这场比赛"
+                      aria-label={`查看 ${teamName(id)} 与 ${teamName(f.opponent)} 的比赛`}
+                      className="flex w-full items-baseline justify-between gap-2 rounded-md py-0.5 text-left transition-colors hover:bg-surface-raised focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none"
+                    >
+                      <span className="min-w-0 truncate text-2xs text-text-muted">
+                        {f.isHome ? '主' : '客'} vs {teamName(f.opponent)}
+                      </span>
+                      <span className="font-num text-2xs tabular-nums text-text-secondary">{f.score}</span>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -423,6 +447,90 @@ function FormSection({ match, stats }) {
           </div>
         ))}
       </div>
+    </Block>
+  );
+}
+
+/**
+ * 积分榜位置：只展示当前比赛双方，不展开完整联赛表。
+ * 数据按开球时点截止；已完赛场次不显示之后的结果。
+ */
+function StandingsSection({ standings, match }) {
+  if (!standings || !standings.supported) return null;
+
+  const asOfText = standings.historical
+    ? '截至本场开球前'
+    : standings.lastResultAt
+      ? `截至 ${bjDate(standings.lastResultAt).slice(5)}`
+      : '暂无赛果';
+
+  const rows = [
+    { id: match.h, row: standings.home },
+    { id: match.a, row: standings.away }
+  ];
+
+  return (
+    <Block
+      icon={<IconCompare />}
+      title="积分榜位置"
+      right={
+        <span className="flex items-center gap-1.5">
+          <Meta>{leagueName(standings.league)}</Meta>
+          <Meta num>
+            {asOfText} · {standings.doneCount} 场
+          </Meta>
+          <Hint
+            content={`${standings.tiebreakerNote} 国内前四/后三名为参考线，不代表官方资格规则；欧冠分区按赛制。已完赛场次按开球时点截止。`}
+            align="end"
+          />
+        </span>
+      }
+    >
+      {standings.rows.length === 0 ? (
+        <p className="py-1 text-2xs text-text-faint">
+          {standings.note || '本联赛暂无已同步赛果'}
+        </p>
+      ) : (
+        <div>
+          {rows.map(({ id, row }) => (
+            <div
+              key={id}
+              className="border-t border-line-hairline py-1.5 first:border-t-0"
+            >
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <Crest id={id} size={16} />
+                <span className="min-w-0 truncate text-xs font-medium text-text-primary">
+                  {teamName(id)}
+                </span>
+                {row && row.zoneKey !== 'mid' && (
+                  <Chip tone={row.zoneTone === 'warn' ? 'warn' : 'neutral'}>
+                    {row.zoneLabel}
+                  </Chip>
+                )}
+                {row ? (
+                  <span className="ml-auto flex flex-wrap items-center gap-x-2 gap-y-0.5 font-num text-2xs tabular-nums text-text-secondary">
+                    <span>第 {row.rank}</span>
+                    <span className="text-text-faint">·</span>
+                    <span>{row.played} 场</span>
+                    <span className="text-text-faint">·</span>
+                    <span>{row.points} 分</span>
+                    <span className="text-text-faint">·</span>
+                    <span>净胜球 {fmtDiff(row.gd)}</span>
+                  </span>
+                ) : (
+                  <span className="ml-auto text-2xs text-text-faint">暂无排名</span>
+                )}
+              </div>
+              {row?.context && (
+                <p className="mt-0.5 pl-6 text-2xs leading-relaxed text-text-muted">
+                  {row.context.primary}
+                  {row.context.secondary ? ` · ${row.context.secondary}` : ''}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </Block>
   );
 }
@@ -528,7 +636,7 @@ function fmtDiff(n) {
  * 也不再单列胜/平/负汇总：最多 1-2 场时比分自证，
  * 而此前把客队胜场涂成 result-loss 红，是把"赛果三态"当成了"敌我"。
  */
-function H2HSection({ stats }) {
+function H2HSection({ stats, onSelect }) {
   const meetings = stats?.h2h?.meetings || [];
 
   if (meetings.length === 0) {
@@ -544,14 +652,22 @@ function H2HSection({ stats }) {
 
   return (
     <Block icon={<IconH2H />} title="历史交锋" right={<Meta num>共 {meetings.length} 战</Meta>}>
-      <ul className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+      <ul className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         {meetings.map(m => (
-          <li key={m.id} className="flex items-baseline gap-1.5 text-xs">
-            <Meta num>{datePart(m.date).slice(5)}</Meta>
-            <span className="text-text-secondary">
-              {teamName(m.home)} <span className="text-text-faint">vs</span> {teamName(m.away)}
-            </span>
-            <span className="font-num font-semibold tabular-nums text-text-primary">{m.score}</span>
+          <li key={m.id}>
+            <button
+              type="button"
+              onClick={() => onSelect?.(m.id)}
+              title="查看这场比赛"
+              aria-label={`查看 ${teamName(m.home)} 对 ${teamName(m.away)} 的比赛`}
+              className="flex items-baseline gap-1.5 rounded-md px-1.5 py-0.5 text-xs transition-colors hover:bg-surface-raised focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none"
+            >
+              <Meta num>{datePart(m.date).slice(5)}</Meta>
+              <span className="text-text-secondary">
+                {teamName(m.home)} <span className="text-text-faint">vs</span> {teamName(m.away)}
+              </span>
+              <span className="font-num font-semibold tabular-nums text-text-primary">{m.score}</span>
+            </button>
           </li>
         ))}
       </ul>

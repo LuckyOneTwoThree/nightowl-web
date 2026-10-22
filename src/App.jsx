@@ -424,6 +424,50 @@ export default function App() {
   const matchMap = useMemo(buildMatchMap, [dataRev]);
   const activeMatch = activeMatchId ? matchMap[activeMatchId] || null : null;
 
+  /**
+   * 当前选中是否属于左栏当前列表。
+   *
+   * 右栏的后续赛程/历史交锋/近况会指向当前视图之外的比赛；
+   * 这时只切右栏、不重置左栏筛选，用一条轻提示说明“正在预览”。
+   */
+  const activeInView = useMemo(() => {
+    if (!activeMatchId) return false;
+    if (view === 'tonight') {
+      return (
+        tonight.slice.some(m => m.id === activeMatchId) ||
+        replayPicks.some(p => p.m.id === activeMatchId) ||
+        tonight.focal?.m.id === activeMatchId
+      );
+    }
+    if (view === 'week') {
+      return !!week && week.matches.some(m => m.id === activeMatchId);
+    }
+    if (view === 'schedule') {
+      return scheduleRows.some(row => row.type === 'match' && row.m.id === activeMatchId);
+    }
+    return false;
+  }, [view, activeMatchId, tonight, replayPicks, week, scheduleRows]);
+
+  /** 预览态的“回到当前视图”落点：当前视图里最该看的那场 */
+  const firstInViewId = useMemo(() => {
+    if (view === 'tonight') {
+      return tonight.hero?.m.id || tonight.focal?.m.id || tonight.slice[0]?.id || null;
+    }
+    if (view === 'week' && week) {
+      return (
+        week.plan.best[0]?.m.id ||
+        week.plan.zeroList[0]?.m.id ||
+        week.matches[0]?.id ||
+        null
+      );
+    }
+    if (view === 'schedule') {
+      const first = scheduleRows.find(row => row.type === 'match');
+      return first?.m.id || null;
+    }
+    return null;
+  }, [view, tonight, week, scheduleRows]);
+
   const activeIntel = useMemo(() => {
     if (!activeMatch) return null;
     const { ev, index } = evalOne(activeMatch, prefs);
@@ -590,6 +634,24 @@ export default function App() {
             把全屏时下方的空白用真正有决策价值的信息填满。 */}
           <section className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto bg-app p-4">
             <div className="mx-auto flex w-full max-w-[1800px] 2xl:max-w-full flex-col gap-3">
+              {activeMatch && !activeInView && (
+                <div
+                  role="status"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-line-hairline bg-surface-raised/40 px-3 py-1.5"
+                >
+                  <span className="min-w-0 truncate text-2xs text-text-muted">
+                    正在预览 · 不在当前列表
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => firstInViewId && setActiveMatchId(firstInViewId)}
+                    disabled={!firstInViewId}
+                    className="shrink-0 rounded-md px-2 py-0.5 text-2xs font-medium text-text-secondary transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    回到当前视图
+                  </button>
+                </div>
+              )}
               <PlayerStage
                 match={activeMatch}
                 state={activeMatch ? stateOf(activeMatch, clockTs) : 'sched'}
@@ -606,9 +668,11 @@ export default function App() {
                 intel={activeIntel}
                 indexHint={INDEX_HINT}
                 isHeroMatch={!!tonight.hero && activeMatch?.id === tonight.hero.m.id}
+                onSelect={select}
+                now={clockTs}
               />
               <div className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-2">
-                <UpcomingFixtures match={activeMatch} prefs={prefs} />
+                <UpcomingFixtures match={activeMatch} prefs={prefs} onSelect={select} />
                 <SameNightPicks match={activeMatch} prefs={prefs} onSelect={select} />
               </div>
             </div>

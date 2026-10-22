@@ -62,7 +62,7 @@ export default function ScheduleScreen() {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [selectedDate, setSelectedDate] = useState<string | 'all' | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
   const appliedParams = useRef<string | null>(null);
 
@@ -125,18 +125,19 @@ export default function ScheduleScreen() {
     return result.filter(section => section.data.length > 0);
   }, [visibleRows]);
 
-  const refresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const outcome = await syncNow({ quick: true });
-      setRefreshNote(
-        outcome.changed > 0 ? `已更新 ${outcome.changed} 场比分` : '暂无比分更新'
-      );
-    } catch {
-      setRefreshNote('比分更新失败，沿用本地数据');
-    } finally {
-      setRefreshing(false);
-    }
+  const refresh = useCallback(() => {
+    setChecking(true);
+    setRefreshNote(null);
+    void syncNow({ quick: true })
+      .then(outcome => {
+        setRefreshNote(
+          outcome.changed > 0 ? `已更新 ${outcome.changed} 场比分` : '暂无比分更新'
+        );
+      })
+      .catch(() => {
+        setRefreshNote('比分更新失败，沿用本地数据');
+      })
+      .finally(() => setChecking(false));
   }, []);
 
   useEffect(() => {
@@ -168,8 +169,10 @@ export default function ScheduleScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>赛程</Text>
-          <Text style={[styles.subline, refreshNote && styles.sublineNote]}>
-            {refreshNote ?? '全季赛程 · 北京时间 · 夜猫日口径'}
+          <Text style={[styles.subline, (checking || refreshNote) && styles.sublineNote]}>
+            {checking
+              ? '正在检查比分…'
+              : refreshNote ?? '全季赛程 · 北京时间 · 夜猫日口径'}
           </Text>
         </View>
         <Pressable
@@ -280,10 +283,8 @@ export default function ScheduleScreen() {
           keyExtractor={item => item.id}
           showsVerticalScrollIndicator={false}
           stickySectionHeadersEnabled
-          refreshing={refreshing}
-          onRefresh={() => {
-            void refresh();
-          }}
+          refreshing={false}
+          onRefresh={refresh}
           contentContainerStyle={styles.listContent}
           renderSectionHeader={({ section }) => (
             <View style={styles.dateHeader}>

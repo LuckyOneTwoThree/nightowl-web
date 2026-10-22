@@ -56,7 +56,11 @@ export async function fetchLeague(league, season = '2026-27', opts = {}) {
   if (!file) return [];
 
   const url = `${RAW_BASE}/${season}/${file}.json`;
-  const j = await fetchJSON(url, { timeoutMs: opts.timeoutMs || 20000, log: opts.log });
+  const j = await fetchJSON(url, {
+    timeoutMs: opts.timeoutMs || 20000,
+    retries: opts.retries,
+    log: opts.log,
+  });
   const { nameIndex } = indexes();
 
   const out = [];

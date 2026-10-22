@@ -206,6 +206,8 @@ export function uclWeeklyTargets(nowTs = Date.now(), targets = new Map()) {
 
 /** 下拉快检只回看最近 72 小时，避免一次手势带来全季历史扫描 */
 export const QUICK_SYNC_WINDOW_MS = 72 * 3600000;
+/** 每个联赛最多回看 2 个比赛日，避免积压时把快检放大成几十个请求 */
+const MAX_QUICK_DATES = 2;
 
 /**
  * 下拉刷新用的轻量目标：只查最近 72 小时内已开球的场次。
@@ -228,6 +230,12 @@ export function quickSyncTargets(fixtures = [], nowTs = Date.now()) {
     const ymd = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
     if (!targets.has(m.l)) targets.set(m.l, new Set());
     targets.get(m.l).add(ymd);
+  }
+
+  for (const [league, dates] of targets) {
+    if (dates.size > MAX_QUICK_DATES) {
+      targets.set(league, new Set([...dates].sort().slice(-MAX_QUICK_DATES)));
+    }
   }
 
   return targets;
@@ -446,7 +454,9 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
   }
 
   const { events, bySource, errors } = await fetchAllEvents({
-    leagues, months: list, targets, order, log, season
+    leagues, months: list, targets, order, log, season,
+    // 下拉快检不能让单次超时占住手势：6s / 单次尝试；完整同步仍用默认的 25s / 3 次
+    fetchOptions: quick ? { timeoutMs: 6000, retries: 1 } : undefined
   });
 
   const { merged, conflicts } = mergeEvents(events, order);

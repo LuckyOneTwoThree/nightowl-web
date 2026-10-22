@@ -43,3 +43,38 @@ export type Narrative = {
   lines: string[];
   trivia: string | null;
 };
+
+export type StandingsRow = {
+  teamId: string;
+  rank: number;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  gf: number;
+  ga: number;
+  gd: number;
+  points: number;
+  zoneKey: 'top' | 'mid' | 'bottom' | 'ucl-direct' | 'ucl-playoff' | 'ucl-out';
+  zoneLabel: string;
+  zoneTone: 'neutral' | 'warn';
+  context: { primary: string; secondary: string } | null;
+};
+
+export type MatchStandings = {
+  supported: boolean;
+  league: string | null;
+  asOfTs: number;
+  historical: boolean;
+  doneCount: number;
+  lastResultAt: number | null;
+  rows: StandingsRow[];
+  home: StandingsRow | null;
+  away: StandingsRow | null;
+  zones:
+    | { top: number; bottom: number }
+    | { direct: number; playoff: number; total: number }
+    | null;
+  tiebreakerNote: string;
+  note: string | null;
+};

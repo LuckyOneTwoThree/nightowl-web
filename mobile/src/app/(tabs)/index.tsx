@@ -63,7 +63,7 @@ export default function TonightScreen() {
   const now = useNow(30_000);
   const { syncing, syncError } = useSyncState();
   const [showFinished, setShowFinished] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
 
   const tonight = useMemo(
@@ -112,18 +112,19 @@ export default function TonightScreen() {
     }
   }, []);
 
-  const pullRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const outcome = await syncNow({ quick: true });
-      setRefreshNote(
-        outcome.changed > 0 ? `已更新 ${outcome.changed} 场比分` : '暂无比分更新'
-      );
-    } catch {
-      setRefreshNote(null);
-    } finally {
-      setRefreshing(false);
-    }
+  const pullRefresh = useCallback(() => {
+    setChecking(true);
+    setRefreshNote(null);
+    void syncNow({ quick: true })
+      .then(outcome => {
+        setRefreshNote(
+          outcome.changed > 0 ? `已更新 ${outcome.changed} 场比分` : '暂无比分更新'
+        );
+      })
+      .catch(() => {
+        setRefreshNote(null);
+      })
+      .finally(() => setChecking(false));
   }, []);
 
   useEffect(() => {
@@ -151,7 +152,7 @@ export default function TonightScreen() {
   const todayLabel = `${bjDate(now)} ${weekdayOf(bjDate(now))}`;
 
   return (
-    <Screen scroll refreshing={refreshing} onRefresh={pullRefresh}>
+    <Screen scroll onRefresh={pullRefresh}>
       <View style={styles.header}>
         <View style={styles.brandBlock}>
           <Image
@@ -177,7 +178,7 @@ export default function TonightScreen() {
       </View>
 
       <View style={styles.contextRow}>
-        {syncing ? (
+        {syncing || checking ? (
           <ActivityIndicator size="small" color={colors.accent} />
         ) : (
           <View style={styles.contextDot} />
@@ -185,10 +186,12 @@ export default function TonightScreen() {
         <Text style={styles.contextText}>
           {syncing
             ? '正在更新比分…'
-            : refreshNote ??
-              `今晚 ${tonight.slice.length} 场${
-                liveCount > 0 ? ` · ${liveCount} 场进行中` : ''
-              }${freshness.pendingCount > 0 ? ` · ${freshness.pendingCount} 场待录` : ''}`}
+            : checking
+              ? '正在检查比分…'
+              : refreshNote ??
+                `今晚 ${tonight.slice.length} 场${
+                  liveCount > 0 ? ` · ${liveCount} 场进行中` : ''
+                }${freshness.pendingCount > 0 ? ` · ${freshness.pendingCount} 场待录` : ''}`}
         </Text>
       </View>
 

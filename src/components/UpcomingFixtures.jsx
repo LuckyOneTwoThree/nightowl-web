@@ -19,7 +19,7 @@ const TIER_TONE = Object.fromEntries(
   Object.entries(TIER_MAP).map(([label, t]) => [label, t.text])
 );
 
-function TeamColumn({ teamId, list, side }) {
+function TeamColumn({ teamId, list, side, onSelect }) {
   const name = teamName(teamId);
   return (
     <div className="min-w-0 flex-1">
@@ -36,17 +36,22 @@ function TeamColumn({ teamId, list, side }) {
             const opp = m.h === teamId ? `vs ${teamName(m.a)}` : `@ ${teamName(m.h)}`;
             const tier = tierOf(m);
             return (
-              <li
-                key={m.id}
-                className="flex items-center justify-between gap-2 rounded-md bg-surface-raised/50 px-2 py-1 transition-colors hover:bg-surface-raised"
-              >
-                <span className="min-w-0 flex-1 truncate text-2xs text-text-secondary">
-                  {/* weekdayOf / zhDate 只吃纯日期（YYYY-MM-DD），传带 T 的 t 会得到 NaN */}
-                  {zhDate(m.t.slice(0, 10))} {weekdayOf(m.t.slice(0, 10)).slice(0, 1)} {hm(m.t)} {opp}
-                </span>
-                <span className={`font-num text-2xs font-semibold tabular-nums ${TIER_TONE[tier.label] || ''}`}>
-                  {tier.label}
-                </span>
+              <li key={m.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect?.(m.id)}
+                  title="查看这场比赛"
+                  aria-label={`查看 ${teamName(m.h)} 对 ${teamName(m.a)} 的比赛`}
+                  className="flex w-full items-center justify-between gap-2 rounded-md bg-surface-raised/50 px-2 py-1 text-left transition-colors hover:bg-surface-raised focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none"
+                >
+                  <span className="min-w-0 flex-1 truncate text-2xs text-text-secondary">
+                    {/* weekdayOf / zhDate 只吃纯日期（YYYY-MM-DD），传带 T 的 t 会得到 NaN */}
+                    {zhDate(m.t.slice(0, 10))} {weekdayOf(m.t.slice(0, 10)).slice(0, 1)} {hm(m.t)} {opp}
+                  </span>
+                  <span className={`font-num text-2xs font-semibold tabular-nums ${TIER_TONE[tier.label] || ''}`}>
+                    {tier.label}
+                  </span>
+                </button>
               </li>
             );
           })}
@@ -56,7 +61,7 @@ function TeamColumn({ teamId, list, side }) {
   );
 }
 
-export default function UpcomingFixtures({ match, prefs }) {
+export default function UpcomingFixtures({ match, prefs, onSelect }) {
   if (!match) {
     return (
       <section className="flex h-full flex-col justify-center overflow-hidden rounded-xl border border-line-hairline bg-surface-card p-4 shadow-card">
@@ -80,9 +85,9 @@ export default function UpcomingFixtures({ match, prefs }) {
           <Meta>各取最近 4 场 · 档位越高熬夜代价越大</Meta>
         </div>
         <div className="flex gap-4">
-          <TeamColumn teamId={match.h} list={home} side="主队" />
+          <TeamColumn teamId={match.h} list={home} side="主队" onSelect={onSelect} />
           <div className="w-px shrink-0 bg-line-hairline" />
-          <TeamColumn teamId={match.a} list={away} side="客队" />
+          <TeamColumn teamId={match.a} list={away} side="客队" onSelect={onSelect} />
         </div>
       </div>
     </section>

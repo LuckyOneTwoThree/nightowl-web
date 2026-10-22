@@ -35,6 +35,7 @@ npm run verify:algo    # 历史基线比对（参考项目已解耦，当前仅�
 ```bash
 npm run test:owl           # 应用层视图模型（今晚/本周/赛程/分区/推荐）
 npm run test:stats         # 真实数据统计（近况/攻防/交锋）
+npm run test:standings     # 联赛积分榜（赛果/截止点/分区/简化排序）
 npm run test:tz            # openfootball 时区换算（离线，含夏令时边界）
 npm run test:scraper-match # 直播源队名匹配（离线，含错配回归）
 npm run test:scraper-parse # 抓取器 HTML 解析（离线，含改版探活回归）
@@ -77,7 +78,7 @@ npm run sync:crests   # ../public/crests → assets/crests + src/data/crests.ts
 - **通知**：`expo-notifications` 动态导入，仅在 `EXPO_PUBLIC_NOTIFICATIONS_ENABLED === '1'` 且非 Expo Go 时启用；EAS 的三个 profile 都设置了该变量。Expo Go 只用于 UI / 数据预览。
 - **播放器**：`expo-video` 原生 HLS + 自定义 UA + PiP；`app.json` 开启 `usesCleartextTraffic`，仅打包 `arm64-v8a`。
 - **无代理**：手机端不运行桌面 `server/`，不内置签名频道；直链直接交给系统播放器。
-- **刷新分层**：下拉只做近 72h 已开球场次的比分快检（ESPN 单源，无整季 openfootball）；完整保鲜仍走启动 / 回前台 / 我的-立即同步。快检与完整同步共用 in-flight 去重，无补丁的完整同步只更新时间、不递增 `rev`。
+- **刷新分层**：下拉手势不等待网络，只触发近 72h 已开球场次的比分快检（ESPN 单源、每联赛最多 2 个比赛日、6s 单次尝试，无整季 openfootball）；完整保鲜仍走启动 / 回前台 / 我的-立即同步。快检与完整同步共用 in-flight 去重，无补丁的完整同步只更新时间、不递增 `rev`。
 - **真机门禁**：改动涉及通知、PiP、HLS、明文 HTTP 或安全区时，必须安装 EAS APK 在真机走一遍，`typecheck` / `export` 不能替代。
 
 ---

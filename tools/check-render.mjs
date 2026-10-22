@@ -158,6 +158,32 @@ app.whenReady().then(async () => {
 
     await waitLoad(win, `${base}/?view=tonight&match=PL-7-NFO-ARS`);
     await sleep(1800);
+
+    // 生产 dist 下验证新功能：双方数据 Tab 必须渲染积分榜位置，且不横向溢出
+    const statsClicked = await win.webContents.executeJavaScript(`
+      (() => {
+        const nodes = [...document.querySelectorAll('button, [role="tab"]')];
+        const tab = nodes.find(n => (n.textContent || '').includes('双方数据'));
+        if (!tab) return false;
+        tab.click();
+        return true;
+      })()
+    `);
+    await sleep(500);
+    const standings = await win.webContents.executeJavaScript(`
+      (() => {
+        const panel = document.querySelector('#intel-panel');
+        if (!panel) return { ok: false, overflow: true, text: '' };
+        return {
+          ok: panel.innerText.includes('积分榜位置'),
+          overflow: panel.scrollWidth > panel.clientWidth + 1,
+          text: panel.innerText.slice(0, 200)
+        };
+      })()
+    `);
+    ok('★ 双方数据渲染积分榜位置', statsClicked && standings.ok, JSON.stringify(standings));
+    ok('★ 积分榜面板无横向溢出', statsClicked && !standings.overflow, JSON.stringify(standings));
+
     const detail = await win.webContents.executeJavaScript(`
       (() => {
         const root = document.getElementById('match-highlights');

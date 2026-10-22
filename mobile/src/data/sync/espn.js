@@ -52,7 +52,11 @@ export async function fetchLeague(league, dateOrDates, opts = {}) {
   for (const d of list) {
     const query = d ? `dates=${d}&` : '';
     const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/${espnCode}/scoreboard?${query}limit=300`;
-    const j = await fetchJSON(url, { timeoutMs: opts.timeoutMs || 25000, log: opts.log });
+    const j = await fetchJSON(url, {
+      timeoutMs: opts.timeoutMs || 25000,
+      retries: opts.retries,
+      log: opts.log,
+    });
     if (j?.code >= 400 || j?.error) {
       throw new Error(j.message || j.error || `ESPN 响应异常码 ${j?.code}`);
     }

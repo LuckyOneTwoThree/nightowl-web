@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Eye,
   EyeOff,
@@ -42,9 +43,10 @@ import {
   storyBonus,
   ts,
 } from '@core/engine.js';
-import { hm, humanCountdownShort, liveMinute as minuteOf, zhDate } from '@core/format.js';
+import { bjDate, hm, humanCountdownShort, liveMinute as minuteOf, zhDate } from '@core/format.js';
 import { eventKey, eventSummary, shouldNotifyEvent } from '@core/live-events.js';
 import { narrativeOf } from '@core/narrative.js';
+import { computeMatchStandings } from '@core/standings.js';
 import { computeMatchStats } from '@core/stats.js';
 
 import { animateLayout } from '@/lib/layoutAnimation';
@@ -62,7 +64,7 @@ import { WatchSheet } from '@/components/WatchSheet';
 import { EmptyState } from '@/ui/EmptyState';
 import { SegmentedControl } from '@/ui/SegmentedControl';
 import { colors, fontSize, radius, spacing, tierColor, withAlpha } from '@/ui/theme';
-import type { Entry, Ev, Match, Narrative, Tier } from '@/types';
+import type { Entry, Ev, Match, MatchStandings, Narrative, Tier } from '@/types';
 
 type Tab = 'intel' | 'stats';
 
@@ -121,6 +123,7 @@ export default function MatchScreen() {
       tier: sleepTier(match.t) as Tier,
       narrative: narrativeOf(match, ev, storylines) as Narrative,
       stats: computeMatchStats(match) as StatsData,
+      standings: computeMatchStandings(match, getFixtures(), { nowTs: now }) as MatchStandings,
       upcoming: upcomingForTeams(match) as { home: Match[]; away: Match[] },
       sameNight: sameNightPicks(match, prefs, 3, now) as Entry[],
     };
@@ -404,7 +407,14 @@ export default function MatchScreen() {
             }
           />
         ) : (
-          <StatsTab match={match} stats={intel.stats} />
+          <StatsTab
+            match={match}
+            stats={intel.stats}
+            standings={intel.standings}
+            onOpenMatch={matchId =>
+              router.push({ pathname: '/match/[id]', params: { id: matchId } })
+            }
+          />
         )}
       </ScrollView>
 
@@ -590,7 +600,17 @@ function IntelTab({
   );
 }
 
-function StatsTab({ match, stats }: { match: Match; stats: StatsData }) {
+function StatsTab({
+  match,
+  stats,
+  standings,
+  onOpenMatch,
+}: {
+  match: Match;
+  stats: StatsData;
+  standings: MatchStandings;
+  onOpenMatch: (id: string) => void;
+}) {
   const homeForm = summaryOf(stats.home.form);
   const awayForm = summaryOf(stats.away.form);
 
@@ -629,6 +649,8 @@ function StatsTab({ match, stats }: { match: Match; stats: StatsData }) {
         />
       </Card>
 
+      <StandingsCard match={match} standings={standings} />
+
       <Card style={styles.cardGap}>
         <Text style={styles.cardEyebrow}>历史交锋</Text>
         <View style={styles.h2hSummary}>
@@ -649,13 +671,20 @@ function StatsTab({ match, stats }: { match: Match; stats: StatsData }) {
         </View>
         {stats.h2h.meetings.length > 0 ? (
           stats.h2h.meetings.map(meeting => (
-            <View key={meeting.id} style={styles.meetingRow}>
+            <Pressable
+              key={meeting.id}
+              onPress={() => onOpenMatch(meeting.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`查看 ${teamName(meeting.home)} 对 ${teamName(meeting.away)} 的比赛`}
+              style={({ pressed }) => [styles.meetingRow, pressed && styles.pressed]}
+            >
               <Text style={styles.meetingDate}>{zhDate(meeting.date.split('T')[0])}</Text>
               <Text style={styles.meetingTeams} numberOfLines={1}>
                 {teamName(meeting.home)} vs {teamName(meeting.away)}
               </Text>
               <Text style={styles.meetingScore}>{meeting.score}</Text>
-            </View>
+              <ChevronRight size={14} color={colors.textFaint} />
+            </Pressable>
           ))
         ) : (
           <Text style={styles.cardLine}>暂无已完赛的直接交手记录。</Text>
@@ -663,6 +692,87 @@ function StatsTab({ match, stats }: { match: Match; stats: StatsData }) {
       </Card>
     </View>
   );
+}
+
+function StandingsCard({
+  match,
+  standings,
+}: {
+  match: Match;
+  standings: MatchStandings;
+}) {
+  if (!standings.supported) return null;
+
+  const asOfText = standings.historical
+    ? '截至本场开球前'
+    : standings.lastResultAt
+      ? `截至 ${bjDate(standings.lastResultAt).slice(5)}`
+      : '暂无赛果';
+  const metaText =
+    standings.doneCount > 0 ? `${asOfText} · ${standings.doneCount} 场` : asOfText;
+  const rows = [
+    { id: match.h, row: standings.home },
+    { id: match.a, row: standings.away },
+  ];
+
+  return (
+    <Card style={styles.cardGap}>
+      <Text style={styles.cardEyebrow}>积分榜位置</Text>
+      <Text style={styles.standingsAsOf}>
+        {standings.league ? `${leagueName(standings.league)} · ` : ''}
+        {metaText}
+      </Text>
+      {standings.rows.length === 0 ? (
+        <Text style={styles.cardLine}>{standings.note || '本联赛暂无已同步赛果'}</Text>
+      ) : (
+        <View>
+          {rows.map(({ id, row }, index) => (
+            <View
+              key={id}
+              style={[styles.standingsRow, index > 0 && styles.standingsRowBorder]}
+            >
+              <View style={styles.standingsTop}>
+                <Crest id={id} size={22} />
+                <Text style={styles.standingsTeam} numberOfLines={1}>
+                  {teamName(id)}
+                </Text>
+                {row && row.zoneKey !== 'mid' ? (
+                  <Chip tone={row.zoneTone === 'warn' ? 'warn' : 'default'}>
+                    {row.zoneLabel}
+                  </Chip>
+                ) : null}
+                <Text style={styles.standingsRank}>
+                  {row ? `第 ${row.rank}` : '暂无'}
+                </Text>
+              </View>
+              {row ? (
+                <>
+                  <Text style={styles.standingsStats}>
+                    {row.played} 场 · {row.points} 分 · 净胜球 {formatGd(row.gd)}
+                  </Text>
+                  {row.context ? (
+                    <Text style={styles.standingsContext}>
+                      {row.context.primary}
+                      {row.context.secondary ? ` · ${row.context.secondary}` : ''}
+                    </Text>
+                  ) : null}
+                </>
+              ) : (
+                <Text style={styles.standingsContext}>该队暂无已同步赛果</Text>
+              )}
+            </View>
+          ))}
+          <Text style={styles.standingsHint}>
+            排名按积分 → 净胜球 → 进球数简化排序；国内分区为参考线，欧冠按赛制。
+          </Text>
+        </View>
+      )}
+    </Card>
+  );
+}
+
+function formatGd(gd: number) {
+  return gd > 0 ? `+${gd}` : `${gd}`;
 }
 
 function TierMeter({ tier }: { tier: Tier }) {
@@ -1127,12 +1237,62 @@ const styles = StyleSheet.create({
   },
   h2hLabel: { color: colors.textFaint, fontSize: fontSize.xxs },
   meetingRow: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: 7,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.hairline,
+  },
+  standingsAsOf: {
+    color: colors.textFaint,
+    fontSize: fontSize.xxs,
+    fontVariant: ['tabular-nums'],
+    marginTop: 2,
+  },
+  standingsRow: {
+    paddingVertical: spacing.sm,
+  },
+  standingsRowBorder: {
+    marginTop: spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.hairline,
+  },
+  standingsTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  standingsTeam: {
+    flex: 1,
+    color: colors.text,
+    fontSize: fontSize.md,
+    fontWeight: '600',
+  },
+  standingsRank: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  standingsStats: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    fontVariant: ['tabular-nums'],
+    marginTop: 2,
+  },
+  standingsContext: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  standingsHint: {
+    color: colors.textFaint,
+    fontSize: fontSize.xxs,
+    lineHeight: 15,
+    marginTop: spacing.sm,
   },
   meetingDate: { width: 48, color: colors.textFaint, fontSize: fontSize.xxs },
   meetingTeams: { flex: 1, color: colors.textSecondary, fontSize: fontSize.xs },
