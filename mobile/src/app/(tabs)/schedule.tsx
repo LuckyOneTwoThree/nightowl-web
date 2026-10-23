@@ -102,6 +102,23 @@ export default function ScheduleScreen() {
     }) as Row[];
   }, [mode, now, prefs, filters, rev]);
 
+  const followedDates = useMemo(() => {
+    const s = new Set<string>();
+    if (!prefs.followedTeams.length) return s;
+    let curDate = '';
+    for (const row of rows) {
+      if (row.type === 'date') {
+        curDate = row.date;
+      } else if (
+        curDate &&
+        (prefs.followedTeams.includes(row.m.h) || prefs.followedTeams.includes(row.m.a))
+      ) {
+        s.add(curDate);
+      }
+    }
+    return s;
+  }, [rows, prefs.followedTeams]);
+
   const visibleRows = useMemo(() => {
     if (activeDate === 'all') return rows;
     const start = rows.findIndex(row => row.type === 'date' && row.date === activeDate);
@@ -247,6 +264,7 @@ export default function ScheduleScreen() {
           const active = activeDate === date;
           const isToday = date === today;
           const count = counts[date] ?? 0;
+          const hasFollowed = followedDates.has(date);
           return (
             <Pressable
               key={date}
@@ -257,6 +275,7 @@ export default function ScheduleScreen() {
                 active && styles.dateCardActive,
               ]}
             >
+              {hasFollowed ? <View style={styles.dateFollowDot} /> : null}
               <Text style={[styles.dateWeekday, active && styles.dateActiveText]}>
                 {isToday ? '今天' : weekdayOf(date).replace('周', '')}
               </Text>
@@ -449,7 +468,16 @@ const styles = StyleSheet.create({
   allCard: { width: 58 },
   reset: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' },
   dateCardToday: { borderColor: colors.control },
-  dateCardActive: { borderColor: colors.control, backgroundColor: colors.raised },
+  dateCardActive: { borderColor: colors.accent, backgroundColor: colors.raised },
+  dateFollowDot: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    width: 5,
+    height: 5,
+    borderRadius: radius.full,
+    backgroundColor: colors.accent,
+  },
   dateWeekday: { color: colors.textFaint, fontSize: fontSize.xs },
   dateDay: {
     color: colors.text,
@@ -458,7 +486,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   dateCount: { color: colors.textFaint, fontSize: fontSize.xxs },
-  dateActiveText: { color: colors.text },
+  dateActiveText: { color: colors.accent },
   dateActiveCount: { color: colors.textSecondary },
   filterBlock: { paddingTop: spacing.sm, gap: spacing.sm },
   filterRow: {

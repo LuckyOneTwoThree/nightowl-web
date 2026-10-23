@@ -21,6 +21,14 @@ import { IconDerby, IconWarn } from './icons.jsx';
  *   3. 选中用底色，直播用右侧红点与分钟数。去掉渐变底、外发光与 gold-flash。
  *   4. 队名独占第二行完整宽度，中文队名不再被截成「桑…」。
  */
+function parseWinner(sc) {
+  if (!sc || !/^\d+-\d+$/.test(sc)) return null;
+  const [h, a] = sc.split('-').map(Number);
+  if (h > a) return 'h';
+  if (a > h) return 'a';
+  return 'd';
+}
+
 export default function MatchRow({
   m,
   state,
@@ -34,15 +42,20 @@ export default function MatchRow({
   minefield = false,
   dateLabel = null,
   badge = null,
-  showSleep = true
+  showSleep = true,
+  followedTeams = []
 }) {
   const live = state === 'live';
   const minute = live ? liveMinute(ts(m.t), now) : 0;
+  const homeFollowed = followedTeams.includes(m.h);
+  const awayFollowed = followedTeams.includes(m.a);
+  const scoreShown = m.st === 'done' && (!spoilerFree || revealed);
+  const winner = scoreShown ? parseWinner(m.sc) : null;
 
   const rowBg = active
-    ? 'bg-surface-raised border border-line-control shadow-card'
+    ? 'bg-surface-raised border border-accent/35 shadow-card'
     : live
-      ? 'bg-surface-card/90 border border-live/25'
+      ? 'bg-surface-card/90 border border-live/25 hover:border-live/40'
       : 'border border-transparent hover:border-line-hairline hover:bg-surface-raised/60';
 
   return (
@@ -127,7 +140,23 @@ export default function MatchRow({
           {/* 对阵行：独占整行宽度 */}
           <div className="mt-1.5 flex items-center gap-2">
             <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
-              <span className="truncate text-sm font-medium text-text-primary" title={teamName(m.h)}>
+              {homeFollowed && (
+                <span
+                  className="h-1 w-1 shrink-0 rounded-full bg-accent"
+                  title="关注球队"
+                  aria-hidden="true"
+                />
+              )}
+              <span
+                className={`truncate text-sm ${
+                  winner === 'h'
+                    ? 'font-semibold text-text-primary'
+                    : winner === 'a'
+                      ? 'font-normal text-text-muted'
+                      : 'font-medium text-text-primary'
+                }`}
+                title={teamName(m.h)}
+              >
                 {teamName(m.h)}
               </span>
               <Crest id={m.h} size={16} />
@@ -135,9 +164,25 @@ export default function MatchRow({
             <span className="shrink-0 font-num text-2xs text-text-faint">vs</span>
             <div className="flex min-w-0 flex-1 items-center gap-1.5">
               <Crest id={m.a} size={16} />
-              <span className="truncate text-sm font-medium text-text-primary" title={teamName(m.a)}>
+              <span
+                className={`truncate text-sm ${
+                  winner === 'a'
+                    ? 'font-semibold text-text-primary'
+                    : winner === 'h'
+                      ? 'font-normal text-text-muted'
+                      : 'font-medium text-text-primary'
+                }`}
+                title={teamName(m.a)}
+              >
                 {teamName(m.a)}
               </span>
+              {awayFollowed && (
+                <span
+                  className="h-1 w-1 shrink-0 rounded-full bg-accent"
+                  title="关注球队"
+                  aria-hidden="true"
+                />
+              )}
             </div>
           </div>
         </div>

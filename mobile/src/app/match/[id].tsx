@@ -53,7 +53,7 @@ import { animateLayout } from '@/lib/layoutAnimation';
 import { scheduleMatchReminder } from '@/lib/reminders';
 import { useLiveMatch, type LiveData } from '@/data/useLiveMatch';
 import { useNow } from '@/lib/useNow';
-import { useDataRev } from '@/state/app';
+import { useAppStore, useDataRev } from '@/state/app';
 import { usePrefs } from '@/state/prefs';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
@@ -63,6 +63,7 @@ import { LiveTimeline } from '@/components/LiveTimeline';
 import { WatchSheet } from '@/components/WatchSheet';
 import { EmptyState } from '@/ui/EmptyState';
 import { SegmentedControl } from '@/ui/SegmentedControl';
+import { SleepBadge } from '@/ui/SleepBadge';
 import { colors, fontSize, radius, spacing, tierColor, withAlpha } from '@/ui/theme';
 import type { Entry, Ev, Match, MatchStandings, Narrative, Tier } from '@/types';
 
@@ -104,7 +105,22 @@ export default function MatchScreen() {
   const now = useNow(30_000);
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('intel');
-  const [revealed, setRevealed] = useState(false);
+  const revealedInStore = useAppStore(s => (id ? !!s.revealedIds[id] : false));
+  const revealMatch = useAppStore(s => s.revealMatch);
+  const hideMatch = useAppStore(s => s.hideMatch);
+  const [forceHidden, setForceHidden] = useState(false);
+  const scoreVisible = prefs.spoilerFree ? revealedInStore : !forceHidden;
+  const handleRevealScore = () => {
+    setForceHidden(false);
+    if (id) revealMatch(id);
+  };
+  const handleHideScore = () => {
+    if (prefs.spoilerFree) {
+      if (id) hideMatch(id);
+    } else {
+      setForceHidden(true);
+    }
+  };
   const [watchOpen, setWatchOpen] = useState(params.watch === '1');
   const [reminderSet, setReminderSet] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -260,7 +276,7 @@ export default function MatchScreen() {
               },
             ]}
           >
-            {finishedNow && finalScore
+            {finishedNow && scoreVisible && finalScore
               ? `${teamName(match.h)} ${finalScore} ${teamName(match.a)}`
               : liveNow && liveScoreText
                 ? `${teamName(match.h)} ${liveScoreText} ${teamName(match.a)}`
@@ -287,7 +303,12 @@ export default function MatchScreen() {
         )}
       >
         <LinearGradient
-          colors={[withAlpha(teamColor(match.h), 0.2), colors.card, colors.card]}
+          colors={[
+            withAlpha(teamColor(match.h), 0.22),
+            colors.card,
+            withAlpha(teamColor(match.a), 0.18),
+          ]}
+          locations={[0, 0.55, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.hero}
@@ -300,11 +321,7 @@ export default function MatchScreen() {
                 {match.r ? ` · 第 ${match.r} 轮` : ''}
               </Text>
             </View>
-            <View style={[styles.tierPill, { borderColor: color }]}>
-              <Text style={[styles.tierText, { color }]}>
-                {tier.label} {tier.zh} · {tier.cost}h
-              </Text>
-            </View>
+            <SleepBadge tier={tier} size="md" showZh />
           </View>
 
           <View style={styles.teams}>
@@ -315,15 +332,17 @@ export default function MatchScreen() {
               </Text>
             </View>
             <View style={styles.center}>
-              {finishedNow && revealed && finalScore ? (
+              {finishedNow && scoreVisible && finalScore ? (
                 <Text style={styles.score}>{finalScore}</Text>
-              ) : finishedNow ? (
+              ) : finishedNow && finalScore ? (
                 <>
-                  <Pressable onPress={() => setRevealed(true)} style={styles.revealButton}>
+                  <Pressable onPress={handleRevealScore} style={styles.revealButton}>
                     <Eye size={13} color={colors.accent} />
                     <Text style={styles.revealText}>揭晓比分</Text>
                   </Pressable>
                 </>
+              ) : finishedNow ? (
+                <Text style={styles.vs}>已结束</Text>
               ) : liveNow && liveScoreText ? (
                 <>
                   <Text style={styles.score}>{liveScoreText}</Text>
@@ -417,8 +436,8 @@ export default function MatchScreen() {
             <Text style={styles.metricMuted}>看点 {intel.ev.star} 星</Text>
           </View>
 
-          {finishedNow && revealed && finalScore ? (
-            <Pressable onPress={() => setRevealed(false)} style={styles.hideScore}>
+          {finishedNow && scoreVisible && finalScore ? (
+            <Pressable onPress={handleHideScore} style={styles.hideScore}>
               <EyeOff size={13} color={colors.textMuted} />
               <Text style={styles.hideScoreText}>重新隐藏比分</Text>
             </Pressable>
@@ -496,8 +515,8 @@ export default function MatchScreen() {
         isDone={finishedNow}
         isLive={liveNow}
         spoilerFree={prefs.spoilerFree}
-        revealed={revealed}
-        onReveal={() => setRevealed(true)}
+        revealed={scoreVisible}
+        onReveal={handleRevealScore}
       />
     </SafeAreaView>
   );
@@ -541,13 +560,16 @@ function IntelTab({
 
       <Card style={styles.cardGap}>
         <View style={styles.cardHeader}>
-          <View>
+          <View style={{ gap: 2 }}>
             <Text style={styles.cardEyebrow}>熬夜代价</Text>
             <Text style={styles.cardTitle}>
               {intel.tier.label} {intel.tier.zh} · {intel.tier.cost}h
             </Text>
           </View>
-          <Chip tone={intel.tier.tier >= 3 ? 'warn' : 'default'}>{hm(match.t)} 开球</Chip>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+            <SleepBadge tier={intel.tier} />
+            <Chip tone="default">{hm(match.t)} 开球</Chip>
+          </View>
         </View>
         <TierMeter tier={intel.tier} />
         <Text style={styles.cardLine}>睡眠成本按开球时间实时计算，不读取静态字段。</Text>
@@ -594,11 +616,36 @@ function IntelTab({
         </Pressable>
         {showAttribution ? (
           <>
-            <AttributionRow label="看点星级" value={`+${starPart.toFixed(1)}`} positive />
-            <AttributionRow label="故事线加成" value={`+${storyPart.toFixed(1)}`} positive />
-            <AttributionRow label="关注球队" value={`+${followPart.toFixed(1)}`} positive />
-            <AttributionRow label="关注联赛" value={`+${leaguePart.toFixed(1)}`} positive />
-            <AttributionRow label="睡眠成本" value={`${intel.tier.cost.toFixed(1)}h`} />
+            <AttributionRow
+              label="看点星级"
+              value={`+${starPart.toFixed(1)}`}
+              ratio={starPart / 50}
+              positive
+            />
+            <AttributionRow
+              label="故事线加成"
+              value={`+${storyPart.toFixed(1)}`}
+              ratio={storyPart / 40}
+              positive
+            />
+            <AttributionRow
+              label="关注球队"
+              value={`+${followPart.toFixed(1)}`}
+              ratio={followPart / 45}
+              positive
+            />
+            <AttributionRow
+              label="关注联赛"
+              value={`+${leaguePart.toFixed(1)}`}
+              ratio={leaguePart / 20}
+              positive
+            />
+            <AttributionRow
+              label="睡眠成本"
+              value={`${intel.tier.cost.toFixed(1)}h`}
+              ratio={intel.tier.cost / 4.5}
+              barColor={tierColor(intel.tier.tier)}
+            />
             <View style={styles.formula}>
               <Text style={styles.formulaText}>
                 指数 = (看点 + 故事线 + 关注 + 联赛) ÷ (1 + 睡眠成本 + 0.5)
@@ -872,16 +919,36 @@ function TierMeter({ tier }: { tier: Tier }) {
 function AttributionRow({
   label,
   value,
+  ratio = 0,
   positive = false,
+  barColor,
 }: {
   label: string;
   value: string;
+  ratio?: number;
   positive?: boolean;
+  barColor?: string;
 }) {
+  const pct = Math.max(0, Math.min(1, ratio));
+  const fill = barColor ?? (positive ? colors.accent : colors.resource);
   return (
-    <View style={styles.attrRow}>
-      <Text style={styles.attrLabel}>{label}</Text>
-      <Text style={[styles.attrValue, positive && { color: colors.accent }]}>{value}</Text>
+    <View style={styles.attrRowWrap}>
+      <View style={styles.attrRow}>
+        <Text style={styles.attrLabel}>{label}</Text>
+        <Text style={[styles.attrValue, positive && { color: colors.accent }]}>{value}</Text>
+      </View>
+      <View style={styles.attrTrack}>
+        <View
+          style={[
+            styles.attrFill,
+            {
+              width: `${Math.round(pct * 100)}%`,
+              backgroundColor: fill,
+              opacity: pct > 0 ? 0.85 : 0.15,
+            },
+          ]}
+        />
+      </View>
     </View>
   );
 }
@@ -1204,11 +1271,24 @@ const styles = StyleSheet.create({
   meterBar: { flex: 1, height: 6, borderRadius: radius.full },
   meterLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
   meterLabel: { color: colors.textFaint, fontSize: fontSize.xxs },
+  attrRowWrap: {
+    gap: 4,
+    paddingVertical: 3,
+  },
   attrRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 3,
+  },
+  attrTrack: {
+    height: 4,
+    borderRadius: radius.full,
+    backgroundColor: colors.hairline,
+    overflow: 'hidden',
+  },
+  attrFill: {
+    height: '100%',
+    borderRadius: radius.full,
   },
   attrLabel: { color: colors.textMuted, fontSize: fontSize.sm },
   attrValue: {

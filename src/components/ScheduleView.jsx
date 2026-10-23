@@ -83,8 +83,19 @@ export default function ScheduleView({
     // 计数必须来自已应用联赛 / 关注 / 搜索筛选的 rows，
     // 否则日期条显示「10 场」、点进去列表只剩 2 场。
     const counts = new Map();
+    const followedSet = new Set();
+    let curDate = '';
     for (const row of rows) {
-      if (row.type === 'date') counts.set(row.date, row.count);
+      if (row.type === 'date') {
+        counts.set(row.date, row.count);
+        curDate = row.date;
+      } else if (
+        curDate &&
+        prefs.followedTeams.length > 0 &&
+        (prefs.followedTeams.includes(row.m.h) || prefs.followedTeams.includes(row.m.a))
+      ) {
+        followedSet.add(curDate);
+      }
     }
     // 覆盖过去 14 天到未来 28 天（支持翻阅历史赛程与昨日、前天比分）
     const list = [];
@@ -94,13 +105,14 @@ export default function ScheduleView({
         offset: i,
         date: d,
         count: counts.get(d) || 0,
+        hasFollowed: followedSet.has(d),
         isToday: i === 0,
         isYesterday: i === -1,
         isBeforeYesterday: i === -2
       });
     }
     return list;
-  }, [rows, now]);
+  }, [rows, now, prefs.followedTeams]);
 
   // 当日比赛按联赛分组（date 模式不用虚拟滚动 —— 一天就十几场）
   const dayGroups = useMemo(() => {
@@ -285,15 +297,22 @@ export default function ScheduleView({
               aria-pressed={active}
               className={`relative shrink-0 rounded-md border px-2.5 py-1 text-center transition-all ${
                 active
-                  ? 'border-line-control bg-surface-raised shadow-card'
+                  ? 'border-accent/50 bg-surface-raised shadow-card'
                   : item.isToday
                     ? 'border-line-control/70 bg-surface-raised/40 hover:border-line-control'
                     : 'border-line-hairline bg-surface-card hover:border-line-control hover:bg-surface-raised'
               }`}
             >
+              {item.hasFollowed && (
+                <span
+                  className="absolute right-1 top-1 h-1 w-1 rounded-full bg-accent"
+                  title="有关注球队比赛"
+                  aria-hidden="true"
+                />
+              )}
               <div
                 className={`font-num text-2xs font-semibold tabular-nums ${
-                  active ? 'text-text-primary' : item.isToday ? 'text-text-secondary' : 'text-text-secondary'
+                  active ? 'text-accent' : item.isToday ? 'text-text-secondary' : 'text-text-secondary'
                 }`}
               >
                 {label}
@@ -429,6 +448,7 @@ export default function ScheduleView({
                           revealed={revealed.has(m.id)}
                           onReveal={onReveal}
                           rivalry={ev.rivalry}
+                          followedTeams={prefs.followedTeams}
                         />
                       </div>
                     );
@@ -486,6 +506,7 @@ export default function ScheduleView({
                     revealed={revealed.has(m.id)}
                     onReveal={onReveal}
                     rivalry={ev.rivalry}
+                    followedTeams={prefs.followedTeams}
                   />
                 </div>
               );

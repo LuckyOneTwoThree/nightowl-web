@@ -164,7 +164,7 @@ export function ScoreText({ match, state, revealed, onReveal, spoilerFree, stale
         <button
           type="button"
           onClick={onReveal}
-          className="inline-flex items-center gap-1 rounded px-1.5 py-px text-2xs text-text-faint transition-colors hover:bg-surface-press hover:text-text-primary"
+          className="inline-flex items-center gap-1 rounded border border-line-control/70 bg-surface-raised/80 px-1.5 py-px text-2xs text-text-secondary transition-colors hover:border-accent/40 hover:bg-surface-press hover:text-accent"
           title="点击揭晓比分"
         >
           <IconReveal />
@@ -172,7 +172,15 @@ export function ScoreText({ match, state, revealed, onReveal, spoilerFree, stale
         </button>
       );
     }
-    return <span className="font-num text-xs font-semibold tabular-nums text-text-primary">{match.sc || '—'}</span>;
+    return (
+      <span
+        className={`font-num text-xs font-semibold tabular-nums text-text-primary ${
+          spoilerFree && revealed ? 'animate-score-pop inline-block' : ''
+        }`}
+      >
+        {match.sc || '—'}
+      </span>
+    );
   }
 
   if (state === 'live') return <LiveDot />;

@@ -9,6 +9,7 @@ type AppStore = {
   syncError: string | null;
   lastCheckedAt: number | null;
   lastSyncedAt: number | null;
+  revealedIds: Record<string, boolean>;
   bump: (meta?: {
     source?: DataSource;
     checkedAt?: number;
@@ -17,6 +18,9 @@ type AppStore = {
   setSyncing: (value: boolean) => void;
   setSyncError: (message: string | null) => void;
   setMeta: (meta: { source?: DataSource; lastCheckedAt?: number | null; lastSyncedAt?: number | null }) => void;
+  revealMatch: (id: string) => void;
+  hideMatch: (id: string) => void;
+  clearRevealed: () => void;
 };
 
 export const useAppStore = create<AppStore>(set => ({
@@ -26,6 +30,7 @@ export const useAppStore = create<AppStore>(set => ({
   syncError: null,
   lastCheckedAt: null,
   lastSyncedAt: null,
+  revealedIds: {},
   bump: meta =>
     set(state => ({
       rev: state.rev + 1,
@@ -43,8 +48,24 @@ export const useAppStore = create<AppStore>(set => ({
       lastSyncedAt:
         meta.lastSyncedAt !== undefined ? meta.lastSyncedAt : state.lastSyncedAt,
     })),
+  revealMatch: id =>
+    set(state => ({
+      revealedIds: { ...state.revealedIds, [id]: true },
+    })),
+  hideMatch: id =>
+    set(state => {
+      const next = { ...state.revealedIds };
+      delete next[id];
+      return { revealedIds: next };
+    }),
+  clearRevealed: () => set({ revealedIds: {} }),
 }));
 
 export function useDataRev(): number {
   return useAppStore(state => state.rev);
+}
+
+export function useMatchRevealed(id: string | undefined, spoilerFree: boolean): boolean {
+  const revealed = useAppStore(state => (id ? !!state.revealedIds[id] : false));
+  return !spoilerFree || revealed;
 }

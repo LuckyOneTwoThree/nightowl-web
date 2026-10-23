@@ -72,6 +72,14 @@ const VIEWS = [
  *     强调色，再多一个金色文字，眼睛就不知道该看哪儿了。它保持 ghost 按钮形态，
  *     位置与「已关注」状态完全重合 —— 同一个槽位在等用户填。
  */
+function watchPeriodOf(nowTs) {
+  const hour = new Date(nowTs + 8 * 3600_000).getUTCHours();
+  if (hour >= 2 && hour < 6) return '深宵档';
+  if (hour >= 23 || hour < 2) return '子夜档';
+  if (hour >= 18) return '黄金档';
+  return '日间档';
+}
+
 export default function TopBar({
   view,
   onViewChange,
@@ -124,18 +132,18 @@ export default function TopBar({
                 role="tab"
                 aria-selected={active}
                 onClick={() => onViewChange(it.id)}
-                className={`relative inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none ${
+                className={`relative inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-all focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none ${
                   active
-                    ? 'font-semibold text-text-primary'
+                    ? 'bg-surface-raised/85 font-semibold text-text-primary shadow-sm'
                     : 'text-text-muted hover:bg-white/[0.04] hover:text-text-primary'
                 }`}
               >
-                <span className={active ? 'text-accent/80' : 'text-text-faint'}>{it.icon}</span>
+                <span className={active ? 'text-accent' : 'text-text-faint'}>{it.icon}</span>
                 {it.label}
                 {active && (
                   <span
                     aria-hidden="true"
-                    className="absolute inset-x-3 -bottom-[11px] h-px bg-accent/70"
+                    className="absolute inset-x-3 -bottom-[10px] h-0.5 rounded-full bg-accent shadow-[0_0_8px_rgb(var(--accent)/0.65)]"
                   />
                 )}
               </button>
@@ -145,14 +153,18 @@ export default function TopBar({
       </div>
 
       <div className="no-drag hidden items-center gap-3 lg:flex">
-        <div className="flex items-baseline gap-2">
-          <span className="font-num text-sm font-semibold tabular-nums text-text-primary">
+        <div className="flex items-center gap-2 rounded-full border border-line-hairline bg-surface-card/70 px-3 py-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-accent/80" aria-hidden="true" />
+          <span className="font-num text-xs font-semibold tabular-nums text-text-primary">
             {bjClock(now)}
           </span>
           <span className="font-num text-2xs tabular-nums text-text-faint">{bjDate(now)}</span>
+          <span className="border-l border-line-hairline pl-2 text-2xs font-medium text-text-muted">
+            {watchPeriodOf(now)}
+          </span>
         </div>
         {liveCount > 0 && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-live/12 px-2.5 py-0.5">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-live/25 bg-live/12 px-2.5 py-0.5">
             <LiveDot />
             <span className="text-2xs font-medium text-live">{liveCount} 场进行中</span>
           </span>
@@ -165,9 +177,13 @@ export default function TopBar({
           onClick={onOpenPalette}
           title="搜索球队、比赛或功能（Ctrl+K）"
           aria-label="搜索"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary"
+          className="inline-flex h-7 items-center gap-1.5 rounded-md border border-line-hairline bg-surface-card/80 px-2 text-2xs text-text-muted transition-colors hover:border-line-control hover:bg-surface-raised hover:text-text-primary"
         >
-          <IconSearch size={14} />
+          <IconSearch size={13} />
+          <span className="hidden sm:inline">搜索</span>
+          <kbd className="hidden rounded border border-line-hairline bg-surface-panel px-1 py-px font-num text-2xs text-text-faint md:inline">
+            {isMacDesktop ? '⌘K' : 'Ctrl K'}
+          </kbd>
         </button>
         <button
           type="button"

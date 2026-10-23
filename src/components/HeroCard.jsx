@@ -33,12 +33,22 @@ function TeamAura({ color, side }) {
  * 但仍守纪律：品牌金只出现在描边 / 指数 / CTA，主队色只做 12–14% 环境光，
  * 不引入第二强调色体系。
  */
-export default function HeroCard({ hero, tier, narrative, state, now, onWatch, indexHint }) {
+export default function HeroCard({
+  hero,
+  tier,
+  narrative,
+  state,
+  active = false,
+  now,
+  onWatch,
+  indexHint
+}) {
   const m = hero.m;
   const ev = hero.ev;
   const copy = TIER_COPY[tier] || TIER_COPY.standard;
   const isHighlight = tier === 'highlight';
   const isWeak = tier === 'weak';
+  const energyFill = Math.max(1, Math.min(5, Math.ceil(hero.index / 6)));
 
   const live = state === 'live';
   const minute = live ? liveMinute(ts(m.t), now) : 0;
@@ -58,10 +68,14 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
 
   return (
     <article
-      className={`no-drag card-lift relative overflow-hidden rounded-2xl p-4 ${
+      className={`no-drag card-lift relative overflow-hidden rounded-2xl p-4 transition-all ${
         isHighlight
-          ? 'bg-gradient-to-br from-accent/[0.10] via-surface-card/95 to-surface-panel ring-1 ring-accent/20'
-          : 'bg-gradient-to-br from-white/[0.035] via-surface-card/90 to-surface-panel ring-1 ring-white/[0.06]'
+          ? `bg-gradient-to-br from-accent/[0.10] via-surface-card/95 to-surface-panel ring-1 ${
+              active ? 'ring-accent/45' : 'ring-accent/20'
+            }`
+          : `bg-gradient-to-br from-white/[0.035] via-surface-card/90 to-surface-panel ring-1 ${
+              active ? 'ring-line-control' : 'ring-white/[0.06]'
+            }`
       }`}
     >
       {/* 主客环境光 */}
@@ -90,14 +104,28 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
           )}
         </div>
 
-        {/* 夜猫指数 · 只留数字，不再叠第二根进度条 */}
+        {/* 夜猫指数 · 数字 + 5 格微型能量刻度 */}
         <div className="flex shrink-0 flex-col items-end">
           <span className="text-2xs tracking-wide text-text-faint">夜猫指数</span>
-          <div className="flex items-baseline gap-0.5">
+          <div className="flex items-baseline gap-1">
             <span className={`font-num text-3xl font-bold leading-none tracking-tight tabular-nums ${isWeak ? 'text-text-secondary' : 'text-accent'}`}>
               {hero.index.toFixed(1)}
             </span>
             <Hint title="夜猫指数说明" content={indexHint} side="bottom" align="end" />
+          </div>
+          <div className="mt-1 flex items-center gap-0.5" aria-hidden="true">
+            {[1, 2, 3, 4, 5].map(step => (
+              <span
+                key={step}
+                className={`h-1 w-2.5 rounded-full ${
+                  step <= energyFill
+                    ? isWeak
+                      ? 'bg-text-secondary'
+                      : 'bg-accent'
+                    : 'bg-white/[0.12]'
+                }`}
+              />
+            ))}
           </div>
         </div>
       </div>
@@ -171,6 +199,12 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
               熬夜代价高
             </span>
           )}
+          {active && (
+            <span className="ml-auto inline-flex items-center gap-1 text-2xs text-text-muted">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent/80" aria-hidden="true" />
+              右侧展示中
+            </span>
+          )}
         </div>
         <Button
           variant={copy.ctaVariant}
@@ -179,7 +213,7 @@ export default function HeroCard({ hero, tier, narrative, state, now, onWatch, i
           onClick={() => onWatch(m.id)}
           className={`w-full ${copy.ctaVariant === 'primary' ? 'shadow-pop' : ''}`}
         >
-          {copy.cta}
+          {live ? '进入直播间' : active ? `${copy.cta} · 聚焦本场` : copy.cta}
         </Button>
       </div>
     </article>

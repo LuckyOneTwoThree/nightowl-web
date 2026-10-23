@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { zhDate, hmCost } from '../core/format.js';
+import { useMemo, useState } from 'react';
+import { zhDate, hmCost, hm } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { stateOf } from '../core/owl.js';
-import { sleepTier } from '../core/engine.js';
+import { nightOf, sleepTier } from '../core/engine.js';
 import { Chip, Crest, Fieldset, Meta, SleepBadge, Stars } from './atoms.jsx';
 import { IconChevronDown, IconChevronUp, IconWarn } from './icons.jsx';
 import MatchRow from './MatchRow.jsx';
@@ -50,11 +50,23 @@ export default function WeekView({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [showZero, setShowZero] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(null);
 
   const { plan, minefield, days, advice } = week;
   const hasScheduledMatches = days.some(day => day.count > 0);
   const usedRatio = plan.budget > 0 ? plan.used / plan.budget : 0;
   const remain = Math.max(0, plan.budget - plan.used);
+  const bestDaySet = useMemo(() => {
+    const s = new Set();
+    for (const e of plan.best) {
+      s.add(nightOf(e.m.t));
+    }
+    return s;
+  }, [plan.best]);
+  const activeDayObj = useMemo(
+    () => (selectedDay ? days.find(d => d.date === selectedDay) || null : null),
+    [selectedDay, days]
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden">
@@ -64,7 +76,7 @@ export default function WeekView({
           type="button"
           onClick={() => setExpanded(v => !v)}
           aria-expanded={expanded}
-          className="flex h-11 w-full items-center gap-2 px-3 text-left"
+          className="flex h-11 w-full items-center gap-2 px-3 text-left transition-colors hover:bg-surface-raised/50"
         >
           <span className="shrink-0 text-2xs font-medium text-text-muted">睡眠预算</span>
           <span className="shrink-0 font-num text-sm font-semibold tabular-nums text-resource">
@@ -78,6 +90,30 @@ export default function WeekView({
             {expanded ? <IconChevronUp size={13} /> : <IconChevronDown size={13} />}
           </span>
         </button>
+
+        {plan.budget > 0 && (
+          <div className="px-3 pb-2.5">
+            <div
+              className="flex h-1.5 w-full gap-0.5 overflow-hidden rounded-full bg-surface-panel"
+              role="img"
+              aria-label={`预算已用 ${hmCost(plan.used)} / ${hmCost(plan.budget)}`}
+            >
+              {plan.best.map(e => {
+                const t = sleepTier(e.m.t);
+                if (t.cost <= 0) return null;
+                const pct = Math.min(100, (t.cost / plan.budget) * 100);
+                return (
+                  <span
+                    key={e.m.id}
+                    style={{ width: `${pct}%` }}
+                    title={`${teamName(e.m.h)} vs ${teamName(e.m.a)} · ${t.label} (${t.cost}h)`}
+                    className={`h-full rounded-full ${BUCKET_CLASS[t.tier] || 'bg-resource'}`}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {expanded && (
           <div className="border-t border-line-hairline px-3 py-3">
@@ -180,6 +216,7 @@ export default function WeekView({
                     revealed={revealed.has(e.m.id)}
                     onReveal={onReveal}
                     rivalry={e.ev.rivalry}
+                    followedTeams={prefs.followedTeams}
                   />
                 ))}
               </div>
@@ -224,7 +261,7 @@ export default function WeekView({
         {/* ---- 档位分布 ---- */}
         <Fieldset
           title="本周熬夜分布"
-          hint="柱子高度 = 当天最晚那场球的睡眠成本；颜色与档位徽章同一色阶。"
+          hint="柱子高度 = 当天最晚那场球的睡眠成本；颜色与档位徽章同一色阶。点击单日可查看当日场次。"
           right={<Meta>按当日最高档位</Meta>}
         >
           {!hasScheduledMatches ? (
@@ -232,28 +269,83 @@ export default function WeekView({
               本周暂无未开赛场次，暂无分布数据
             </p>
           ) : (
-          <div className="flex items-end justify-between gap-1.5">
-            {days.map((d, i) => {
-              const h = d.count === 0 ? 3 : Math.max(8, (d.cost / 4.5) * 60);
-              return (
-                <div key={d.date} className="flex flex-1 flex-col items-center gap-1.5">
-                  <div className="flex w-full flex-col items-center justify-end gap-0.5" style={{ height: 64 }}>
-                    {d.count > 0 && (
-                      <span className="font-num text-2xs tabular-nums text-text-faint">{hmCost(d.cost)}</span>
-                    )}
-                    <div
-                      className={`w-full rounded-sm transition-all ${
-                        d.count === 0 ? 'bg-line-hairline' : `${BUCKET_CLASS[bucketOf(d.cost)]} opacity-90`
-                      } ${i === 0 ? 'ring-1 ring-accent/40' : ''}`}
-                      style={{ height: h }}
-                      title={`${zhDate(d.date)} · ${d.count} 场 · 最高 ${hmCost(d.cost)}`}
-                    />
-                  </div>
-                  <span className="text-2xs text-text-faint">周{WEEKDAY_SHORT[i]}</span>
+            <div className="flex items-end justify-between gap-1.5">
+              {days.map((d, i) => {
+                const h = d.count === 0 ? 3 : Math.max(8, (d.cost / 4.5) * 60);
+                const hasBest = bestDaySet.has(d.date);
+                const isSelected = selectedDay === d.date;
+                return (
+                  <button
+                    key={d.date}
+                    type="button"
+                    onClick={() => setSelectedDay(cur => (cur === d.date ? null : d.date))}
+                    aria-pressed={isSelected}
+                    className={`flex flex-1 flex-col items-center gap-1 rounded-md py-1 transition-colors ${
+                      isSelected ? 'bg-surface-raised ring-1 ring-accent/40' : 'hover:bg-surface-raised/50'
+                    }`}
+                  >
+                    <span className="flex h-2 items-center justify-center">
+                      {hasBest && (
+                        <span
+                          className="h-1 w-1 rounded-full bg-accent"
+                          title="包含本周精选场次"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </span>
+                    <div className="flex w-full flex-col items-center justify-end gap-0.5 px-1" style={{ height: 60 }}>
+                      {d.count > 0 && (
+                        <span className="font-num text-2xs tabular-nums text-text-faint">{hmCost(d.cost)}</span>
+                      )}
+                      <div
+                        className={`w-full rounded-sm transition-all ${
+                          d.count === 0 ? 'bg-line-hairline' : `${BUCKET_CLASS[bucketOf(d.cost)]} opacity-90`
+                        } ${i === 0 && !isSelected ? 'ring-1 ring-accent/35' : ''}`}
+                        style={{ height: h }}
+                        title={`${zhDate(d.date)} · ${d.count} 场 · 最高 ${hmCost(d.cost)}`}
+                      />
+                    </div>
+                    <span className={`text-2xs ${isSelected ? 'font-semibold text-accent' : 'text-text-faint'}`}>
+                      周{WEEKDAY_SHORT[i]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {activeDayObj && (
+            <div className="mt-2.5 rounded-lg border border-line-hairline bg-surface-card/70 p-2">
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-2xs font-medium text-text-primary">
+                  {zhDate(activeDayObj.date)} · {activeDayObj.count} 场未开赛
+                </span>
+                <Meta num>最高消耗 {hmCost(activeDayObj.cost)}</Meta>
+              </div>
+              {activeDayObj.matches?.length > 0 ? (
+                <div className="space-y-0.5">
+                  {activeDayObj.matches.slice(0, 5).map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => onSelect(m.id)}
+                      className={`flex w-full items-center gap-2 rounded px-1.5 py-1 text-left transition-colors ${
+                        m.id === activeMatchId ? 'bg-surface-raised' : 'hover:bg-surface-raised/60'
+                      }`}
+                    >
+                      <span className="w-9 shrink-0 font-num text-2xs tabular-nums text-text-secondary">
+                        {hm(m.t)}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-2xs text-text-primary">
+                        {teamName(m.h)} vs {teamName(m.a)}
+                      </span>
+                      <SleepBadge match={m} compact />
+                    </button>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
+              ) : (
+                <Meta>当日暂无未开赛场次</Meta>
+              )}
+            </div>
           )}
           {hasScheduledMatches && (
             <p className="mt-2.5 text-2xs leading-relaxed text-text-secondary">{advice}</p>
@@ -317,8 +409,10 @@ function PickRow({ e, active, onSelect }) {
       type="button"
       onClick={() => onSelect(m.id)}
       aria-current={active ? 'true' : undefined}
-      className={`relative w-full overflow-hidden rounded-lg py-2 pr-2.5 pl-3 text-left transition-colors ${
-        active ? 'bg-surface-raised' : 'hover:bg-surface-raised'
+      className={`relative w-full overflow-hidden rounded-lg py-2 pr-2.5 pl-3 text-left transition-all ${
+        active
+          ? 'border border-accent/35 bg-surface-raised shadow-card'
+          : 'border border-transparent hover:border-line-hairline hover:bg-surface-raised/60'
       }`}
     >
       <span

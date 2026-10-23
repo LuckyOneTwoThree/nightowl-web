@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import {
+  Animated,
   Modal,
   Pressable,
   ScrollView,
@@ -22,19 +23,52 @@ type Props = {
 
 export function Sheet({ visible, onClose, title, children, scroll = false }: Props) {
   const insets = useSafeAreaInsets();
+  const translateY = useRef(new Animated.Value(280)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      translateY.setValue(240);
+      backdropOpacity.setValue(0);
+      Animated.parallel([
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.spring(translateY, {
+          toValue: 0,
+          damping: 22,
+          stiffness: 240,
+          mass: 0.85,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible, backdropOpacity, translateY]);
 
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="none"
       statusBarTranslucent
       presentationStyle="overFullScreen"
       onRequestClose={onClose}
     >
       <View style={styles.root}>
-        <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="关闭" />
-        <View style={[styles.panel, { paddingBottom: insets.bottom + spacing.lg }]}>
+        <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="关闭" />
+        </Animated.View>
+        <Animated.View
+          style={[
+            styles.panel,
+            {
+              paddingBottom: insets.bottom + spacing.lg,
+              transform: [{ translateY }],
+            },
+          ]}
+        >
           <View style={styles.grabber} />
           {title ? (
             <View style={styles.header}>
@@ -55,7 +89,7 @@ export function Sheet({ visible, onClose, title, children, scroll = false }: Pro
           ) : (
             children
           )}
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

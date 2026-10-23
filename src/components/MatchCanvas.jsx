@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { hm, zhDate, weekdayOf, datePart } from '../core/format.js';
-import { teamName, teamColor, leagueName } from '../data/index.js';
+import { teamName, teamColor, leagueName, TEAM_MAP } from '../data/index.js';
 import { computeMatchStats } from '../core/stats.js';
 import { eventSummary } from '../core/live-events.js';
-import { Button, Chip, Crest, Meta } from './atoms.jsx';
+import { Button, Chip, Crest, LiveDot, Meta } from './atoms.jsx';
 import { IconPlay, IconReset, IconSignal } from './icons.jsx';
 
 const FORM_DOT = {
@@ -147,10 +147,12 @@ export default function MatchCanvas({
             <span className="w-full truncate text-center text-base font-semibold text-text-primary sm:text-lg" title={teamName(match.h)}>
               {teamName(match.h)}
             </span>
-            <span className="text-2xs text-text-faint">主队</span>
+            <span className="text-2xs text-text-faint">
+              主队{TEAM_MAP[match.h]?.tag ? ` · ${TEAM_MAP[match.h].tag}` : ''}
+            </span>
           </div>
 
-          <div className="flex min-w-[128px] shrink-0 flex-col items-center">
+          <div className="flex min-w-[140px] shrink-0 flex-col items-center">
             {postponed ? (
               <span className="font-num text-2xl font-semibold text-warn">延期</span>
             ) : finished ? (
@@ -183,6 +185,21 @@ export default function MatchCanvas({
               )
             ) : match.tbd ? (
               <span className="font-num text-2xl font-semibold text-text-muted">--:--</span>
+            ) : /^\d{2}:\d{2}:\d{2}$/.test(stageCountdown || '') ? (
+              <div
+                aria-live="polite"
+                aria-label={`倒计时 ${stageCountdown}`}
+                className="flex items-center gap-1 font-num tabular-nums"
+              >
+                {stageCountdown.split(':').map((unit, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-1">
+                    {idx > 0 && <span className="text-xl font-bold text-text-faint">:</span>}
+                    <span className="inline-flex min-w-[44px] items-center justify-center rounded-lg border border-white/[0.08] bg-surface-panel/75 px-2 py-1 text-2xl font-bold leading-none tracking-tight text-text-primary shadow-inner sm:text-3xl">
+                      {unit}
+                    </span>
+                  </span>
+                ))}
+              </div>
             ) : (
               <span
                 key={stageCountdown}
@@ -216,7 +233,9 @@ export default function MatchCanvas({
             <span className="w-full truncate text-center text-base font-semibold text-text-primary sm:text-lg" title={teamName(match.a)}>
               {teamName(match.a)}
             </span>
-            <span className="text-2xs text-text-faint">客队</span>
+            <span className="text-2xs text-text-faint">
+              客队{TEAM_MAP[match.a]?.tag ? ` · ${TEAM_MAP[match.a].tag}` : ''}
+            </span>
           </div>
         </div>
 
@@ -267,10 +286,17 @@ export default function MatchCanvas({
         </div>
 
         {/* 叙事 + 操作 */}
-        <div className="mt-2.5 flex items-center justify-between gap-2">
-          <p className="min-w-0 truncate text-xs text-text-secondary" title={ticker}>
-            {hidden && live ? '比分已隐藏' : ticker}
-          </p>
+        <div className="mt-2.5 flex items-center justify-between gap-2 rounded-lg border border-white/[0.05] bg-surface-panel/50 px-2.5 py-1.5">
+          <div className="flex min-w-0 items-center gap-2">
+            {live ? (
+              <LiveDot />
+            ) : (
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/70" aria-hidden="true" />
+            )}
+            <p className="min-w-0 truncate text-xs text-text-secondary" title={ticker}>
+              {hidden && live ? '比分已隐藏' : ticker}
+            </p>
+          </div>
           <div className="flex shrink-0 items-center gap-1.5">
             {finished ? (
               hasFinal ? (

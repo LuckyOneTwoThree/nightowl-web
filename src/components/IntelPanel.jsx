@@ -353,13 +353,14 @@ function IdentitySection({ match, identity }) {
 }
 
 function AttributionSection({ ev, tier, index, storyB, followedB, leagueB }) {
+  const tierStyle = TIER_MAP[tier.label] || TIER_MAP.S0;
   const rows = [
-    ['看点星级', `${ev.star} / 3`],
-    ['故事线加成', storyB],
-    ['主队加成', followedB],
-    ['联赛加成', leagueB],
-    ['睡眠代价', `${tier.cost}h (${tier.label} ${tier.zh})`],
-    ['观看占用', `${WATCH_COST}h`]
+    ['看点星级', `${ev.star} / 3`, (ev.star / 3) * 100, 'bg-text-secondary'],
+    ['故事线加成', storyB, Math.min(100, (storyB / 16) * 100), 'bg-text-secondary'],
+    ['主队加成', followedB, Math.min(100, (followedB / 16) * 100), 'bg-text-secondary'],
+    ['联赛加成', leagueB, Math.min(100, (leagueB / 16) * 100), 'bg-text-secondary'],
+    ['睡眠代价', `${tier.cost}h (${tier.label} ${tier.zh})`, Math.min(100, (tier.cost / 4.5) * 100), tierStyle.solid],
+    ['观看占用', `${WATCH_COST}h`, Math.min(100, (WATCH_COST / 2) * 100), 'bg-line-control']
   ];
   return (
     <Block
@@ -367,19 +368,27 @@ function AttributionSection({ ev, tier, index, storyB, followedB, leagueB }) {
       title="指数归因"
       right={<Hint content="指数计算为：(基础看点 + 各项加成) ÷ (1 + 睡眠代价 + 观看占用)。各分项由推荐引擎实时算出，与排序口径完全一致。" align="end" />}
     >
-      <dl className="space-y-1">
-        {rows.map(([label, val]) => {
+      <dl className="space-y-1.5">
+        {rows.map(([label, val, pct, barCls]) => {
           const numeric = typeof val === 'number';
           const shown = numeric ? (val > 0 ? `+${val.toFixed(1)}` : val.toFixed(1)) : val;
           const tone = numeric ? (val > 0 ? 'text-text-primary' : 'text-text-faint') : 'text-text-secondary';
           return (
-            <div key={label} className="flex items-baseline justify-between gap-2">
-              <dt className="text-2xs text-text-muted">{label}</dt>
-              <dd className={`font-num text-2xs tabular-nums ${tone}`}>{shown}</dd>
+            <div key={label} className="space-y-0.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <dt className="text-2xs text-text-muted">{label}</dt>
+                <dd className={`font-num text-2xs tabular-nums ${tone}`}>{shown}</dd>
+              </div>
+              <div className="h-1 w-full overflow-hidden rounded-full bg-line-hairline" aria-hidden="true">
+                <div
+                  className={`h-full rounded-full ${barCls} ${pct > 0 ? 'opacity-80' : 'opacity-0'}`}
+                  style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
+                />
+              </div>
             </div>
           );
         })}
-        <div className="mt-1 flex items-baseline justify-between gap-2 border-t border-line-hairline pt-1">
+        <div className="mt-1 flex items-baseline justify-between gap-2 border-t border-line-hairline pt-1.5">
           <dt className="text-2xs font-medium text-text-secondary">综合指数</dt>
           {/* 与面板头部的「夜猫指数」是同一个数：金色只给头部那一个，
               这里的合计行留在表内闭合分解，不再重复强调 */}
@@ -438,10 +447,22 @@ function FormSection({ match, stats, onSelect }) {
                       onClick={() => f.matchId && onSelect?.(f.matchId)}
                       title="查看这场比赛"
                       aria-label={`查看 ${teamName(id)} 与 ${teamName(f.opponent)} 的比赛`}
-                      className="flex w-full items-baseline justify-between gap-2 rounded-md py-0.5 text-left transition-colors hover:bg-surface-raised focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none"
+                      className="flex w-full items-baseline justify-between gap-2 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-surface-raised focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none"
                     >
-                      <span className="min-w-0 truncate text-2xs text-text-muted">
-                        {f.isHome ? '主' : '客'} vs {teamName(f.opponent)}
+                      <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-2xs text-text-muted">
+                        <span
+                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                            f.result === 'W'
+                              ? 'bg-result-win'
+                              : f.result === 'D'
+                                ? 'bg-result-draw'
+                                : 'bg-result-loss'
+                          }`}
+                          aria-hidden="true"
+                        />
+                        <span className="truncate">
+                          {f.isHome ? '主' : '客'} vs {teamName(f.opponent)}
+                        </span>
                       </span>
                       <span className="font-num text-2xs tabular-nums text-text-secondary">{f.score}</span>
                     </button>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -74,12 +75,28 @@ function PlayerView({
   const insets = useSafeAreaInsets();
   const [panelOpen, setPanelOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [hudVisible, setHudVisible] = useState(true);
+  const hudOpacity = useRef(new Animated.Value(1)).current;
   const attemptsRef = useRef(0);
   const firstSourceRef = useRef(true);
   const stateRef = useRef({ lines, activeId: active.id });
   stateRef.current = { lines, activeId: active.id };
 
   useKeepAwake();
+
+  useEffect(() => {
+    Animated.timing(hudOpacity, {
+      toValue: hudVisible || panelOpen ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [hudVisible, panelOpen, hudOpacity]);
+
+  useEffect(() => {
+    if (!hudVisible || panelOpen) return undefined;
+    const timer = setTimeout(() => setHudVisible(false), 4000);
+    return () => clearTimeout(timer);
+  }, [hudVisible, panelOpen, active.id]);
 
   const player = useVideoPlayer(
     {
@@ -146,7 +163,12 @@ function PlayerView({
   };
 
   return (
-    <View style={styles.root}>
+    <View
+      style={styles.root}
+      onTouchStart={() => {
+        if (!hudVisible) setHudVisible(true);
+      }}
+    >
       <StatusBar hidden />
       <VideoView
         player={player}
@@ -157,23 +179,33 @@ function PlayerView({
         allowsPictureInPicture
       />
 
-      <View style={[styles.topBar, { top: insets.top + spacing.sm }]}>
+      <Animated.View
+        pointerEvents={hudVisible || panelOpen ? 'box-none' : 'none'}
+        style={[
+          styles.topBar,
+          { top: insets.top + spacing.sm, opacity: hudOpacity },
+        ]}
+      >
         <Pressable onPress={onBack} style={styles.topButton} accessibilityLabel="返回">
           <ChevronLeft size={20} color={colors.text} />
         </Pressable>
         <View style={styles.titlePill}>
+          <View style={styles.liveDot} />
           <Text style={styles.title} numberOfLines={1}>
-            {teamName(match.h)} vs {teamName(match.a)}
+            {teamName(match.h)} vs {teamName(match.a)} · {active.name}
           </Text>
         </View>
         <Pressable
-          onPress={() => setPanelOpen(value => !value)}
+          onPress={() => {
+            setHudVisible(true);
+            setPanelOpen(value => !value);
+          }}
           style={styles.topButton}
           accessibilityLabel="选择线路"
         >
           <ListVideo size={18} color={colors.text} />
         </Pressable>
-      </View>
+      </Animated.View>
 
       {notice ? (
         <View style={[styles.notice, { bottom: insets.bottom + 96 }]}>
@@ -266,16 +298,24 @@ const styles = StyleSheet.create({
   titlePill: {
     flex: 1,
     height: 34,
-    maxWidth: 300,
+    maxWidth: 340,
     borderRadius: radius.full,
-    backgroundColor: 'rgba(11,14,21,0.72)',
+    backgroundColor: 'rgba(11,14,21,0.78)',
     borderWidth: 1,
     borderColor: colors.hairline,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
     paddingHorizontal: spacing.md,
   },
-  title: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: radius.full,
+    backgroundColor: colors.live,
+  },
+  title: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600', flexShrink: 1 },
   notice: {
     position: 'absolute',
     alignSelf: 'center',

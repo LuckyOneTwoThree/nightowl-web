@@ -51,7 +51,8 @@ import { Crest } from '@/ui/Crest';
 import { MatchRow } from '@/ui/MatchRow';
 import { Screen } from '@/ui/Screen';
 import { SectionHeader } from '@/ui/SectionHeader';
-import { colors, fontSize, radius, spacing, tierColor, withAlpha } from '@/ui/theme';
+import { SleepBadge } from '@/ui/SleepBadge';
+import { colors, fontSize, radius, spacing, withAlpha } from '@/ui/theme';
 import type { Entry, Match, Narrative, Tier } from '@/types';
 
 type ReplayPick = Entry & { reason: string };
@@ -217,7 +218,7 @@ export default function TonightScreen() {
           hero={hero}
           narrative={heroNarrative}
           now={now}
-          weak={heroTier(hero.index) === 'weak'}
+          level={heroTier(hero.index) as 'highlight' | 'standard' | 'weak'}
           onPress={openHero}
         />
       ) : tonight.focal ? (
@@ -385,19 +386,21 @@ function HeroCard({
   hero,
   narrative,
   now,
-  weak,
+  level,
   onPress,
 }: {
   hero: Entry;
   narrative: Narrative | null;
   now: number;
-  weak: boolean;
+  level: 'highlight' | 'standard' | 'weak';
   onPress: () => void;
 }) {
   const tier = sleepTier(hero.m.t) as Tier;
   const countdown = engineCountdown(ts(hero.m.t), now);
-  const color = tierColor(tier.tier);
   const isLive = stateOf(hero.m, now) === 'live';
+  const weak = level === 'weak';
+  const isHighlight = level === 'highlight';
+  const energyFill = Math.max(1, Math.min(5, Math.ceil(hero.index / 6)));
 
   return (
     <Pressable
@@ -410,24 +413,47 @@ function HeroCard({
       style={({ pressed }) => [pressed && styles.pressed]}
     >
       <LinearGradient
-        colors={[withAlpha(teamColor(hero.m.h), 0.2), colors.card, colors.card]}
+        colors={
+          weak
+            ? [withAlpha(teamColor(hero.m.h), 0.12), colors.card, colors.card]
+            : [
+                withAlpha(teamColor(hero.m.h), isHighlight ? 0.25 : 0.2),
+                colors.card,
+                withAlpha(teamColor(hero.m.a), isHighlight ? 0.2 : 0.14),
+              ]
+        }
+        locations={[0, 0.55, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.hero}
+        style={[
+          styles.hero,
+          isHighlight && styles.heroHighlight,
+          weak && styles.heroWeak,
+        ]}
       >
         <View style={styles.heroTop}>
           <View style={styles.heroTopLeft}>
-            <Text style={styles.heroEyebrow}>今晚之选</Text>
+            <View style={styles.eyebrowRow}>
+              {isHighlight ? <Sparkles size={11} color={colors.accent} /> : null}
+              <Text
+                style={[
+                  styles.heroEyebrow,
+                  isHighlight && styles.heroEyebrowHighlight,
+                ]}
+              >
+                {isHighlight
+                  ? '今晚之选 · 焦点夜'
+                  : weak
+                    ? '今夜平淡 · 若熬夜看这一场'
+                    : '今晚之选'}
+              </Text>
+            </View>
             <Text style={styles.heroLeague}>
               {leagueName(hero.m.l)}
               {hero.m.r ? ` · 第 ${hero.m.r} 轮` : ''}
             </Text>
           </View>
-          <View style={[styles.tierPill, { borderColor: color }]}>
-            <Text style={[styles.tierText, { color }]}>
-              {tier.label} {tier.zh} · {tier.cost}h
-            </Text>
-          </View>
+          <SleepBadge tier={tier} size="md" showZh />
         </View>
 
         <View style={styles.teams}>
@@ -465,7 +491,20 @@ function HeroCard({
         <View style={styles.metrics}>
           <View style={styles.metric}>
             <Text style={styles.metricLabel}>夜猫指数</Text>
-            <Text style={styles.metricAccent}>{hero.index.toFixed(1)}</Text>
+            <View style={styles.metricIndexRow}>
+              <Text style={styles.metricAccent}>{hero.index.toFixed(1)}</Text>
+              <View style={styles.energyBarRow}>
+                {[1, 2, 3, 4, 5].map(step => (
+                  <View
+                    key={step}
+                    style={[
+                      styles.energyTick,
+                      step <= energyFill ? styles.energyTickOn : styles.energyTickOff,
+                    ]}
+                  />
+                ))}
+              </View>
+            </View>
           </View>
           <View style={styles.metricDivider} />
           <View style={styles.metric}>
@@ -499,9 +538,14 @@ function HeroCard({
           </View>
         ) : null}
 
-        <View style={styles.cta}>
-          <Text style={styles.ctaText}>{isLive ? '看直播' : '查看比赛'}</Text>
-          <ChevronRight size={16} color={colors.accentInk} />
+        <View style={[styles.cta, weak && !isLive && styles.ctaSecondary]}>
+          <Text style={[styles.ctaText, weak && !isLive && styles.ctaTextSecondary]}>
+            {isLive ? '看直播' : weak ? '查看详情' : '查看比赛'}
+          </Text>
+          <ChevronRight
+            size={16}
+            color={weak && !isLive ? colors.textSecondary : colors.accentInk}
+          />
         </View>
       </LinearGradient>
     </Pressable>
@@ -579,13 +623,23 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     overflow: 'hidden',
   },
+  heroHighlight: {
+    borderColor: withAlpha(colors.accent, 0.35),
+  },
+  heroWeak: {
+    borderColor: colors.hairline,
+  },
   heroTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   heroTopLeft: { gap: 3 },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   heroEyebrow: {
     color: colors.textFaint,
     fontSize: fontSize.xxs,
     fontWeight: '700',
     letterSpacing: 1,
+  },
+  heroEyebrowHighlight: {
+    color: colors.accent,
   },
   heroLeague: {
     color: colors.textSecondary,
@@ -649,12 +703,17 @@ const styles = StyleSheet.create({
   },
   metric: { flex: 1, gap: 3 },
   metricLabel: { color: colors.textFaint, fontSize: fontSize.xxs, letterSpacing: 0.4 },
+  metricIndexRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   metricAccent: {
     color: colors.accent,
     fontSize: fontSize.base,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
+  energyBarRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  energyTick: { width: 3, height: 10, borderRadius: 1.5 },
+  energyTickOn: { backgroundColor: colors.accent },
+  energyTickOff: { backgroundColor: withAlpha(colors.text, 0.14) },
   metricValue: {
     color: colors.textSecondary,
     fontSize: fontSize.md,
@@ -681,7 +740,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
   },
+  ctaSecondary: {
+    backgroundColor: colors.raised,
+    borderWidth: 1,
+    borderColor: colors.control,
+  },
   ctaText: { color: colors.accentInk, fontSize: fontSize.md, fontWeight: '800' },
+  ctaTextSecondary: { color: colors.textSecondary, fontWeight: '700' },
   focal: { gap: spacing.xs },
   focalTitle: { color: colors.text, fontSize: fontSize.xl, fontWeight: '700' },
   focalMeta: {

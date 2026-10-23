@@ -74,6 +74,7 @@ export default function TonightView({
         onReveal={onReveal}
         rivalry={ev.rivalry}
         minefield={minefieldIds.has(m.id)}
+        followedTeams={prefs.followedTeams}
       />
     );
   };
@@ -94,6 +95,7 @@ export default function TonightView({
       dateLabel={zhDate(datePart(p.m.t))}
       badge={<Chip tone="neutral">{p.reason}</Chip>}
       showSleep={false}
+      followedTeams={prefs.followedTeams}
     />
   );
 
@@ -117,6 +119,7 @@ export default function TonightView({
           tier={tier}
           narrative={narrative}
           state={stateOf(hero.m, now)}
+          active={hero.m.id === activeMatchId}
           now={now}
           onWatch={onSelect}
           indexHint={INDEX_HINT}

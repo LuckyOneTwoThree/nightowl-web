@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { useAppStore } from './app';
+
 export type Prefs = {
   followedTeams: string[];
   followedLeagues: string[];
@@ -41,7 +43,12 @@ export const usePrefsStore = create<PrefsStore>()(
     set => ({
       prefs: DEFAULT_PREFS,
       hydrated: false,
-      setPrefs: patch => set(state => ({ prefs: { ...state.prefs, ...patch } })),
+      setPrefs: patch => {
+        if (patch.spoilerFree !== undefined) {
+          useAppStore.getState().clearRevealed();
+        }
+        set(state => ({ prefs: { ...state.prefs, ...patch } }));
+      },
       toggleTeam: id =>
         set(state => {
           const existing = state.prefs.followedTeams;

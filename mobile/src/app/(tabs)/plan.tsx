@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, TriangleAlert } from 'lucide-react-native';
 
 import { leagueName, teamName } from '@data/index.js';
 import { computeWeek } from '@core/owl.js';
-import { sleepTier } from '@core/engine.js';
+import { nightOf, sleepTier } from '@core/engine.js';
 import { hm, hmCost, zhDate } from '@core/format.js';
 import { animateLayout } from '@/lib/layoutAnimation';
 import { useNow } from '@/lib/useNow';
@@ -18,6 +18,7 @@ import { Chip } from '@/ui/Chip';
 import { Crest } from '@/ui/Crest';
 import { Screen } from '@/ui/Screen';
 import { SectionHeader } from '@/ui/SectionHeader';
+import { SleepBadge } from '@/ui/SleepBadge';
 import {
   colors,
   fontSize,
@@ -25,6 +26,7 @@ import {
   radius,
   spacing,
   tierColor,
+  withAlpha,
 } from '@/ui/theme';
 import type { Entry, Ev, Match } from '@/types';
 
@@ -56,6 +58,7 @@ export default function PlanScreen() {
   const now = useNow(60_000);
   const [weekOffset, setWeekOffset] = useState(0);
   const [showZero, setShowZero] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const week = useMemo(
     () => computeWeek(now + weekOffset * 7 * DAY_MS, prefs) as unknown as WeekData,
@@ -69,12 +72,24 @@ export default function PlanScreen() {
   const plan = week.plan;
   const remain = Math.max(0, plan.budget - plan.used);
   const hasAnyMatches = week.days.some(day => day.count > 0);
+  const bestDaySet = useMemo(() => {
+    const s = new Set<string>();
+    for (const entry of plan.best) {
+      s.add(nightOf(entry.m.t));
+    }
+    return s;
+  }, [plan.best]);
+  const activeDayObj = useMemo(
+    () => (selectedDay ? week.days.find(d => d.date === selectedDay) ?? null : null),
+    [selectedDay, week.days]
+  );
 
   const openMatch = (id: string) =>
     router.push({ pathname: '/match/[id]', params: { id } });
 
   const changeWeek = (delta: number) => {
     void Haptics.selectionAsync();
+    setSelectedDay(null);
     setWeekOffset(value => value + delta);
   };
 
@@ -122,6 +137,27 @@ export default function PlanScreen() {
             <Text style={styles.budgetStat}>结余 {hmCost(remain)}</Text>
           </View>
         </View>
+        {plan.budget > 0 ? (
+          <View style={styles.budgetBarTrack}>
+            {plan.best.map(entry => {
+              const t = sleepTier(entry.m.t);
+              if (t.cost <= 0) return null;
+              const pct = Math.min(100, (t.cost / plan.budget) * 100);
+              return (
+                <View
+                  key={entry.m.id}
+                  style={[
+                    styles.budgetBarSegment,
+                    {
+                      width: `${pct}%`,
+                      backgroundColor: tierColor(t.tier),
+                    },
+                  ]}
+                />
+              );
+            })}
+          </View>
+        ) : null}
         <View style={styles.budgetRow}>
           {BUDGETS.map(hours => (
             <Chip
@@ -239,26 +275,91 @@ export default function PlanScreen() {
               <View style={styles.chart}>
                 {week.days.map((day, index) => {
                   const height = day.count === 0 ? 3 : Math.max(8, (day.cost / 4.5) * 58);
-                  const bucket = day.cost >= 4.5 ? 4 : day.cost >= 3.5 ? 3 : day.cost >= 2.5 ? 2 : day.cost >= 1 ? 1 : 0;
+                  const bucket =
+                    day.cost >= 4.5
+                      ? 4
+                      : day.cost >= 3.5
+                        ? 3
+                        : day.cost >= 2.5
+                          ? 2
+                          : day.cost >= 1
+                            ? 1
+                            : 0;
+                  const hasBest = bestDaySet.has(day.date);
+                  const isSelected = selectedDay === day.date;
                   return (
-                    <View key={day.date} style={styles.chartColumn}>
+                    <Pressable
+                      key={day.date}
+                      onPress={() => {
+                        void Haptics.selectionAsync();
+                        animateLayout();
+                        setSelectedDay(cur => (cur === day.date ? null : day.date));
+                      }}
+                      style={[
+                        styles.chartColumn,
+                        isSelected && styles.chartColumnActive,
+                      ]}
+                    >
+                      <View style={styles.chartDotSlot}>
+                        {hasBest ? <View style={styles.chartBestDot} /> : null}
+                      </View>
                       <View style={styles.chartBarWrap}>
                         <View
                           style={[
                             styles.chartBar,
                             {
                               height,
-                              backgroundColor: day.count === 0 ? colors.hairline : tierColor(bucket),
+                              backgroundColor:
+                                day.count === 0 ? colors.hairline : tierColor(bucket),
                             },
                           ]}
                         />
                       </View>
-                      <Text style={styles.chartLabel}>周{WEEKDAYS[index]}</Text>
+                      <Text
+                        style={[
+                          styles.chartLabel,
+                          isSelected && { color: colors.accent, fontWeight: '700' },
+                        ]}
+                      >
+                        周{WEEKDAYS[index]}
+                      </Text>
                       <Text style={styles.chartCount}>{day.count || '·'}</Text>
-                    </View>
+                    </Pressable>
                   );
                 })}
               </View>
+              {activeDayObj ? (
+                <View style={styles.dayPreview}>
+                  <View style={styles.dayPreviewHead}>
+                    <Text style={styles.dayPreviewTitle}>
+                      {zhDate(activeDayObj.date)} · {activeDayObj.count} 场未开赛
+                    </Text>
+                    <Text style={styles.dayPreviewCost}>
+                      最高消耗 {hmCost(activeDayObj.cost)}
+                    </Text>
+                  </View>
+                  {activeDayObj.matches.length > 0 ? (
+                    activeDayObj.matches.slice(0, 4).map(m => (
+                      <Pressable
+                        key={m.id}
+                        onPress={() => openMatch(m.id)}
+                        style={({ pressed }) => [
+                          styles.dayPreviewRow,
+                          pressed && styles.pressed,
+                        ]}
+                      >
+                        <Text style={styles.dayPreviewTime}>{hm(m.t)}</Text>
+                        <Text style={styles.dayPreviewTeams} numberOfLines={1}>
+                          {teamName(m.h)} vs {teamName(m.a)}
+                        </Text>
+                        <SleepBadge tier={sleepTier(m.t)} />
+                      </Pressable>
+                    ))
+                  ) : (
+                    <Text style={styles.emptyText}>当日暂无未开赛场次</Text>
+                  )}
+                </View>
+              ) : null}
               <Text style={styles.advice}>{week.advice}</Text>
             </>
           ) : (
@@ -324,9 +425,7 @@ function PickRow({ entry, onPress }: { entry: Entry; onPress: () => void }) {
       <View style={styles.pickMain}>
         <View style={styles.pickTop}>
           <Text style={styles.pickLeague}>{leagueName(match.l)}</Text>
-          <Chip tone={tier.tier >= 3 ? 'warn' : 'default'}>
-            {tier.label} · {tier.cost}h
-          </Chip>
+          <SleepBadge tier={tier} />
           <Text style={styles.pickIndex}>{entry.index.toFixed(1)}</Text>
         </View>
         <View style={styles.pickTeams}>
@@ -392,6 +491,20 @@ const styles = StyleSheet.create({
   budgetUnit: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: '500' },
   budgetStats: { alignItems: 'flex-end', gap: 3 },
   budgetStat: { color: colors.textMuted, fontSize: fontSize.xs },
+  budgetBarTrack: {
+    height: 7,
+    borderRadius: radius.full,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    gap: 2,
+  },
+  budgetBarSegment: {
+    height: '100%',
+    borderRadius: radius.full,
+  },
   budgetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingTop: spacing.xs },
   hint: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 17 },
   section: { gap: spacing.sm },
@@ -465,12 +578,56 @@ const styles = StyleSheet.create({
   mineTeams: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
   mineReason: { color: colors.textFaint, fontSize: fontSize.xs },
   mineTime: { color: colors.textMuted, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
-  chart: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, paddingTop: spacing.sm },
-  chartColumn: { flex: 1, alignItems: 'center', gap: 4 },
-  chartBarWrap: { height: 64, width: '100%', justifyContent: 'flex-end', alignItems: 'center' },
+  chart: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs, paddingTop: spacing.xs },
+  chartColumn: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    borderRadius: radius.md,
+  },
+  chartColumnActive: {
+    backgroundColor: withAlpha(colors.accent, 0.08),
+  },
+  chartDotSlot: { height: 6, justifyContent: 'center', alignItems: 'center' },
+  chartBestDot: {
+    width: 5,
+    height: 5,
+    borderRadius: radius.full,
+    backgroundColor: colors.accent,
+  },
+  chartBarWrap: { height: 60, width: '100%', justifyContent: 'flex-end', alignItems: 'center' },
   chartBar: { width: '62%', borderRadius: radius.sm, minHeight: 3 },
   chartLabel: { color: colors.textFaint, fontSize: fontSize.xs },
   chartCount: { color: colors.textMuted, fontSize: fontSize.xxs, fontVariant: ['tabular-nums'] },
+  dayPreview: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.hairline,
+    gap: spacing.xs,
+  },
+  dayPreviewHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  dayPreviewTitle: { color: colors.text, fontSize: fontSize.xs, fontWeight: '700' },
+  dayPreviewCost: { color: colors.textMuted, fontSize: fontSize.xxs, fontVariant: ['tabular-nums'] },
+  dayPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 4,
+  },
+  dayPreviewTime: {
+    width: 40,
+    color: colors.textSecondary,
+    fontSize: fontSize.xs,
+    fontVariant: ['tabular-nums'],
+  },
+  dayPreviewTeams: { flex: 1, color: colors.textSecondary, fontSize: fontSize.xs },
   advice: { color: colors.textMuted, fontSize: fontSize.xs, lineHeight: 18, marginTop: spacing.sm },
   emptyText: { color: colors.textMuted, fontSize: fontSize.sm },
   altRow: {
