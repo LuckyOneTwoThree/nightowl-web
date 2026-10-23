@@ -10,7 +10,7 @@
   <br />
 
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Android-2b6cb0?style=flat-square" alt="platform" />
-  <img src="https://img.shields.io/badge/release-v0.1.31-2f855a?style=flat-square" alt="release" />
+  <img src="https://img.shields.io/badge/release-v0.1.32-2f855a?style=flat-square" alt="release" />
   <img src="https://img.shields.io/badge/electron-33-47848f?style=flat-square" alt="electron" />
   <img src="https://img.shields.io/badge/expo%20sdk-58-000020?style=flat-square" alt="expo" />
   <img src="https://img.shields.io/badge/react-19-149eca?style=flat-square" alt="react" />
@@ -28,7 +28,7 @@
 
 <br />
 
-![开屏动画](docs/images/01-splash-v0131.png)
+![开屏动画](docs/images/01-splash-v0132.png)
 
 ---
 
@@ -101,23 +101,27 @@
 
 ### 今晚观赛 —— 分区 + 唯一推荐
 
-![今晚观赛](docs/images/02-tonight-v0131.png)
+![今晚观赛](docs/images/02-tonight-v0132.png)
 
 ### 赛程日历 —— 日期条 + 联赛分组
 
-![赛程日历](docs/images/03-schedule-v0131.png)
+![赛程日历](docs/images/03-schedule-v0132.png)
 
 ### 比赛情报与后续赛程
 
-![比赛情报与后续赛程](docs/images/04-modules-v0131.png)
+![比赛情报与后续赛程](docs/images/04-modules-v0132.png)
 
 ### 数据视角 —— 近况 / 赛季攻防 / 积分榜位置 / 交锋
 
-![数据视角](docs/images/05-intel-v0131.png)
+![数据视角](docs/images/05-intel-v0132.png)
+
+### 左栏「接下来」—— 当前比赛之后看什么
+
+![左栏接下来](docs/images/07-nextup-v0132.png)
 
 ### 完整积分榜 —— 联赛 / 欧冠全表与分区
 
-![完整积分榜](docs/images/06-standings-v0131.png)
+![完整积分榜](docs/images/06-standings-v0132.png)
 
 ---
 
