@@ -286,7 +286,8 @@ export default function PlayerStage({
   spoilerFree = true,
   revealed = false,
   onReveal,
-  notifyLiveEvents = true
+  notifyLiveEvents = true,
+  underVideo = null
 }) {
   // 秒级刷新只存在于本组件（倒计时文本与进行中的分钟数）。
   // 若由 App 供秒级 now，每秒重渲染会波及整个视图树 —— 赛程视图会每秒
@@ -738,6 +739,9 @@ export default function PlayerStage({
   const diffMs = kickTs - now;
   const isNearKickoff = state === 'sched' && diffMs <= 30 * 60 * 1000 && diffMs >= 0;
   const directLines = lines.filter(l => l.isDirect && l.url);
+  // 有长回顾/直播面板时，把情报放进主列，填满画面下方的空间；
+  // 赛前短侧栏仍保持「视频 + 侧栏」的广播台布局。
+  const stackIntel = finished || (live && !streamUrl);
 
   /* ---------------- 状态提示：按真实状态说话，不写死排期文案 ---------------- */
   const notices = [];
@@ -854,7 +858,7 @@ export default function PlayerStage({
 
   /* ---------------- 右侧协同栏 ---------------- */
   const ControlSidebar = (
-    <div className="broadcast-sheen flex w-full shrink-0 flex-col rounded-2xl border border-white/[0.055] bg-surface-panel/55 p-3 shadow-card backdrop-blur-xl transition-all xl:w-[315px] xl:self-stretch xl:p-4 min-h-0">
+    <div className="broadcast-sheen flex w-full shrink-0 flex-col rounded-2xl border border-white/[0.055] bg-surface-panel/55 p-3 shadow-card backdrop-blur-xl transition-all xl:w-[315px] xl:p-4 min-h-0">
       {live && (
         <LiveMatchPanel
           match={match}
@@ -974,14 +978,32 @@ export default function PlayerStage({
 
   return (
     <div className="flex w-full flex-col gap-2.5">
-      {/* 宽屏协同模式：父级 items-stretch，右侧侧栏严格与视频区等高，下端齐平 */}
+      {/* 宽屏协同模式：主列放视频 + 情报，右侧回顾独立成栏。
+          这样右侧回顾比画面高时，画面下方由情报填满，不再留下大块空白。
+          堆叠分支用默认 stretch：右栏卡片拉伸到与主列等高，页脚钉在卡片底部，
+          右下不再露出页面底色；赛前分支保持 items-start（侧栏通常比画面高）。 */}
       {!theaterMode ? (
-        <div className="flex w-full flex-col items-stretch gap-3 xl:flex-row xl:items-stretch">
-          <div className="player-adaptive-video flex min-w-0 flex-1">
-            {VideoScreen}
+        stackIntel ? (
+          <div className="flex w-full flex-col gap-3 xl:flex-row">
+            <div className="flex min-w-0 flex-1 flex-col gap-3">
+              <div className="player-adaptive-video flex min-w-0">
+                {VideoScreen}
+              </div>
+              {underVideo}
+            </div>
+            {ControlSidebar}
           </div>
-          {ControlSidebar}
-        </div>
+        ) : (
+          <>
+            <div className="flex w-full flex-col gap-3 xl:flex-row xl:items-start">
+              <div className="player-adaptive-video flex min-w-0 flex-1">
+                {VideoScreen}
+              </div>
+              {ControlSidebar}
+            </div>
+            {underVideo}
+          </>
+        )
       ) : (
         <div className="flex w-full flex-col gap-2.5">
           <div className="w-full">
@@ -1076,6 +1098,8 @@ export default function PlayerStage({
               </div>
             </div>
           )}
+
+          {underVideo}
 
           {finished && (
             <div className="w-full rounded-xl border border-line-hairline bg-surface-card px-3 pb-3 shadow-card">

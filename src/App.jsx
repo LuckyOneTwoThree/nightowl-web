@@ -26,6 +26,7 @@ import IntelPanel from './components/IntelPanel.jsx';
 import StandingsModal from './components/StandingsModal.jsx';
 import PlayerStage from './components/PlayerStage.jsx';
 import UpcomingFixtures from './components/UpcomingFixtures.jsx';
+import NextUpRail from './components/NextUpRail.jsx';
 import SameNightPicks from './components/SameNightPicks.jsx';
 import SettingsDrawer from './components/SettingsDrawer.jsx';
 import Onboarding, { shouldShowOnboarding } from './components/Onboarding.jsx';
@@ -598,21 +599,18 @@ export default function App() {
         <main className="flex min-h-0 flex-1 overflow-hidden">
           {/* 左栏：决策与列表 */}
           <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] 2xl:w-[390px] shrink-0 flex-col overflow-hidden border-r border-white/[0.05] bg-surface-panel p-4">
-          <div key={view} className="animate-view-enter flex h-full min-h-0 flex-col">
+          <div key={view} className="animate-view-enter flex min-h-0 flex-1 flex-col">
             {view === 'tonight' && (
               <TonightView
                 tonight={tonight}
                 now={clockTs}
                 activeMatchId={activeMatchId}
-                activeMatch={activeMatch}
                 onSelect={select}
                 prefs={prefs}
                 revealed={revealed}
                 onReveal={reveal}
                 countdownText={countdownText}
                 replayPicks={replayPicks}
-                onOpenWeek={() => setView('week')}
-                onOpenSchedule={() => setView('schedule')}
               />
             )}
 
@@ -644,6 +642,14 @@ export default function App() {
                 onOpenStandings={openStandings}
               />
             )}
+          </div>
+          <div className="shrink-0 pt-3">
+            <NextUpRail
+              match={activeMatch || tonight.focal?.m || tonight.hero?.m || null}
+              onSelect={select}
+              onOpenWeek={() => setView('week')}
+              onOpenSchedule={() => setView('schedule')}
+            />
           </div>
           </section>
 
@@ -683,16 +689,18 @@ export default function App() {
                 revealed={activeMatch ? revealed.has(activeMatch.id) : false}
                 onReveal={reveal}
                 notifyLiveEvents={prefs.notifyLiveEvents}
-              />
-              <IntelPanel
-                match={activeMatch}
-                prefs={prefs}
-                intel={activeIntel}
-                indexHint={INDEX_HINT}
-                isHeroMatch={!!tonight.hero && activeMatch?.id === tonight.hero.m.id}
-                onSelect={select}
-                onOpenStandings={openStandings}
-                now={clockTs}
+                underVideo={
+                  <IntelPanel
+                    match={activeMatch}
+                    prefs={prefs}
+                    intel={activeIntel}
+                    indexHint={INDEX_HINT}
+                    isHeroMatch={!!tonight.hero && activeMatch?.id === tonight.hero.m.id}
+                    onSelect={select}
+                    onOpenStandings={openStandings}
+                    now={clockTs}
+                  />
+                }
               />
               <div className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-2">
                 <UpcomingFixtures match={activeMatch} prefs={prefs} onSelect={select} />

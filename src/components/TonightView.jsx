@@ -5,7 +5,6 @@ import { evalOne, stateOf, heroTier, groupTonight } from '../core/owl.js';
 import { storylines } from '../data/index.js';
 import HeroCard, { NoMatchCard } from './HeroCard.jsx';
 import MatchRow from './MatchRow.jsx';
-import NextUpRail from './NextUpRail.jsx';
 import { Chip, LiveDot, SectionLabel } from './atoms.jsx';
 
 /** 夜猫指数口径说明 —— 从常驻版面收进 Hint（P2：界面不再解释自己） */
@@ -24,18 +23,14 @@ export default function TonightView({
   tonight,
   now,
   activeMatchId,
-  activeMatch = null,
   onSelect,
   prefs,
   revealed,
   onReveal,
   countdownText,
-  replayPicks = [],
-  onOpenWeek,
-  onOpenSchedule
+  replayPicks = []
 }) {
   const { night, slice, hero, focal, minefieldIds } = tonight;
-  const contextMatch = activeMatch || focal?.m || hero?.m || null;
 
   const narrative = useMemo(
     () => (hero ? narrativeOf(hero.m, hero.ev, storylines) : null),
@@ -158,8 +153,7 @@ export default function TonightView({
         今晚赛程 · {zhDate(night)} {weekdayOf(night)}
       </SectionLabel>
 
-      <div ref={listRef} className="scrollbar-thin -mr-1 flex min-h-0 flex-1 flex-col overflow-y-auto pr-1">
-        <div className="space-y-0.5">
+      <div ref={listRef} className="scrollbar-thin -mr-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1">
         {total > 0 && (
           <>
             {groups.live.length > 0 && (
@@ -204,16 +198,6 @@ export default function TonightView({
             {replayPicks.map(renderReplayRow)}
           </>
         )}
-        </div>
-
-        <div className="mt-auto pt-3">
-          <NextUpRail
-            match={contextMatch}
-            onSelect={onSelect}
-            onOpenWeek={onOpenWeek}
-            onOpenSchedule={onOpenSchedule}
-          />
-        </div>
       </div>
     </div>
   );
