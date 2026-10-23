@@ -604,12 +604,15 @@ export default function App() {
                 tonight={tonight}
                 now={clockTs}
                 activeMatchId={activeMatchId}
+                activeMatch={activeMatch}
                 onSelect={select}
                 prefs={prefs}
                 revealed={revealed}
                 onReveal={reveal}
                 countdownText={countdownText}
                 replayPicks={replayPicks}
+                onOpenWeek={() => setView('week')}
+                onOpenSchedule={() => setView('schedule')}
               />
             )}
 
