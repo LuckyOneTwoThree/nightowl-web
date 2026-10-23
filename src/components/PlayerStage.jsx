@@ -315,6 +315,28 @@ export default function PlayerStage({
   const [streamKind, setStreamKind] = useState(null);
   const [error, setError] = useState(null);
 
+  // 广播行（赛前 / 有视频直播）里右栏高度跟随画面卡片：
+  // 内容短于画面时拉伸补齐，长于画面时栏内滚动，避免任一侧露出大片空白。
+  const videoCardRef = useRef(null);
+  const [videoCardH, setVideoCardH] = useState(0);
+  useEffect(() => {
+    const stacked = state === 'finished' || state === 'ended_pending' || (state === 'live' && !streamUrl);
+    if (theaterMode || stacked) {
+      setVideoCardH(0);
+      return undefined;
+    }
+    const el = videoCardRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(entries => {
+      const entry = entries[0];
+      // contentRect 不含边框；用 borderBox 尺寸与视觉高度一致
+      const h = Math.round(entry.borderBoxSize?.[0]?.blockSize ?? el.getBoundingClientRect().height);
+      setVideoCardH(prev => (Math.abs(prev - h) < 1 ? prev : h));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [theaterMode, state, streamUrl, match?.id]);
+
   const [lines, setLines] = useState([]);
   const [loadingLines, setLoadingLines] = useState(false);
   const [activeLineId, setActiveLineId] = useState(null);
@@ -772,6 +794,7 @@ export default function PlayerStage({
   /* ---------------- 视频核心屏 ---------------- */
   const VideoScreen = (
     <div
+      ref={videoCardRef}
       style={{
         aspectRatio: `${aspectRatio}`
       }}
@@ -857,8 +880,15 @@ export default function PlayerStage({
   /* ---------------- 线路按钮（两种模式共用，组件定义见模块作用域） ---------------- */
 
   /* ---------------- 右侧协同栏 ---------------- */
+  // 广播行：栏高钉在画面卡片高度（短则拉伸、长则栏内滚动）；
+  // 堆叠分支：栏随主列等高拉伸，不做上限。
   const ControlSidebar = (
-    <div className="broadcast-sheen flex w-full shrink-0 flex-col rounded-2xl border border-white/[0.055] bg-surface-panel/55 p-3 shadow-card backdrop-blur-xl transition-all xl:w-[315px] xl:p-4 min-h-0">
+    <div
+      className={`broadcast-sheen flex w-full shrink-0 flex-col rounded-2xl border border-white/[0.055] bg-surface-panel/55 p-3 shadow-card backdrop-blur-xl transition-all xl:w-[315px] xl:p-4 min-h-0 ${
+        stackIntel ? '' : 'xl:max-h-[var(--rail-h)] xl:overflow-y-auto xl:overscroll-contain scrollbar-thin'
+      }`}
+      style={stackIntel ? undefined : { '--rail-h': videoCardH ? `${videoCardH}px` : 'none' }}
+    >
       {live && (
         <LiveMatchPanel
           match={match}
@@ -995,7 +1025,7 @@ export default function PlayerStage({
           </div>
         ) : (
           <>
-            <div className="flex w-full flex-col gap-3 xl:flex-row xl:items-start">
+            <div className="flex w-full flex-col gap-3 xl:flex-row">
               <div className="player-adaptive-video flex min-w-0 flex-1">
                 {VideoScreen}
               </div>
