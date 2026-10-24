@@ -365,7 +365,7 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const tonight = useMemo(() => computeTonight(Date.now(), prefs), [minuteKey, prefs, dataRev]);
 
-  // 最近值得补看：只扫描最近 48h，排除今晚已在赛程里的场次；不新增数据源
+  // 最近值得补看：只扫描最近 96h（REPLAY_WINDOW_MS），排除今晚已在赛程里的场次；不新增数据源
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const replayPicks = useMemo(() => computeReplayPicks(Date.now(), prefs, 3), [minuteKey, prefs, dataRev]);
 
@@ -575,6 +575,37 @@ export default function App() {
   const overlayOpen =
     settingsOpen || onboardingOpen || updateModalOpen || splashOpen || paletteOpen || !!standingsState;
 
+  /**
+   * Escape 浮层栈：一次 Esc 只关最上层浮层。
+   *
+   * 此前各浮层在 window 上无条件监听 Escape，设置抽屉 + 更新弹窗叠加时
+   * （设置里点「检查更新」不关抽屉）一次 Esc 会连关两层，丢失上下文。
+   * 各组件的监听已移除，由这里按「后开者在上」派发；SplashScreen 不入栈——
+   * 它永远在最顶层且自带 Space/Enter/Escape 跳过键。
+   */
+  const overlayCloseStack = useMemo(() => {
+    const stack = [];
+    if (settingsOpen) stack.push(() => setSettingsOpen(false));
+    if (onboardingOpen) stack.push(() => setOnboardingOpen(false));
+    if (updateModalOpen) stack.push(() => setUpdateModalOpen(false));
+    if (standingsState) stack.push(closeStandings);
+    if (paletteOpen) stack.push(() => setPaletteOpen(false));
+    // 开屏永远在最顶层（z 最高），也入栈：它自带 Esc 跳过键，与栈派发对同一动作
+    // 重复触发是无害幂等；不入栈则首次启动「开屏 + 引导」同屏时一次 Esc 会连关两层
+    if (splashOpen) stack.push(handleCloseSplash);
+    return stack;
+  }, [settingsOpen, onboardingOpen, updateModalOpen, standingsState, paletteOpen, splashOpen, closeStandings, handleCloseSplash]);
+
+  useEffect(() => {
+    if (overlayCloseStack.length === 0) return undefined;
+    const onEsc = e => {
+      if (e.key !== 'Escape') return;
+      overlayCloseStack[overlayCloseStack.length - 1]();
+    };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [overlayCloseStack]);
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden stage-atmosphere text-text-primary">
       <div className="flex min-h-0 flex-1 flex-col" inert={overlayOpen || undefined}>
@@ -751,6 +782,8 @@ export default function App() {
         match={standingsState?.matchId ? matchMap[standingsState.matchId] || null : null}
         now={clockTs}
         dataRev={dataRev}
+        spoilerFree={prefs.spoilerFree}
+        revealed={revealed}
         onClose={closeStandings}
       />
 

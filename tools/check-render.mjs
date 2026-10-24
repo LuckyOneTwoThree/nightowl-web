@@ -7,7 +7,9 @@
  *   · #root 有内容；
  *   · 没有 Uncaught / ReferenceError / TypeError；
  *   · 命令面板能打开并关闭；
- *   · 点击第一场比赛后应用仍存活。
+ *   · 点击第一场比赛后应用仍存活；
+ *   · 防剧透开启时完赛场次走「揭晓比分」路径不崩；
+ *   · 失效深链 ?match=自动降级到今晚之选，不白屏（hooks 违规回归）。
  *
  * 运行：npm run build && npm run check:render
  * CI 在 Windows runner 上执行同一脚本。
@@ -286,6 +288,67 @@ app.whenReady().then(async () => {
     );
     ok('★ 完赛详情仍无致命错误',
       !errors.some(m => /Uncaught|ReferenceError|TypeError|is not defined|Cannot read/i.test(m)),
+      errors.join(' | ')
+    );
+
+    /* ---------- 防剧透揭晓路径（spoilerFree=true）----------
+       此前冒烟固定 spoilerFree=false，隐藏分支从未被真实渲染过。 */
+    await win.webContents.executeJavaScript(`localStorage.setItem('spoilerFree','true'); true`);
+    await waitLoad(win, `${base}/?view=tonight&match=PL-7-NFO-ARS`);
+    await sleep(1600);
+    const hiddenState = await win.webContents.executeJavaScript(`
+      (() => {
+        // 只查右栏舞台：左栏列表（补看行）的「揭晓」属于别的场次
+        const right = document.querySelectorAll('main > section')[1] || document.body;
+        return {
+          revealBtn: [...right.querySelectorAll('button')].some(
+            b => (b.textContent || '').trim() === '揭晓比分'
+          )
+        };
+      })()
+    `);
+    ok('★ 防剧透开启时完赛场次提供「揭晓比分」入口', hiddenState.revealBtn, JSON.stringify(hiddenState));
+
+    const revealClicked = await win.webContents.executeJavaScript(`
+      (() => {
+        const right = document.querySelectorAll('main > section')[1] || document.body;
+        const btn = [...right.querySelectorAll('button')].find(
+          b => (b.textContent || '').trim() === '揭晓比分'
+        );
+        if (!btn) return false;
+        btn.click();
+        return true;
+      })()
+    `);
+    await sleep(600);
+    const afterReveal = await win.webContents.executeJavaScript(
+      `document.getElementById('root')?.children.length || 0`
+    );
+    ok('★ 揭晓后应用存活且无致命错误',
+      revealClicked && afterReveal >= 1 &&
+        !errors.some(m => /Uncaught|ReferenceError|TypeError|is not defined|Cannot read/i.test(m)),
+      errors.join(' | ')
+    );
+
+    /* ---------- 失效深链自愈 ----------
+       ?match=<不存在> → activeMatch null → 自动降级今晚之选（null→非 null）。
+       UpcomingFixtures/SameNightPicks 曾在 useMemo 前 early-return，
+       这条路径触发 "Rendered more hooks" 整页白屏（P0 hooks 修复的回归锚点）。 */
+    await waitLoad(win, `${base}/?view=tonight&match=BADID-XX-YY-ZZ`);
+    await sleep(1600);
+    const healed = await win.webContents.executeJavaScript(`
+      (() => ({
+        rootChildren: document.getElementById('root')?.children.length || 0,
+        matchParam: new URLSearchParams(location.search).get('match'),
+        text: document.body.innerText.slice(0, 120)
+      }))()
+    `);
+    ok('★ 失效深链不白屏（root 存活）', healed.rootChildren >= 1, JSON.stringify(healed));
+    ok('★ 失效深链自愈到有效比赛', !!healed.matchParam && healed.matchParam !== 'BADID-XX-YY-ZZ', JSON.stringify(healed));
+    ok('★ 失效深链路径无致命错误（含 hooks 违规回归）',
+      !errors.some(m =>
+        /Uncaught|ReferenceError|TypeError|is not defined|Cannot read|Rendered more hooks/i.test(m)
+      ),
       errors.join(' | ')
     );
   } catch (err) {

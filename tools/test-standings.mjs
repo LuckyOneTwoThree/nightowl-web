@@ -80,6 +80,22 @@ const afterS3 = computeStandings('PL', synthetic, {
 ok('S3 完赛后 1ms 才纳入', afterS3.doneCount === 3, `实际 ${afterS3.doneCount}`);
 ok('纳入 S3 后 C 升到第一', afterS3.rows[0].teamId === 'C');
 
+console.log('\n二·五、防剧透排除：excludeIds');
+// 场景：今晚已完赛但未「揭晓」的场次不得把积分/净胜球变化透进积分榜。
+// 排除 S3/S4 后榜应回到第 1 轮后的形态，且 excludedCount 如实计数。
+const hidden = computeStandings('PL', synthetic, { excludeIds: new Set(['S3', 'S4']) });
+ok('排除后只算未被隐藏的场次', hidden.doneCount === 2, `实际 ${hidden.doneCount}`);
+ok('排除场次如实计数', hidden.excludedCount === 2, `实际 ${hidden.excludedCount}`);
+ok('排除后回到第 1 轮口径（A 第一）', hidden.rows[0].teamId === 'A' && hidden.rows[0].points === 3);
+ok('无排除时 excludedCount 为 0', all.excludedCount === 0, `实际 ${all.excludedCount}`);
+// 排除一个「本就不会计入」的场次（sched）不得虚增 excludedCount
+const hiddenSched = computeStandings('PL', synthetic, { excludeIds: new Set(['S5']) });
+ok(
+  '排除未完赛场次不计入 excludedCount',
+  hiddenSched.excludedCount === 0 && hiddenSched.doneCount === 4,
+  `实际 excluded=${hiddenSched.excludedCount} done=${hiddenSched.doneCount}`
+);
+
 const historical = computeMatchStandings(synthetic[2], synthetic, {
   nowTs: ts('2026-08-08T22:00') + 1
 });

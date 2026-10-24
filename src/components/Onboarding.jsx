@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FOLLOWABLE_LEAGUES, LEAGUE_NAMES, leagueColor } from '../data/index.js';
 import { BrandLogo, Button, Chip, Hint, Meta, TogglePill } from './atoms.jsx';
 import TeamPicker from './TeamPicker.jsx';
@@ -47,6 +47,13 @@ const LEAGUE_RULE =
  */
 export default function Onboarding({ open, prefs, onPrefsChange, onClose }) {
   const [step, setStep] = useState(1);
+  const step2FirstRef = useRef(null);
+
+  // 背景 inert 时键盘焦点不能落在 body 上：第 1 步 TeamPicker 自带 autoFocus，
+  // 第 2 步此前没有落点 —— 聚焦第一个联赛开关。
+  useEffect(() => {
+    if (open && step === 2) step2FirstRef.current?.focus();
+  }, [open, step]);
 
   const patch = p => onPrefsChange({ ...prefs, ...p });
 
@@ -126,6 +133,7 @@ export default function Onboarding({ open, prefs, onPrefsChange, onClose }) {
                 {FOLLOWABLE_LEAGUES.map(code => (
                   <TogglePill
                     key={code}
+                    ref={code === FOLLOWABLE_LEAGUES[0] ? step2FirstRef : undefined}
                     on={prefs.followedLeagues.includes(code)}
                     onClick={() => toggleLeague(code)}
                     label={LEAGUE_NAMES[code]}

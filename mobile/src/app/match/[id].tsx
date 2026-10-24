@@ -167,14 +167,16 @@ export default function MatchScreen() {
     for (const event of liveEvents) {
       const key = eventKey(event);
       if (next.has(key)) continue;
+      // 基线无条件记录：静默期到达的事件不因之后「揭晓」而补发（与桌面口径一致）
       next.add(key);
-      if (prefs.notifyLiveEvents && shouldNotifyEvent(event)) {
+      // 防剧透：比分未揭晓时进球/红牌事件 toast 等于直接剧透
+      if (prefs.notifyLiveEvents && scoreVisible && shouldNotifyEvent(event)) {
         setToast(eventSummary(event, match));
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     }
     prevLiveEvents.current = next;
-  }, [liveEvents, match, prefs.notifyLiveEvents]);
+  }, [liveEvents, match, prefs.notifyLiveEvents, scoreVisible]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -278,7 +280,7 @@ export default function MatchScreen() {
           >
             {finishedNow && scoreVisible && finalScore
               ? `${teamName(match.h)} ${finalScore} ${teamName(match.a)}`
-              : liveNow && liveScoreText
+              : liveNow && liveScoreText && scoreVisible
                 ? `${teamName(match.h)} ${liveScoreText} ${teamName(match.a)}`
                 : `${teamName(match.h)} vs ${teamName(match.a)}`}
           </Animated.Text>
@@ -343,9 +345,22 @@ export default function MatchScreen() {
                 </>
               ) : finishedNow ? (
                 <Text style={styles.vs}>已结束</Text>
-              ) : liveNow && liveScoreText ? (
+              ) : liveNow && liveScoreText && scoreVisible ? (
                 <>
                   <Text style={styles.score}>{liveScoreText}</Text>
+                  <View style={styles.liveRow}>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.liveLabel}>
+                      {liveData?.statusText || '进行中'} {liveMinuteText}
+                    </Text>
+                  </View>
+                </>
+              ) : liveNow && liveScoreText ? (
+                <>
+                  <Pressable onPress={handleRevealScore} style={styles.revealButton}>
+                    <Eye size={13} color={colors.accent} />
+                    <Text style={styles.revealText}>揭晓实时比分</Text>
+                  </Pressable>
                   <View style={styles.liveRow}>
                     <View style={styles.liveDot} />
                     <Text style={styles.liveLabel}>
@@ -464,6 +479,8 @@ export default function MatchScreen() {
             intel={intel}
             live={liveData}
             isLive={liveNow}
+            scoreVisible={scoreVisible}
+            onReveal={handleRevealScore}
             onOpenMatch={matchId =>
               router.push({ pathname: '/match/[id]', params: { id: matchId } })
             }
@@ -527,6 +544,8 @@ function IntelTab({
   intel,
   live,
   isLive,
+  scoreVisible,
+  onReveal,
   onOpenMatch,
 }: {
   match: Match;
@@ -540,6 +559,8 @@ function IntelTab({
   };
   live: LiveData | null;
   isLive: boolean;
+  scoreVisible: boolean;
+  onReveal: () => void;
   onOpenMatch: (id: string) => void;
 }) {
   const [showAttribution, setShowAttribution] = useState(false);
@@ -553,9 +574,20 @@ function IntelTab({
   return (
     <View style={styles.tabGap}>
       {live && live.events.length > 0 ? (
-        <Card style={styles.cardGap}>
-          <LiveTimeline match={match} events={live.events} live={isLive} />
-        </Card>
+        scoreVisible ? (
+          <Card style={styles.cardGap}>
+            <LiveTimeline match={match} events={live.events} live={isLive} />
+          </Card>
+        ) : (
+          <Card style={styles.cardGap}>
+            <Pressable onPress={onReveal} style={styles.revealButton}>
+              <Eye size={13} color={colors.accent} />
+              <Text style={styles.revealText}>
+                {isLive ? '实时事件已隐藏 · 揭晓' : '比赛事件已隐藏 · 揭晓'}
+              </Text>
+            </Pressable>
+          </Card>
+        )
       ) : null}
 
       <Card style={styles.cardGap}>

@@ -234,7 +234,8 @@ export function evalOne(m, prefs) {
   return { ev, index: E.owlIndex(ev, m, E.PRODUCT_WEIGHTS) };
 }
 
-/** 补看窗口：只回看最近两天，避免把整季旧赛果变成推荐噪声 */
+/** 补看窗口：只回看最近 96h（4 天），避免把整季旧赛果变成推荐噪声。
+ *  ⚠️ 口径唯一出处：UI 文案（补看分区标题）与 App 层注释都以此常量为准，勿另写数字 */
 export const REPLAY_WINDOW_MS = 96 * 3600000;
 
 /**

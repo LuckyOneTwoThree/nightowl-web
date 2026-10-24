@@ -71,15 +71,8 @@ export default function SettingsDrawer({
     if (open) loadFreshness();
   }, [open, loadFreshness]);
 
-  // Escape 关闭：抽屉常驻渲染，键盘用户需要一条不依赖鼠标的退出路径
-  useEffect(() => {
-    if (!open) return;
-    const onKey = e => {
-      if (e.key === 'Escape') onClose?.();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  // Escape 关闭已上收到 App 的浮层栈统一派发（一次 Esc 只关最上层，
+  // 修复「设置 + 更新弹窗叠加时一次 Esc 连关两层」）；这里不再各自监听。
 
   const runSync = async () => {
     setSyncing(true);

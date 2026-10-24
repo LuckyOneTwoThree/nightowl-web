@@ -194,7 +194,7 @@ export default function TonightView({
 
         {replayPicks.length > 0 && (
           <>
-            <SectionHead label="最近值得补看" count={replayPicks.length} />
+            <SectionHead label="最近值得补看 · 近 4 天" count={replayPicks.length} />
             {replayPicks.map(renderReplayRow)}
           </>
         )}

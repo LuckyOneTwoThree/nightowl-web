@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { hm, zhDate, weekdayOf, datePart } from '../core/format.js';
-import { teamName, teamColor, leagueName, TEAM_MAP } from '../data/index.js';
+import { teamName, teamColor, leagueName } from '../data/index.js';
 import { computeMatchStats } from '../core/stats.js';
 import { eventSummary } from '../core/live-events.js';
 import { Button, Chip, Crest, LiveDot, Meta } from './atoms.jsx';
@@ -147,9 +147,8 @@ export default function MatchCanvas({
             <span className="w-full truncate text-center text-base font-semibold text-text-primary sm:text-lg" title={teamName(match.h)}>
               {teamName(match.h)}
             </span>
-            <span className="text-2xs text-text-faint">
-              主队{TEAM_MAP[match.h]?.tag ? ` · ${TEAM_MAP[match.h].tag}` : ''}
-            </span>
+            {/* 身份标签（卫冕冠军等）只由 IntelPanel 的 IdentitySection 表达——
+                画布已有队徽+队名+主客方位三重信息，这里再放一份是纯噪声 */}
           </div>
 
           <div className="flex min-w-[140px] shrink-0 flex-col items-center">
@@ -232,9 +231,6 @@ export default function MatchCanvas({
             <Crest id={match.a} size={54} className="drop-shadow-[0_6px_18px_rgba(0,0,0,0.45)]" />
             <span className="w-full truncate text-center text-base font-semibold text-text-primary sm:text-lg" title={teamName(match.a)}>
               {teamName(match.a)}
-            </span>
-            <span className="text-2xs text-text-faint">
-              客队{TEAM_MAP[match.a]?.tag ? ` · ${TEAM_MAP[match.a].tag}` : ''}
             </span>
           </div>
         </div>

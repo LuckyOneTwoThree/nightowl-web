@@ -1157,3 +1157,69 @@ React 没有错误边界，整棵树卸载，`#root` 变成 0 个子节点 → �
 | 赛前 1120×700 | 低于 xl 列堆叠，无高度上限 |
 | 完赛 UCL-3-LIV-VIL | 右栏底边 = 情报底边 790，回归通过 |
 | `npm run test:all` / `check:render` | **661/661** · **17/17** |
+
+## 二十一、批次 1：缺陷修复 + 观看控制闭环（2026-10-24）· v0.1.35
+
+深度审计（桌面 UI / 手机端 / 跨端信任链路三路并行）产出约 50 条发现，归并为
+P0 缺陷 + 四条主线（信任闭环 / 观看体验 / 手机链路 / UI 打磨），分五批落地。
+本批先收崩溃与高风险项。
+
+### P0 缺陷
+
+- **hooks 违规崩溃**：`UpcomingFixtures` / `SameNightPicks` 在 `useMemo` 前
+  early-return，`activeMatch` null→非 null（失效深链 `?match=` 自动降级）时
+  React 抛 "Rendered more hooks" 整页白屏。early-return 后移 + 钩子内判空
+  （`upcomingForTeams` / `sameNightPicks` 首行就读 `m.t`，不接 null ——
+  这一点是新增冒烟实测抓出来的，第一版修复只移了 return 仍然崩）。
+- **防剧透三处缺口**：
+  - 桌面积分榜：`computeStandings` 新增 `excludeIds` 选项 +
+    `excludedCount` 返回；`StandingsModal` 接收 spoilerFree/revealed，
+  排除「今晚已完赛未揭晓」场次并在「截至」行如实标注「已排除今晚未揭晓 N 场」
+  （只排今晚窗口——全排会让榜停在无法解释的旧时点，同样是撒谎）；
+  - 手机实时事件 toast：补 `scoreVisible` 抑制（与桌面口径一致），
+  基线无条件记录，揭晓后不补发；
+  - 手机 live 比分：hero 中央、紧凑标题、IntelTab 事件时间线三处补 reveal 门。
+- **假快捷键文案**：SHORTCUT_HINT 承诺 F/P/1-9 但从未实现 → 本批直接实现真实
+  快捷键（见下），不再撒谎。
+- **补看窗口口径**：常量 96h 唯一化，修正 owl.js「两天」/ App「48h」两处注释，
+  补看分区标题写明「近 4 天」。
+
+### 观看控制闭环
+
+- **起播静音首帧**（Player.jsx）：首次使用默认静音 + 画面中央「点击开启声音」
+  （8 秒后自动退场）；音量/静音偏好 localStorage 持久化，之后起播沿用。
+  修凌晨自动换线 50% 音量外放。
+- **播放作用域快捷键**：F 全屏 / P 画中画 / M 静音 / 1–9 切直链
+  （Player 经 onReady 暴露 art 实例）；浮层打开不响应、输入框聚焦让位、
+  带修饰键不拦截；空格/方向键仍由 ArtPlayer 内建热键处理。
+- **剧场模式控制**：剧场分支补 notices（换线/错误提示）与「停止」按钮
+  （收起态入线路条右端，展开态入头部），修播放出错时的无声失败。
+- **Escape 浮层栈**：App 按栈派发（settings → onboarding → update →
+  standings → palette → splash，后开者在上），移除三个组件各自的 window 监听，
+  修「设置 + 更新弹窗叠加时一次 Esc 连关两层」；开屏也入栈（自身 Esc 与栈派发
+  幂等共存，避免首次启动「开屏 + 引导」同屏连关）；Onboarding 第 2 步聚焦
+  第一个联赛开关（第 1 步 TeamPicker 原有 autoFocus）。
+
+### 信息去重
+
+- MatchCanvas 两侧队名下的「主队/客队 · 身份标签」移除——画布已有队徽+队名+
+  主客方位三重信息，身份只由 IntelPanel「赛季身份」表达；
+- SameNightPicks 指数从 `text-accent` 降为中性主文字色——次级推荐模块每行
+  3 个金色数字会稀释 Hero 与情报面板头的核心指数强调。
+
+### 验证
+
+| 项目 | 结果 |
+| :--- | :--- |
+| 离线套件 | **666 项全过**（原 661 + 积分榜 excludeIds 5 项） |
+| `check:render` | **22/22**（原 17 + 防剧透揭晓路径 2 + 失效深链自愈 3） |
+| 截图复核 | 1440 完赛视图：画布身份标签已移除、布局无破损、左栏/接下来正常 |
+| 手机端 | `sync:shared` / `verify:shared` / `typecheck` / `export:android` 全过（5.8MB） |
+| 构建 | 主包 692.93KB（gzip 170.97KB）；Player 718.99KB |
+
+### 后续批次（已排定，另行实施）
+
+批次 2 桌面信任闭环（托盘/自启/通知权限、关注球队全集进球提醒、数据新鲜度
+闭环、同步状态机、错误归真）；批次 3 体验主菜（全局热键、滚动记忆、断流预算
+恢复、开球起播去延迟、NextUpRail 差异化、Hero CTA、舞台高度恒定）；
+批次 4 手机端核心链路；批次 5 打磨收尾（a11y、文档对齐）。

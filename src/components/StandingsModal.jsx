@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getFixtures, leagueName, teamName } from '../data/index.js';
 import { STANDINGS_LEAGUES, computeStandings, standingsCutoff } from '../core/standings.js';
-import { isFinished } from '../core/engine.js';
+import { isFinished, nightOf, owlDay } from '../core/engine.js';
 import { bjDate } from '../core/format.js';
 import { Chip, Crest, Hint, Meta } from './atoms.jsx';
 import { IconClose } from './icons.jsx';
@@ -37,8 +37,12 @@ function fmtGd(n) {
  *
  * 不是第四个顶栏视图：从本场积分位置或赛程页展开，关闭后回到原上下文。
  * 本场联赛用本场截止点；切到其他联赛用当前已同步，避免无关联赛显示历史时点。
+ *
+ * 防剧透：开启 spoilerFree 时，「今晚」已完赛但未揭晓的场次不计入积分
+ * （它们的积分/净胜球变化等于把比分数学揭晓了）；排除数量在「截至」行如实标注。
+ * 只排今晚窗口——把所有未揭晓场次都排掉会让榜停在看不出年代的时点，反而在撒谎。
  */
-export default function StandingsModal({ open, onClose, initialLeague, match, now, dataRev }) {
+export default function StandingsModal({ open, onClose, initialLeague, match, now, dataRev, spoilerFree = false, revealed = null }) {
   const closeRef = useRef(null);
   const scrollRef = useRef(null);
   const [league, setLeague] = useState(initialLeague || 'PL');
@@ -52,22 +56,33 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
   useEffect(() => {
     if (!open) return undefined;
     closeRef.current?.focus();
-    const onKey = e => {
-      if (e.key === 'Escape') onClose?.();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+    return undefined;
+  }, [open]);
 
   const activeLeague = STANDINGS_LEAGUES.includes(league) ? league : 'PL';
   const nowTs = Number.isFinite(now) ? now : Date.now();
   const isMatchLeague = !!match && match.l === activeLeague;
   const historical = isMatchLeague && isFinished(match);
 
+  // 今晚已完赛、未「揭晓」的场次 → 从积分计算中排除（防剧透）。
+  // revealed 是会话级 Set；dataRev 变化时 fixtures 可能新增完赛场次，需重算。
+  const hiddenIds = useMemo(() => {
+    if (!spoilerFree) return null;
+    const night = nightOf(nowTs);
+    const s = new Set();
+    for (const m of getFixtures()) {
+      if (m.st !== 'done' || !m.sc) continue;
+      if (revealed?.has(m.id)) continue;
+      if (owlDay(m.t) === night) s.add(m.id);
+    }
+    return s.size ? s : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spoilerFree, revealed, nowTs, dataRev]);
+
   const table = useMemo(() => {
     const asOfTs = historical ? standingsCutoff(match, nowTs) : nowTs;
-    return computeStandings(activeLeague, getFixtures(), { asOfTs });
-  }, [activeLeague, historical, match, nowTs, dataRev]);
+    return computeStandings(activeLeague, getFixtures(), { asOfTs, excludeIds: hiddenIds });
+  }, [activeLeague, historical, match, nowTs, dataRev, hiddenIds]);
 
   // 切联赛后回到榜首，避免停在上一联赛的滚动位置
   useEffect(() => {
@@ -85,6 +100,8 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
     : table.lastResultAt
       ? `截至 ${bjDate(table.lastResultAt).slice(5)}`
       : '暂无赛果';
+  const excludedText =
+    !historical && table.excludedCount > 0 ? `已排除今晚未揭晓 ${table.excludedCount} 场` : null;
   const isUcl = activeLeague === 'UCL';
   const matchSummary =
     isMatchLeague && match
@@ -156,6 +173,7 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
               <span className="text-xs font-medium text-text-primary">{leagueName(activeLeague)}</span>
               <Meta num>{asOfText}</Meta>
               <Meta num>{table.doneCount} 场已同步</Meta>
+              {excludedText && <Meta num>{excludedText}</Meta>}
               <Hint
                 content={`${table.tiebreakerNote} ${
                   isUcl

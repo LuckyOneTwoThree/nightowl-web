@@ -18,6 +18,11 @@ const TIER_TONE = Object.fromEntries(
 );
 
 export default function SameNightPicks({ match, prefs, onSelect }) {
+  // ⚠️ hooks 必须在 early-return 之前调用（同 UpcomingFixtures：match null→非 null
+  // 的切换路径会让 hooks 数量变化，React 直接抛错整页白屏）。
+  // 判空放钩子内：sameNightPicks 首行就读 m.t，不接 null。
+  const picks = useMemo(() => (match ? sameNightPicks(match, prefs, 3) : []), [match, prefs]);
+
   if (!match) {
     return (
       <section className="flex h-full flex-col justify-center overflow-hidden rounded-xl border border-line-hairline bg-surface-card p-4 shadow-card">
@@ -29,9 +34,6 @@ export default function SameNightPicks({ match, prefs, onSelect }) {
       </section>
     );
   }
-
-  // 遍历同夜全部场次，随 match / prefs 变化时才算一次
-  const picks = useMemo(() => sameNightPicks(match, prefs, 3), [match, prefs]);
 
   return (
     <section className="flex h-full flex-col justify-between overflow-hidden rounded-xl border border-line-hairline bg-surface-card p-4 shadow-card transition-shadow hover:shadow-pop">
@@ -69,7 +71,9 @@ export default function SameNightPicks({ match, prefs, onSelect }) {
                     </span>
                     <Crest id={m.a} size={14} />
                   </span>
-                  <span className="font-num text-2xs font-semibold tabular-nums text-accent">
+                  {/* 指数用中性主文字色：accent 只留给 Hero 与情报面板头的核心指数，
+                      一个次级推荐模块每行 3 个金色数字会稀释强调 */}
+                  <span className="font-num text-2xs font-semibold tabular-nums text-text-primary">
                     {index.toFixed(1)}
                   </span>
                   <span className={`font-num text-2xs font-semibold ${TIER_TONE[tier.label] || ''}`}>

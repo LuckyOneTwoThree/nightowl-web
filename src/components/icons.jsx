@@ -45,6 +45,7 @@ import {
   Table2,
   Timer,
   TriangleAlert,
+  Volume2,
   X
 } from 'lucide-react';
 
@@ -88,6 +89,7 @@ export const IconExternal = mk(ExternalLink, 12);
 export const IconReveal = mk(Eye, 13);
 export const IconPlay = mk(Play, 13);
 export const IconStop = mk(CircleStop, 13);
+export const IconVolume = mk(Volume2, 13);
 
 /* ---- 自绘标题栏的窗口按钮（Windows/Linux；macOS 用系统交通灯）---- */
 export const IconWinMin = mk(Minus, 12);

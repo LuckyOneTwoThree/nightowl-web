@@ -85,15 +85,7 @@ export default function UpdateModal({
     }
   }, [open, isDesktop, webCheck.checked, webCheck.loading, checkWebUpdate]);
 
-  // Escape 关闭：模态弹窗应支持键盘退出，不能只靠点击遮罩
-  useEffect(() => {
-    if (!open) return;
-    const onKey = e => {
-      if (e.key === 'Escape') onClose?.();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  // Escape 关闭已上收到 App 的浮层栈统一派发（一次 Esc 只关最上层）；这里不再各自监听。
 
   if (!open) return null;
 

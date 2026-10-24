@@ -164,6 +164,7 @@ function emptyTable(league, asOfTs, note) {
     league,
     asOfTs,
     doneCount: 0,
+    excludedCount: 0,
     lastResultAt: null,
     rows: [],
     zones: null,
@@ -177,12 +178,17 @@ function emptyTable(league, asOfTs, note) {
  *
  * @param {string} league 联赛编码
  * @param {Array|null} allFixtures 全量赛程；为空时读取运行期 fixtures
- * @param {{asOfTs?: number}} opts asOfTs 缺省表示包含全部已完赛
+ * @param {{asOfTs?: number, excludeIds?: Set<string>}} opts
+ *   asOfTs 缺省表示包含全部已完赛；
+ *   excludeIds 排除指定场次（防剧透：今晚已完赛但未「揭晓」的场次不得把
+ *   积分/净胜球变化透进积分榜）。被排除且本会计入 doneCount 的场次数记入
+ *   excludedCount，由 UI 如实标注「已排除 N 场未揭晓」。
  */
 export function computeStandings(league, allFixtures = null, opts = {}) {
   const fixtures = allFixtures || getFixtures();
   const supported = STANDINGS_LEAGUES.includes(league);
   const asOfTs = Number.isFinite(opts.asOfTs) ? opts.asOfTs : Infinity;
+  const excludeIds = opts.excludeIds || null;
   if (!supported) {
     return emptyTable(league, asOfTs, '该赛事不提供积分榜');
   }
@@ -190,6 +196,7 @@ export function computeStandings(league, allFixtures = null, opts = {}) {
   const rowsById = new Map();
   let doneCount = 0;
   let lastResultAt = null;
+  let excludedCount = 0;
 
   for (const match of fixtures) {
     if (!match || match.l !== league) continue;
@@ -207,6 +214,13 @@ export function computeStandings(league, allFixtures = null, opts = {}) {
     // 只有「截止点之前已经结束」的赛果才算已知；先开球、后终场的比赛
     // 不能在旧比赛视图里提前出现。联赛赛制无加时，120min 是保守完赛近似。
     if (kick + MATCH_DURATION_MS > asOfTs) continue;
+
+    // 防剧透排除放在所有「本会计入」过滤之后：excludedCount 只统计
+    // 真正影响积分却被隐藏的场次，UI 的「已排除 N 场」才不说谎。
+    if (excludeIds && excludeIds.has(match.id)) {
+      excludedCount += 1;
+      continue;
+    }
 
     const score = parseScore(match.sc);
     if (!score) continue;
@@ -262,6 +276,7 @@ export function computeStandings(league, allFixtures = null, opts = {}) {
     league,
     asOfTs,
     doneCount,
+    excludedCount,
     lastResultAt,
     rows,
     zones: league === 'UCL' ? { ...UCL_ZONES } : { ...DOMESTIC_ZONES },

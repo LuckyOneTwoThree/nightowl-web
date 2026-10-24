@@ -62,6 +62,15 @@ function TeamColumn({ teamId, list, side, onSelect }) {
 }
 
 export default function UpcomingFixtures({ match, prefs, onSelect }) {
+  // ⚠️ hooks 必须在 early-return 之前调用：match 从 null 变非 null（失效深链
+  // 自动降级到今晚之选）会让两次渲染的 hooks 数量不同，React 直接抛
+  // "Rendered more hooks than during the previous render" 整页白屏。
+  // 判空放钩子内而不是省略钩子调用；upcomingForTeams 本身不接 null（首行就读 m.t）。
+  const { home, away } = useMemo(
+    () => (match ? upcomingForTeams(match) : { home: [], away: [] }),
+    [match]
+  );
+
   if (!match) {
     return (
       <section className="flex h-full flex-col justify-center overflow-hidden rounded-xl border border-line-hairline bg-surface-card p-4 shadow-card">
@@ -73,9 +82,6 @@ export default function UpcomingFixtures({ match, prefs, onSelect }) {
       </section>
     );
   }
-
-  // 全量遍历，随 match 变化时才算一次（App 的 30 秒 tick 与 revealed 变化会触发重渲染）
-  const { home, away } = useMemo(() => upcomingForTeams(match), [match]);
 
   return (
     <section className="flex h-full flex-col justify-between overflow-hidden rounded-xl border border-line-hairline bg-surface-card p-4 shadow-card transition-shadow hover:shadow-pop">

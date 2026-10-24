@@ -70,7 +70,7 @@ function useWatchSources() {
 }
 
 const SHORTCUT_HINT =
-  '播放中可用：F 全屏 · P 画中画 · 空格 暂停 · ← → 快退快进 · 1–9 切换线路。快捷键在视频画面获得焦点时生效。';
+  '播放中可用：F 全屏 · P 画中画 · M 静音 · 1–9 切换线路；视频画面聚焦时还支持 空格 暂停 · ← → 快退快进。输入框内快捷键不生效。';
 
 /**
  * ⚠️ 下面三个组件必须定义在模块作用域，不能写在 PlayerStage 的渲染函数体内。
@@ -471,6 +471,59 @@ export default function PlayerStage({
     return () => clearTimeout(timer);
   }, [lineNotice]);
 
+  // ArtPlayer 实例（由 Player 的 onReady 回传）：快捷键的全屏/画中画/静音操作走它
+  const artRef = useRef(null);
+  const handlePlayerReady = useCallback(art => {
+    artRef.current = art;
+  }, []);
+
+  /**
+   * 播放中的作用域快捷键：F 全屏 · P 画中画 · M 静音 · 1–9 切换直链线路
+   *
+   * 此前 SHORTCUT_HINT 承诺过这些键但从未实现（UI 文案撒谎）。
+   * 作用域：仅在 streamUrl 存在（正在播放）时绑定；浮层打开不响应；
+   * 输入框/文本域/可编辑元素聚焦时让给用户输入；带修饰键的组合不拦截。
+   * 空格/方向键仍由 ArtPlayer 内建热键在视频聚焦时处理，不在这里重复。
+   */
+  useEffect(() => {
+    if (!streamUrl) return undefined;
+    const onKey = e => {
+      if (isOverlayOpen) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      if (
+        t &&
+        (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)
+      ) {
+        return;
+      }
+      const art = artRef.current;
+      if (!art || art.destroyed) return;
+      const key = e.key.toLowerCase();
+
+      if (key === 'f') {
+        e.preventDefault();
+        art.fullscreen = !art.fullscreen;
+      } else if (key === 'p') {
+        e.preventDefault();
+        art.pip = !art.pip;
+      } else if (key === 'm') {
+        e.preventDefault();
+        art.muted = !art.muted;
+      } else if (key >= '1' && key <= '9') {
+        // 1–9 直达第 N 条直链；超出的编号忽略，不回绕（回绕容易切回刚断的那条）
+        const direct = linesRef.current.filter(l => l.isDirect && l.url);
+        const target = direct[Number(key) - 1];
+        if (target) {
+          e.preventDefault();
+          manualSelectLine(target);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [streamUrl, isOverlayOpen, manualSelectLine]);
+
   const liveNotifyRef = useRef({
     matchId: null,
     initialized: false,
@@ -810,7 +863,13 @@ export default function PlayerStage({
             </div>
           }
         >
-          <Player src={proxyUrl} kind={streamKind} onError={handlePlayerError} onAspectRatio={setAspectRatio} />
+          <Player
+            src={proxyUrl}
+            kind={streamKind}
+            onError={handlePlayerError}
+            onAspectRatio={setAspectRatio}
+            onReady={handlePlayerReady}
+          />
         </Suspense>
       ) : (
         <MatchCanvas
@@ -1096,7 +1155,14 @@ export default function PlayerStage({
                 )}
               </div>
               <div className="shrink-0">
-                <OfficialLinks sources={sources} match={match} limit={5} replay={finished} />
+                <div className="flex items-center justify-end gap-1.5">
+                  {streamUrl && (
+                    <Button variant="danger" icon={<IconStop />} onClick={stopPlayback}>
+                      停止
+                    </Button>
+                  )}
+                  <OfficialLinks sources={sources} match={match} limit={streamUrl ? 3 : 5} replay={finished} />
+                </div>
               </div>
             </div>
           ) : (
@@ -1116,6 +1182,11 @@ export default function PlayerStage({
                 </span>
                 <span className="flex items-center gap-3">
                   <OfficialLinks sources={sources} match={match} replay={finished} />
+                  {streamUrl && (
+                    <Button variant="danger" icon={<IconStop />} onClick={stopPlayback}>
+                      停止
+                    </Button>
+                  )}
                   <Button variant="ghost" icon={<IconChevronUp />} onClick={() => setTheaterLinesExpanded(false)}>
                     收起
                   </Button>
@@ -1126,6 +1197,16 @@ export default function PlayerStage({
                   <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={manualSelectLine} />
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* 剧场模式此前不渲染 ControlSidebar，换线/错误提示与停止按钮整体消失，
+              播放出错时是无声失败 —— notices 必须在剧场分支独立呈现 */}
+          {notices.length > 0 && (
+            <div className="shrink-0 space-y-1.5">
+              {notices.map((n, i) => (
+                <Notice key={i} n={n} />
+              ))}
             </div>
           )}
 
