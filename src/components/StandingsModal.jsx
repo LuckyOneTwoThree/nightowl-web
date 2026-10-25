@@ -100,8 +100,10 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
     : table.lastResultAt
       ? `截至 ${bjDate(table.lastResultAt).slice(5)}`
       : '暂无赛果';
+  // 历史视图同样标注：本场开球前已结束的今晚场次若未揭晓也会被排除
+  //（积分变化等于数学揭晓），不标就是静默改数
   const excludedText =
-    !historical && table.excludedCount > 0 ? `已排除今晚未揭晓 ${table.excludedCount} 场` : null;
+    table.excludedCount > 0 ? `已排除今晚未揭晓 ${table.excludedCount} 场` : null;
   const isUcl = activeLeague === 'UCL';
   const matchSummary =
     isMatchLeague && match

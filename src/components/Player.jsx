@@ -12,6 +12,11 @@ const FALLBACK_THEME = '#F5B942';
 const LS_VOLUME = 'nightowl:player_volume';
 const LS_MUTED = 'nightowl:player_muted';
 
+/** 中央「开启声音」提示每会话最多展示一次：
+ *  用户没碰过音量时 firstRun 恒为 true，断流自动换线会重建播放器，
+ *  若无此标记提示会在每次换线后重新弹出 8 秒。 */
+let firstRunHintShown = false;
+
 function readVolumePrefs() {
   let volume = 0.5;
   let muted = null; // null = 从未设置（首次使用）
@@ -82,8 +87,10 @@ export default function Player({
     const type = inferMediaType(src, kind);
     const prefs = readVolumePrefs();
     const startMuted = prefs.firstRun ? true : !!prefs.muted;
-    // 只在「从未设置过偏好」（首次使用）时显示中央提示；沿用用户偏好的静音不打扰
-    setMutedHint(prefs.firstRun);
+    // 只在「从未设置过偏好」且本会话未展示过时显示中央提示；
+    // 沿用用户偏好的静音（自己关的）不打扰
+    setMutedHint(prefs.firstRun && !firstRunHintShown);
+    if (prefs.firstRun) firstRunHintShown = true;
     let art = null;
 
     try {
