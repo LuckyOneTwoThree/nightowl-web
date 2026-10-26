@@ -488,7 +488,7 @@ export default function PlayerStage({
   useEffect(() => {
     if (!streamUrl) return undefined;
     const onKey = e => {
-      if (isOverlayOpen) return;
+      if (isOverlayOpen || e.repeat) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target;
       if (
