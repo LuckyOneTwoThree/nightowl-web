@@ -295,6 +295,234 @@ console.log('七、版本比较（更新提示的唯一判据）');
 }
 
 console.log('');
+console.log('八、周计划时间模型（P0：精选 = 可执行计划）');
+{
+  // 合成数据：同开球 / 区间重叠 / 关注强塞 / 已结束混入，全部不依赖真实赛程
+  const mk = (id, t, h, a, extra = {}) => ({ id, l: 'PL', r: 1, t, tbd: false, st: 'sched', h, a, ...extra });
+  const OPTS = { ...E.PRODUCT_PLAN_OPTS, nowTs: E.ts('2026-11-01T12:00') };
+  const noFollow = [[], []];
+  const planOf = (list, followed = [], budget = 8.0, fl = ['PL']) =>
+    E.planWeek(list, {}, [], [], followed, budget, fl, OPTS);
+  const overlap = (a, b) => {
+    const sa = E.ts(a.m.t), sb = E.ts(b.m.t);
+    return sa < sb + E.MATCH_DURATION_MS && sb < sa + E.MATCH_DURATION_MS;
+  };
+
+  // 1) 同开球 4 场（23:00 → S1，成本 1h）：只能看一场，预算只计一场
+  {
+    const four = [
+      mk('S1-A', '2026-11-05T23:00', 'ARS', 'NFO'),
+      mk('S1-B', '2026-11-05T23:00', 'LIV', 'BUR'),
+      mk('S1-C', '2026-11-05T23:00', 'MCI', 'WOL'),
+      mk('S1-D', '2026-11-05T23:00', 'CHE', 'EVE')
+    ];
+    const p = planOf(four, [], 4.0);
+    ok('★ 同开球 4 场最多入选 1 场', p.best.length === 1, `入选 ${p.best.length} 场`);
+    ok('★ 同开球组只计一场成本（used=1h 而非 4h）', Math.abs(p.used - 1) < 1e-9, `used=${p.used}`);
+    ok('used 等于入选场次档位成本之和',
+      Math.abs(p.used - p.best.reduce((s, e) => s + E.tierOf(e.m).cost, 0)) < 1e-9);
+  }
+
+  // 2) 区间重叠（01:30–03:30 与 02:45–04:45）：非同开球也不共存
+  {
+    const two = [
+      mk('O1-A', '2026-11-05T01:30', 'ARS', 'NFO'),
+      mk('O1-B', '2026-11-05T02:45', 'LIV', 'BUR')
+    ];
+    const p = planOf(two, [], 8.0);
+    ok('★ 区间重叠的两场不共存（01:30 与 02:45）', p.best.length === 1, `入选 ${p.best.length} 场`);
+  }
+
+  // 3) 精选内任意两场不重叠（混合场景的总不变量）
+  {
+    const mix = [
+      mk('M1', '2026-11-05T23:00', 'ARS', 'NFO'),
+      mk('M2', '2026-11-05T23:00', 'LIV', 'BUR'),
+      mk('M3', '2026-11-06T01:30', 'MCI', 'WOL'),
+      mk('M4', '2026-11-06T02:45', 'CHE', 'EVE'),
+      mk('M5', '2026-11-06T22:00', 'TOT', 'NEW'),
+      mk('M6', '2026-11-07T22:00', 'AVL', 'FUL')
+    ];
+    const p = planOf(mix, [], 8.0);
+    const bad = [];
+    for (let i = 0; i < p.best.length; i++)
+      for (let j = i + 1; j < p.best.length; j++)
+        if (overlap(p.best[i], p.best[j])) bad.push(`${p.best[i].m.id}×${p.best[j].m.id}`);
+    ok('★ 精选内任意两场观看区间不重叠', bad.length === 0, bad.join('、'));
+    ok('不重叠场次仍可组合入选（23:00 + 22:00 次日等）', p.best.length >= 2, `入选 ${p.best.length} 场`);
+  }
+
+  // 4) 关注球队同开球二选一：确定性判据，不静默丢掉
+  {
+    const pair = [
+      mk('F1-A', '2026-11-05T03:00', 'ARS', 'NFO'),
+      mk('F1-B', '2026-11-05T03:00', 'LIV', 'BUR')
+    ];
+    const p = planOf(pair, ['ARS', 'LIV'], 8.0);
+    ok('★ 两支关注球队同开球只入选 1 场', p.best.length === 1, `入选 ${p.best.length} 场`);
+    ok('★ 落选的一方进入同开球备选（不静默丢掉）',
+      Array.isArray(p.kickoffGroups) && p.kickoffGroups.some(g =>
+        g.entries.length === 2 && g.entries.some(e => e.m.id === 'F1-A') && g.entries.some(e => e.m.id === 'F1-B')),
+      'kickoffGroups 未记录该组');
+    const p2 = planOf(pair, ['ARS', 'LIV'], 8.0);
+    ok('★ 二选一判据确定性（两次结果一致）',
+      p.best.length === p2.best.length && p.best[0]?.m.id === p2.best[0]?.m.id,
+      `${p.best[0]?.m.id} vs ${p2.best[0]?.m.id}`);
+  }
+
+  // 5) 同开球一关注一不关注：关注方优先
+  {
+    const pair = [
+      mk('F2-A', '2026-11-05T03:00', 'ARS', 'NFO'),
+      mk('F2-B', '2026-11-05T03:00', 'WOL', 'BUR')
+    ];
+    const p = planOf(pair, ['ARS'], 8.0);
+    ok('★ 同开球二选一优先关注球队', p.best.length === 1 && p.best[0].m.id === 'F2-A',
+      `入选 ${p.best[0]?.m.id}`);
+  }
+
+  // 6) 已结束场次不得进候选池（约束下沉，不依赖调用方过滤）
+  {
+    const list = [
+      mk('P1-PAST', '2026-11-05T03:00', 'ARS', 'NFO'),          // 相对 nowTs 已结束
+      mk('P1-LIVE', '2026-11-06T12:30', 'LIV', 'BUR'),           // 进行中（可加入）
+      mk('P1-FUT', '2026-11-06T22:00', 'MCI', 'WOL')            // 未开球
+    ];
+    // nowTs = 2026-11-06T12:40：P1-PAST（11-05 03:00+120min）已结束
+    const p = E.planWeek(list, {}, [], [], [], 8.0, ['PL'], { ...E.PRODUCT_PLAN_OPTS, nowTs: E.ts('2026-11-06T12:40') });
+    const ids = [...p.best, ...p.evs, ...p.zeroList].map(e => e.m.id);
+    ok('★ 已结束场次不进精选/候选/零成本', !ids.includes('P1-PAST'), `泄漏: ${ids.join(',')}`);
+    ok('进行中与未开球场次仍在候选池', ids.includes('P1-LIVE') && ids.includes('P1-FUT'), ids.join(','));
+  }
+
+  // 7) 零成本同开球同样成组（浏览口径保留，但要能标出「只能看一场」）
+  {
+    const zeros = [
+      mk('Z1', '2026-11-05T22:30', 'ARS', 'NFO'),
+      mk('Z2', '2026-11-05T22:30', 'CHE', 'MUN'),
+      mk('Z3', '2026-11-05T20:00', 'LIV', 'EVE')
+    ];
+    const p = planOf(zeros, [], 4.0);
+    const g = (p.kickoffGroups || []).find(x => x.t === '2026-11-05T22:30');
+    ok('★ 零成本同开球也被记录为同开球组', !!g && g.entries.length === 2,
+      g ? `${g.entries.length} 场` : '无该组');
+  }
+
+  // 8) 备选必须是可加入计划的场次：与精选时间重叠的候选不得混入
+  {
+    const list = [
+      mk('ALT-A', '2026-11-05T23:00', 'ARS', 'NFO'),
+      mk('ALT-B', '2026-11-05T23:00', 'LIV', 'BUR'),
+      mk('ALT-C', '2026-11-06T22:00', 'MCI', 'WOL')
+    ];
+    const p = planOf(list, [], 1.0);
+    ok('★ 备选不与精选时间重叠',
+      p.alt.every(a => p.best.every(b => !overlap(a, b))),
+      p.alt.map(a => `${a.m.id}×${p.best.find(b => overlap(a, b))?.m.id || ''}`).join(','));
+    ok('★ 同开球落选场不进入备选', !p.alt.some(a => a.m.id === 'ALT-B'),
+      p.alt.map(a => a.m.id).join(','));
+  }
+
+  // 9) 零成本顺带也是可执行计划：排除与精选冲突，且组内两两不重叠
+  {
+    const list = [
+      mk('Z2-PLAN', '2026-11-05T23:00', 'ARS', 'NFO'),
+      mk('Z2-CLASH', '2026-11-05T22:00', 'LIV', 'BUR'),
+      mk('Z2-A', '2026-11-06T20:00', 'MCI', 'WOL'),
+      mk('Z2-B', '2026-11-06T20:00', 'CHE', 'EVE'),
+      mk('Z2-C', '2026-11-07T20:00', 'TOT', 'NEW')
+    ];
+    const p = planOf(list, [], 4.0);
+    const bad = [];
+    for (let i = 0; i < p.zeroList.length; i++)
+      for (let j = i + 1; j < p.zeroList.length; j++)
+        if (overlap(p.zeroList[i], p.zeroList[j])) bad.push(`${p.zeroList[i].m.id}×${p.zeroList[j].m.id}`);
+    ok('★ 零成本顺带组内两两不重叠', bad.length === 0, bad.join('、'));
+    ok('★ 零成本顺带不与精选时间重叠',
+      p.zeroList.every(z => p.best.every(b => !overlap(z, b))),
+      p.zeroList.filter(z => p.best.some(b => overlap(z, b))).map(z => z.m.id).join(','));
+    ok('零成本顺带计数等于实际列表长度', p.zeroCount === p.zeroList.length,
+      `${p.zeroCount} vs ${p.zeroList.length}`);
+  }
+}
+
+console.log('');
+console.log('九、周窗口与未来周（P0：夜猫周锚点）');
+{
+  // 1) 夜猫周锚点：周一凌晨归上一周（真实数据：2026-09-07T00:00–05:59 有 6 场，owlDay=09-06）
+  {
+    const w = computeWeek(NOW, prefs); // NOW=2026-09-13 周日 → 夜猫周 09-07..09-13
+    const dayDates = w.days.map(d => d.date);
+    ok('周历 7 天且为夜猫日序列', w.days.length === 7, `${w.days.length}`);
+    ok('★ 窗口内每场的 owlDay 都落在 7 天网格（周一凌晨不落网格外）',
+      w.matches.every(m => dayDates.includes(E.owlDay(m.t))),
+      w.matches.filter(m => !dayDates.includes(E.owlDay(m.t)))
+        .slice(0, 3).map(m => `${m.t} owlDay=${E.owlDay(m.t)}`).join('、'));
+    // 窗口 = 真实赛程中 owlDay 落在 7 天网格的全部场次（不丢不重）
+    const expectIds = new Set(fixtures
+      .filter(m => dayDates.includes(E.owlDay(m.t)))
+      .map(m => m.id));
+    const gotIds = new Set(w.matches.map(m => m.id));
+    const missing = [...expectIds].filter(id => !gotIds.has(id));
+    const extra = [...gotIds].filter(id => !expectIds.has(id));
+    ok('★ 周窗口与 7 天网格同口径（不丢不重）', missing.length === 0 && extra.length === 0,
+      `缺 ${missing.length} 多 ${extra.length}${extra.slice(0, 2).join ? '' : ''}`);
+  }
+
+  // 2) 锚点错位场景：周一 00:10 打开「本周规划」，Tonight 的场次必须出现在周视图里
+  {
+    const monEarly = E.ts('2026-10-26T00:10');
+    const night = E.nightOf(monEarly); // 周日夜 10-25
+    const w = computeWeek(monEarly, prefs);
+    const dayDates = w.days.map(d => d.date);
+    ok('★ 周一凌晨看「本周」仍是上一夜猫周', w.weekStartStr === E.mondayOfWall(night),
+      `weekStartStr=${w.weekStartStr} 期望 ${E.mondayOfWall(night)}（nightOf=${night}）`);
+    const tonightCount = fixtures.filter(m => E.owlDay(m.t) === night).length;
+    const inWeekView = w.matches.filter(m => E.owlDay(m.t) === night).length;
+    ok('★ 今夜场次全部落在周网格（Tonight 与周规划同口径）',
+      tonightCount > 0 && inWeekView === tonightCount,
+      `今夜 ${tonightCount} 场，周视图含 ${inWeekView} 场`);
+  }
+
+  // 3) 未来周：锚点后移只决定「看哪一周」，可排性必须用真实 now 判断
+  {
+    const w0 = computeWeek(NOW, prefs);
+    const w1 = computeWeek(NOW, prefs, { weekOffset: 1 });
+    ok('★ weekOffset=1 定位到下一周', w1.weekStartStr !== w0.weekStartStr &&
+      w1.weekStartStr > w0.weekStartStr, `${w0.weekStartStr} → ${w1.weekStartStr}`);
+
+    // 动态选样（数据会保鲜，不硬编码场次）：取「严格未来周」里的最早场次，
+    // 验证周偏移不会把该周前半段误判成历史（手机「下一周」的 P0-2 缺陷）。
+    const realNow = Date.now();
+    const curWeekStr = E.mondayOfWall(E.nightOf(realNow));
+    const futureWeekMatches = fixtures
+      .filter(m => m.st === 'sched' && !m.tbd && E.mondayOfWall(E.owlDay(m.t)) > curWeekStr)
+      .sort((a, b) => E.ts(a.t) - E.ts(b.t));
+    if (futureWeekMatches.length === 0) {
+      ok('（跳过：当前数据没有严格未来周的已排期场次）', true);
+    } else {
+      const target = futureWeekMatches[0];
+      const weeks = Math.round(
+        (Date.parse(E.mondayOfWall(E.owlDay(target.t)) + 'T00:00:00Z') -
+          Date.parse(curWeekStr + 'T00:00:00Z')) / 86400000 / 7
+      );
+      const wf = computeWeek(realNow, prefs, { weekOffset: weeks });
+      ok('目标场次落在定位周窗口', wf.matches.some(m => m.id === target.id),
+        `${target.id} ${target.t}（weekOffset=${weeks}）`);
+      // 候选池口径检查的是「可排性」，不是「最终执行列表」：
+      // 零成本执行列表会主动剔除与精选/彼此冲突的场次，那些场次仍应存在于原始候选池。
+      const poolIds = new Set([...wf.plan.evs, ...wf.plan.zeroPool].map(e => e.m.id));
+      const wronglyDropped = wf.matches.filter(m =>
+        m.st === 'sched' && !m.tbd &&
+        realNow < E.ts(m.t) + E.MATCH_DURATION_MS &&
+        !poolIds.has(m.id));
+      ok('★ 未来周未结束场次全部进入候选池（不误判已结束）', wronglyDropped.length === 0,
+        wronglyDropped.slice(0, 3).map(m => `${m.id} ${m.t}`).join('、'));
+    }
+  }
+}
+
+console.log('');
 console.log('────────────────────────────────────────────────────');
 console.log(`通过 ${pass} 项，失败 ${fail} 项`);
 if (fail > 0) {

@@ -148,17 +148,17 @@ log('| 策略 | ' + [1.0, 2.5, 4.0, 6.0].map(b => `${b}h`).join(' | ') + ' | 顺
 log('| :--- | ' + [1.0, 2.5, 4.0, 6.0].map(() => '---:').join(' | ') + ' | ---: |');
 for (const c of CFG) {
   const cells = [1.0, 2.5, 4.0, 6.0].map(b => {
-    const p = E.planWeek(weekMatches, recMap, RIV, ST, FOLLOWED, b, LEAGUES_6, c.opts);
+    const p = E.planWeek(weekMatches, recMap, RIV, ST, FOLLOWED, b, LEAGUES_6, { ...c.opts, nowTs: null });
     return `${p.best.length}场/${p.used.toFixed(1)}h`;
   });
-  const pZ = E.planWeek(weekMatches, recMap, RIV, ST, FOLLOWED, 4.0, LEAGUES_6, c.opts);
+  const pZ = E.planWeek(weekMatches, recMap, RIV, ST, FOLLOWED, 4.0, LEAGUES_6, { ...c.opts, nowTs: null });
   log(`| ${c.name} | ${cells.join(' | ')} | ${c.opts.separateZeroCost ? pZ.zeroCount : '—'} |`);
 }
 
 log('');
 log('**推荐策略（N=5 + 分离）在周预算 4.0h 下的输出**');
 log('');
-const pRec = E.planWeek(weekMatches, recMap, RIV, ST, FOLLOWED, 4.0, LEAGUES_6, { maxPicks: 5, separateZeroCost: true });
+const pRec = E.planWeek(weekMatches, recMap, RIV, ST, FOLLOWED, 4.0, LEAGUES_6, { maxPicks: 5, separateZeroCost: true, nowTs: null });
 log(`预算内入选 **${pRec.best.length}** 场，占用 ${pRec.used.toFixed(1)}h，结余 ${(4.0 - pRec.used).toFixed(1)}h：`);
 log('');
 pRec.best.forEach(e => log(`- ${e.m.t} ${e.m.h} vs ${e.m.a} · ${E.tierOf(e.m).label}(${E.tierOf(e.m).cost}h) · 指数 ${e.index.toFixed(1)} · ${e.ev.isFollowed ? '**主队**' : '中立'}`));

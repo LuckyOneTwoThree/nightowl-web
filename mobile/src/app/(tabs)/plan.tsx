@@ -40,10 +40,17 @@ type WeekData = {
     zeroCount: number;
     budget: number;
     used: number;
+    kickoffGroups: KickoffGroup[];
   };
   minefield: Array<{ m: Match; ev: Ev; reason: string }>;
   days: Array<{ date: string; count: number; cost: number; matches: Match[] }>;
   advice: string;
+};
+
+type KickoffGroup = {
+  t: string;
+  entries: Entry[];
+  chosen: Entry;
 };
 
 const BUDGETS = [0, 1, 2, 3, 4, 5, 6, 8];
@@ -61,7 +68,9 @@ export default function PlanScreen() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const week = useMemo(
-    () => computeWeek(now + weekOffset * 7 * DAY_MS, prefs) as unknown as WeekData,
+    // 周偏移只移动「看哪一周」的锚点；可排性始终用真实 now（后移 now 会把未来周
+    // 前半段误判成历史，见 core computeWeek 的 weekOffset 语义）
+    () => computeWeek(now, prefs, { weekOffset }) as unknown as WeekData,
     [now, weekOffset, prefs, rev]
   );
 
@@ -79,6 +88,15 @@ export default function PlanScreen() {
     }
     return s;
   }, [plan.best]);
+  const kickoffGroupByMatch = useMemo(() => {
+    const map = new Map<string, KickoffGroup>();
+    for (const group of plan.kickoffGroups || []) {
+      for (const entry of group.entries) {
+        map.set(entry.m.id, group);
+      }
+    }
+    return map;
+  }, [plan.kickoffGroups]);
   const activeDayObj = useMemo(
     () => (selectedDay ? week.days.find(d => d.date === selectedDay) ?? null : null),
     [selectedDay, week.days]
@@ -173,7 +191,7 @@ export default function PlanScreen() {
           ))}
         </View>
         <Text style={styles.hint}>
-          零成本 S0 场次不占额度；背包最多 5 场，是本周可安排的场次上限。
+          零成本 S0 场次不占额度，但同一时段仍只能看一场；背包最多 5 场，是本周可安排的场次上限。
         </Text>
       </Card>
 
@@ -186,7 +204,12 @@ export default function PlanScreen() {
         {plan.best.length > 0 ? (
           <View style={styles.list}>
             {plan.best.map(entry => (
-              <PickRow key={entry.m.id} entry={entry} onPress={() => openMatch(entry.m.id)} />
+              <PickRow
+                key={entry.m.id}
+                entry={entry}
+                kickoffGroup={kickoffGroupByMatch.get(entry.m.id)}
+                onPress={() => openMatch(entry.m.id)}
+              />
             ))}
           </View>
         ) : (
@@ -399,9 +422,21 @@ export default function PlanScreen() {
   );
 }
 
-function PickRow({ entry, onPress }: { entry: Entry; onPress: () => void }) {
+function PickRow({
+  entry,
+  kickoffGroup,
+  onPress,
+}: {
+  entry: Entry;
+  kickoffGroup?: KickoffGroup;
+  onPress: () => void;
+}) {
   const match = entry.m;
   const tier = sleepTier(match.t);
+  const groupAlternatives = kickoffGroup
+    ? kickoffGroup.entries.filter(x => x.m.id !== match.id)
+    : [];
+  const groupSize = kickoffGroup?.entries.length ?? 0;
   const reason = entry.ev.isFollowed
     ? '主队出战'
     : entry.ev.rivalry
@@ -442,6 +477,11 @@ function PickRow({ entry, onPress }: { entry: Entry; onPress: () => void }) {
         <Text style={styles.pickReason} numberOfLines={1}>
           {reason}
         </Text>
+        {groupAlternatives.length > 0 ? (
+          <Text style={styles.pickConflict} numberOfLines={1}>
+            同时开球 · 只能看一场 · 组内 {groupSize} 场
+          </Text>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -548,6 +588,7 @@ const styles = StyleSheet.create({
   pickTeamName: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600', maxWidth: '34%' },
   pickVs: { color: colors.textFaint, fontSize: fontSize.xxs },
   pickReason: { color: colors.textFaint, fontSize: fontSize.xs },
+  pickConflict: { color: colors.warn, fontSize: fontSize.xxs, fontWeight: '600' },
   zeroRow: {
     flexDirection: 'row',
     alignItems: 'center',

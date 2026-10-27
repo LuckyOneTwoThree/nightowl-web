@@ -29,7 +29,7 @@ function bucketOf(cost) {
 
 /** 背包规划要解释口径，但不该占版面 */
 const PLAN_HINT =
-  '零成本（S0）场次不进背包：它们不熬夜，随便看。背包只有 5 个名额，是本周可安排的场次上限，不是睡眠额度。';
+  '零成本（S0）场次不进背包：不占睡眠额度，但同一时段仍只能看一场。背包只有 5 个名额，是本周可安排的场次上限，不是睡眠额度。';
 
 /**
  * 本周视图（Week）
@@ -63,6 +63,13 @@ export default function WeekView({
     }
     return s;
   }, [plan.best]);
+  const kickoffGroupByMatch = useMemo(() => {
+    const map = new Map();
+    for (const group of plan.kickoffGroups || []) {
+      for (const entry of group.entries) map.set(entry.m.id, group);
+    }
+    return map;
+  }, [plan.kickoffGroups]);
   const activeDayObj = useMemo(
     () => (selectedDay ? days.find(d => d.date === selectedDay) || null : null),
     [selectedDay, days]
@@ -178,6 +185,7 @@ export default function WeekView({
                   key={e.m.id}
                   e={e}
                   active={e.m.id === activeMatchId}
+                  kickoffGroup={kickoffGroupByMatch.get(e.m.id)}
                   onSelect={onSelect}
                 />
               ))}
@@ -392,8 +400,11 @@ export default function WeekView({
  * 与 MatchRow 的区别只有一件事：这里要说明**为什么入选**，
  * 所以多一排列选理由，其余版式与 MatchRow 同构（时刻列 + 对阵 + 右侧数值）。
  */
-function PickRow({ e, active, onSelect }) {
+function PickRow({ e, active, kickoffGroup, onSelect }) {
   const m = e.m;
+  const groupAlternatives = kickoffGroup
+    ? kickoffGroup.entries.filter(x => x.m.id !== m.id)
+    : [];
   const reason = e.ev.isFollowed
     ? '主队出战'
     : e.ev.rivalry
@@ -456,6 +467,20 @@ function PickRow({ e, active, onSelect }) {
               {m.t.slice(5, 10).replace('-', '/')} · {sleepTier(m.t).cost}h
             </Meta>
           </div>
+          {groupAlternatives.length > 0 && (
+            <div className="mt-1 flex items-center gap-1 text-2xs text-warn">
+              <IconWarn size={11} />
+              <span className="shrink-0">同时开球 · 只能看一场</span>
+              <span
+                className="min-w-0 truncate text-text-faint"
+                title={groupAlternatives
+                  .map(x => `${teamName(x.m.h)} vs ${teamName(x.m.a)}`)
+                  .join('、')}
+              >
+                · 组内 {kickoffGroup.entries.length} 场，其余不同时看
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </button>

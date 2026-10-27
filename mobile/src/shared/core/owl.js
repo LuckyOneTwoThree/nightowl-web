@@ -110,17 +110,33 @@ function buildWeekDays(weekStartStr, matches) {
   return days;
 }
 
-export function computeWeek(nowTs, prefs) {
-  const ws = E.weekStartBJ(nowTs);
-  const end = ws.ts + 7 * DAY_MS;
+/**
+ * 周计划视图（夜猫周口径）
+ *
+ * 周 = 7 个夜猫日（owlDay，凌晨 6 点前归前一夜），窗口、日网格、plan 共用同一锚点。
+ * 此前窗口按时间戳 [周一 00:00, 下周一 00:00) 过滤、日网格按 owlDay 归组，口径分裂：
+ * 周一凌晨场次在 matches 里有、7 天网格里没有（实测 2026-10-26 00:10 打开本周规划时，
+ * Tonight 的 28 场一场都进不了周网格）。
+ *
+ * opts.weekOffset：看哪一周（整数周，正数未来、负数过去）。**只移动锚点**——
+ * 可排性（isPickable）始终用真实 nowTs。手机端「下一周」此前把 nowTs 整体后移，
+ * 未来周前半段被误判成历史、不进计划。
+ */
+export function computeWeek(nowTs, prefs, opts = {}) {
+  const weekOffset = Number.isFinite(opts.weekOffset) ? Math.trunc(opts.weekOffset) : 0;
+  const anchorTs = nowTs + weekOffset * 7 * DAY_MS;
+  const night = E.nightOf(anchorTs);
+  const weekStartStr = E.mondayOfWall(night);
+  const dayDates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(Date.parse(weekStartStr + 'T00:00:00Z') + i * DAY_MS);
+    dayDates.push(d.toISOString().slice(0, 10));
+  }
   const matches = getFixtures()
-    .filter(m => {
-      const t = E.ts(m.t);
-      return t >= ws.ts && t < end;
-    })
+    .filter(m => dayDates.includes(E.owlDay(m.t)))
     .sort(byTs);
 
-  // 本周窗口内"尚未结束"的场次才进算法；
+  // 周窗口内"尚未结束"的场次才进算法；
   // 已踢完但状态未同步的场次（本地单机 + 手动保鲜下很常见）不参与背包与雷区
   const pickable = matches.filter(m => isPickable(m, nowTs));
 
@@ -132,19 +148,19 @@ export function computeWeek(nowTs, prefs) {
     prefs.followedTeams,
     prefs.weeklyBudget,
     prefs.followedLeagues,
-    E.PRODUCT_PLAN_OPTS
+    { ...E.PRODUCT_PLAN_OPTS, nowTs }
   );
 
   const mine = E.minefield(pickable, REC_MAP, rivalries, storylines, prefs.followedTeams, prefs.followedLeagues);
-  const days = buildWeekDays(ws.str, matches);
+  const days = buildWeekDays(weekStartStr, matches);
 
   // 周度建议只基于「还能安排」的场次。
   // 若沿用全周场次，会出现"建议本周注意 09-10 的重度档"而那天早已过去的情况 ——
   // 背包看未来、建议却看全周，两者口径不一致会让人怀疑结论。柱状图仍展示全周（历史视角）。
-  const upcomingDays = buildWeekDays(ws.str, pickable);
+  const upcomingDays = buildWeekDays(weekStartStr, pickable);
   const advice = weekDistributionAdvice(upcomingDays.filter(d => d.count > 0));
 
-  return { weekStartStr: ws.str, matches, plan, minefield: mine, days, advice };
+  return { weekStartStr, weekOffset, matches, plan, minefield: mine, days, advice };
 }
 
 /* ------------------------------------------------------------------ */

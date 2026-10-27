@@ -175,7 +175,7 @@ export default function OnboardingScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.description}>
-            每周睡眠预算决定「本周精选」最多能安排几场。零成本场次不占额度，背包最多 5 场。
+            每周睡眠预算决定「本周精选」最多能安排几场。零成本场次不占额度，但同一时段仍只能看一场；背包最多 5 场。
           </Text>
           <View style={styles.budgetRow}>
             {BUDGETS.map(hours => (

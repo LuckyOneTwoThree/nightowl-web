@@ -149,7 +149,7 @@ log('');
 log('| 周预算 | 入选场次 | 实际占用 | 其中 S0 场次 | 最大单场占预算 |');
 log('| ---: | ---: | ---: | ---: | ---: |');
 for (const b of [1.0, 2.5, 4.0, 6.0, 8.0]) {
-  const p = E.planWeek(weekMatches, recMap, RIV, ST, FOLLOWED, b, LEAGUES_6);
+  const p = E.planWeek(weekMatches, recMap, RIV, ST, FOLLOWED, b, LEAGUES_6, { nowTs: null });
   const z = p.best.filter(e => E.tierOf(e.m).cost === 0).length;
   const maxR = p.best.length ? Math.max(...p.best.map(e => E.tierOf(e.m).cost)) / b : 0;
   log(`| ${b.toFixed(1)}h | **${p.best.length}** | ${p.used.toFixed(1)}h | ${z} | ${(maxR * 100).toFixed(0)}% |`);
@@ -164,14 +164,14 @@ log('');
 
 // 方案 1：数量上限 N
 const capN = (matches, budget, n) => {
-  const p = E.planWeek(matches, recMap, RIV, ST, FOLLOWED, budget, LEAGUES_6);
+  const p = E.planWeek(matches, recMap, RIV, ST, FOLLOWED, budget, LEAGUES_6, { nowTs: null });
   const sorted = [...p.best].sort((a, b) => b.index - a.index);
   return { best: sorted.slice(0, n), used: sorted.slice(0, n).reduce((s, e) => s + E.tierOf(e.m).cost, 0) };
 };
 // 方案 2：S0 场次不进背包，单列为「零成本顺带」
 const detachS0 = (matches, budget) => {
   const nonZero = matches.filter(m => E.tierOf(m).cost > 0);
-  const p = E.planWeek(nonZero, recMap, RIV, ST, FOLLOWED, budget, LEAGUES_6);
+  const p = E.planWeek(nonZero, recMap, RIV, ST, FOLLOWED, budget, LEAGUES_6, { nowTs: null });
   const zero = matches.filter(m => E.tierOf(m).cost === 0 && m.st === 'sched' && !m.tbd);
   return { best: p.best, used: p.used, zeroCount: zero.length };
 };
@@ -182,7 +182,7 @@ const both = (matches, budget, n) => {
   return { best: sorted.slice(0, n), used: sorted.slice(0, n).reduce((s, e) => s + E.tierOf(e.m).cost, 0), zeroCount: d.zeroCount };
 };
 
-const p0 = E.planWeek(weekMatches, recMap, RIV, ST, FOLLOWED, 4.0, LEAGUES_6);
+const p0 = E.planWeek(weekMatches, recMap, RIV, ST, FOLLOWED, 4.0, LEAGUES_6, { nowTs: null });
 const p1 = capN(weekMatches, 4.0, 5);
 const p2 = detachS0(weekMatches, 4.0);
 const p3 = both(weekMatches, 4.0, 5);

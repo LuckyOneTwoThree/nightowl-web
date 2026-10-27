@@ -335,11 +335,27 @@ export function knapsack(entries, budgetHours, w = DEFAULT_WEIGHTS, capRatio = 1
 }
 
 /**
- * 带**数量上限**的 0-1 背包（D8 修复）
+ * 观看互斥判据：观看区间 [kick, kick+120min) 重叠即「同一时间只能看一场」。
+ *
+ * 为什么需要：精选的语义是「最多能看哪几场」（可执行计划，见 README 与 PLAN_HINT），
+ * 不是「值得看的候选清单」。此前只约束预算与数量，同一时刻开球的多场会被同时选中
+ * 并把睡眠成本相加（实测 4 场 23:00 同开球 → used=4h，实际只能看 1 场）。
+ * 120 分钟是完赛近似（matchState 同一口径），不是观赛占用上限；
+ * 加时/点球的赛事若接入需另行标定。
+ */
+export function exclusiveMatches(a, b) {
+  const sa = ts(a.t), sb = ts(b.t);
+  if (isNaN(sa) || isNaN(sb)) return false;
+  return sa < sb + MATCH_DURATION_MS && sb < sa + MATCH_DURATION_MS;
+}
+
+/**
+ * 带**数量上限 + 观看互斥**的 0-1 背包（D8 修复 + P0 冲突约束）
  *
  * 为什么需要：原版背包重量 = 睡眠成本 × 2，S0 场次成本 0 → 重量 0 → 不消耗容量，
  * 于是当周全部零成本场次被一次装入（实测周预算 1.0h 也返回 20 场）。
- * 这里把「预算」与「场次数量」作为两个独立约束，用二维 DP 求最优。
+ * 这里把「预算」与「场次数量」作为两个独立约束；再加第三条约束：
+ * 入选场次的观看区间两两不重叠（加权区间调度，DP[i][c][x] 按结束时间转移）。
  */
 export function knapsackLimited(entries, budgetHours, w = DEFAULT_WEIGHTS, maxCount = 5) {
   const cap = Math.round(budgetHours * 2);
@@ -347,9 +363,24 @@ export function knapsackLimited(entries, budgetHours, w = DEFAULT_WEIGHTS, maxCo
   const K = Math.min(maxCount, n);
   const NEG = -1e9;
 
-  const val = entries.map(e => Math.round(e.index * 10));
-  const wt = entries.map(e => Math.round(tierOf(e.m).cost * 2));
+  // 按结束时间排序（同结束按开始、再按 id，保证确定性）
+  const items = entries.map(e => ({
+    e,
+    s: ts(e.m.t),
+    f: ts(e.m.t) + MATCH_DURATION_MS,
+    val: Math.round(e.index * 10),
+    wt: Math.round(tierOf(e.m).cost * 2)
+  })).sort((a, b) => (a.f - b.f) || (a.s - b.s) || String(a.e.m.id).localeCompare(String(b.e.m.id)));
 
+  // p[i] = 前 i 项里、在第 i 项开始前已结束的项数（加权区间调度的转移点）
+  const p = new Array(n + 1).fill(0);
+  for (let i = 1; i <= n; i++) {
+    let j = i - 1;
+    while (j >= 1 && items[j - 1].f > items[i - 1].s) j--;
+    p[i] = j;
+  }
+
+  // DP[i][c][x] = 前 i 项里选 c 场、重量 x 的最优价值（二维 DP 勿改一维滚动：pick 回溯会被覆盖）
   const dp = [];
   for (let i = 0; i <= n; i++) {
     dp[i] = [];
@@ -361,9 +392,10 @@ export function knapsackLimited(entries, budgetHours, w = DEFAULT_WEIGHTS, maxCo
     for (let c = 0; c <= K; c++) {
       for (let x = 0; x <= cap; x++) {
         let best = dp[i - 1][c][x];
-        if (c > 0 && wt[i - 1] <= x) {
-          const prev = dp[i - 1][c - 1][x - wt[i - 1]];
-          if (prev > NEG / 2 && prev + val[i - 1] > best) best = prev + val[i - 1];
+        const it = items[i - 1];
+        if (c > 0 && it.wt <= x) {
+          const prev = dp[p[i]][c - 1][x - it.wt];
+          if (prev > NEG / 2 && prev + it.val > best) best = prev + it.val;
         }
         dp[i][c][x] = best;
       }
@@ -378,30 +410,100 @@ export function knapsackLimited(entries, budgetHours, w = DEFAULT_WEIGHTS, maxCo
   }
 
   const chosen = [];
-  let c = bestC, x = bestX;
-  for (let i = n; i >= 1; i--) {
-    if (c > 0 && dp[i][c][x] !== dp[i - 1][c][x]) {
-      chosen.unshift(entries[i - 1]);
-      x -= wt[i - 1];
+  let i = n, c = bestC, x = bestX;
+  while (i > 0 && c > 0) {
+    if (dp[i][c][x] !== dp[i - 1][c][x]) {
+      chosen.unshift(items[i - 1].e);
+      x -= items[i - 1].wt;
       c -= 1;
+      i = p[i];
+    } else {
+      i -= 1;
     }
   }
   return chosen;
 }
 
+/**
+ * 只做观看互斥的加权区间调度（不设数量上限）。
+ *
+ * 为什么不用 knapsackLimited(..., maxCount = entries.length)：
+ * 零成本场次的产品口径是「不占预算、不占名额」，而 LIMITED 的语义仍是背包名额；
+ * 用 entries.length 只是把上限抬到恰好够用，后续一改条目数量就会重新截断。
+ *
+ * 对零成本池求加权区间最优解：每个时段最多一场，最大化夜猫指数之和。
+ * 单场成本不进入预算约束（成本为 0），因此这里只需要时间互斥和总权重最大。
+ */
+export function intervalSchedule(entries, w = DEFAULT_WEIGHTS) {
+  if (!entries.length) return [];
+
+  const items = entries.map(e => ({
+    e,
+    s: ts(e.m.t),
+    f: ts(e.m.t) + MATCH_DURATION_MS,
+    val: Math.round(e.index * 10)
+  })).sort((a, b) => (a.f - b.f) || (a.s - b.s) || String(a.e.m.id).localeCompare(String(b.e.m.id)));
+
+  // p[i] = 前 i 个候选里，与第 i 个不相交的最后一个候选的 1-based 位置
+  const p = new Array(items.length + 1).fill(0);
+  for (let i = 1; i <= items.length; i++) {
+    let j = i - 1;
+    while (j >= 1 && items[j - 1].f > items[i - 1].s) j--;
+    p[i] = j;
+  }
+
+  const dp = new Array(items.length + 1).fill(0);
+  for (let i = 1; i <= items.length; i++) {
+    const take = dp[p[i]] + items[i - 1].val;
+    dp[i] = Math.max(dp[i - 1], take);
+  }
+
+  const chosen = [];
+  let i = items.length;
+  while (i > 0) {
+    if (dp[i] !== dp[i - 1]) {
+      chosen.unshift(items[i - 1].e);
+      i = p[i];
+    } else {
+      i -= 1;
+    }
+  }
+  return chosen;
+}
+
+/**
+ * 周计划（可执行观赛计划，不是候选清单）
+ *
+ * 语义依据：README「算出「最多能看哪几场」的最优组合」+ PLAN_HINT「本周可安排的场次上限」。
+ * 因此入选集合必须满足三条约束：**预算内、数量上限内、观看区间两两不重叠**。
+ *
+ * opts.nowTs：时间基准。
+ *   传数字 → 以它为准剔除「已结束」场次（kick + 120min ≤ nowTs，含比分未同步的假 sched）；
+ *   传 null → 显式关闭时间过滤（spike 历史回放 / 标定脚本专用）；
+ *   不传   → 默认 Date.now()（安全默认：调用方忘传也不会把已踢完的场次当可安排）。
+ */
 export function planWeek(matches, recMap, rivalries, storylines, followed, budget, followedLeagues, opts = {}) {
   const w = opts.weights || DEFAULT_WEIGHTS;
   const capRatio = opts.knapsackCapRatio == null ? 1 : opts.knapsackCapRatio;
   const softGuarantee = !!opts.followedSoftGuarantee;
   const maxPicks = opts.maxPicks == null ? Infinity : opts.maxPicks;   // D8：数量上限
   const separateZero = !!opts.separateZeroCost;                        // D8：S0 场次分离
+  const nowTs = opts.nowTs === null ? null
+    : (Number.isFinite(opts.nowTs) ? opts.nowTs : Date.now());
 
   // ⚠️ 不能用 `budget || 4.0`：0 是**合法意图**（"本周一点都不熬"），但它 falsy，
   //    会被静默改成 4.0 —— 结果是滑杆拖到 0 又弹回 4，而偏好里存的其实还是 0，
   //    界面与存储各说各话。只对「非有限数」回落默认值。
   budget = typeof budget === 'number' && Number.isFinite(budget) ? budget : 4.0;
 
-  const eligible = matches.filter(m => m.st === 'sched' && !m.tbd);
+  const eligible = matches.filter(m => {
+    if (m.st !== 'sched' || m.tbd) return false;
+    if (nowTs != null) {
+      const kick = ts(m.t);
+      if (!isNaN(kick) && nowTs >= kick + MATCH_DURATION_MS) return false; // 已结束（含未同步的假 sched）
+    }
+    return true;
+  });
   const isZero = (m) => tierOf(m).cost === 0;
 
   const build = (list) => list
@@ -418,7 +520,18 @@ export function planWeek(matches, recMap, rivalries, storylines, followed, budge
   const evs = build(pool);
   const zeroEvs = build(zeroPool);
 
-  const followedEvs = evs.filter(e => e.ev.isFollowed);
+  // 二选一判据（同开球 / 区间重叠时只能看一场，必须确定性地给出「给谁」）：
+  // 关注球队 > 星级 > 故事线加成 > 夜猫指数 > id（前四项全部相同时按 id 决出，保证两次结果一致）
+  const cmpPref = (a, b) => {
+    if (b.ev.isFollowed !== a.ev.isFollowed) return (b.ev.isFollowed ? 1 : 0) - (a.ev.isFollowed ? 1 : 0);
+    if (b.ev.star !== a.ev.star) return b.ev.star - a.ev.star;
+    const sa = storyBonus(a.ev, w), sb = storyBonus(b.ev, w);
+    if (sb !== sa) return sb - sa;
+    if (b.index !== a.index) return b.index - a.index;
+    return String(a.m.id).localeCompare(String(b.m.id));
+  };
+
+  const followedEvs = evs.filter(e => e.ev.isFollowed).sort(cmpPref);
   const followedLeagueNeutralEvs = evs.filter(e => !e.ev.isFollowed && e.ev.isLeagueFollowed);
   const otherNeutralEvs = evs.filter(e => !e.ev.isFollowed && !e.ev.isLeagueFollowed);
 
@@ -430,36 +543,76 @@ export function planWeek(matches, recMap, rivalries, storylines, followed, budge
   let best = [];
   let curBudget = budget;
   const room = () => (limited ? maxPicks - best.length : Infinity);
+  const conflicts = (m) => best.some(e => exclusiveMatches(e.m, m));
 
-  // 主队比赛：预算内必保（原版行为）；softGuarantee 时额外受单场占比约束
+  // 主队比赛：预算内必保（原版行为）；与已入选场次互斥时按二选一判据让位（不重复计成本）
   followedEvs.forEach(e => {
     if (room() <= 0) return;
     const cost = tierOf(e.m).cost;
     const underCap = capRatio >= 1 || cost <= capRatio * budget;
-    if (cost <= curBudget && underCap) {
+    if (cost <= curBudget && underCap && !conflicts(e.m)) {
       best.push(e);
       curBudget -= cost;
     }
   });
 
   if (curBudget >= 0 && room() > 0 && followedLeagueNeutralEvs.length > 0) {
-    const filled = fill(followedLeagueNeutralEvs, Math.max(0, curBudget), room());
+    const filled = fill(followedLeagueNeutralEvs.filter(e => !conflicts(e.m)), Math.max(0, curBudget), room());
     best = best.concat(filled);
     filled.forEach(e => { curBudget -= tierOf(e.m).cost; });
   }
 
   if (curBudget >= 0 && room() > 0 && otherNeutralEvs.length > 0) {
-    const filled = fill(otherNeutralEvs, Math.max(0, curBudget), room());
+    const filled = fill(otherNeutralEvs.filter(e => !conflicts(e.m)), Math.max(0, curBudget), room());
     best = best.concat(filled);
     curBudget -= filled.reduce((s, e) => s + tierOf(e.m).cost, 0);
   }
 
   const bestIds = {};
   best.forEach(e => { bestIds[e.m.id] = true; });
-  const alt = evs.filter(e => !bestIds[e.m.id]).slice(0, 3);
+  const alt = evs
+    .filter(e => !bestIds[e.m.id])
+    .filter(e => !best.some(b => exclusiveMatches(b.m, e.m)))
+    .slice(0, 3);
+
+  // 「零成本顺带」也是一份可执行计划：既不能和精选同时看，组内也不能同时看。
+  // 零成本只说明不占睡眠预算，不说明可以在同一时段看多场。
+  const zeroExecutablePool = zeroEvs.filter(e => !best.some(b => exclusiveMatches(b.m, e.m)));
+  const zeroList = intervalSchedule(zeroExecutablePool, w);
+
+  // 同开球组（≥2 场，含零成本）：供界面标注「同时开球 · 只能看一场」。
+  // chosen = 组内实际入选 best 的条目；无入选时为组内推荐（二选一判据），不静默丢掉落选方。
+  const byKick = new Map();
+  evs.concat(zeroEvs).forEach(e => {
+    const k = e.m.t;
+    if (!byKick.has(k)) byKick.set(k, []);
+    byKick.get(k).push(e);
+  });
+  const kickoffGroups = [];
+  for (const [t, list] of byKick) {
+    if (list.length < 2) continue;
+    const entries = [...list].sort(cmpPref);
+    kickoffGroups.push({ t, entries, chosen: entries.find(e => bestIds[e.m.id]) || entries[0] });
+  }
+  kickoffGroups.sort((a, b) => ts(a.t) - ts(b.t));
+
+  // 已用 = 入选场次档位成本之和。入选集合经互斥约束两两不重叠，每场都真实可看、
+  // 各自独立计睡眠成本 —— 该值同时等于「同组取最大」口径（每组至多一场），不再对互斥场次重复累加。
   const usedCost = best.reduce((s, e) => s + tierOf(e.m).cost, 0);
 
-  return { best, alt, budget, used: usedCost, evs, zeroList: zeroEvs, zeroCount: zeroEvs.length };
+  return {
+    best,
+    alt,
+    budget,
+    used: usedCost,
+    evs,
+    zeroList,
+    zeroCount: zeroList.length,
+    // 原始零成本候选池（含与精选冲突的场次）。仅用于候选完整性测试与后续浏览；
+    // zeroList 才是可执行计划。勿把 zeroPool 直接接到「顺带」列表。
+    zeroPool: zeroEvs,
+    kickoffGroups
+  };
 }
 
 // ---------- 雷区预警 ----------
