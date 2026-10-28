@@ -96,7 +96,8 @@ export default function ScheduleView({
 
   const closeFilter = () => {
     setFilterOpen(false);
-    window.requestAnimationFrame(() => filterBtnRef.current?.focus());
+    // 筛选层不是全屏浮层，触发按钮始终可聚焦；直接归还，避免隐藏窗口节流 rAF
+    filterBtnRef.current?.focus();
   };
 
   const dayStrip = useMemo(() => {

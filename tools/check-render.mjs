@@ -662,7 +662,7 @@ app.whenReady().then(async () => {
         const row = [...(left?.querySelectorAll('[role="button"]') || [])].find(
           n => (n.textContent || '').includes('AC米兰') && (n.textContent || '').includes('博洛尼亚')
         );
-        return { found: !!row, text: row?.innerText || '' };
+        return { found: !!row, text: row?.textContent || '' };
       })()
     `);
     ok('★ 赛程未开赛行显示夜猫指数而非重复「未开赛」',

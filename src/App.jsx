@@ -59,11 +59,8 @@ function restoreFocus(ref) {
   const el = ref.current;
   ref.current = null;
   if (!el?.isConnected || typeof window === 'undefined') return;
-  // 状态更新后 React 才移除背景的 inert，必须在下一帧再判断可聚焦性。
-  window.requestAnimationFrame(() => {
-    if (!el.isConnected || el.closest?.('[inert]')) return;
-    el.focus?.();
-  });
+  if (el.closest?.('[inert]')) return;
+  el.focus?.();
 }
 
 /** 读取 URL 深链（?view=week&match=PL-12-ARS-MCI），使三个视图可直接分享/刷新定位 */
@@ -137,6 +134,8 @@ export default function App() {
     setOnboardingOpen(false);
   }, []);
   const rerunOnboarding = () => {
+    // 焦点交给引导，不归还到即将被遮住的设置入口
+    settingsReturnRef.current = null;
     setSettingsOpen(false);
     setOnboardingOpen(true);
   };
@@ -174,7 +173,6 @@ export default function App() {
   }, []);
   const closeSettings = useCallback(() => {
     setSettingsOpen(false);
-    restoreFocus(settingsReturnRef);
   }, []);
   const openPalette = useCallback(() => {
     rememberFocus(paletteReturnRef);
@@ -182,7 +180,6 @@ export default function App() {
   }, []);
   const closePalette = useCallback(() => {
     setPaletteOpen(false);
-    restoreFocus(paletteReturnRef);
   }, []);
   const openUpdateModal = useCallback(() => {
     rememberFocus(updateReturnRef);
@@ -190,8 +187,16 @@ export default function App() {
   }, []);
   const closeUpdateModal = useCallback(() => {
     setUpdateModalOpen(false);
-    restoreFocus(updateReturnRef);
   }, []);
+
+  // 关闭动画/状态提交后再归还焦点，避免目标仍处于 inert 祖先里。
+  // 不用 rAF：Windows 隐藏窗口会节流，CI 与真实窗口行为会分叉。
+  useEffect(() => {
+    if (!settingsOpen) restoreFocus(settingsReturnRef);
+    if (!standingsState) restoreFocus(standingsReturnRef);
+    if (!paletteOpen) restoreFocus(paletteReturnRef);
+    if (!updateModalOpen) restoreFocus(updateReturnRef);
+  }, [settingsOpen, standingsState, paletteOpen, updateModalOpen]);
 
   useEffect(() => {
     if (!window.desktop?.onUpdaterEvent) return;
@@ -297,6 +302,7 @@ export default function App() {
   const onboardingVisible = onboardingOpen && !splashOpen;
 
   const replaySplash = useCallback(() => {
+    settingsReturnRef.current = null;
     setSettingsOpen(false);
     setSplashOpen(true);
   }, []);
@@ -625,7 +631,6 @@ export default function App() {
   }, []);
   const closeStandings = useCallback(() => {
     setStandingsState(null);
-    restoreFocus(standingsReturnRef);
   }, []);
   const openStandingsForActive = useCallback(() => {
     const league = activeMatch && STANDINGS_LEAGUES.includes(activeMatch.l) ? activeMatch.l : 'PL';
@@ -665,6 +670,8 @@ export default function App() {
   const runPaletteItem = useCallback(item => {
     const action = item?.action;
     if (!action) return;
+    // 执行动作会切换视图或打开新的浮层，不把焦点抢回搜索入口
+    paletteReturnRef.current = null;
     setPaletteOpen(false);
     if (action.type === 'view') {
       setView(action.view);
