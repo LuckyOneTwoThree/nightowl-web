@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getFixtures, leagueName, teamName } from '../data/index.js';
 import { STANDINGS_LEAGUES, computeStandings, standingsCutoff } from '../core/standings.js';
-import { isFinished, nightOf, owlDay } from '../core/engine.js';
+import { isFinished } from '../core/engine.js';
+import { unrevealedTonightIds } from '../core/reveal.js';
 import { bjDate } from '../core/format.js';
 import { Chip, Crest, Hint, Meta } from './atoms.jsx';
 import { IconClose } from './icons.jsx';
@@ -67,15 +68,8 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
   // 今晚已完赛、未「揭晓」的场次 → 从积分计算中排除（防剧透）。
   // revealed 是会话级 Set；dataRev 变化时 fixtures 可能新增完赛场次，需重算。
   const hiddenIds = useMemo(() => {
-    if (!spoilerFree) return null;
-    const night = nightOf(nowTs);
-    const s = new Set();
-    for (const m of getFixtures()) {
-      if (m.st !== 'done' || !m.sc) continue;
-      if (revealed?.has(m.id)) continue;
-      if (owlDay(m.t) === night) s.add(m.id);
-    }
-    return s.size ? s : null;
+    const ids = unrevealedTonightIds(getFixtures(), nowTs, spoilerFree, revealed);
+    return ids.size ? ids : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spoilerFree, revealed, nowTs, dataRev]);
 

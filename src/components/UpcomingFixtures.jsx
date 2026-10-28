@@ -61,7 +61,7 @@ function TeamColumn({ teamId, list, side, onSelect }) {
   );
 }
 
-export default function UpcomingFixtures({ match, prefs, onSelect }) {
+export default function UpcomingFixtures({ match, prefs, onSelect, embedded = false }) {
   // ⚠️ hooks 必须在 early-return 之前调用：match 从 null 变非 null（失效深链
   // 自动降级到今晚之选）会让两次渲染的 hooks 数量不同，React 直接抛
   // "Rendered more hooks than during the previous render" 整页白屏。
@@ -72,6 +72,7 @@ export default function UpcomingFixtures({ match, prefs, onSelect }) {
   );
 
   if (!match) {
+    if (embedded) return null;
     return (
       <section className="flex h-full flex-col justify-center overflow-hidden rounded-xl border border-line-hairline bg-surface-card p-4 shadow-card">
         <EmptyState
@@ -83,19 +84,27 @@ export default function UpcomingFixtures({ match, prefs, onSelect }) {
     );
   }
 
+  const content = (
+    <div>
+      <div className="mb-2.5 flex items-center justify-between">
+        <h3 className="text-xs font-semibold tracking-wide text-text-primary">双方后续赛程</h3>
+        <Meta>各取最近 4 场 · 档位越高熬夜代价越大</Meta>
+      </div>
+      <div className="flex gap-4">
+        <TeamColumn teamId={match.h} list={home} side="主队" onSelect={onSelect} />
+        <div className="w-px shrink-0 bg-line-hairline" />
+        <TeamColumn teamId={match.a} list={away} side="客队" onSelect={onSelect} />
+      </div>
+    </div>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
   return (
     <section className="flex h-full flex-col justify-between overflow-hidden rounded-xl border border-line-hairline bg-surface-card p-4 shadow-card transition-shadow hover:shadow-pop">
-      <div>
-        <div className="mb-2.5 flex items-center justify-between">
-          <h3 className="text-2xs font-semibold tracking-wide text-text-primary">双方后续赛程</h3>
-          <Meta>各取最近 4 场 · 档位越高熬夜代价越大</Meta>
-        </div>
-        <div className="flex gap-4">
-          <TeamColumn teamId={match.h} list={home} side="主队" onSelect={onSelect} />
-          <div className="w-px shrink-0 bg-line-hairline" />
-          <TeamColumn teamId={match.a} list={away} side="客队" onSelect={onSelect} />
-        </div>
-      </div>
+      {content}
     </section>
   );
 }

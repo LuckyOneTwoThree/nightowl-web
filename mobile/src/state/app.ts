@@ -9,6 +9,7 @@ type AppStore = {
   syncError: string | null;
   lastCheckedAt: number | null;
   lastSyncedAt: number | null;
+  lastSyncErrorAt: number | null;
   revealedIds: Record<string, boolean>;
   bump: (meta?: {
     source?: DataSource;
@@ -17,7 +18,12 @@ type AppStore = {
   }) => void;
   setSyncing: (value: boolean) => void;
   setSyncError: (message: string | null) => void;
-  setMeta: (meta: { source?: DataSource; lastCheckedAt?: number | null; lastSyncedAt?: number | null }) => void;
+  setMeta: (meta: {
+    source?: DataSource;
+    lastCheckedAt?: number | null;
+    lastSyncedAt?: number | null;
+    lastSyncErrorAt?: number | null;
+  }) => void;
   revealMatch: (id: string) => void;
   hideMatch: (id: string) => void;
   clearRevealed: () => void;
@@ -30,6 +36,7 @@ export const useAppStore = create<AppStore>(set => ({
   syncError: null,
   lastCheckedAt: null,
   lastSyncedAt: null,
+  lastSyncErrorAt: null,
   revealedIds: {},
   bump: meta =>
     set(state => ({
@@ -37,6 +44,7 @@ export const useAppStore = create<AppStore>(set => ({
       source: meta?.source ?? state.source,
       lastCheckedAt: meta?.checkedAt ?? state.lastCheckedAt,
       lastSyncedAt: meta?.syncedAt ?? state.lastSyncedAt,
+      lastSyncErrorAt: null,
     })),
   setSyncing: value => set({ syncing: value }),
   setSyncError: message => set({ syncError: message }),
@@ -47,6 +55,8 @@ export const useAppStore = create<AppStore>(set => ({
         meta.lastCheckedAt !== undefined ? meta.lastCheckedAt : state.lastCheckedAt,
       lastSyncedAt:
         meta.lastSyncedAt !== undefined ? meta.lastSyncedAt : state.lastSyncedAt,
+      lastSyncErrorAt:
+        meta.lastSyncErrorAt !== undefined ? meta.lastSyncErrorAt : state.lastSyncErrorAt,
     })),
   revealMatch: id =>
     set(state => ({

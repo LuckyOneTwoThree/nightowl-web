@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getFixtures, setFixtures, storylines, teamName } from './data/index.js';
 import { countdown as engineCountdown, ts, MATCH_DURATION_MS, sleepTier } from './core/engine.js';
-import { humanCountdownShort } from './core/format.js';
+import { bjClock, humanCountdownShort } from './core/format.js';
 import { STANDINGS_LEAGUES } from './core/standings.js';
 import { loadPrefs, savePrefs } from './core/prefs.js';
 import { isPrematchDue, prematchNotification } from './core/notifications.js';
@@ -16,6 +16,7 @@ import {
   computeReplayPicks
 } from './core/owl.js';
 import { narrativeOf } from './core/narrative.js';
+import { unrevealedTonightIds } from './core/reveal.js';
 
 import TopBar from './components/TopBar.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
@@ -25,9 +26,7 @@ import ScheduleView from './components/ScheduleView.jsx';
 import IntelPanel from './components/IntelPanel.jsx';
 import StandingsModal from './components/StandingsModal.jsx';
 import PlayerStage from './components/PlayerStage.jsx';
-import UpcomingFixtures from './components/UpcomingFixtures.jsx';
 import NextUpRail from './components/NextUpRail.jsx';
-import SameNightPicks from './components/SameNightPicks.jsx';
 import SettingsDrawer from './components/SettingsDrawer.jsx';
 import Onboarding, { shouldShowOnboarding } from './components/Onboarding.jsx';
 import SplashScreen from './components/SplashScreen.jsx';
@@ -85,6 +84,36 @@ export default function App() {
 
   // ---- 偏好（本地存储）----
   const [prefs, setPrefsState] = useState(() => loadPrefs());
+  const [theme, setThemeState] = useState(() => {
+    try {
+      return localStorage.getItem('nightowl:theme') === 'light' ? 'light' : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+
+  const setTheme = useCallback(nextTheme => {
+    const resolved = nextTheme === 'light' ? 'light' : 'dark';
+    setThemeState(resolved);
+    try {
+      localStorage.setItem('nightowl:theme', resolved);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    if (theme === 'light') {
+      root.classList.add('light');
+      root.classList.remove('dark');
+      root.setAttribute('data-theme', 'light');
+    } else {
+      root.classList.add('dark');
+      root.classList.remove('light');
+      root.setAttribute('data-theme', 'dark');
+    }
+  }, [theme, prefs]);
+
   const setPrefs = useCallback(next => {
     setPrefsState(next);
     savePrefs(next);
@@ -263,7 +292,9 @@ export default function App() {
   // 启动时（以及点「立即同步」后）从 /api/fixtures 拉最新数据替换掉它，
   // dataRev 变化会让下面所有派生数据重算 —— 否则「刚结束的比赛」会一直显示待录比分。
   const [dataRev, setDataRev] = useState(0);
+  const [dataHealth, setDataHealth] = useState(null);
   const lastSyncTriggerRef = useRef(0);
+  const lastHealthAtRef = useRef(null);
 
   // 竞态保护：refreshData 有 4 个并发来源（挂载 effect / focus 监听 /
   // triggerSync 的 409 延迟分支 / 设置抽屉按钮）。旧实现无任何保护，
@@ -300,6 +331,57 @@ export default function App() {
       refreshInFlightRef.current = null;
     }
   }, []);
+
+  /** 低频数据状态：发现后台写入新赛果时只重载 fixtures；失败/陈旧则显示提示 */
+  const refreshHealth = useCallback(async () => {
+    try {
+      const r = await fetch('/api/scores/status');
+      if (!r.ok) throw new Error(String(r.status));
+      const j = await r.json();
+      const at = j?.lastSync?.at || null;
+      if (at && at !== lastHealthAtRef.current) {
+        lastHealthAtRef.current = at;
+        // 无补丁的自检只更新时间，不重载整份 fixtures。
+        if (Number(j?.lastSync?.patches || 0) > 0) refreshData();
+      }
+      const errors = Number(j?.lastSync?.errors || 0);
+      const writtenOk = j?.lastSync?.written?.ok !== false;
+      const pending = Number(j?.freshness?.pendingCount || 0);
+      const stale = Number(j?.freshness?.staleHours || 0);
+      let state = 'ok';
+      let label = '数据未检查';
+      if (j?.lastSync && (errors > 0 || !writtenOk)) {
+        state = 'error';
+        label = errors > 0 ? `同步失败 · ${errors} 个来源` : '同步写盘失败';
+      } else if (pending > 0) {
+        state = 'warn';
+        label = `待录 ${pending} 场`;
+      } else if (stale >= 24) {
+        state = 'warn';
+        label = `数据落后 ${Math.floor(stale / 24)} 天`;
+      } else if (at) {
+        const t = Date.parse(at);
+        label = `数据 ${Number.isFinite(t) ? bjClock(t, false) : '已更新'}`;
+      } else {
+        state = 'unknown';
+      }
+      setDataHealth({ state, label });
+    } catch {
+      setDataHealth({ state: 'error', label: '本地服务未连接' });
+    }
+  }, [refreshData]);
+
+  useEffect(() => {
+    let interval = null;
+    const timer = setTimeout(() => {
+      refreshHealth();
+      interval = setInterval(refreshHealth, 120000);
+    }, 4000);
+    return () => {
+      clearTimeout(timer);
+      if (interval) clearInterval(interval);
+    };
+  }, [refreshHealth]);
 
   const triggerSync = useCallback(async () => {
     const now = Date.now();
@@ -481,6 +563,14 @@ export default function App() {
     return { ev, index, tier, narrative };
   }, [activeMatch, prefs]);
 
+  // 今晚已完赛但未揭晓的场次：积分榜、近况、赛季统计和比赛详情共用同一集合。
+  // 必须由 App 统一计算，不能每个面板各自判断（旧实现正是这样漏掉积分榜和球队页的）。
+  const spoilerExcludedIds = useMemo(
+    () => unrevealedTonightIds(getFixtures(), clockTs, prefs.spoilerFree, revealed),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [clockTs, prefs.spoilerFree, revealed, dataRev]
+  );
+
   // ---- 首屏自动锁定今晚之选（用户零点击即有内容）----
   // ⚠️ 深链 ?match=XXX 可能已失效：分享链接过期、热更新后该场被移除、手填错误。
   // 此时 activeMatchId 非空但 matchMap 里查不到 → 右栏永久空态，刷新也不自愈
@@ -615,6 +705,7 @@ export default function App() {
           onViewChange={setView}
           liveCount={liveCount}
           prefs={prefs}
+          dataHealth={dataHealth}
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenPalette={() => setPaletteOpen(true)}
           updateAvailable={updateAvailable}
@@ -629,7 +720,7 @@ export default function App() {
         {/* 主工作区：左栏黄金比例（330-390px） + 右栏核心主舞台（~75%） */}
         <main className="flex min-h-0 flex-1 overflow-hidden">
           {/* 左栏：决策与列表 */}
-          <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] 2xl:w-[390px] shrink-0 flex-col overflow-hidden border-r border-white/[0.05] bg-surface-panel p-4">
+          <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] 2xl:w-[390px] shrink-0 flex-col overflow-hidden border-r border-line-hairline bg-surface-panel p-4">
           <div key={view} className="animate-view-enter flex min-h-0 flex-1 flex-col">
             {view === 'tonight' && (
               <TonightView
@@ -674,20 +765,19 @@ export default function App() {
               />
             )}
           </div>
-          <div className="shrink-0 pt-3">
-            <NextUpRail
-              match={activeMatch || tonight.focal?.m || tonight.hero?.m || null}
-              onSelect={select}
-              onOpenWeek={() => setView('week')}
-              onOpenSchedule={() => setView('schedule')}
-            />
-          </div>
+          {view === 'tonight' && tonight.slice.length < 3 && (
+            <div className="shrink-0 pt-3">
+              <NextUpRail
+                match={activeMatch || tonight.focal?.m || tonight.hero?.m || null}
+                onSelect={select}
+                onOpenWeek={() => setView('week')}
+                onOpenSchedule={() => setView('schedule')}
+              />
+            </div>
+          )}
           </section>
 
-          {/* 右栏：观赛大屏 + 情报 + 下方模块区。
-            上半（播放器 + 熬夜看点/双方数据）保持原有纵向排布；
-            下半新增模块区：双方后续赛程 & 同夜推荐 —— 宽屏并排两列、窄屏堆叠，
-            把全屏时下方的空白用真正有决策价值的信息填满。 */}
+          {/* 右栏：转播舞台 + 情报中枢 */}
           <section className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
             <div className="mx-auto flex w-full max-w-[1800px] 2xl:max-w-full flex-col gap-3">
               {activeMatch && !activeInView && (
@@ -695,7 +785,7 @@ export default function App() {
                   role="status"
                   className="sticky top-0 z-20 flex animate-view-enter items-center justify-between gap-3 rounded-lg border border-line-hairline bg-surface-panel/95 px-3 py-1.5 shadow-card backdrop-blur-xl motion-reduce:animate-none"
                 >
-                  <span className="min-w-0 truncate text-2xs text-text-secondary">
+                  <span className="min-w-0 truncate text-xs text-text-secondary">
                     正在查看：{teamName(activeMatch.h)} vs {teamName(activeMatch.a)}
                     <span className="text-text-faint">
                       {' '}· {activeMatch.t.slice(5, 10).replace('-', '/')} {activeMatch.t.split('T')[1]}
@@ -705,7 +795,7 @@ export default function App() {
                     type="button"
                     onClick={() => firstInViewId && setActiveMatchId(firstInViewId)}
                     disabled={!firstInViewId}
-                    className="shrink-0 rounded-md px-2 py-0.5 text-2xs font-medium text-text-secondary transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+                    className="shrink-0 rounded-md px-2 py-0.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     回到当前视图
                   </button>
@@ -720,14 +810,13 @@ export default function App() {
                 revealed={activeMatch ? revealed.has(activeMatch.id) : false}
                 onReveal={reveal}
                 notifyLiveEvents={prefs.notifyLiveEvents}
-                asideExtra={
-                  <SameNightPicks match={activeMatch} prefs={prefs} onSelect={select} compact />
-                }
+                excludedIds={spoilerExcludedIds}
                 underVideo={
                   <IntelPanel
                     match={activeMatch}
                     prefs={prefs}
                     intel={activeIntel}
+                    excludedIds={spoilerExcludedIds}
                     indexHint={INDEX_HINT}
                     isHeroMatch={!!tonight.hero && activeMatch?.id === tonight.hero.m.id}
                     onSelect={select}
@@ -736,8 +825,6 @@ export default function App() {
                   />
                 }
               />
-              {/* 同夜替代已上移到右栏；这里保留当前场次双方的后续赛程 */}
-              <UpcomingFixtures match={activeMatch} prefs={prefs} onSelect={select} />
             </div>
           </section>
         </main>
@@ -755,6 +842,8 @@ export default function App() {
         open={settingsOpen}
         prefs={prefs}
         onPrefsChange={setPrefs}
+        theme={theme}
+        onThemeChange={setTheme}
         onClose={() => setSettingsOpen(false)}
         onRerunOnboarding={rerunOnboarding}
         onReplaySplash={replaySplash}

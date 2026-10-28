@@ -38,6 +38,7 @@ export function useLiveMatch(
 ) {
   const [data, setData] = useState<LiveData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lastSuccessAt, setLastSuccessAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const matchId = match?.id;
   const kickoff = match?.t;
@@ -46,6 +47,7 @@ export function useLiveMatch(
     if (!enabled || !match) {
       setData(null);
       setError(null);
+      setLastSuccessAt(null);
       setLoading(false);
       return;
     }
@@ -71,6 +73,7 @@ export function useLiveMatch(
         if (result?.ok) {
           setData(result);
           setError(null);
+          setLastSuccessAt(Date.now());
         } else {
           setError(result?.reason || 'live-unavailable');
         }
@@ -97,5 +100,5 @@ export function useLiveMatch(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId, kickoff, enabled, intervalMs]);
 
-  return { data, error, loading };
+  return { data, error, loading, lastSuccessAt };
 }

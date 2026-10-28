@@ -412,6 +412,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
             at: new Date().toISOString(),
             ms: Date.now() - startedAt,
             patches: result.patches.size,
+            attempted: result.attempted !== false,
             applied: !!apply && written?.ok === true,
             written,
             errors: result.errors.length,
@@ -501,32 +502,53 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
       const startedAt = Date.now();
       const fixtures = await loadFixturesImpl();
       const result = await syncScoresImpl({ fixtures, rules, log });
+      let written = { ok: true, changed: 0, note: '没有需要写入的补丁' };
+      let applied = false;
       if (result.patches.size > 0) {
         const { fixtures: next, changed } = applyPatches(fixtures, result.patches);
         const issues = validateFixtures(next);
-        if (!issues.length) {
+        if (issues.length) {
+          written = { ok: false, reason: '校验未通过，已放弃写盘', issues: issues.slice(0, 5) };
+        } else {
           const saved = saveFixturesImpl(next) || { ok: false, reason: '写盘结果缺失' };
           // ⚠️ 不能不看 saved.ok 就报「完成」：数据目录不可写时 saveFixtures 返回
           //    {ok:false, reason}，此时日志在撒谎、lastSync.applied 也错报为 true。
-          const ok = saved.ok === true;
-          log[ok ? 'log' : 'warn']?.(
-            ok
+          written = { ...saved, changed };
+          applied = saved.ok === true;
+          log[applied ? 'log' : 'warn']?.(
+            applied
               ? `[scores] 后台自动保鲜完成：写入 ${changed} 场新完赛比分 (${Date.now() - startedAt}ms)`
               : `[scores] 后台自动保鲜写盘失败：${saved?.reason || '未知原因'}（${changed} 场未落盘）`
           );
-          lastSync = {
-            at: new Date().toISOString(),
-            ms: Date.now() - startedAt,
-            patches: result.patches.size,
-            applied: ok, // 写盘失败不得报「已应用」
-            written: { ...saved, changed },
-            errors: result.errors.length,
-            stats: result.stats
-          };
         }
       }
+      // 即使没有补丁也要记录「这次检查发生过」；否则设置页会永远显示
+      // 「本次启动后未运行」，用户无法区分健康自检与从未执行。
+      lastSync = {
+        at: new Date().toISOString(),
+        ms: Date.now() - startedAt,
+        patches: result.patches.size,
+        attempted: result.attempted !== false,
+        applied,
+        written,
+        errors: result.errors.length,
+        stats: result.stats,
+        bySource: result.bySource
+      };
     } catch (err) {
-      log.warn?.(`[scores] 后台保鲜异常: ${err?.message || err}`);
+      const message = err?.message || String(err);
+      log.warn?.(`[scores] 后台保鲜异常: ${message}`);
+      lastSync = {
+        at: new Date().toISOString(),
+        ms: Date.now() - startedAt,
+        patches: 0,
+        attempted: true,
+        applied: false,
+        written: { ok: false, reason: message },
+        errors: 1,
+        stats: {},
+        bySource: {}
+      };
     } finally {
       syncing = false;
     }

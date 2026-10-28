@@ -34,9 +34,10 @@ function knownByTs(currentMatch) {
  * @param {number} limit - 返回的最大场次数（默认 5）
  * @returns {Array} 近期走势列表
  */
-export function computeTeamForm(teamId, currentMatch, allFixtures = null, limit = 5) {
+export function computeTeamForm(teamId, currentMatch, allFixtures = null, limit = 5, opts = {}) {
   allFixtures = allFixtures || getFixtures();
   if (!teamId) return [];
+  const excludeIds = opts.excludeIds || null;
 
   const knownTs = knownByTs(currentMatch);
 
@@ -47,6 +48,7 @@ export function computeTeamForm(teamId, currentMatch, allFixtures = null, limit 
       m.st === 'done' &&
       m.sc &&
       m.id !== currentMatch?.id &&
+      !(excludeIds && excludeIds.has(m.id)) &&
       parseTime(m.t) + MATCH_DURATION_MS <= knownTs
   );
 
@@ -89,8 +91,9 @@ export function computeTeamForm(teamId, currentMatch, allFixtures = null, limit 
  * @param {string} leagueCode - 联赛编码（如 PL, PD）
  * @param {Array} allFixtures - 全量赛程
  */
-export function computeSeasonStats(teamId, leagueCode, allFixtures = null, cutoffTs = Infinity) {
+export function computeSeasonStats(teamId, leagueCode, allFixtures = null, cutoffTs = Infinity, opts = {}) {
   allFixtures = allFixtures || getFixtures();
+  const excludeIds = opts.excludeIds || null;
   if (!teamId) {
     return {
       played: 0,
@@ -115,6 +118,7 @@ export function computeSeasonStats(teamId, leagueCode, allFixtures = null, cutof
       m.l === leagueCode &&
       m.st === 'done' &&
       m.sc &&
+      !(excludeIds && excludeIds.has(m.id)) &&
       parseTime(m.t) + MATCH_DURATION_MS <= cutoffTs
   );
 
@@ -188,8 +192,9 @@ export function computeSeasonStats(teamId, leagueCode, allFixtures = null, cutof
  * @param {object|null} currentMatch 当前查看的比赛；为空表示不限时间
  * @param {number} limit 最多返回几场（按时间倒序）
  */
-export function computeHeadToHead(team1, team2, allFixtures = null, currentMatch = null, limit = 5) {
+export function computeHeadToHead(team1, team2, allFixtures = null, currentMatch = null, limit = 5, opts = {}) {
   allFixtures = allFixtures || getFixtures();
+  const excludeIds = opts.excludeIds || null;
   if (!team1 || !team2) return { meetings: [], summary: { t1Wins: 0, draws: 0, t2Wins: 0, total: 0 } };
 
   const cutoff = knownByTs(currentMatch);
@@ -201,6 +206,7 @@ export function computeHeadToHead(team1, team2, allFixtures = null, currentMatch
         m.st === 'done' &&
         m.sc &&
         m.id !== currentMatch?.id &&
+        !(excludeIds && excludeIds.has(m.id)) &&
         parseTime(m.t) + MATCH_DURATION_MS <= cutoff
     )
     .sort((a, b) => parseTime(b.t) - parseTime(a.t));
@@ -249,22 +255,23 @@ export function computeHeadToHead(team1, team2, allFixtures = null, currentMatch
 /**
  * 整合当前比赛双方的全部真实数据
  */
-export function computeMatchStats(match, allFixtures = null) {
+export function computeMatchStats(match, allFixtures = null, opts = {}) {
   allFixtures = allFixtures || getFixtures();
   if (!match) return null;
 
+  const excludeIds = opts.excludeIds || null;
   const cutoff = knownByTs(match);
   return {
     home: {
       id: match.h,
-      form: computeTeamForm(match.h, match, allFixtures),
-      season: computeSeasonStats(match.h, match.l, allFixtures, cutoff)
+      form: computeTeamForm(match.h, match, allFixtures, 5, { excludeIds }),
+      season: computeSeasonStats(match.h, match.l, allFixtures, cutoff, { excludeIds })
     },
     away: {
       id: match.a,
-      form: computeTeamForm(match.a, match, allFixtures),
-      season: computeSeasonStats(match.a, match.l, allFixtures, cutoff)
+      form: computeTeamForm(match.a, match, allFixtures, 5, { excludeIds }),
+      season: computeSeasonStats(match.a, match.l, allFixtures, cutoff, { excludeIds })
     },
-    h2h: computeHeadToHead(match.h, match.a, allFixtures, match)
+    h2h: computeHeadToHead(match.h, match.a, allFixtures, match, 5, { excludeIds })
   };
 }

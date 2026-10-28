@@ -13,6 +13,7 @@ import { leagueName, teamName } from '@data/index.js';
 import { countdown as engineCountdown, ts } from '@core/engine.js';
 import { hm, humanCountdownShort, liveMinute } from '@core/format.js';
 import { sourceUrlFor } from '@core/watch-sources.js';
+import { liveScoreForDisplay, isScoreVisible } from '@core/reveal.js';
 import watchSources from '../shared/server/watch-sources.json';
 
 import { useHighlights } from '@/data/useHighlights';
@@ -79,6 +80,9 @@ export function WatchSheet({
   };
 
   const hiddenBySpoiler = isDone && spoilerFree && !revealed;
+  // 直播比分同样受防剧透控制：看直播入口不等于允许提前知道当前比分。
+  const showLiveScore = isScoreVisible(spoilerFree, revealed);
+  const liveScore = liveScoreForDisplay(live?.score, spoilerFree, revealed);
   const {
     data: highlights,
     loading: highlightsLoading,
@@ -147,8 +151,8 @@ export function WatchSheet({
               <Text style={styles.liveText}>
                 {live?.statusText || '比赛已开始'}
                 {live?.minuteLabel ? ` · ${live.minuteLabel}` : ` · ${minute}'`}
-                {live?.score && live.score.h != null
-                  ? ` · ${live.score.h}-${live.score.a}`
+                {liveScore && liveScore.h != null
+                  ? ` · ${liveScore.h}-${liveScore.a}`
                   : ''}
               </Text>
             </View>

@@ -77,7 +77,7 @@ export default {
 
         /* 品牌 */
         accent: alpha('accent'),
-        'accent-ink': '#1A1204',
+        'accent-ink': alpha('accent-ink'),
 
         /* 语义状态 */
         live: alpha('live'),
@@ -96,6 +96,7 @@ export default {
         'result-win': alpha('result-win'),
         'result-draw': alpha('result-draw'),
         'result-loss': alpha('result-loss'),
+        'result-ink': alpha('result-ink'),
 
         /* 联赛识别色（仅列表左色条） */
         'league-pl': '#A8559F',

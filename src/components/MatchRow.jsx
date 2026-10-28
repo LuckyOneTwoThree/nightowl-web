@@ -59,6 +59,23 @@ export default function MatchRow({
       ? 'bg-surface-card/90 border border-live/25 hover:border-live/40'
       : 'border border-transparent hover:border-line-hairline hover:bg-surface-raised/60';
 
+  // 单行标签上限：最多展示 1 个高优状态标签（外部自定义 badge > 雷区 > 德比），避免满行胶囊挤压
+  const primaryTag =
+    badge ||
+    (minefield ? (
+      <span title="凌晨低性价比场次，建议优先休息">
+        <Chip tone="warn">
+          <IconWarn size={11} />
+          雷区
+        </Chip>
+      </span>
+    ) : rivalry ? (
+      <span className="inline-flex min-w-0 items-center gap-1 text-2xs font-medium text-warn" title={rivalry}>
+        <IconDerby size={11} />
+        德比
+      </span>
+    ) : null);
+
   return (
     <div
       role="button"
@@ -71,7 +88,7 @@ export default function MatchRow({
         }
       }}
       aria-current={active ? 'true' : undefined}
-      className={`relative w-full cursor-pointer select-none overflow-hidden rounded-lg py-2 pr-2.5 pl-3 text-left transition-all duration-150 focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none ${rowBg}`}
+      className={`relative w-full cursor-pointer select-none overflow-hidden rounded-lg py-2 pr-3 pl-3.5 text-left transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none ${rowBg}`}
     >
       {/* 联赛身份条 */}
       <span
@@ -83,7 +100,7 @@ export default function MatchRow({
       <div className="flex gap-2.5">
         {/* 时刻列：固定宽度，让所有行的开球时间纵向对齐 */}
         <span
-          className={`w-10 shrink-0 pt-px font-num text-xs font-semibold tabular-nums ${
+          className={`w-11 shrink-0 pt-px font-num text-xs font-semibold tabular-nums ${
             live ? 'text-live' : 'text-text-secondary'
           }`}
         >
@@ -91,30 +108,16 @@ export default function MatchRow({
         </span>
 
         <div className="min-w-0 flex-1">
-          {/* 元信息行 */}
+          {/* 第一行：元信息与夜猫指数（严禁使用 ★ 星号混淆看点星级） */}
           <div className="flex items-center gap-2">
-            <span className="shrink-0 text-2xs text-text-muted">{leagueName(m.l)}</span>
-            {dateLabel && <span className="shrink-0 text-2xs text-text-faint">{dateLabel}</span>}
+            <span className="shrink-0 text-xs text-text-muted">{leagueName(m.l)}</span>
+            {dateLabel && <span className="shrink-0 text-xs text-text-faint">{dateLabel}</span>}
             {m.tbd ? (
-              <span className="shrink-0 text-2xs text-text-faint">时间待定</span>
+              <span className="shrink-0 text-xs text-text-faint">待定</span>
             ) : (
               showSleep && <SleepBadge match={m} compact />
             )}
-            {rivalry && (
-              <span className="inline-flex min-w-0 items-center gap-1 text-2xs text-warn" title={rivalry}>
-                <IconDerby size={11} />
-                德比
-              </span>
-            )}
-            {minefield && (
-              <span title="凌晨场次，建议睡觉">
-                <Chip tone="warn">
-                  <IconWarn size={11} />
-                  雷区
-                </Chip>
-              </span>
-            )}
-            {badge}
+            {primaryTag}
 
             <span className="ml-auto shrink-0">
               {live ? (
@@ -124,12 +127,17 @@ export default function MatchRow({
                 </span>
               ) : state === 'sched' && index != null ? (
                 <span
-                  className="font-num text-xs font-semibold tabular-nums text-text-secondary"
+                  className="inline-flex items-baseline gap-1 font-num text-xs font-semibold tabular-nums"
                   title="夜猫指数"
                   aria-label={`夜猫指数 ${index.toFixed(1)}`}
                 >
-                  {index.toFixed(1)}
+                  <span className="text-2xs font-normal text-text-faint">指数</span>
+                  <span className={index >= 8 ? 'text-accent' : 'text-text-secondary'}>
+                    {index.toFixed(1)}
+                  </span>
                 </span>
+              ) : scoreShown ? (
+                <span className="text-2xs text-text-faint">终场</span>
               ) : (
                 <ScoreText
                   match={m}
@@ -146,12 +154,12 @@ export default function MatchRow({
             </span>
           </div>
 
-          {/* 对阵行：独占整行宽度 */}
+          {/* 第二行：对阵主视觉（13px text-sm + 18px 队徽） */}
           <div className="mt-1.5 flex items-center gap-2">
             <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
               {homeFollowed && (
                 <span
-                  className="h-1 w-1 shrink-0 rounded-full bg-accent"
+                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
                   title="关注球队"
                   aria-hidden="true"
                 />
@@ -168,11 +176,27 @@ export default function MatchRow({
               >
                 {teamName(m.h)}
               </span>
-              <Crest id={m.h} size={16} />
+              <Crest id={m.h} size={18} />
             </div>
-            <span className="shrink-0 font-num text-2xs text-text-faint">vs</span>
+
+            {scoreShown ? (
+              <span
+                className={`shrink-0 rounded bg-surface-raised px-1.5 py-px font-num text-xs font-bold tabular-nums text-text-primary ${
+                  spoilerFree && revealed ? 'animate-score-pop inline-block' : ''
+                }`}
+              >
+                {m.sc || '—'}
+              </span>
+            ) : m.st === 'done' && spoilerFree && !revealed ? (
+              <span className="shrink-0 font-num text-xs text-text-faint" title="比分已隐藏">
+                • : •
+              </span>
+            ) : (
+              <span className="shrink-0 font-num text-xs text-text-faint">vs</span>
+            )}
+
             <div className="flex min-w-0 flex-1 items-center gap-1.5">
-              <Crest id={m.a} size={16} />
+              <Crest id={m.a} size={18} />
               <span
                 className={`truncate text-sm ${
                   winner === 'a'
@@ -187,7 +211,7 @@ export default function MatchRow({
               </span>
               {awayFollowed && (
                 <span
-                  className="h-1 w-1 shrink-0 rounded-full bg-accent"
+                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
                   title="关注球队"
                   aria-hidden="true"
                 />

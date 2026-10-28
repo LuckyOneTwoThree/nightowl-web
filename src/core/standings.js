@@ -306,7 +306,7 @@ export function standingsCutoff(match, nowTs = Date.now()) {
  *
  * @param {object} match 当前选中的比赛
  * @param {Array|null} allFixtures 全量赛程
- * @param {{nowTs?: number}} opts 当前时间（用于未赛/进行中/时间待定）
+ * @param {{nowTs?: number, excludeIds?: Set<string>}} opts 当前时间与防剧透排除集合
  */
 export function computeMatchStandings(match, allFixtures = null, opts = {}) {
   const nowTs = Number.isFinite(opts.nowTs) ? opts.nowTs : Date.now();
@@ -321,6 +321,7 @@ export function computeMatchStandings(match, allFixtures = null, opts = {}) {
 
   const historical = isFinished(match);
   const asOfTs = standingsCutoff(match, nowTs);
+  const excludeIds = opts.excludeIds || null;
   const supported =
     STANDINGS_LEAGUES.includes(match.l) &&
     !(match.l === 'UCL' && Number(match.r) > UCL_LEAGUE_PHASE_MAX_ROUND);
@@ -338,7 +339,7 @@ export function computeMatchStandings(match, allFixtures = null, opts = {}) {
     };
   }
 
-  const table = computeStandings(match.l, allFixtures, { asOfTs });
+  const table = computeStandings(match.l, allFixtures, { asOfTs, excludeIds });
   const home = table.rows.find(row => row.teamId === match.h) || null;
   const away = table.rows.find(row => row.teamId === match.a) || null;
 

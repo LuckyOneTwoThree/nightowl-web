@@ -2,13 +2,22 @@ import { getFixtures, setFixtures } from '@data/index.js';
 import rules from '../../shared/server/rules.json';
 
 import { saveFixtures } from '@/data/fixtures';
+import { classifySyncOutcome } from '@core/sync-outcome.js';
 import { useAppStore } from '@/state/app';
 
 import { applyPatches, syncScores as syncScoresRaw, validateFixtures } from './scores.js';
 
 const syncScores = syncScoresRaw as (options: Record<string, unknown>) => Promise<any>;
 
+export type SyncStatus =
+  | 'not_needed'
+  | 'up_to_date'
+  | 'updated'
+  | 'partial_failure'
+  | 'failed';
+
 export type SyncOutcome = {
+  status: SyncStatus;
   changed: number;
   checkedAt: number;
   errors: unknown[];
@@ -33,6 +42,7 @@ export function syncNow(options: SyncOptions = {}): Promise<SyncOutcome> {
     // 由完整同步在后台继续写盘。否则用户会看到“正在检查比分…”卡很久。
     if (quick && !inFlightQuick) {
       return Promise.resolve({
+        status: 'not_needed',
         changed: 0,
         checkedAt: Date.now(),
         errors: [],
@@ -84,20 +94,43 @@ export function syncNow(options: SyncOptions = {}): Promise<SyncOutcome> {
     }
 
     const checkedAt = Date.now();
-    const attempted = !!result.attempted;
+    const attempted = result.attempted !== false;
     const errors = result.errors ?? [];
+    const fullySuccessful = attempted && errors.length === 0;
+    const status = classifySyncOutcome({
+      attempted,
+      changed,
+      errors: errors.length,
+    }) as SyncStatus;
+
     if (changed > 0) {
-      useAppStore.getState().bump({ source, checkedAt, syncedAt: checkedAt });
-    } else {
-      // 快检无变化也必须推进 lastCheckedAt，否则每次回前台都会再查一次；
+      // 部分失败时补丁已经落盘，必须刷新界面，但不要把 lastCheckedAt
+      // 当成「完整成功」推进；lastSyncErrorAt 单独记录失败时间。
+      useAppStore.getState().bump({
+        source,
+        ...(fullySuccessful ? { checkedAt } : {}),
+        syncedAt: checkedAt,
+      });
+    } else if (fullySuccessful || status === 'not_needed') {
+      // 健康检查无变化也必须推进 lastCheckedAt，否则每次回前台都会再查一次；
       // 只更新时间、不递增 rev，避免整页数据重算。
       useAppStore.getState().setMeta({ lastCheckedAt: checkedAt });
     }
-    if (quick && attempted && errors.length === 0) {
+
+    if (status === 'failed' || status === 'partial_failure') {
+      const message =
+        status === 'partial_failure'
+          ? `部分来源失败（${errors.length} 个），已保留成功补丁`
+          : `同步失败（${errors.length} 个来源未返回有效数据）`;
+      useAppStore.getState().setSyncError(message);
+      useAppStore.getState().setMeta({ lastSyncErrorAt: checkedAt });
+    } else if (attempted || status === 'not_needed') {
       useAppStore.getState().setSyncError(null);
+      useAppStore.getState().setMeta({ lastSyncErrorAt: null });
     }
 
     return {
+      status,
       changed,
       checkedAt,
       errors,
@@ -113,6 +146,7 @@ export function syncNow(options: SyncOptions = {}): Promise<SyncOutcome> {
       useAppStore
         .getState()
         .setSyncError(error instanceof Error ? error.message : String(error));
+      useAppStore.getState().setMeta({ lastSyncErrorAt: Date.now() });
       throw error;
     })
     .finally(() => {

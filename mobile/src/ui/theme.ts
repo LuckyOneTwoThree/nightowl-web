@@ -20,6 +20,7 @@ export const colors = {
   resource: '#45BFAE',
   warn: '#E0A82E',
   danger: '#F2776B',
+  resultInk: '#000000',
   dangerSoft: 'rgba(242, 119, 107, 0.12)',
   success: '#35A06F',
   overlay: 'rgba(0, 0, 0, 0.68)',

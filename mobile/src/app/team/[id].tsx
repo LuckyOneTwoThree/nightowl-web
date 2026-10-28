@@ -6,12 +6,13 @@ import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
 
 import { TEAM_MAP, getFixtures, leagueName, teamName } from '@data/index.js';
 import { computeSeasonStats, computeTeamForm } from '@core/stats.js';
+import { unrevealedTonightIds } from '@core/reveal.js';
 import { evalOne } from '@core/owl.js';
 import { ts } from '@core/engine.js';
 import { hm, zhDate } from '@core/format.js';
 
 import { useNow } from '@/lib/useNow';
-import { useDataRev } from '@/state/app';
+import { useAppStore, useDataRev } from '@/state/app';
 import { usePrefs, usePrefsStore } from '@/state/prefs';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
@@ -45,6 +46,7 @@ export default function TeamScreen() {
   const prefs = usePrefs();
   const rev = useDataRev();
   const now = useNow(60_000);
+  const revealedIds = useAppStore(state => state.revealedIds);
   const toggleTeam = usePrefsStore(state => state.toggleTeam);
 
   const fixtures = useMemo(() => getFixtures() as Match[], [rev]);
@@ -72,14 +74,18 @@ export default function TeamScreen() {
   );
   const next = upcoming[0] || null;
   const nextIntel = next ? (evalOne(next, prefs) as { index: number }) : null;
+  const spoilerExcludedIds = useMemo(() => {
+    const ids = unrevealedTonightIds(fixtures, now, prefs.spoilerFree, revealedIds);
+    return ids.size ? ids : null;
+  }, [fixtures, now, prefs.spoilerFree, revealedIds]);
   const form = useMemo(
-    () => (team ? (computeTeamForm(id, null as unknown as object, fixtures, 5) as FormItem[]) : []),
-    [id, team, fixtures]
+    () => (team ? (computeTeamForm(id, null as unknown as object, fixtures, 5, { excludeIds: spoilerExcludedIds }) as FormItem[]) : []),
+    [id, team, fixtures, spoilerExcludedIds]
   );
   const season = useMemo(
     () =>
       team
-        ? (computeSeasonStats(id, team.league, fixtures) as {
+        ? (computeSeasonStats(id, team.league, fixtures, Infinity, { excludeIds: spoilerExcludedIds }) as {
             played: number;
             wins: number;
             draws: number;
@@ -89,7 +95,7 @@ export default function TeamScreen() {
             winRate: number;
           })
         : null,
-    [id, team, fixtures]
+    [id, team, fixtures, spoilerExcludedIds]
   );
   const formSummary = form.reduce(
     (acc, item) => {
@@ -231,6 +237,11 @@ export default function TeamScreen() {
           ) : (
             <Text style={styles.muted}>暂无已完赛记录。</Text>
           )}
+          {spoilerExcludedIds ? (
+            <Text style={styles.muted}>
+              已排除今晚未揭晓 {spoilerExcludedIds.size} 场，避免从近况倒推比分。
+            </Text>
+          ) : null}
         </Card>
 
         {season ? (
@@ -364,7 +375,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  formDotText: { color: '#0B0E15', fontSize: fontSize.xxs, fontWeight: '800' },
+  formDotText: { color: colors.resultInk, fontSize: fontSize.xxs, fontWeight: '800' },
   formSummary: { color: colors.textMuted, fontSize: fontSize.xs },
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingTop: spacing.xs },
   stat: {

@@ -85,6 +85,7 @@ export default function TopBar({
   onViewChange,
   liveCount,
   prefs,
+  dataHealth = null,
   onOpenSettings,
   updateAvailable = false,
   updateVersion = null,
@@ -122,9 +123,10 @@ export default function TopBar({
           </span>
         </div>
 
-        <nav className="no-drag flex shrink-0 items-center gap-0.5" aria-label="视图切换" role="tablist">
+        <nav className="no-drag flex shrink-0 items-center gap-1" aria-label="视图切换" role="tablist">
           {VIEWS.map(it => {
             const active = it.id === view;
+            const showLiveBadge = it.id === 'tonight' && liveCount > 0;
             return (
               <button
                 key={it.id}
@@ -132,18 +134,27 @@ export default function TopBar({
                 role="tab"
                 aria-selected={active}
                 onClick={() => onViewChange(it.id)}
-                className={`relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs transition-all focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none ${
+                className={`relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs transition-all active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none ${
                   active
-                    ? 'bg-surface-raised/85 font-semibold text-text-primary shadow-sm'
-                    : 'text-text-muted hover:bg-white/[0.04] hover:text-text-primary'
+                    ? 'bg-surface-raised font-semibold text-text-primary shadow-card'
+                    : 'text-text-muted hover:bg-surface-raised/60 hover:text-text-primary'
                 }`}
               >
                 <span className={active ? 'text-accent' : 'text-text-faint'}>{it.icon}</span>
                 {it.label}
+                {showLiveBadge && (
+                  <span
+                    className="ml-0.5 inline-flex items-center gap-1 rounded-full bg-live/15 px-1.5 py-px font-num text-2xs font-semibold tabular-nums text-live"
+                    title={`${liveCount} 场比赛正在进行`}
+                  >
+                    <LiveDot />
+                    {liveCount}
+                  </span>
+                )}
                 {active && (
                   <span
                     aria-hidden="true"
-                    className="absolute inset-x-3 -bottom-[10px] h-0.5 rounded-full bg-accent shadow-[0_0_8px_rgb(var(--accent)/0.65)]"
+                    className="absolute inset-x-3 -bottom-[10px] h-0.5 rounded-full bg-accent"
                   />
                 )}
               </button>
@@ -152,32 +163,52 @@ export default function TopBar({
         </nav>
       </div>
 
-      <div className="no-drag hidden shrink-0 items-center gap-3 xl:flex">
-        <div className="flex items-center gap-2 rounded-full border border-line-hairline bg-surface-card/70 px-3 py-1">
+      <div className="no-drag hidden shrink-0 items-center gap-2.5 xl:flex">
+        <div className="flex items-center gap-2 rounded-full border border-line-hairline bg-surface-card px-3 py-1">
           <span className="h-1.5 w-1.5 rounded-full bg-accent/80" aria-hidden="true" />
           <span className="font-num text-xs font-semibold tabular-nums text-text-primary">
             {bjClock(now)}
           </span>
-          <span className="font-num text-2xs tabular-nums text-text-faint">{bjDate(now)}</span>
-          <span className="border-l border-line-hairline pl-2 text-2xs font-medium text-text-muted">
+          <span className="font-num text-xs tabular-nums text-text-faint">{bjDate(now)}</span>
+          <span className="border-l border-line-hairline pl-2 text-xs font-medium text-text-muted">
             {watchPeriodOf(now)}
           </span>
         </div>
-        {liveCount > 0 && (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-live/25 bg-live/12 px-2.5 py-0.5">
-            <LiveDot />
-            <span className="text-2xs font-medium text-live">{liveCount} 场进行中</span>
-          </span>
-        )}
       </div>
 
       <div className="no-drag flex shrink-0 items-center gap-1.5">
+        {dataHealth && dataHealth.state !== 'unknown' && (
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            title="数据同步与保鲜状态，点击查看详情"
+            className={`inline-flex max-w-[160px] shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none ${
+              dataHealth.state === 'error'
+                ? 'border-danger/30 bg-danger/10 text-danger'
+                : dataHealth.state === 'warn'
+                  ? 'border-warn/30 bg-warn/10 text-warn'
+                  : 'border-line-hairline bg-surface-card text-text-secondary'
+            }`}
+          >
+            <span
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                dataHealth.state === 'error'
+                  ? 'bg-danger'
+                  : dataHealth.state === 'warn'
+                    ? 'bg-warn'
+                    : 'bg-resource'
+              }`}
+              aria-hidden="true"
+            />
+            <span className="truncate font-medium">{dataHealth.label}</span>
+          </button>
+        )}
         <button
           type="button"
           onClick={onOpenPalette}
           title="搜索球队、比赛或功能（Ctrl+K）"
           aria-label="搜索"
-          className="inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-line-hairline bg-surface-card/80 px-2 text-2xs text-text-muted transition-colors hover:border-line-control hover:bg-surface-raised hover:text-text-primary"
+          className="inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-line-hairline bg-surface-card px-2.5 text-xs text-text-secondary transition-colors hover:border-line-control hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
         >
           <IconSearch size={13} />
           <span className="hidden sm:inline">搜索</span>
@@ -190,7 +221,7 @@ export default function TopBar({
           onClick={onOpenStandings}
           title="查看完整积分榜"
           aria-label="积分榜"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
         >
           <IconStandings size={14} />
         </button>
@@ -199,7 +230,7 @@ export default function TopBar({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1 text-xs text-text-primary transition-colors hover:bg-surface-raised"
+            className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1 text-xs text-text-primary transition-colors hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
           >
             <Crest id={primaryTeam} size={16} />
             <span className="font-medium">{teamName(primaryTeam)}</span>
@@ -211,22 +242,20 @@ export default function TopBar({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-raised hover:text-text-primary"
+            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
           >
             设置关注球队
           </button>
         )}
 
-        <span className="mx-1 h-4 w-px bg-line-hairline" aria-hidden="true" />
+        <span className="mx-0.5 h-4 w-px bg-line-hairline" aria-hidden="true" />
 
-        {/* 版本更新气泡 —— 主流产品的做法：有新版本时在顶栏给出**可见**的入口，
-            而不是藏在设置面板里等用户自己发现 */}
         {updateAvailable && (
           <button
             type="button"
             onClick={onOpenUpdate}
             title={updateVersion ? `新版本 v${updateVersion} 可用，点击查看` : '有新版本可用，点击查看'}
-            className="inline-flex items-center gap-1.5 rounded-full border border-accent/45 bg-accent/15 px-2.5 py-1 text-2xs font-medium text-accent shadow-[0_0_12px_rgba(245,185,66,0.28)] transition-colors hover:bg-accent/25 cursor-pointer"
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-accent/45 bg-accent/15 px-2.5 py-1 text-2xs font-medium text-accent transition-colors hover:bg-accent/25 focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
           >
             <span className="inline-flex h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
             {updateVersion ? `新版本 v${updateVersion}` : '新版本'}
@@ -236,7 +265,7 @@ export default function TopBar({
         <button
           type="button"
           onClick={onOpenSettings}
-          className="relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary"
+          className="relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
         >
           <IconSettings />
           偏好与数据

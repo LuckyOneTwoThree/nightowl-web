@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  AppState,
   Pressable,
   Share,
   StyleSheet,
@@ -9,7 +10,6 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import Constants from 'expo-constants';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -33,7 +33,7 @@ import {
   teamColor,
   teamName,
 } from '@data/index.js';
-import { computeTonight, evalOne, sameNightPicks, stateOf, upcomingForTeams } from '@core/owl.js';
+import { evalOne, sameNightPicks, stateOf, upcomingForTeams } from '@core/owl.js';
 import {
   countdown as engineCountdown,
   followedBonus,
@@ -43,14 +43,15 @@ import {
   storyBonus,
   ts,
 } from '@core/engine.js';
-import { bjDate, hm, humanCountdownShort, liveMinute as minuteOf, zhDate } from '@core/format.js';
+import { bjClock, bjDate, hm, humanCountdownShort, liveMinute as minuteOf, zhDate } from '@core/format.js';
 import { eventKey, eventSummary, shouldNotifyEvent } from '@core/live-events.js';
 import { narrativeOf } from '@core/narrative.js';
 import { computeMatchStandings } from '@core/standings.js';
 import { computeMatchStats } from '@core/stats.js';
+import { unrevealedTonightIds } from '@core/reveal.js';
 
 import { animateLayout } from '@/lib/layoutAnimation';
-import { scheduleMatchReminder } from '@/lib/reminders';
+import { hasScheduledMatchReminder, scheduleMatchReminder } from '@/lib/reminders';
 import { useLiveMatch, type LiveData } from '@/data/useLiveMatch';
 import { useNow } from '@/lib/useNow';
 import { useAppStore, useDataRev } from '@/state/app';
@@ -106,6 +107,7 @@ export default function MatchScreen() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('intel');
   const revealedInStore = useAppStore(s => (id ? !!s.revealedIds[id] : false));
+  const revealedIds = useAppStore(s => s.revealedIds);
   const revealMatch = useAppStore(s => s.revealMatch);
   const hideMatch = useAppStore(s => s.hideMatch);
   const [forceHidden, setForceHidden] = useState(false);
@@ -126,9 +128,33 @@ export default function MatchScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
 
+  // 以系统已排程通知为事实来源，而不是页面 state。
+  useEffect(() => {
+    if (!id) return undefined;
+    let alive = true;
+    const sync = () => {
+      void hasScheduledMatchReminder(id).then(value => {
+        if (alive) setReminderSet(value);
+      });
+    };
+    sync();
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') sync();
+    });
+    return () => {
+      alive = false;
+      subscription.remove();
+    };
+  }, [id, rev]);
+
   const match = useMemo(
     () => getFixtures().find((item: Match) => item.id === id) as Match | undefined,
     [id, rev]
+  );
+
+  const spoilerExcludedIds = useMemo(
+    () => unrevealedTonightIds(getFixtures(), now, prefs.spoilerFree, revealedIds),
+    [now, prefs.spoilerFree, revealedIds, rev]
   );
 
   const intel = useMemo(() => {
@@ -139,12 +165,12 @@ export default function MatchScreen() {
       index,
       tier: sleepTier(match.t) as Tier,
       narrative: narrativeOf(match, ev, storylines) as Narrative,
-      stats: computeMatchStats(match) as StatsData,
-      standings: computeMatchStandings(match, getFixtures(), { nowTs: now }) as MatchStandings,
+      stats: computeMatchStats(match, null, { excludeIds: spoilerExcludedIds }) as StatsData,
+      standings: computeMatchStandings(match, getFixtures(), { nowTs: now, excludeIds: spoilerExcludedIds }) as MatchStandings,
       upcoming: upcomingForTeams(match) as { home: Match[]; away: Match[] },
       sameNight: sameNightPicks(match, prefs, 3, now) as Entry[],
     };
-  }, [match, prefs, now, rev]);
+  }, [match, prefs, now, rev, spoilerExcludedIds]);
 
   const state = match ? (stateOf(match, now) as string) : 'sched';
   const isDone = match
@@ -226,13 +252,9 @@ export default function MatchScreen() {
     });
   };
 
-  const autoReminded =
-    prefs.notifyBefore15 &&
-    Constants.executionEnvironment !== 'storeClient' &&
-    (prefs.followedTeams.includes(match.h) ||
-      prefs.followedTeams.includes(match.a) ||
-      computeTonight(now, prefs).hero?.m.id === match.id);
-  const reminded = autoReminded || reminderSet;
+  // 只有系统里真的存在该场的提醒，才显示「提醒已开启」。
+  // autoReminded 只代表偏好意图，不代表权限与排程成功，不能当事实来源。
+  const reminded = reminderSet;
 
   const handleReminder = async () => {
     const ok = await scheduleMatchReminder(match);
@@ -442,6 +464,13 @@ export default function MatchScreen() {
               </>
             )}
           </View>
+
+          {liveNow && live.error ? (
+            <Text style={styles.liveStale}>
+              实时数据暂时不可用
+              {live.lastSuccessAt ? ` · 最后更新 ${bjClock(live.lastSuccessAt, false)}` : ''}
+            </Text>
+          ) : null}
 
           <View style={styles.metrics}>
             <View style={styles.metric}>
@@ -1248,6 +1277,7 @@ const styles = StyleSheet.create({
   stateReminded: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   stateRemindedText: { color: colors.textSecondary, fontSize: fontSize.xs },
   stateSecondary: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: '600' },
+  liveStale: { color: colors.warn, fontSize: fontSize.xs, marginTop: spacing.xs },
   stateText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '600', flexShrink: 1 },
   stateLiveText: { color: colors.live, fontSize: fontSize.sm, fontWeight: '700' },
   stateAction: { color: colors.accent, fontSize: fontSize.sm, fontWeight: '700' },
@@ -1383,7 +1413,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  formDotText: { color: '#0B0E15', fontSize: fontSize.xxs, fontWeight: '800' },
+  formDotText: { color: colors.resultInk, fontSize: fontSize.xxs, fontWeight: '800' },
   formSummary: { color: colors.textFaint, fontSize: fontSize.xs },
   tableHead: { flexDirection: 'row', alignItems: 'center', paddingBottom: spacing.xs },
   tableLabel: { flex: 1 },

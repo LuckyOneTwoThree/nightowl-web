@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getFixtures, FOLLOWABLE_LEAGUES, LEAGUE_NAMES, leagueColor } from '../data/index.js';
 import { defaultPrefs } from '../core/prefs.js';
 import { summarizeSyncResponse } from '../core/sync-outcome.js';
-import { BrandLogo, Button, Chip, Fieldset, Hint, Meta, Switch, TogglePill } from './atoms.jsx';
-import { IconClose, IconReset } from './icons.jsx';
+import { BrandLogo, Button, Chip, Fieldset, Hint, Meta, Segmented, Switch, TogglePill } from './atoms.jsx';
+import { IconClose, IconReset, IconSun, IconTonight } from './icons.jsx';
 import TeamPicker from './TeamPicker.jsx';
 
 /**
@@ -28,6 +28,8 @@ export default function SettingsDrawer({
   open,
   prefs,
   onPrefsChange,
+  theme = 'dark',
+  onThemeChange,
   onClose,
   onRerunOnboarding,
   onReplaySplash,
@@ -91,7 +93,9 @@ export default function SettingsDrawer({
       const outcome = summarizeSyncResponse(j);
       setSyncMsg(outcome);
       // 只有真正写盘成功才替换内存快照；失败时仍刷新状态，让用户看到失败原因
-      if (outcome.ok) await onDataRefresh?.();
+      if (outcome.status === 'updated' || outcome.status === 'partial_failure') {
+        await onDataRefresh?.();
+      }
       await loadFreshness();
       refresh();
     } catch (err) {
@@ -198,6 +202,22 @@ export default function SettingsDrawer({
         </div>
 
         <div className="scrollbar-thin min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+          {/* 界面主题（暗夜转播台 / 日间演播室） */}
+          <Fieldset
+            title="界面主题"
+            hint="暗夜转播台适合深夜关灯看球；日间演播室适合白天查赛程、看积分榜与复盘。播放器舞台始终保持深色高对比度。"
+          >
+            <Segmented
+              ariaLabel="选择界面主题"
+              value={theme}
+              onChange={v => onThemeChange?.(v)}
+              items={[
+                { id: 'dark', label: '暗夜转播台', icon: <IconTonight size={12} /> },
+                { id: 'light', label: '日间演播室', icon: <IconSun size={12} /> }
+              ]}
+            />
+          </Fieldset>
+
           {/* 关注球队 */}
           <Fieldset
             title="关注球队"
@@ -295,7 +315,7 @@ export default function SettingsDrawer({
               />
               <SwitchRow
                 label="进球 / 红牌 / 终场提醒"
-                hint="比赛进行中且窗口不在前台时提醒；防剧透开启且未揭晓时不提醒。"
+                hint="仅当前观看场次；窗口不在前台时提醒，防剧透开启且未揭晓时不提醒。"
                 on={prefs.notifyLiveEvents}
                 onChange={v => patch({ notifyLiveEvents: v })}
               />

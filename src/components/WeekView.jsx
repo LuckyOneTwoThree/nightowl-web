@@ -3,19 +3,15 @@ import { zhDate, hmCost, hm } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { stateOf } from '../core/owl.js';
 import { owlDay, sleepTier } from '../core/engine.js';
-import { Chip, Crest, Fieldset, Meta, SleepBadge, Stars } from './atoms.jsx';
-import { IconChevronDown, IconChevronUp, IconWarn } from './icons.jsx';
+import { Chip, Crest, Hint, Meta, SectionLabel, SleepBadge, Stars } from './atoms.jsx';
+import { IconChevronDown, IconChevronUp, IconClose, IconWarn } from './icons.jsx';
 import MatchRow from './MatchRow.jsx';
 
 const WEEKDAY_SHORT = ['一', '二', '三', '四', '五', '六', '日'];
 
 /**
  * 档位分布柱状图的色阶。
- *
- * 此前这里是四个随手挑的十六进制（#FF7A45 / #F59E0B / #0D9488 / #10B981），
- * 与 SleepBadge 上的档位色**对不上** —— 同一根柱子在两个位置表示同一件事却是两种颜色。
- * 改为按 cost 直接查档位，颜色复用 tier-0…tier-4 那条连续色阶，
- * 于是「周历上的红」与「徽章上的 S4」是同一个信号。
+ * 复用 tier-0…tier-4 连续色阶，使「周历上的柱子」与「徽章上的 S0–S4」完全一致。
  */
 const BUCKET_CLASS = ['bg-tier-0', 'bg-tier-1', 'bg-tier-2', 'bg-tier-3', 'bg-tier-4'];
 
@@ -34,9 +30,9 @@ const PLAN_HINT =
 /**
  * 本周视图（Week）
  *
- * 分区之间用 hairline + 留白分隔，不再每块各套一个圆角盒子 ——
- * 此前"预算卡 + 精选卡 + 零成本卡 + 雷区卡 + 分布卡 + 备选卡"六个盒子并列，
- * 层级语义完全丧失（盒子深浅本来只代表可交互性）。
+ * 结构：
+ *   · 顶部仪表盘卡片：睡眠预算（预算 / 已排 / 剩余）+ 可折叠滑杆 + 内嵌 7 晚熬夜负荷柱（点击单晚过滤）
+ *   · 下方三段式 Tab 列表：本周精选 (N/5) | 零成本顺带 (N) | 备选与雷区 (N)
  */
 export default function WeekView({
   week,
@@ -49,13 +45,13 @@ export default function WeekView({
   onReveal
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [showZero, setShowZero] = useState(false);
+  const [activeTab, setActiveTab] = useState('best');
   const [selectedDay, setSelectedDay] = useState(null);
 
   const { plan, minefield, days, advice } = week;
   const hasScheduledMatches = days.some(day => day.count > 0);
-  const usedRatio = plan.budget > 0 ? plan.used / plan.budget : 0;
-  const remain = Math.max(0, plan.budget - plan.used);
+  const remaining = Math.max(0, plan.budget - plan.used);
+
   const bestDaySet = useMemo(() => {
     const s = new Set();
     for (const e of plan.best) {
@@ -63,6 +59,7 @@ export default function WeekView({
     }
     return s;
   }, [plan.best]);
+
   const kickoffGroupByMatch = useMemo(() => {
     const map = new Map();
     for (const group of plan.kickoffGroups || []) {
@@ -70,47 +67,76 @@ export default function WeekView({
     }
     return map;
   }, [plan.kickoffGroups]);
+
   const activeDayObj = useMemo(
     () => (selectedDay ? days.find(d => d.date === selectedDay) || null : null),
     [selectedDay, days]
   );
+
   const weekRange = days.length
     ? `${days[0].date.slice(5).replace('-', '/')} – ${days[days.length - 1].date.slice(5).replace('-', '/')}`
     : '';
 
+  const filteredBest = useMemo(
+    () => (selectedDay ? plan.best.filter(e => owlDay(e.m.t) === selectedDay) : plan.best),
+    [plan.best, selectedDay]
+  );
+  const filteredZero = useMemo(
+    () =>
+      selectedDay
+        ? plan.zeroList.filter(e => owlDay(e.m.t) === selectedDay)
+        : plan.zeroList.slice(0, 40),
+    [plan.zeroList, selectedDay]
+  );
+  const filteredMinefield = useMemo(
+    () => (selectedDay ? minefield.filter(e => owlDay(e.m.t) === selectedDay) : minefield.slice(0, 6)),
+    [minefield, selectedDay]
+  );
+  const filteredAlt = useMemo(
+    () => (selectedDay ? plan.alt.filter(e => owlDay(e.m.t) === selectedDay) : plan.alt),
+    [plan.alt, selectedDay]
+  );
+
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden">
-      {/* 夜猫周口径：日格是「某一天入夜之后」，周一格包含周二凌晨 */}
-      <div className="flex items-center justify-between gap-2 px-0.5 text-2xs text-text-muted">
-        <span className="font-num tabular-nums">{weekRange} 夜</span>
-        <span className="truncate text-text-faint" title="周一格从周一 06:00 起，含周二凌晨；周日格含周一凌晨">
-          06:00 前归前一夜
-        </span>
+    <div className="flex h-full min-h-0 flex-col gap-2.5 overflow-hidden">
+      {/* 夜猫周口径标题行 */}
+      <div className="flex items-center justify-between gap-2 px-0.5">
+        <SectionLabel
+          hint="周一格从周一 06:00 起，含周二凌晨；周日格含周一凌晨（06:00 前归前一夜）。"
+          right={<Meta num>{weekRange} 夜</Meta>}
+          className="w-full"
+        >
+          本周熬夜规划
+        </SectionLabel>
       </div>
 
-      {/* ---- 睡眠预算 ---- */}
-      <section className="overflow-hidden rounded-xl border border-line-hairline bg-surface-card">
+      {/* ---- 顶部仪表盘卡片：睡眠预算 + 7 晚熬夜负荷柱 ---- */}
+      <section className="shrink-0 overflow-hidden rounded-xl border border-line-hairline bg-surface-card shadow-card">
         <button
           type="button"
           onClick={() => setExpanded(v => !v)}
           aria-expanded={expanded}
-          className="flex h-11 w-full items-center gap-2 px-3 text-left transition-colors hover:bg-surface-raised/50"
+          className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors hover:bg-surface-raised/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
         >
-          <span className="shrink-0 text-2xs font-medium text-text-muted">睡眠预算</span>
-          <span className="shrink-0 font-num text-sm font-semibold tabular-nums text-resource">
-            {hmCost(plan.budget)}
-          </span>
-          <Meta num className="truncate">
-            已用 {hmCost(plan.used)}（{(usedRatio * 100).toFixed(0)}%）· 结余 {hmCost(remain)}
-          </Meta>
-          <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-2xs text-text-muted">
-            {expanded ? '收起' : '调整'}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 font-num text-xs tabular-nums">
+              <span className="font-semibold text-text-primary">
+                预算 <span className="text-resource">{plan.budget.toFixed(1)}h</span>
+              </span>
+              <span className="text-text-faint">·</span>
+              <span className="text-text-secondary">已排 {plan.used.toFixed(1)}h</span>
+              <span className="text-text-faint">·</span>
+              <span className="text-text-muted">剩余 {remaining.toFixed(1)}h</span>
+            </div>
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1 text-2xs text-text-muted">
+            {expanded ? '收起' : '调整预算'}
             {expanded ? <IconChevronUp size={13} /> : <IconChevronDown size={13} />}
           </span>
         </button>
 
         {plan.budget > 0 && (
-          <div className="px-3 pb-2.5">
+          <div className="px-3 pb-2">
             <div
               className="flex h-1.5 w-full gap-0.5 overflow-hidden rounded-full bg-surface-panel"
               role="img"
@@ -134,12 +160,12 @@ export default function WeekView({
         )}
 
         {expanded && (
-          <div className="border-t border-line-hairline px-3 py-3">
-            <div className="flex items-baseline gap-1.5">
-              <span className="font-num text-xl font-bold tabular-nums text-resource">
-                {plan.budget.toFixed(1)}
+          <div className="border-t border-line-hairline bg-surface-raised/30 px-3 py-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-2xs text-text-secondary">每周熬夜预算上限</span>
+              <span className="font-num text-sm font-bold tabular-nums text-resource">
+                {plan.budget.toFixed(1)} 小时 / 周
               </span>
-              <span className="text-2xs text-text-muted">小时 / 周</span>
             </div>
 
             <input
@@ -149,7 +175,7 @@ export default function WeekView({
               step="0.5"
               value={plan.budget}
               onChange={e => onBudgetChange(Number(e.target.value))}
-              className="mt-2.5 w-full accent-[rgb(69_191_174)]"
+              className="mt-2 w-full accent-[rgb(var(--resource))]"
               aria-label="每周熬夜预算（小时）"
             />
 
@@ -160,80 +186,200 @@ export default function WeekView({
             </div>
           </div>
         )}
-      </section>
 
-      <div className="scrollbar-thin -mr-1 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-        {/* ---- 算法精选 ---- */}
-        <Fieldset
-          title="本周精选"
-          hint={PLAN_HINT}
-          right={<Meta num>{plan.best.length} / 5</Meta>}
-        >
-          {plan.best.length === 0 ? (
-            <div className="rounded-lg border border-line-hairline bg-surface-raised/30 px-3 py-3.5 text-center">
-              <p className="text-xs font-medium text-text-secondary">
-              {!hasScheduledMatches
-                  ? '本周暂无比赛'
-                  : plan.evs.length === 0
-                    ? '本周暂无可安排的未开赛场次'
-                    : '当前预算下暂未选出场次'}
-              </p>
-              {plan.evs.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => onBudgetChange(Math.min(8, plan.budget + 1))}
-                  disabled={plan.budget >= 8}
-                  className="mt-1.5 rounded-md px-2 py-1 text-2xs font-medium text-accent transition-colors hover:bg-surface-accent disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {plan.budget >= 8 ? '预算已达上限' : '预算增加 1 小时'}
-                </button>
-              )}
-            </div>
+        {/* 内嵌 7 晚熬夜负荷柱 */}
+        <div className="border-t border-line-hairline px-2.5 pt-2 pb-2">
+          <div className="mb-1 flex items-center justify-between px-0.5">
+            <span className="text-2xs font-medium text-text-muted">7 晚熬夜负荷（点击单晚筛选）</span>
+            {selectedDay ? (
+              <button
+                type="button"
+                onClick={() => setSelectedDay(null)}
+                className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-2xs font-medium text-accent transition-colors hover:bg-surface-accent focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
+              >
+                <span>清除 {selectedDay.slice(5).replace('-', '/')}</span>
+                <IconClose size={10} />
+              </button>
+            ) : (
+              <Hint
+                content="柱子高度代表当晚最晚场次的睡眠成本，颜色对应 S0–S4 档位，圆点代表含本周精选场次。点击任意一晚可过滤下方列表。"
+                align="end"
+              />
+            )}
+          </div>
+
+          {!hasScheduledMatches ? (
+            <p className="py-2 text-center text-2xs text-text-faint">本周暂无未开赛场次</p>
           ) : (
-            <div className="space-y-1">
-              {plan.best.map(e => {
-                const group = kickoffGroupByMatch.get(e.m.id);
+            <div className="flex items-end justify-between gap-1">
+              {days.map((d, i) => {
+                const h = d.count === 0 ? 3 : Math.max(6, (d.cost / 4.5) * 38);
+                const hasBest = bestDaySet.has(d.date);
+                const isSelected = selectedDay === d.date;
                 return (
-                  <div key={e.m.id}>
-                    <PickRow
-                      e={e}
-                      active={e.m.id === activeMatchId}
-                      kickoffGroup={group}
-                      onSelect={onSelect}
-                    />
-                    <KickoffAlternatives
-                      group={group}
-                      selectedId={e.m.id}
-                      activeMatchId={activeMatchId}
-                      onSelect={onSelect}
-                    />
-                  </div>
+                  <button
+                    key={d.date}
+                    type="button"
+                    onClick={() => setSelectedDay(cur => (cur === d.date ? null : d.date))}
+                    aria-pressed={isSelected}
+                    className={`flex flex-1 flex-col items-center gap-0.5 rounded-md py-1 transition-colors focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
+                      isSelected ? 'bg-surface-raised ring-1 ring-accent/50' : 'hover:bg-surface-raised/60'
+                    }`}
+                  >
+                    <span className="flex h-1.5 items-center justify-center">
+                      {hasBest && (
+                        <span
+                          className="h-1 w-1 rounded-full bg-accent"
+                          title="包含本周精选场次"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </span>
+                    <div className="flex w-full flex-col items-center justify-end gap-0.5 px-1" style={{ height: 42 }}>
+                      {d.count > 0 && (
+                        <span className="font-num text-[10px] leading-none tabular-nums text-text-faint">
+                          {hmCost(d.cost)}
+                        </span>
+                      )}
+                      <div
+                        className={`w-full rounded-sm transition-all ${
+                          d.count === 0 ? 'bg-line-hairline' : `${BUCKET_CLASS[bucketOf(d.cost)]} opacity-90`
+                        }`}
+                        style={{ height: h }}
+                        title={`${zhDate(d.date)} · ${d.count} 场 · 最高 ${hmCost(d.cost)}`}
+                      />
+                    </div>
+                    <span
+                      className={`font-num text-2xs leading-tight tabular-nums ${
+                        isSelected ? 'font-semibold text-accent' : 'text-text-secondary'
+                      }`}
+                    >
+                      周{WEEKDAY_SHORT[i]}
+                    </span>
+                  </button>
                 );
               })}
             </div>
           )}
-        </Fieldset>
+        </div>
+      </section>
 
-        {/* ---- 零成本顺带 ---- */}
-        {plan.zeroCount > 0 && (
-          <Fieldset
-            title="零成本顺带"
-            hint={`这些场次开球在睡前，睡眠成本 0 小时，不占额度，也不算精选名额；但同一时段只能选一场。可执行 ${plan.zeroCount} 场，共 ${plan.zeroPool?.length ?? plan.zeroCount} 场候选。`}
-            right={
-              <button
-                type="button"
-                onClick={() => setShowZero(v => !v)}
-                aria-expanded={showZero}
-                className="inline-flex items-center gap-1 text-2xs text-text-muted transition-colors hover:text-text-primary"
-              >
-                {plan.zeroCount} 场可执行
-                {showZero ? <IconChevronUp size={12} /> : <IconChevronDown size={12} />}
-              </button>
-            }
-          >
-            {showZero && (
-              <div className="scrollbar-thin max-h-56 space-y-0.5 overflow-y-auto pr-1">
-                {plan.zeroList.slice(0, 40).map(e => (
+      {/* ---- 三段式列表切换 Tab ---- */}
+      <div className="flex shrink-0 items-center justify-between gap-1 rounded-lg border border-line-hairline bg-surface-card p-1">
+        {[
+          { id: 'best', label: '本周精选', count: `${plan.best.length}/5` },
+          { id: 'zero', label: '零成本顺带', count: `${plan.zeroCount}` },
+          { id: 'alt', label: '备选与雷区', count: `${plan.alt.length + minefield.length}` }
+        ].map(t => {
+          const on = activeTab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              onClick={() => setActiveTab(t.id)}
+              className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-2xs transition-colors focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
+                on
+                  ? 'bg-surface-raised font-semibold text-text-primary shadow-sm'
+                  : 'text-text-muted hover:text-text-primary'
+              }`}
+            >
+              <span className="truncate">{t.label}</span>
+              <span className={`font-num tabular-nums ${on ? 'text-accent' : 'text-text-faint'}`}>
+                {t.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ---- 列表内容区 ---- */}
+      <div className="scrollbar-thin -mr-1 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+        {selectedDay && activeDayObj && (
+          <div className="flex items-center justify-between rounded-lg border border-accent/30 bg-surface-accent px-2.5 py-1.5 text-2xs">
+            <span className="text-text-primary">
+              正在筛选：<span className="font-semibold text-accent">{zhDate(activeDayObj.date)} 夜</span>（共 {activeDayObj.count} 场未开赛）
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedDay(null)}
+              className="font-medium text-accent underline underline-offset-2 hover:opacity-80 cursor-pointer"
+            >
+              看全周
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'best' && (
+          <div>
+            <div className="mb-1.5 flex items-center justify-between px-0.5">
+              <Meta>{advice || '按夜猫指数与预算上限自动排程'}</Meta>
+              <Hint content={PLAN_HINT} align="end" />
+            </div>
+            {filteredBest.length === 0 ? (
+              <div className="rounded-lg border border-line-hairline bg-surface-raised/30 px-3 py-4 text-center">
+                <p className="text-xs font-medium text-text-secondary">
+                  {selectedDay
+                    ? '当晚没有入选本周精选的场次'
+                    : !hasScheduledMatches
+                      ? '本周暂无比赛'
+                      : plan.evs.length === 0
+                        ? '本周暂无可安排的未开赛场次'
+                        : '当前预算下暂未选出场次'}
+                </p>
+                {!selectedDay && plan.evs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onBudgetChange(Math.min(8, plan.budget + 1))}
+                    disabled={plan.budget >= 8}
+                    className="mt-2 rounded-md border border-accent/40 bg-surface-accent px-2.5 py-1 text-2xs font-medium text-accent transition-colors hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                  >
+                    {plan.budget >= 8 ? '预算已达上限' : '预算增加 1 小时'}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {filteredBest.map(e => {
+                  const group = kickoffGroupByMatch.get(e.m.id);
+                  return (
+                    <div key={e.m.id}>
+                      <PickRow
+                        e={e}
+                        active={e.m.id === activeMatchId}
+                        kickoffGroup={group}
+                        onSelect={onSelect}
+                      />
+                      <KickoffAlternatives
+                        group={group}
+                        selectedId={e.m.id}
+                        activeMatchId={activeMatchId}
+                        onSelect={onSelect}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'zero' && (
+          <div>
+            <div className="mb-1.5 flex items-center justify-between px-0.5">
+              <Meta>睡前开球（0h 睡眠代价），不占本周预算与名额</Meta>
+              <Meta num>可执行 {plan.zeroCount} 场</Meta>
+            </div>
+            {filteredZero.length === 0 ? (
+              <div className="rounded-lg border border-line-hairline bg-surface-raised/30 px-3 py-4 text-center">
+                <p className="text-xs text-text-secondary">
+                  {selectedDay ? '当晚暂无零成本顺带场次' : '本周暂无零成本顺带场次'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {filteredZero.map(e => (
                   <MatchRow
                     key={e.m.id}
                     m={e.m}
@@ -250,166 +396,77 @@ export default function WeekView({
                 ))}
               </div>
             )}
-          </Fieldset>
+          </div>
         )}
 
-        {/* ---- 雷区预警 ---- */}
-        {minefield.length > 0 && (
-          <Fieldset
-            title="本周雷区"
-            hint="高代价但看点不足的场次：熬夜性价比最低，建议放弃或直接睡觉。"
-            right={<Meta num>{minefield.length} 场</Meta>}
-          >
-            <div className="space-y-1">
-              {minefield.slice(0, 4).map(e => (
-                <button
-                  key={e.m.id}
-                  type="button"
-                  onClick={() => onSelect(e.m.id)}
-                  className="w-full rounded-md px-2.5 py-2 text-left transition-colors hover:bg-surface-raised"
-                >
-                  <div className="flex items-center gap-2">
-                    <Meta num className="shrink-0">
-                      {zhDate(e.m.t.split('T')[0])} {e.m.t.split('T')[1]}
-                    </Meta>
-                    <Chip tone="warn" className="ml-auto shrink-0">
-                      <IconWarn size={11} />
-                      雷区
-                    </Chip>
-                  </div>
-                  <p className="mt-1 truncate text-xs text-text-secondary">
-                    {teamName(e.m.h)} vs {teamName(e.m.a)}
-                  </p>
-                  <p className="mt-0.5 truncate text-2xs text-text-faint">{e.reason}</p>
-                </button>
-              ))}
-            </div>
-          </Fieldset>
-        )}
-
-        {/* ---- 档位分布 ---- */}
-        <Fieldset
-          title="本周熬夜分布"
-          hint="柱子高度 = 当天最晚那场球的睡眠成本；颜色与档位徽章同一色阶。点击单日可查看当日场次。"
-          right={<Meta>按当日最高档位</Meta>}
-        >
-          {!hasScheduledMatches ? (
-            <p className="rounded-lg border border-dashed border-line-hairline px-3 py-4 text-center text-xs text-text-muted">
-              本周暂无未开赛场次，暂无分布数据
-            </p>
-          ) : (
-            <div className="flex items-end justify-between gap-1.5">
-              {days.map((d, i) => {
-                const h = d.count === 0 ? 3 : Math.max(8, (d.cost / 4.5) * 60);
-                const hasBest = bestDaySet.has(d.date);
-                const isSelected = selectedDay === d.date;
-                return (
-                  <button
-                    key={d.date}
-                    type="button"
-                    onClick={() => setSelectedDay(cur => (cur === d.date ? null : d.date))}
-                    aria-pressed={isSelected}
-                    className={`flex flex-1 flex-col items-center gap-1 rounded-md py-1 transition-colors ${
-                      isSelected ? 'bg-surface-raised ring-1 ring-accent/40' : 'hover:bg-surface-raised/50'
-                    }`}
-                  >
-                    <span className="flex h-2 items-center justify-center">
-                      {hasBest && (
-                        <span
-                          className="h-1 w-1 rounded-full bg-accent"
-                          title="包含本周精选场次"
-                          aria-hidden="true"
-                        />
-                      )}
-                    </span>
-                    <div className="flex w-full flex-col items-center justify-end gap-0.5 px-1" style={{ height: 60 }}>
-                      {d.count > 0 && (
-                        <span className="font-num text-2xs tabular-nums text-text-faint">{hmCost(d.cost)}</span>
-                      )}
-                      <div
-                        className={`w-full rounded-sm transition-all ${
-                          d.count === 0 ? 'bg-line-hairline' : `${BUCKET_CLASS[bucketOf(d.cost)]} opacity-90`
-                        } ${i === 0 && !isSelected ? 'ring-1 ring-accent/35' : ''}`}
-                        style={{ height: h }}
-                        title={`${zhDate(d.date)} · ${d.count} 场 · 最高 ${hmCost(d.cost)}`}
-                      />
-                    </div>
-                    <span className={`flex flex-col items-center gap-0.5 text-2xs ${isSelected ? 'font-semibold text-accent' : 'text-text-faint'}`}>
-                      <span>周{WEEKDAY_SHORT[i]}</span>
-                      <span className="font-num tabular-nums text-text-faint">{d.date.slice(5).replace('-', '/')}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {activeDayObj && (
-            <div className="mt-2.5 rounded-lg border border-line-hairline bg-surface-card/70 p-2">
-              <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-2xs font-medium text-text-primary">
-                  {zhDate(activeDayObj.date)} · {activeDayObj.count} 场未开赛
-                </span>
-                <Meta num>最高消耗 {hmCost(activeDayObj.cost)}</Meta>
-              </div>
-              {activeDayObj.matches?.length > 0 ? (
-                <div className="space-y-0.5">
-                  {activeDayObj.matches.slice(0, 5).map(m => (
+        {activeTab === 'alt' && (
+          <div className="space-y-3">
+            {filteredMinefield.length > 0 && (
+              <div>
+                <div className="mb-1 flex items-center justify-between px-0.5">
+                  <span className="text-2xs font-semibold text-warn">本周雷区（高代价低看点）</span>
+                  <Meta num>{filteredMinefield.length} 场</Meta>
+                </div>
+                <div className="space-y-1">
+                  {filteredMinefield.map(e => (
                     <button
-                      key={m.id}
+                      key={e.m.id}
                       type="button"
-                      onClick={() => onSelect(m.id)}
-                      className={`flex w-full items-center gap-2 rounded px-1.5 py-1 text-left transition-colors ${
-                        m.id === activeMatchId ? 'bg-surface-raised' : 'hover:bg-surface-raised/60'
-                      }`}
+                      onClick={() => onSelect(e.m.id)}
+                      className="w-full rounded-lg border border-line-hairline bg-surface-card px-2.5 py-2 text-left transition-colors hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
                     >
-                      <span className="w-9 shrink-0 font-num text-2xs tabular-nums text-text-secondary">
-                        {hm(m.t)}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-2xs text-text-primary">
-                        {teamName(m.h)} vs {teamName(m.a)}
-                      </span>
-                      <SleepBadge match={m} compact />
+                      <div className="flex items-center gap-2">
+                        <Meta num className="shrink-0">
+                          {zhDate(e.m.t.split('T')[0])} {e.m.t.split('T')[1]}
+                        </Meta>
+                        <Chip tone="warn" className="ml-auto shrink-0">
+                          <IconWarn size={11} />
+                          雷区
+                        </Chip>
+                      </div>
+                      <p className="mt-1 truncate text-xs font-medium text-text-primary">
+                        {teamName(e.m.h)} vs {teamName(e.m.a)}
+                      </p>
+                      <p className="mt-0.5 truncate text-2xs text-text-muted">{e.reason}</p>
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            <div>
+              <div className="mb-1 flex items-center justify-between px-0.5">
+                <span className="text-2xs font-semibold text-text-secondary">备选场次（因额度或同开球落选）</span>
+                <Meta num>{filteredAlt.length} 场</Meta>
+              </div>
+              {filteredAlt.length === 0 ? (
+                <div className="rounded-lg border border-line-hairline bg-surface-raised/30 px-3 py-4 text-center">
+                  <p className="text-xs text-text-secondary">暂无备选场次</p>
+                </div>
               ) : (
-                <Meta>当日暂无未开赛场次</Meta>
+                <div className="space-y-1">
+                  {filteredAlt.map(e => (
+                    <button
+                      key={e.m.id}
+                      type="button"
+                      onClick={() => onSelect(e.m.id)}
+                      className="flex w-full items-center gap-2 rounded-lg border border-transparent bg-surface-card px-2.5 py-1.5 text-left transition-colors hover:border-line-hairline hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
+                    >
+                      <Meta num className="shrink-0">
+                        {e.m.t.slice(5, 10).replace('-', '/')} {e.m.t.split('T')[1]}
+                      </Meta>
+                      <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
+                        {teamName(e.m.h)} vs {teamName(e.m.a)}
+                      </span>
+                      <span className="shrink-0 font-num text-2xs tabular-nums text-text-secondary">
+                        指数 {e.index.toFixed(1)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
-          )}
-          {hasScheduledMatches && (
-            <p className="mt-2.5 text-2xs leading-relaxed text-text-secondary">{advice}</p>
-          )}
-        </Fieldset>
-
-        {/* ---- 备选 ---- */}
-        {plan.alt.length > 0 && (
-          <Fieldset
-            title="备选"
-            hint="落选通常是因为本周名额或预算已满、与已选场次时间重叠，或单场睡眠成本偏高。"
-            right={<Meta num>{plan.alt.length}</Meta>}
-          >
-            <div className="space-y-0.5">
-              {plan.alt.map(e => (
-                <button
-                  key={e.m.id}
-                  type="button"
-                  onClick={() => onSelect(e.m.id)}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-colors hover:bg-surface-raised"
-                >
-                  <Meta num className="shrink-0">
-                    {e.m.t.slice(5, 10).replace('-', '/')} {e.m.t.split('T')[1]}
-                  </Meta>
-                  <span className="min-w-0 flex-1 truncate text-xs text-text-secondary">
-                    {teamName(e.m.h)} vs {teamName(e.m.a)}
-                  </span>
-                  <span className="shrink-0 font-num text-2xs tabular-nums text-text-muted">
-                    {e.index.toFixed(1)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </Fieldset>
+          </div>
         )}
       </div>
     </div>
@@ -431,9 +488,9 @@ function KickoffAlternatives({ group, selectedId, activeMatchId, onSelect }) {
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
         title="仅切换右侧预览，不改变本周精选"
-        className="inline-flex items-center gap-1 pt-0.5 text-2xs text-text-faint transition-colors hover:text-text-secondary focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none"
+        className="inline-flex items-center gap-1 pt-0.5 text-2xs text-text-faint transition-colors hover:text-text-secondary focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none cursor-pointer"
       >
-        同组其他 {others.length} 场
+        同开球其他 {others.length} 场
         {open ? <IconChevronUp size={11} /> : <IconChevronDown size={11} />}
       </button>
       {open && (
@@ -444,7 +501,7 @@ function KickoffAlternatives({ group, selectedId, activeMatchId, onSelect }) {
               type="button"
               onClick={() => onSelect?.(x.m.id)}
               aria-current={x.m.id === activeMatchId ? 'true' : undefined}
-              className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors ${
+              className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors cursor-pointer ${
                 x.m.id === activeMatchId ? 'bg-surface-raised' : 'hover:bg-surface-raised/60'
               }`}
             >
@@ -455,7 +512,7 @@ function KickoffAlternatives({ group, selectedId, activeMatchId, onSelect }) {
                 {teamName(x.m.h)} vs {teamName(x.m.a)}
               </span>
               <span className="shrink-0 font-num text-2xs tabular-nums text-text-muted">
-                {x.index.toFixed(1)}
+                指数 {x.index.toFixed(1)}
               </span>
             </button>
           ))}
@@ -467,9 +524,6 @@ function KickoffAlternatives({ group, selectedId, activeMatchId, onSelect }) {
 
 /**
  * 背包入选行
- *
- * 与 MatchRow 的区别只有一件事：这里要说明**为什么入选**，
- * 所以多一排列选理由，其余版式与 MatchRow 同构（时刻列 + 对阵 + 右侧数值）。
  */
 function PickRow({ e, active, kickoffGroup, onSelect }) {
   const m = e.m;
@@ -478,9 +532,7 @@ function PickRow({ e, active, kickoffGroup, onSelect }) {
   const dateLabel = crossesMidnight
     ? `${night.slice(5).replace('-', '/')} 夜`
     : m.t.slice(5, 10).replace('-', '/');
-  const groupAlternatives = kickoffGroup
-    ? kickoffGroup.entries.filter(x => x.m.id !== m.id)
-    : [];
+  const conflictCount = kickoffGroup?.entries?.length || 0;
   const reason = e.ev.isFollowed
     ? '主队出战'
     : e.ev.rivalry
@@ -496,10 +548,10 @@ function PickRow({ e, active, kickoffGroup, onSelect }) {
       type="button"
       onClick={() => onSelect(m.id)}
       aria-current={active ? 'true' : undefined}
-      className={`relative w-full overflow-hidden rounded-lg py-2 pr-2.5 pl-3 text-left transition-all ${
+      className={`relative w-full overflow-hidden rounded-lg py-2 pr-2.5 pl-3 text-left transition-all focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
         active
-          ? 'border border-accent/35 bg-surface-raised shadow-card'
-          : 'border border-transparent hover:border-line-hairline hover:bg-surface-raised/60'
+          ? 'border border-accent/45 bg-surface-raised shadow-card'
+          : 'border border-transparent bg-surface-card hover:border-line-hairline hover:bg-surface-raised/70'
       }`}
     >
       <span
@@ -514,12 +566,17 @@ function PickRow({ e, active, kickoffGroup, onSelect }) {
         </span>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <span className="shrink-0 text-2xs text-text-muted">{leagueName(m.l)}</span>
             <SleepBadge match={m} compact />
-            {/* 列表已按指数排序，行内不需要再用品牌金重复强调 —— 一屏四行同时金色等于没有金色 */}
+            {conflictCount > 1 && (
+              <span className="inline-flex items-center gap-0.5 rounded bg-warn/12 px-1.5 py-px font-num text-2xs font-medium text-warn">
+                <IconWarn size={10} />
+                同时开球 ({conflictCount})
+              </span>
+            )}
             <span className="ml-auto shrink-0 font-num text-xs font-semibold tabular-nums text-text-primary">
-              {e.index.toFixed(1)}
+              指数 {e.index.toFixed(1)}
             </span>
           </div>
 
@@ -537,7 +594,6 @@ function PickRow({ e, active, kickoffGroup, onSelect }) {
 
           <div className="mt-1 flex items-center gap-2">
             <Stars star={e.ev.star} />
-            {/* 入选理由只有一处需要解释，所以用文字而不是又一个胶囊 */}
             <span className="min-w-0 truncate text-2xs text-text-faint">{reason}</span>
             <span
               className="ml-auto shrink-0"
@@ -548,12 +604,6 @@ function PickRow({ e, active, kickoffGroup, onSelect }) {
               </Meta>
             </span>
           </div>
-          {groupAlternatives.length > 0 && (
-            <div className="mt-1 flex items-center gap-1 text-2xs text-warn">
-              <IconWarn size={11} />
-              <span className="shrink-0">同时开球 · 只能看一场</span>
-            </div>
-          )}
         </div>
       </div>
     </button>

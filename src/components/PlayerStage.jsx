@@ -113,12 +113,12 @@ const LineButton = memo(function LineButton({ l, compact = false, active, onSele
       type="button"
       onClick={() => onSelect(l)}
       aria-pressed={active}
-      className={`inline-flex items-center justify-between gap-1.5 rounded-lg px-2.5 py-1.5 text-2xs transition-colors cursor-pointer ${
+      className={`inline-flex items-center justify-between gap-1.5 rounded-lg px-2.5 py-1.5 text-2xs transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none ${
         compact ? 'shrink-0 whitespace-nowrap' : 'w-full'
       } ${
         active
-          ? 'bg-accent/10 font-semibold text-accent ring-1 ring-accent/20'
-          : 'text-text-secondary hover:bg-white/[0.04] hover:text-text-primary'
+          ? 'bg-accent/12 font-semibold text-accent ring-1 ring-accent/30'
+          : 'text-text-secondary hover:bg-surface-raised hover:text-text-primary'
       }`}
     >
       <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
@@ -154,7 +154,7 @@ function OfficialLinks({ sources, match, limit = 99, replay = false }) {
                 window.desktop.openExternal(url);
               }
             }}
-            className="inline-flex items-center gap-1 rounded-lg border border-transparent bg-white/[0.035] px-2.5 py-1 text-2xs text-text-muted transition-colors hover:bg-white/[0.06] hover:text-text-primary"
+            className="inline-flex items-center gap-1 rounded-lg border border-line-hairline bg-surface-raised/60 px-2.5 py-1 text-2xs text-text-secondary transition-colors hover:border-line-control hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
           >
             <IconExternal size={11} />
             {s.name}
@@ -179,8 +179,8 @@ function OfficialLinks({ sources, match, limit = 99, replay = false }) {
 function LineEmptyState({ loading, state, isNearKickoff, scrapeError, onRefresh }) {
   if (loading) {
     return (
-      <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline/70 bg-surface-raised/20 p-3 text-center">
-        <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.04] text-accent">
+      <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline bg-surface-raised/30 p-3 text-center">
+        <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-surface-raised text-accent">
           <IconReset className="animate-spin" size={14} />
         </span>
         <p className="text-xs font-medium text-text-primary">正在检索直播线路…</p>
@@ -191,8 +191,8 @@ function LineEmptyState({ loading, state, isNearKickoff, scrapeError, onRefresh 
 
   if (state === 'pp') {
     return (
-      <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline/70 bg-surface-raised/20 p-3 text-center">
-        <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.04] text-text-muted">
+      <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline bg-surface-raised/30 p-3 text-center">
+        <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-surface-raised text-text-muted">
           <IconWarn size={14} />
         </span>
         <p className="text-xs font-medium text-text-primary">本场比赛已延期</p>
@@ -203,8 +203,8 @@ function LineEmptyState({ loading, state, isNearKickoff, scrapeError, onRefresh 
 
   if (state === 'finished' || state === 'ended_pending') {
     return (
-      <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline/70 bg-surface-raised/20 p-3 text-center">
-        <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.04] text-text-muted">
+      <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline bg-surface-raised/30 p-3 text-center">
+        <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-surface-raised text-text-muted">
           <IconCheck size={14} />
         </span>
         <p className="text-xs font-medium text-text-primary">比赛已终场</p>
@@ -218,8 +218,8 @@ function LineEmptyState({ loading, state, isNearKickoff, scrapeError, onRefresh 
   if (state === 'sched') {
     if (isNearKickoff) {
       return (
-        <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline/70 bg-surface-raised/20 p-3 text-center">
-          <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 text-accent">
+        <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline bg-surface-raised/30 p-3 text-center">
+          <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-accent/12 text-accent">
             <IconSignal className="animate-pulse" size={14} />
           </span>
           <p className="text-xs font-medium text-text-primary">信号接入中…</p>
@@ -236,7 +236,7 @@ function LineEmptyState({ loading, state, isNearKickoff, scrapeError, onRefresh 
     }
 
     return (
-      <div className="my-1.5 flex items-center gap-2 rounded-md border border-line-hairline/70 bg-surface-raised/20 px-2.5 py-2 text-2xs leading-relaxed text-text-muted">
+      <div className="my-1.5 flex items-center gap-2 rounded-md border border-line-hairline bg-surface-raised/30 px-2.5 py-2 text-2xs leading-relaxed text-text-muted">
         <IconCalendar size={12} className="shrink-0 text-text-faint" />
         <span>线路通常在赛前 15~30 分钟接入；临近开赛时自动同步</span>
       </div>
@@ -245,8 +245,8 @@ function LineEmptyState({ loading, state, isNearKickoff, scrapeError, onRefresh 
 
   // state === 'live'
   return (
-    <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline/70 bg-surface-raised/20 p-3 text-center">
-      <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.04] text-text-muted">
+    <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline bg-surface-raised/30 p-3 text-center">
+      <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-surface-raised text-text-muted">
         {scrapeError ? <IconWarn className="text-warn" size={14} /> : <IconSignal size={14} />}
       </span>
       <p className="text-xs font-medium text-text-primary">
@@ -288,7 +288,8 @@ export default function PlayerStage({
   onReveal,
   notifyLiveEvents = true,
   underVideo = null,
-  asideExtra = null
+  asideExtra = null,
+  excludedIds = null
 }) {
   // 秒级刷新只存在于本组件（倒计时文本与进行中的分钟数）。
   // 若由 App 供秒级 now，每秒重渲染会波及整个视图树 —— 赛程视图会每秒
@@ -801,7 +802,7 @@ export default function PlayerStage({
 
   if (!match) {
     return (
-      <div className="flex aspect-video max-h-[46vh] w-full items-center justify-center rounded-xl bg-stage-bg">
+      <div className="dark flex aspect-video max-h-[46vh] w-full items-center justify-center rounded-xl bg-stage-bg">
         <p className="text-xs text-text-muted">从左侧选择一场比赛</p>
       </div>
     );
@@ -852,7 +853,7 @@ export default function PlayerStage({
       style={{
         aspectRatio: `${aspectRatio}`
       }}
-      className={`relative isolate z-0 w-full overflow-hidden rounded-xl bg-stage-bg border border-line-hairline shadow-2xl transition-all duration-200 ${
+      className={`dark relative isolate z-0 w-full overflow-hidden rounded-xl bg-stage-bg border border-line-hairline shadow-2xl transition-all duration-200 ${
         !streamUrl ? 'max-h-[36vh] min-h-[280px]' : ''
       } ${isOverlayOpen ? 'pointer-events-none select-none' : ''}`}
     >
@@ -876,6 +877,7 @@ export default function PlayerStage({
         <MatchCanvas
           match={match}
           state={state}
+          intel={intel}
           stageCountdown={stageCountdown}
           isNearKickoff={isNearKickoff}
           liveData={liveData}
@@ -928,7 +930,7 @@ export default function PlayerStage({
             onClick={() => setTheaterMode(v => !v)}
             title={theaterMode ? '切换为协同模式' : '切换为宽屏剧场'}
             aria-label={theaterMode ? '切换为协同模式' : '切换为宽屏剧场'}
-            className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-white/[0.08] text-text-secondary transition-colors hover:bg-white/[0.14] hover:text-text-primary"
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-white/[0.08] text-text-secondary transition-colors hover:bg-white/[0.14] hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
           >
             {theaterMode ? <IconTheaterOff /> : <IconTheaterOn />}
           </button>
@@ -944,7 +946,7 @@ export default function PlayerStage({
   // 堆叠分支：栏随主列等高拉伸，不做上限。
   const ControlSidebar = (
     <div
-      className={`broadcast-sheen flex w-full shrink-0 flex-col rounded-2xl border border-white/[0.055] bg-surface-panel/55 p-3 shadow-card backdrop-blur-xl transition-all xl:w-[315px] xl:p-4 min-h-0 ${
+      className={`broadcast-sheen flex w-full shrink-0 flex-col rounded-2xl border border-line-hairline bg-surface-panel/75 p-3 shadow-card backdrop-blur-xl transition-all xl:w-[315px] xl:p-4 min-h-0 ${
         stackIntel ? '' : 'xl:max-h-[var(--rail-h)] xl:overflow-y-auto xl:overscroll-contain scrollbar-thin'
       }`}
       style={stackIntel ? undefined : { '--rail-h': videoCardH ? `${videoCardH}px` : 'none' }}
@@ -1039,7 +1041,7 @@ export default function PlayerStage({
         />
       </div>
 
-      <div className="mt-2.5 shrink-0 border-t border-white/[0.06] pt-3">
+      <div className="mt-2.5 shrink-0 border-t border-line-hairline pt-3">
         <SectionLabel>{finished ? '官方全场回放' : '官方平台'}</SectionLabel>
         <div className="mt-1.5">
           <OfficialLinks sources={sources} match={match} replay={finished} />
@@ -1047,13 +1049,17 @@ export default function PlayerStage({
       </div>
 
       {!streamUrl && (
-        <div className="mt-auto flex shrink-0 items-center border-t border-white/[0.06] pt-3">
-          <Meta>官方平台直达 · 本机代理仅转发公开线路</Meta>
+        <div className="mt-auto flex shrink-0 items-center justify-between gap-2 border-t border-line-hairline pt-3">
+          <Meta>官方平台直达 · 播放与线路说明</Meta>
+          <Hint
+            content="官方平台直达链接跳转官方站点或站内搜索；本机代理仅转发公开直播线路，不托管、不录制任何音视频内容。"
+            align="end"
+          />
         </div>
       )}
 
       {streamUrl && (
-        <div className="mt-auto flex shrink-0 items-center justify-between border-t border-white/[0.06] pt-3">
+        <div className="mt-auto flex shrink-0 items-center justify-between border-t border-line-hairline pt-3">
           <span className="inline-flex items-center gap-1.5">
             <Hint content={SHORTCUT_HINT} align="start">
               <IconKeyboard size={12} />

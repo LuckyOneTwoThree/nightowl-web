@@ -7,7 +7,9 @@ import { STANDINGS_LEAGUES, computeStandings, standingsCutoff } from '@core/stan
 import { isFinished } from '@core/engine.js';
 import { bjDate } from '@core/format.js';
 
-import { useDataRev } from '@/state/app';
+import { useAppStore, useDataRev } from '@/state/app';
+import { usePrefs } from '@/state/prefs';
+import { unrevealedTonightIds } from '@core/reveal.js';
 import { useNow } from '@/lib/useNow';
 import { Chip } from '@/ui/Chip';
 import { Crest } from '@/ui/Crest';
@@ -17,6 +19,7 @@ import type { Match, StandingsRow } from '@/types';
 type LeagueTable = {
   rows: StandingsRow[];
   doneCount: number;
+  excludedCount: number;
   lastResultAt: number | null;
   note: string | null;
 };
@@ -71,6 +74,8 @@ export default function StandingsPanel({
   const router = useRouter();
   const rev = useDataRev();
   const now = useNow(30_000);
+  const prefs = usePrefs();
+  const revealedIds = useAppStore(state => state.revealedIds);
 
   const safeInitial = STANDINGS_LEAGUES.includes(initialLeague) ? initialLeague : 'PL';
   const [league, setLeague] = useState(safeInitial);
@@ -86,10 +91,15 @@ export default function StandingsPanel({
   const isMatchLeague = !!match && match.l === league;
   const historical = isMatchLeague && isFinished(match);
 
+  const excludedIds = useMemo(() => {
+    const ids = unrevealedTonightIds(getFixtures(), now, prefs.spoilerFree, revealedIds);
+    return ids.size ? ids : null;
+  }, [now, prefs.spoilerFree, revealedIds, rev]);
+
   const table = useMemo(() => {
     const asOfTs = historical ? standingsCutoff(match, now) : now;
-    return computeStandings(league, getFixtures(), { asOfTs }) as LeagueTable;
-  }, [league, historical, match, now, rev]);
+    return computeStandings(league, getFixtures(), { asOfTs, excludeIds: excludedIds || undefined }) as LeagueTable;
+  }, [league, historical, match, now, rev, excludedIds]);
 
   const isUcl = league === 'UCL';
   const focusIds = new Set(isMatchLeague && match ? [match.h, match.a] : []);
@@ -133,6 +143,7 @@ export default function StandingsPanel({
       <View style={styles.metaBlock}>
         <Text style={styles.metaText}>
           {leagueName(league)} · {asOfText} · {table.doneCount} 场已同步
+          {table.excludedCount > 0 ? ` · 已排除今晚未揭晓 ${table.excludedCount} 场` : ''}
         </Text>
         <Text style={styles.legendText}>
           {isUcl ? '前8直通 / 9–24 附加赛 / 25–36 出局' : '前四参考线 / 后三名风险区'}

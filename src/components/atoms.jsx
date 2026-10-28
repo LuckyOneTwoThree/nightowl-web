@@ -32,10 +32,8 @@ export function BrandLogo({ size = 26, rounded = 'md', className = '', withGlow 
   return (
     <span
       style={{ width: size, height: size }}
-      className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden border border-line-control bg-surface-card shadow-sm transition-transform duration-300 ${roundCls} ${
-        withGlow
-          ? 'border-accent/40 shadow-[0_0_14px_rgba(245,185,66,0.32)]'
-          : 'shadow-[0_2px_8px_rgba(0,0,0,0.5)]'
+      className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden border border-line-control bg-surface-card transition-transform duration-300 ${roundCls} ${
+        withGlow ? 'border-accent/40 shadow-pop' : 'shadow-card'
       } ${className}`}
     >
       <img
@@ -219,19 +217,24 @@ export function Button({
   ...rest
 }) {
   const variants = {
-    primary: 'bg-accent text-accent-ink font-semibold shadow-pop hover:brightness-110',
-    default: 'bg-surface-raised border border-line-control text-text-primary shadow-card hover:border-line-control hover:bg-surface-press',
-    ghost: 'border border-line-hairline bg-surface-card text-text-secondary transition-all hover:border-line-control hover:bg-surface-raised hover:text-text-primary',
-    danger: 'border border-danger/30 bg-danger/10 text-danger hover:bg-danger/20'
+    primary:
+      'bg-accent text-accent-ink font-semibold shadow-pop hover:brightness-110 disabled:hover:brightness-100',
+    default:
+      'bg-surface-raised border border-line-control text-text-primary shadow-card hover:border-line-control hover:bg-surface-press disabled:hover:bg-surface-raised',
+    ghost:
+      'border border-line-hairline bg-surface-card text-text-secondary transition-all hover:border-line-control hover:bg-surface-raised hover:text-text-primary disabled:hover:bg-surface-card disabled:hover:text-text-secondary',
+    danger:
+      'border border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 disabled:hover:bg-danger/10'
   };
   const sizes = {
-    sm: 'px-2.5 py-1 text-2xs',
-    md: 'px-3.5 py-1.5 text-xs'
+    xs: 'px-2 py-0.5 text-2xs font-medium',
+    sm: 'px-2.5 py-1 text-xs font-medium',
+    md: 'px-3.5 py-1.5 text-xs font-medium'
   };
   return (
     <button
       type={type}
-      className={`no-drag inline-flex items-center justify-center gap-1.5 rounded-md transition-all duration-150 active:translate-y-px active:scale-[0.99] focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 ${
+      className={`no-drag inline-flex items-center justify-center gap-1.5 rounded-md transition-all duration-150 active:translate-y-px active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 disabled:active:translate-y-0 disabled:active:scale-100 ${
         variants[variant] || variants.default
       } ${sizes[size] || sizes.sm} ${className}`}
       {...rest}
@@ -249,7 +252,7 @@ export function IconButton({ children, label, className = '', ...rest }) {
       type="button"
       aria-label={label}
       title={label}
-      className={`no-drag inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-all duration-150 hover:bg-surface-raised hover:text-text-primary active:scale-95 focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none ${className}`}
+      className={`no-drag inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-all duration-150 hover:bg-surface-raised hover:text-text-primary active:scale-95 focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-muted disabled:active:scale-100 ${className}`}
       {...rest}
     >
       {children}
@@ -258,16 +261,17 @@ export function IconButton({ children, label, className = '', ...rest }) {
 }
 
 /** 开关 */
-export function Switch({ on, onChange, label }) {
+export function Switch({ on, onChange, label, disabled = false }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={on}
       aria-label={label}
-      onClick={() => onChange(!on)}
-      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${
-        on ? 'bg-accent' : 'bg-line-control'
+      disabled={disabled}
+      onClick={() => !disabled && onChange(!on)}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-45 ${
+        on ? 'bg-accent' : 'bg-line-control hover:bg-line-control/80'
       }`}
     >
       <span
@@ -282,7 +286,10 @@ export function Switch({ on, onChange, label }) {
 /** 分段选择器（视图切换 / 线路切换 / 联赛筛选共用） */
 export function Segmented({ items, value, onChange, className = '' }) {
   return (
-    <div className={`inline-flex items-center gap-1 rounded-lg border border-line-hairline bg-surface-panel p-0.5 shadow-inner ${className}`} role="tablist">
+    <div
+      className={`inline-flex items-center gap-1 rounded-lg border border-line-hairline bg-surface-panel p-0.5 ${className}`}
+      role="tablist"
+    >
       {items.map(it => {
         const active = it.id === value;
         return (
@@ -290,11 +297,12 @@ export function Segmented({ items, value, onChange, className = '' }) {
             key={it.id}
             type="button"
             role="tab"
+            disabled={it.disabled}
             aria-selected={active}
-            onClick={() => onChange(it.id)}
-            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs transition-all focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none ${
+            onClick={() => !it.disabled && onChange(it.id)}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs transition-all active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 ${
               active
-                ? 'border border-line-control bg-surface-raised font-semibold text-text-primary shadow-sm'
+                ? 'border border-line-control bg-surface-raised font-semibold text-text-primary shadow-card'
                 : 'border border-transparent text-text-muted hover:border-line-hairline hover:bg-surface-raised hover:text-text-primary'
             }`}
           >
@@ -311,9 +319,6 @@ export function Segmented({ items, value, onChange, className = '' }) {
 
 /**
  * 筛选条 / 多选条（联赛筛选、球队分类、关注联赛共用）
- *
- * 此前这三处各自手写了一份 pill，字号、内距、选中态颜色已经开始发散。
- * 收敛到这里，选中态全站只有一个表达方式：**同一层底色 + 品牌色文字**。
  */
 export function TogglePill({
   on,
@@ -333,10 +338,10 @@ export function TogglePill({
       disabled={disabled}
       aria-pressed={on}
       title={hint || undefined}
-      className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-2xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-text-muted ${
+      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-text-muted ${
         on
-          ? 'bg-surface-raised font-medium text-text-primary'
-          : 'text-text-muted hover:bg-surface-raised hover:text-text-secondary'
+          ? 'border-accent/40 bg-accent/12 font-semibold text-accent'
+          : 'border-line-hairline bg-surface-card text-text-secondary hover:border-line-control hover:bg-surface-raised hover:text-text-primary'
       } ${className}`}
       {...rest}
     >
@@ -349,21 +354,18 @@ export function TogglePill({
       )}
       {label}
       {count != null && (
-        <span className={`font-num tabular-nums ${on ? 'text-text-secondary' : 'text-text-faint'}`}>{count}</span>
+        <span className={`font-num text-2xs tabular-nums ${on ? 'text-accent' : 'text-text-faint'}`}>
+          {count}
+        </span>
       )}
     </button>
   );
 }
 
 /**
- * 悬浮说明：把"界面在解释自己"的长句收进这里。
- *
- * 算法公式、口径规则、实现状态这类内容**不是决策信息**，不该常驻版面；
-/**
  * 口径说明（Hint）
  *
- * 界面只展示事实，不解释自己。但口径确实需要可查，所以给一个稳定的入口。
- * 默认向上展示，当处于顶部容器时可指定 side="bottom"，避免被顶栏或外层截断。
+ * 界面只展示事实，不解释自己。支持 hover、键盘 focus 与点击展开（兼顾无障碍与触控）。
  */
 export function Hint({
   content,
@@ -373,24 +375,45 @@ export function Hint({
   side = 'top',
   className = ''
 }) {
-  const posAlign = {
-    center: 'left-1/2 -translate-x-1/2',
-    start: 'left-0',
-    end: 'right-0'
-  }[align] || 'left-1/2 -translate-x-1/2';
+  const [pinned, setPinned] = useState(false);
+  const posAlign =
+    {
+      center: 'left-1/2 -translate-x-1/2',
+      start: 'left-0',
+      end: 'right-0'
+    }[align] || 'left-1/2 -translate-x-1/2';
 
-  const posSide = side === 'bottom'
-    ? 'top-full mt-2'
-    : 'bottom-full mb-2';
+  const posSide = side === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2';
+
+  const toggle = e => {
+    e.stopPropagation();
+    setPinned(v => !v);
+  };
+  const onKeyDown = e => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      setPinned(v => !v);
+    } else if (e.key === 'Escape' && pinned) {
+      e.stopPropagation();
+      setPinned(false);
+    }
+  };
 
   return (
-    <span className={`group/hint relative inline-flex items-center ${className}`}>
+    <span
+      className={`group/hint relative inline-flex items-center ${className}`}
+      onBlur={() => setPinned(false)}
+    >
       {children ? (
         <span
           tabIndex={0}
           role="button"
+          aria-expanded={pinned}
           aria-label="查看说明"
-          className="inline-flex cursor-help items-center outline-none transition-colors focus-visible:text-text-primary"
+          onClick={toggle}
+          onKeyDown={onKeyDown}
+          className="inline-flex cursor-help items-center rounded outline-none transition-colors hover:text-text-primary focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:text-text-primary"
         >
           {children}
         </span>
@@ -398,17 +421,22 @@ export function Hint({
         <span
           tabIndex={0}
           role="button"
+          aria-expanded={pinned}
           aria-label="查看说明"
-          className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full text-text-faint outline-none transition-colors hover:text-text-secondary focus-visible:text-text-secondary"
+          onClick={toggle}
+          onKeyDown={onKeyDown}
+          className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full text-text-faint outline-none transition-colors hover:text-text-secondary focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:text-text-secondary"
         >
           <IconInfo size={13} />
         </span>
       )}
       <span
         role="tooltip"
-        className={`hint-enter pointer-events-none absolute z-pop ${posSide} ${posAlign} hidden w-max max-w-[240px] rounded-lg border border-line-hairline bg-surface-raised p-2.5 text-left text-2xs font-normal leading-relaxed text-text-secondary shadow-pop group-hover/hint:block group-focus-within/hint:block`}
+        className={`hint-enter pointer-events-none absolute z-pop ${posSide} ${posAlign} ${
+          pinned ? 'block' : 'hidden group-hover/hint:block group-focus-within/hint:block'
+        } w-max max-w-[260px] rounded-lg border border-line-control bg-surface-raised p-3 text-left text-xs font-normal leading-relaxed text-text-secondary shadow-pop`}
       >
-        {title && <div className="mb-1 font-semibold text-accent text-2xs">{title}</div>}
+        {title && <div className="mb-1 text-xs font-semibold text-accent">{title}</div>}
         {content}
       </span>
     </span>
@@ -419,11 +447,11 @@ export function Hint({
 /* 版式                                                               */
 /* ------------------------------------------------------------------ */
 
-/** 栏目标题：小、静、只负责分组，不抢内容 */
+/** 栏目标题：清晰分组（12px），不抢内容 */
 export function SectionLabel({ children, right = null, hint = null, className = '' }) {
   return (
     <div className={`flex items-center justify-between gap-2 ${className}`}>
-      <span className="inline-flex items-center gap-1 text-2xs font-medium text-text-muted">
+      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-secondary">
         {children}
         {hint ? <Hint content={hint} align="start" /> : null}
       </span>

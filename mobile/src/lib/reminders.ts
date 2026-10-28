@@ -112,6 +112,12 @@ async function runReminderSync(prefs: Prefs): Promise<ReminderResult> {
       .slice(0, MAX_REMINDERS);
 
     const existing = await Notifications.getAllScheduledNotificationsAsync();
+    const manualMatchIds = new Set(
+      existing
+        .filter(item => item.content.data?.kind === 'manual')
+        .map(item => item.content.data?.matchId)
+        .filter((id): id is string => typeof id === 'string')
+    );
     for (const item of existing) {
       if (item.content.data?.kind === 'prematch') {
         await Notifications.cancelScheduledNotificationAsync(item.identifier);
@@ -120,6 +126,8 @@ async function runReminderSync(prefs: Prefs): Promise<ReminderResult> {
 
     let scheduled = 0;
     for (const match of list) {
+      // 手动提醒优先：不要再用自动提醒覆盖/重复同一场。
+      if (manualMatchIds.has(match.id)) continue;
       const when = new Date(ts(match.t) - LEAD_MS);
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -183,6 +191,15 @@ export async function scheduleMatchReminder(match: Match): Promise<boolean> {
     if (!granted) return false;
     const when = new Date(ts(match.t) - LEAD_MS);
     if (when.getTime() <= Date.now()) return false;
+
+    // 幂等：同一场已经排过自动/手动提醒时，不重复追加。
+    const existing = await Notifications.getAllScheduledNotificationsAsync();
+    const already = existing.some(item => {
+      const data = item.content.data || {};
+      return data.matchId === match.id && (data.kind === 'prematch' || data.kind === 'manual');
+    });
+    if (already) return true;
+
     await Notifications.scheduleNotificationAsync({
       content: {
         title: `赛前 15 分钟提醒 · ${teamName(match.h)} vs ${teamName(match.a)}`,
@@ -196,6 +213,20 @@ export async function scheduleMatchReminder(match: Match): Promise<boolean> {
       },
     });
     return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function hasScheduledMatchReminder(matchId: string): Promise<boolean> {
+  if (!notificationsAvailable()) return false;
+  try {
+    const Notifications = await import('expo-notifications');
+    const existing = await Notifications.getAllScheduledNotificationsAsync();
+    return existing.some(item => {
+      const data = item.content.data || {};
+      return data.matchId === matchId && (data.kind === 'prematch' || data.kind === 'manual');
+    });
   } catch {
     return false;
   }

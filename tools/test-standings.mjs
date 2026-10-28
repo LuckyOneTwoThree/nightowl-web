@@ -88,6 +88,12 @@ ok('排除后只算未被隐藏的场次', hidden.doneCount === 2, `实际 ${hid
 ok('排除场次如实计数', hidden.excludedCount === 2, `实际 ${hidden.excludedCount}`);
 ok('排除后回到第 1 轮口径（A 第一）', hidden.rows[0].teamId === 'A' && hidden.rows[0].points === 3);
 ok('无排除时 excludedCount 为 0', all.excludedCount === 0, `实际 ${all.excludedCount}`);
+const hiddenMatchView = computeMatchStandings(synthetic[4], synthetic, {
+  nowTs: ts('2026-08-20T00:00'),
+  excludeIds: new Set(['S3', 'S4'])
+});
+ok('★ 比赛详情积分榜透传 excludeIds', hiddenMatchView.excludedCount === 2 && hiddenMatchView.doneCount === 2,
+  `excluded=${hiddenMatchView.excludedCount} done=${hiddenMatchView.doneCount}`);
 // 排除一个「本就不会计入」的场次（sched）不得虚增 excludedCount
 const hiddenSched = computeStandings('PL', synthetic, { excludeIds: new Set(['S5']) });
 ok(

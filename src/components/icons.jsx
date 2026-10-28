@@ -39,8 +39,10 @@ import {
   Settings,
   Shield,
   Signal,
+  SlidersHorizontal,
   Square,
   Star,
+  Sun,
   Swords,
   Table2,
   Timer,
@@ -77,6 +79,8 @@ export const IconSettings = mk(Settings, 14);
 
 /* ---- 通用控件 ---- */
 export const IconSearch = mk(Search, 14);
+export const IconFilter = mk(SlidersHorizontal, 13);
+export const IconSun = mk(Sun, 14);
 export const IconClose = mk(X, 14);
 export const IconCheck = mk(Check, 12);
 export const IconChevronDown = mk(ChevronDown, 12);

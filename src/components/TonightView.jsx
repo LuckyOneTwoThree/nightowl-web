@@ -103,10 +103,10 @@ export default function TonightView({
   const SectionHead = ({ label, count, live }) => (
     <div className="flex items-center gap-1.5 pt-2 pb-1">
       {live && <LiveDot />}
-      <span className={`text-2xs font-semibold tracking-wide ${live ? 'text-live' : 'text-text-faint'}`}>
+      <span className={`text-xs font-semibold tracking-wide ${live ? 'text-live' : 'text-text-muted'}`}>
         {label}
       </span>
-      <span className="font-num text-2xs tabular-nums text-text-faint">· {count}</span>
+      <span className="font-num text-xs tabular-nums text-text-faint">· {count}</span>
     </div>
   );
 
@@ -132,6 +132,7 @@ export default function TonightView({
       )}
 
       <SectionLabel
+        hint="06:00 前开球的凌晨场次归入今晚观赛"
         right={
           <span className="inline-flex items-center gap-2">
             {replayPicks.length > 0 && (
@@ -139,7 +140,7 @@ export default function TonightView({
                 type="button"
                 onClick={jumpToReplay}
                 aria-label="跳到最近值得补看"
-                className="text-2xs text-text-secondary underline-offset-2 hover:text-text-primary hover:underline"
+                className="text-xs text-text-secondary underline-offset-2 hover:text-text-primary hover:underline"
               >
                 补看 {replayPicks.length}
               </button>
@@ -148,12 +149,12 @@ export default function TonightView({
               <span className="text-text-faint" aria-hidden="true">·</span>
             )}
             {liveCount > 0 ? (
-              <span className="inline-flex items-center gap-1.5 text-2xs text-live">
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-live">
                 <LiveDot />
                 {liveCount} 场进行中
               </span>
             ) : listed > 0 ? (
-              <span className="font-num text-2xs tabular-nums text-text-faint">
+              <span className="font-num text-xs tabular-nums text-text-faint">
                 {hero ? `其余 ${listed} 场` : `${listed} 场`}
               </span>
             ) : null}
@@ -161,7 +162,6 @@ export default function TonightView({
         }
       >
         今晚赛程 · {zhDate(night)} {weekdayOf(night)}
-        <span className="text-text-faint"> · 含次日凌晨</span>
       </SectionLabel>
 
       <div
@@ -171,8 +171,8 @@ export default function TonightView({
         }`}
       >
         {listed === 0 && hero && (
-          <p className="rounded-lg border border-line-hairline bg-surface-card/50 px-3 py-3 text-center text-2xs text-text-faint">
-            今晚只有今晚之选这一场。
+          <p className="rounded-lg border border-line-hairline bg-surface-card px-3 py-3 text-center text-xs text-text-muted">
+            今晚仅此一场焦点战。
           </p>
         )}
         {listed > 0 && (
@@ -194,16 +194,16 @@ export default function TonightView({
                 <button
                   type="button"
                   onClick={() => setShowFinished(v => !v)}
-                  className="flex w-full items-center gap-1.5 pt-2 pb-1 text-left"
+                  className="flex w-full items-center gap-1.5 rounded-md pt-2 pb-1 text-left transition-colors hover:text-text-secondary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
                   aria-expanded={showFinished}
                 >
-                  <span className="text-2xs font-semibold tracking-wide text-text-faint">
+                  <span className="text-xs font-semibold tracking-wide text-text-muted">
                     已结束
                   </span>
-                  <span className="font-num text-2xs tabular-nums text-text-faint">
+                  <span className="font-num text-xs tabular-nums text-text-faint">
                     · {groups.finished.length}
                   </span>
-                  <span className="text-2xs text-text-faint underline underline-offset-2">
+                  <span className="text-xs text-text-faint underline underline-offset-2">
                     {showFinished ? '收起' : '展开'}
                   </span>
                 </button>

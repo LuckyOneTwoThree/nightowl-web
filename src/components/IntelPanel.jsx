@@ -14,7 +14,10 @@ import {
 import { evalOne } from '../core/owl.js';
 import { computeMatchStats } from '../core/stats.js';
 import { Chip, Crest, Hint, Meta, SectionLabel } from './atoms.jsx';
+import UpcomingFixtures from './UpcomingFixtures.jsx';
+import SameNightPicks from './SameNightPicks.jsx';
 import {
+  IconCalendar,
   IconCompare,
   IconCost,
   IconDerby,
@@ -45,6 +48,7 @@ export default function IntelPanel({
   prefs,
   indexHint,
   intel: propIntel,
+  excludedIds = null,
   isHeroMatch = false,
   onSelect,
   onOpenStandings,
@@ -65,15 +69,15 @@ export default function IntelPanel({
   );
   const stories = useMemo(() => (match ? storylinesOf(match, storylines) : []), [match]);
   const identity = useMemo(() => (match ? seasonIdentityOf(match) : null), [match]);
-  const stats = useMemo(() => (match ? computeMatchStats(match) : null), [match]);
+  const stats = useMemo(() => (match ? computeMatchStats(match, null, { excludeIds: excludedIds }) : null), [match, excludedIds]);
   const standings = useMemo(
-    () => (match ? computeMatchStandings(match, null, { nowTs: now }) : null),
-    [match, now]
+    () => (match ? computeMatchStandings(match, null, { nowTs: now, excludeIds: excludedIds }) : null),
+    [match, now, excludedIds]
   );
 
   if (!match || !ev || !tier || !narrative || !identity) {
     return (
-      <section className="broadcast-sheen flex min-h-[200px] flex-1 items-center justify-center rounded-2xl border border-white/[0.055] bg-surface-panel/70">
+      <section className="broadcast-sheen flex min-h-[200px] flex-1 items-center justify-center rounded-2xl border border-line-hairline bg-surface-panel/70">
         <p className="text-xs text-text-muted">从左侧选择一场比赛，查看熬夜代价与赛前情报</p>
       </section>
     );
@@ -86,16 +90,19 @@ export default function IntelPanel({
   return (
     <section
       id="intel-panel"
-      className="broadcast-sheen glass-lift scroll-mt-4 animate-reveal-up overflow-hidden rounded-2xl border border-white/[0.055] bg-surface-panel/70 shadow-card backdrop-blur-xl motion-reduce:animate-none"
+      className="broadcast-sheen glass-lift scroll-mt-4 animate-reveal-up overflow-hidden rounded-2xl border border-line-hairline bg-surface-panel/75 shadow-card backdrop-blur-xl motion-reduce:animate-none"
     >
       {/* 面板头：只放视图切换，不放对阵信息 */}
-      <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
-        <div className="flex items-center gap-1" role="tablist" aria-label="情报视图">
+      <div className="flex items-center justify-between gap-3 border-b border-line-hairline px-4 py-3">
+        <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label="情报视图">
           <PanelTab active={tab === 'decision'} onClick={() => setTab('decision')} icon={<IconCost />}>
-            熬夜代价与看点
+            看点与代价
           </PanelTab>
           <PanelTab active={tab === 'stats'} onClick={() => setTab('stats')} icon={<IconForm />}>
             双方数据
+          </PanelTab>
+          <PanelTab active={tab === 'related'} onClick={() => setTab('related')} icon={<IconCalendar />}>
+            关联赛程
           </PanelTab>
         </div>
         <div className="flex shrink-0 items-baseline gap-1.5">
@@ -109,7 +116,7 @@ export default function IntelPanel({
 
       {tab === 'decision' ? (
         <div className="grid grid-cols-1 gap-x-0 gap-y-0 p-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
-          <div className="space-y-4 lg:border-r lg:border-white/[0.06] lg:pr-6">
+          <div className="space-y-4 lg:border-r lg:border-line-hairline lg:pr-6">
             <SleepCostSection tier={tier} match={match} />
             <NarrativeSection narrative={narrative} stories={stories} ev={ev} hideHeadline={isHeroMatch} />
           </div>
@@ -125,7 +132,7 @@ export default function IntelPanel({
             />
           </div>
         </div>
-      ) : (
+      ) : tab === 'stats' ? (
         /* 分栏依据是实测排版尺寸，不是"看起来对称"（1440 窗口下面板内容宽 1047px）：
            此前两等分 → 走势列 437px，而对手名实测只有 50-94px 宽，
            比分被 justify-between 甩到 315px 之外，行内两个元素不再成组。
@@ -136,22 +143,31 @@ export default function IntelPanel({
            其余也只有 1 场（快照只含一个赛季，同联赛一对最多两回合）。 */
         <div className="p-4">
           <div className="grid grid-cols-1 gap-x-0 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-            <div className="lg:pr-6 lg:border-r lg:border-white/[0.06]">
+            <div className="lg:pr-6 lg:border-r lg:border-line-hairline">
               <FormSection match={match} stats={stats} onSelect={onSelect} />
             </div>
             <div className="pt-3 lg:pt-0 lg:pl-6">
               <SeasonSection match={match} stats={stats} />
             </div>
           </div>
-          <div className="mt-4 border-t border-white/[0.06] pt-3">
+          <div className="mt-4 border-t border-line-hairline pt-3">
             <StandingsSection
               standings={standings}
               match={match}
               onOpenStandings={onOpenStandings}
             />
           </div>
-          <div className="mt-4 border-t border-white/[0.06] pt-3">
+          <div className="mt-4 border-t border-line-hairline pt-3">
             <H2HSection stats={stats} onSelect={onSelect} />
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+          <div className="lg:border-r lg:border-line-hairline lg:pr-6">
+            <UpcomingFixtures match={match} prefs={prefs} onSelect={onSelect} embedded />
+          </div>
+          <div className="pt-3 lg:pl-2 lg:pt-0">
+            <SameNightPicks match={match} prefs={prefs} onSelect={onSelect} embedded />
           </div>
         </div>
       )}
@@ -170,7 +186,7 @@ function PanelTab({ active, onClick, icon, children }) {
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`inline-flex items-center rounded-lg px-3 py-1.5 text-xs transition-all ${
+      className={`inline-flex items-center rounded-lg px-3 py-1.5 text-xs transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none ${
         active
           ? 'border border-line-control bg-surface-raised font-semibold text-text-primary shadow-sm'
           : 'border border-transparent text-text-muted hover:border-line-hairline hover:bg-surface-raised hover:text-text-primary'
@@ -428,7 +444,7 @@ function FormSection({ match, stats, onSelect }) {
                     <span
                       key={i}
                       title={`${f.date.slice(0, 10)} vs ${teamName(f.opponent)} ${f.score}`}
-                      className={`inline-flex h-4 w-4 items-center justify-center rounded-sm text-2xs font-semibold text-bg-app ${
+                      className={`inline-flex h-4 w-4 items-center justify-center rounded-sm text-2xs font-semibold text-result-ink ${
                         f.result === 'W' ? 'bg-result-win' : f.result === 'D' ? 'bg-result-draw' : 'bg-result-loss'
                       }`}
                     >
@@ -504,6 +520,7 @@ function StandingsSection({ standings, match, onOpenStandings }) {
           <Meta>{leagueName(standings.league)}</Meta>
           <Meta num>
             {asOfText} · {standings.doneCount} 场
+            {standings.excludedCount > 0 ? ` · 已排除 ${standings.excludedCount} 场未揭晓` : ''}
           </Meta>
           <Hint
             content={`${standings.tiebreakerNote} 国内前四/后三名为参考线，不代表官方资格规则；欧冠分区按赛制。已完赛场次按开球时点截止。`}

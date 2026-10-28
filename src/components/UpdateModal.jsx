@@ -141,7 +141,7 @@ export default function UpdateModal({
             type="button"
             onClick={onClose}
             aria-label="关闭"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-white/10 hover:text-text-primary cursor-pointer"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary cursor-pointer"
           >
             <IconClose size={15} />
           </button>
@@ -186,7 +186,7 @@ export default function UpdateModal({
               {/* 更新日志区域 */}
               <div className="flex flex-col gap-1.5">
                 <span className="text-2xs font-medium text-text-muted">更新内容与修复：</span>
-                <div className="scrollbar-thin max-h-36 overflow-y-auto rounded-lg border border-line-hairline bg-stage-bg/60 p-3 text-2xs leading-relaxed text-text-secondary whitespace-pre-line font-body">
+                <div className="scrollbar-thin max-h-36 overflow-y-auto rounded-lg border border-line-hairline bg-surface-panel p-3 text-2xs leading-relaxed text-text-secondary whitespace-pre-line font-body">
                   {releaseNotes}
                 </div>
               </div>
@@ -202,7 +202,7 @@ export default function UpdateModal({
               </div>
 
               {/* 进度条 */}
-              <div className="relative h-2 w-full overflow-hidden rounded-full bg-white/10">
+              <div className="relative h-2 w-full overflow-hidden rounded-full bg-surface-raised">
                 <div
                   className="absolute inset-y-0 left-0 rounded-full bg-accent shadow-pop transition-all duration-300"
                   style={{ width: `${updateState?.progress?.percent || 0}%` }}

@@ -156,9 +156,17 @@ export default function ScheduleScreen() {
           setRefreshNote('后台同步中，稍后再试');
           return;
         }
-        setRefreshNote(
-          outcome.changed > 0 ? `已更新 ${outcome.changed} 场比分` : '暂无比分更新'
-        );
+        if (outcome.status === 'failed') {
+          setRefreshNote('比分同步失败，沿用本地数据');
+        } else if (outcome.status === 'partial_failure') {
+          setRefreshNote(`已更新 ${outcome.changed} 场，部分来源失败`);
+        } else if (outcome.status === 'updated') {
+          setRefreshNote(`已更新 ${outcome.changed} 场比分`);
+        } else if (outcome.status === 'not_needed') {
+          setRefreshNote('暂无可检查的比分');
+        } else {
+          setRefreshNote('暂无比分更新');
+        }
       })
       .catch(() => {
         setRefreshNote('比分更新失败，沿用本地数据');

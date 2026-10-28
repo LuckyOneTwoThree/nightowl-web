@@ -186,6 +186,42 @@ app.whenReady().then(async () => {
     ok('★ 双方数据渲染积分榜位置', statsClicked && standings.ok, JSON.stringify(standings));
     ok('★ 积分榜面板无横向溢出', statsClicked && !standings.overflow, JSON.stringify(standings));
 
+    // 验证情报面板第 3 个 Tab：关联赛程（合并双方后续赛程 + 同夜其他推荐）
+    const relatedClicked = await win.webContents.executeJavaScript(`
+      (() => {
+        const nodes = [...document.querySelectorAll('button, [role="tab"]')];
+        const tab = nodes.find(n => (n.textContent || '').includes('关联赛程'));
+        if (!tab) return false;
+        tab.click();
+        return true;
+      })()
+    `);
+    await sleep(400);
+    const relatedState = await win.webContents.executeJavaScript(`
+      (() => {
+        const panel = document.querySelector('#intel-panel');
+        if (!panel) return { ok: false, overflow: true, text: '' };
+        return {
+          ok: panel.innerText.includes('双方后续赛程') && panel.innerText.includes('同夜其他推荐'),
+          overflow: panel.scrollWidth > panel.clientWidth + 1,
+          text: panel.innerText.slice(0, 200)
+        };
+      })()
+    `);
+    ok('★ 关联赛程 Tab 渲染双方后续赛程与同夜推荐', relatedClicked && relatedState.ok, JSON.stringify(relatedState));
+    ok('★ 关联赛程面板无横向溢出', relatedClicked && !relatedState.overflow, JSON.stringify(relatedState));
+
+    // 切回双方数据 Tab 以继续验证完整积分榜入口
+    await win.webContents.executeJavaScript(`
+      (() => {
+        const nodes = [...document.querySelectorAll('button, [role="tab"]')];
+        const tab = nodes.find(n => (n.textContent || '').includes('双方数据'));
+        tab?.click();
+        return true;
+      })()
+    `);
+    await sleep(300);
+
     // 完整积分榜：从本场位置入口打开，PL 20 行；切 UCL 36 行；Escape 可关闭
     const fullOpen = await win.webContents.executeJavaScript(`
       (() => {
@@ -395,6 +431,50 @@ app.whenReady().then(async () => {
     ok('★ 周视图有本周精选', weekText.includes('本周精选'));
     ok('★ 周视图日期无 NaN（owlDay 字符串口径）',
       !/NaN|aN\/NaN/.test(weekText), weekText.slice(0, 240));
+
+    /* ---------- 1366×768 视口与赛程筛选抽屉验证 ---------- */
+    win.setContentSize(1366, 768);
+    await waitLoad(win, `${base}/?view=schedule`);
+    await sleep(1400);
+    const filterBtnClicked = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = document.querySelector('button[aria-label="打开赛程筛选面板"]');
+        if (!btn) return false;
+        btn.click();
+        return true;
+      })()
+    `);
+    await sleep(300);
+    const scheduleFilterCheck = await win.webContents.executeJavaScript(`
+      (() => {
+        const region = document.querySelector('[role="region"][aria-label="赛程筛选面板"]');
+        return {
+          opened: !!region,
+          overflow: region ? region.scrollWidth > region.clientWidth + 1 : true
+        };
+      })()
+    `);
+    ok('★ 1366 视口赛程筛选抽屉可打开且不横向溢出',
+      filterBtnClicked && scheduleFilterCheck.opened && !scheduleFilterCheck.overflow,
+      JSON.stringify(scheduleFilterCheck));
+
+    /* ---------- 浅色主题（Light Theme）渲染门禁 ---------- */
+    await win.webContents.executeJavaScript(`localStorage.setItem('nightowl:theme', 'light'); true`);
+    await waitLoad(win, `${base}/?view=tonight`);
+    await sleep(1500);
+    const lightCheck = await win.webContents.executeJavaScript(`
+      (() => ({
+        isLight: document.documentElement.classList.contains('light'),
+        rootChildren: document.getElementById('root')?.children.length || 0,
+        stageHasDark: !!document.querySelector('.dark.bg-stage-bg')
+      }))()
+    `);
+    ok('★ 浅色主题正常挂载（html.light 且主舞台保持深色）',
+      lightCheck.isLight && lightCheck.rootChildren >= 1 && lightCheck.stageHasDark,
+      JSON.stringify(lightCheck));
+    ok('★ 浅色主题无运行时致命错误',
+      !errors.some(m => /Uncaught|ReferenceError|TypeError|is not defined|Cannot read/i.test(m)),
+      errors.join(' | '));
   } catch (err) {
     ok('渲染冒烟执行完成', false, String(err?.stack || err));
   } finally {

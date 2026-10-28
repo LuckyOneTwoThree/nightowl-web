@@ -138,6 +138,7 @@
   --accent: #f5b942;
   --accent-rgb: 245 185 66;
   --accent-ink: #1a1204;
+  --accent-ink-rgb: 26 18 4;
   --accent-soft: #1f1a10;
   --accent-soft-rgb: 31 26 16;
 
@@ -172,6 +173,10 @@
   --result-draw-rgb: 107 118 134;
   --result-loss: #c9524c;
   --result-loss-rgb: 201 82 76;
+  /* 赛果方块上的深色字：draw/loss 原本用 bg-app 只有 4.19/4.41，低于 11px AA；
+     纯黑在三种赛果底上都 >=4.56。 */
+  --result-ink: #000000;
+  --result-ink-rgb: 0 0 0;
 
   /* ---- 联赛识别色：仅用于列表左色条，饱和度刻意压低 ---- */
   --league-pl: #a8559f;
@@ -194,6 +199,100 @@
 
   --scrollbar-thumb: #222a38;
   --scrollbar-thumb-hover: #33405a;
+}
+
+/* ====================================================================
+ * 日间演播室浅色主题（.light）—— 全部 token 通过 WCAG AA（>= 4.5:1）
+ * 视频与赛前主舞台（--stage-bg）保持深色，确保直播画面与比分沉浸感。
+ * ==================================================================== */
+.light {
+  color-scheme: light;
+
+  /* ---- 表面层级 ---- */
+  --bg-app: #f1f4f9;
+  --bg-app-rgb: 241 244 249;
+  --surface-panel: #ffffff;
+  --surface-panel-rgb: 255 255 255;
+  --surface-card: #f8fafc;
+  --surface-card-rgb: 248 250 252;
+  --surface-raised: #eef2f7;
+  --surface-raised-rgb: 238 242 247;
+  --surface-press: #e2e8f0;
+  --surface-press-rgb: 226 232 240;
+  --stage-bg: #090d14;
+  --stage-bg-rgb: 9 13 20;
+
+  /* ---- 描边 ---- */
+  --line-hairline: #e2e8f0;
+  --line-hairline-rgb: 226 232 240;
+  --line-control: #cbd5e1;
+  --line-control-rgb: 203 213 225;
+
+  /* ---- 文本：四档全部在 card/raised/press 上 >= 4.5:1 ---- */
+  --text-primary: #0f172a;
+  --text-primary-rgb: 15 23 42;
+  --text-secondary: #334155;
+  --text-secondary-rgb: 51 65 85;
+  --text-muted: #475569;
+  --text-muted-rgb: 71 85 105;
+  --text-faint: #526077;
+  --text-faint-rgb: 82 96 119;
+
+  /* ---- 品牌（1A 暗夜流金日间态：深珀金 #8a5a00，配白字或暖米浅底） ---- */
+  --accent: #8a5a00;
+  --accent-rgb: 138 90 0;
+  --accent-ink: #ffffff;
+  --accent-ink-rgb: 255 255 255;
+  --accent-soft: #fdf6e7;
+  --accent-soft-rgb: 253 246 231;
+
+  /* ---- 语义状态 ---- */
+  --live: #b91c1c;
+  --live-rgb: 185 28 28;
+  --resource: #0f766e;
+  --resource-rgb: 15 118 110;
+  --warn: #92400e;
+  --warn-rgb: 146 64 14;
+  --danger: #991b1b;
+  --danger-rgb: 153 27 27;
+
+  /* ---- 睡眠档位 S0→S4（在 12% tint + card/raised 上均 >= 5.0:1） ---- */
+  --tier-0: #166534;
+  --tier-0-rgb: 22 101 52;
+  --tier-1: #365314;
+  --tier-1-rgb: 54 83 20;
+  --tier-2: #854d0e;
+  --tier-2-rgb: 133 77 14;
+  --tier-3: #9a3412;
+  --tier-3-rgb: 154 52 18;
+  --tier-4: #991b1b;
+  --tier-4-rgb: 153 27 27;
+
+  /* ---- 赛果方块（配纯黑文字 --result-ink: #000000 均 >= 5.8:1） ---- */
+  --result-win: #4ade80;
+  --result-win-rgb: 74 222 128;
+  --result-draw: #94a3b8;
+  --result-draw-rgb: 148 163 184;
+  --result-loss: #f87171;
+  --result-loss-rgb: 248 113 113;
+  --result-ink: #000000;
+  --result-ink-rgb: 0 0 0;
+
+  /* ---- 联赛识别色 ---- */
+  --league-pl: #9333ea;
+  --league-pd: #c2410c;
+  --league-sa: #15803d;
+  --league-bl: #be123c;
+  --league-fl: #1d4ed8;
+  --league-ucl: #4338ca;
+  --league-scg: #475569;
+
+  /* ---- 阴影 ---- */
+  --shadow-card: 0 1px 2px 0 rgba(15, 23, 42, 0.06);
+  --shadow-pop: 0 10px 26px -8px rgba(15, 23, 42, 0.16), 0 2px 6px -2px rgba(15, 23, 42, 0.08);
+
+  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-thumb-hover: #94a3b8;
 }
 
 @layer base {
@@ -251,26 +350,27 @@
 }
 
 @layer utilities {
-  /* 舞台氛围：极细径向冷光，让暗色工作台有转播台空气感 */
+  /* 舞台氛围：克制的背景承托，不堆叠多余光效 */
   .stage-atmosphere {
     background:
-      radial-gradient(ellipse 80% 55% at 70% 0%, rgb(var(--accent-rgb) / 0.04), transparent 55%),
-      radial-gradient(ellipse 60% 45% at 15% 20%, rgb(7 10 16 / 0.35), transparent 60%),
+      radial-gradient(ellipse 75% 45% at 70% 0%, rgb(var(--accent-rgb) / 0.03), transparent 55%),
       var(--bg-app);
   }
-
-  /* 核心模块玻璃高光：只给 xl 级卡片 */
-  .glass-lift {
-    box-shadow: var(--shadow-card), inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+  .light .stage-atmosphere {
+    background: var(--bg-app);
   }
 
-  /* 主舞台/情报板的顶部微光，替代第二层描边 */
+  /* 核心模块卡片阴影：仅保留干净的表面层级阴影 */
+  .glass-lift {
+    box-shadow: var(--shadow-card);
+  }
+
+  /* 主舞台顶部 1px 微光，浅色模式下自动关闭避免泛白 */
   .broadcast-sheen {
-    background-image: radial-gradient(
-      ellipse 70% 45% at 18% 0%,
-      rgba(255, 255, 255, 0.045),
-      transparent 62%
-    );
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+  }
+  .light .broadcast-sheen {
+    box-shadow: none;
   }
 
   /* 只给真正的可点击大卡片用；列表行不要整片抬升 */

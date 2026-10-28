@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
-import Constants from 'expo-constants';
+import { AppState } from 'react-native';
 import { router } from 'expo-router';
+import { nightOf } from '@core/engine.js';
 
 import { usePrefs } from '@/state/prefs';
 import { useDataRev } from '@/state/app';
+import { useNow } from '@/lib/useNow';
 
 import { notificationsAvailable, syncPrematchReminders } from './reminders';
 
@@ -19,6 +21,8 @@ type NotificationResponseLike = {
 export function usePrematchReminders() {
   const prefs = usePrefs();
   const rev = useDataRev();
+  const now = useNow(60_000);
+  const night = nightOf(now);
   const teamsKey = prefs.followedTeams.join(',');
   const leaguesKey = prefs.followedLeagues.join(',');
 
@@ -34,7 +38,16 @@ export function usePrematchReminders() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [teamsKey, leaguesKey, prefs.notifyBefore15, rev]);
+  }, [teamsKey, leaguesKey, prefs.notifyBefore15, rev, night]);
+
+  // 跨夜/回前台：hero 可能已经换人，必须重算提醒。不能只依赖 rev（没有新补丁时 rev 不变）。
+  useEffect(() => {
+    if (!notificationsAvailable()) return undefined;
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') void syncPrematchReminders(prefs);
+    });
+    return () => subscription.remove();
+  }, [teamsKey, leaguesKey, prefs.notifyBefore15]);
 
   useEffect(() => {
     if (!notificationsAvailable()) return undefined;
