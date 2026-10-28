@@ -259,7 +259,7 @@ export default function MatchCanvas({
                   {loadingLines ? '检测中…' : actionLabel}
                 </Button>
                 {onScrollToIntel && (
-                  <Button variant="ghost" onClick={onScrollToIntel}>
+                  <Button variant="ghost" onClick={onScrollToIntel} title="定位到赛前情报">
                     情报
                   </Button>
                 )}

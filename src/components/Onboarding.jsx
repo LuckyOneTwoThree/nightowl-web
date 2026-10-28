@@ -49,6 +49,11 @@ export default function Onboarding({ open, prefs, onPrefsChange, onClose }) {
   const [step, setStep] = useState(1);
   const step2FirstRef = useRef(null);
 
+  // 关闭即回到第一步：否则从设置里「重新引导」会直接停在用户上次离开的第 2 步。
+  useEffect(() => {
+    if (!open) setStep(1);
+  }, [open]);
+
   // 背景 inert 时键盘焦点不能落在 body 上：第 1 步 TeamPicker 自带 autoFocus，
   // 第 2 步此前没有落点 —— 聚焦第一个联赛开关。
   useEffect(() => {

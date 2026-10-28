@@ -82,20 +82,27 @@ export default function WeekView({
     [plan.best, selectedDay]
   );
   const filteredZero = useMemo(
-    () =>
-      selectedDay
-        ? plan.zeroList.filter(e => owlDay(e.m.t) === selectedDay)
-        : plan.zeroList.slice(0, 40),
+    () => (selectedDay ? plan.zeroList.filter(e => owlDay(e.m.t) === selectedDay) : plan.zeroList),
     [plan.zeroList, selectedDay]
   );
   const filteredMinefield = useMemo(
-    () => (selectedDay ? minefield.filter(e => owlDay(e.m.t) === selectedDay) : minefield.slice(0, 6)),
+    () => (selectedDay ? minefield.filter(e => owlDay(e.m.t) === selectedDay) : minefield),
     [minefield, selectedDay]
   );
   const filteredAlt = useMemo(
     () => (selectedDay ? plan.alt.filter(e => owlDay(e.m.t) === selectedDay) : plan.alt),
     [plan.alt, selectedDay]
   );
+
+  // Tab 计数必须与当前列表口径一致：单晚筛选生效时显示当晚数量，
+  // 否则会出现「标签写 21 场、列表只渲染 9 行」的静默截断。
+  const tabCounts = {
+    best: selectedDay ? `${filteredBest.length}/5` : `${plan.best.length}/5`,
+    zero: selectedDay ? `${filteredZero.length}` : `${plan.zeroCount}`,
+    alt: selectedDay
+      ? `${filteredAlt.length + filteredMinefield.length}`
+      : `${plan.alt.length + minefield.length}`
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2.5 overflow-hidden">
@@ -222,6 +229,7 @@ export default function WeekView({
                     type="button"
                     onClick={() => setSelectedDay(cur => (cur === d.date ? null : d.date))}
                     aria-pressed={isSelected}
+                    aria-label={`${zhDate(d.date)} 周${WEEKDAY_SHORT[i]}，${d.count} 场，最高 ${hmCost(d.cost)}`}
                     className={`flex flex-1 flex-col items-center gap-0.5 rounded-md py-1 transition-colors focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
                       isSelected ? 'bg-surface-raised ring-1 ring-accent/50' : 'hover:bg-surface-raised/60'
                     }`}
@@ -237,7 +245,7 @@ export default function WeekView({
                     </span>
                     <div className="flex w-full flex-col items-center justify-end gap-0.5 px-1" style={{ height: 42 }}>
                       {d.count > 0 && (
-                        <span className="font-num text-[10px] leading-none tabular-nums text-text-faint">
+                        <span className="font-num text-2xs leading-none tabular-nums text-text-faint">
                           {hmCost(d.cost)}
                         </span>
                       )}
@@ -265,11 +273,15 @@ export default function WeekView({
       </section>
 
       {/* ---- 三段式列表切换 Tab ---- */}
-      <div className="flex shrink-0 items-center justify-between gap-1 rounded-lg border border-line-hairline bg-surface-card p-1">
+      <div
+        role="tablist"
+        aria-label="本周列表切换"
+        className="flex shrink-0 items-center justify-between gap-1 rounded-lg border border-line-hairline bg-surface-card p-1"
+      >
         {[
-          { id: 'best', label: '本周精选', count: `${plan.best.length}/5` },
-          { id: 'zero', label: '零成本顺带', count: `${plan.zeroCount}` },
-          { id: 'alt', label: '备选与雷区', count: `${plan.alt.length + minefield.length}` }
+          { id: 'best', label: '本周精选', count: tabCounts.best },
+          { id: 'zero', label: '零成本顺带', count: tabCounts.zero },
+          { id: 'alt', label: '备选与雷区', count: tabCounts.alt }
         ].map(t => {
           const on = activeTab === t.id;
           return (
@@ -295,19 +307,14 @@ export default function WeekView({
       </div>
 
       {/* ---- 列表内容区 ---- */}
-      <div className="scrollbar-thin -mr-1 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+      <div
+        key={`${activeTab}-${selectedDay || 'all'}`}
+        className="scrollbar-thin -mr-1 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1"
+      >
         {selectedDay && activeDayObj && (
-          <div className="flex items-center justify-between rounded-lg border border-accent/30 bg-surface-accent px-2.5 py-1.5 text-2xs">
-            <span className="text-text-primary">
-              正在筛选：<span className="font-semibold text-accent">{zhDate(activeDayObj.date)} 夜</span>（共 {activeDayObj.count} 场未开赛）
-            </span>
-            <button
-              type="button"
-              onClick={() => setSelectedDay(null)}
-              className="font-medium text-accent underline underline-offset-2 hover:opacity-80 cursor-pointer"
-            >
-              看全周
-            </button>
+          <div className="rounded-lg border border-accent/30 bg-surface-accent px-2.5 py-1.5 text-2xs text-text-primary">
+            正在筛选：<span className="font-semibold text-accent">{zhDate(activeDayObj.date)} 夜</span>（共{' '}
+            {activeDayObj.count} 场未开赛） · 点上方「清除」取消
           </div>
         )}
 
@@ -392,6 +399,7 @@ export default function WeekView({
                     onReveal={onReveal}
                     rivalry={e.ev.rivalry}
                     followedTeams={prefs.followedTeams}
+                    index={e.index}
                   />
                 ))}
               </div>

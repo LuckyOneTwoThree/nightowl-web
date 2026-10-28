@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { crestUrl, teamColor, leagueColor, leagueName } from '../data/index.js';
 import { sleepTier } from '../core/engine.js';
 import { TIER_MAP } from '../core/narrative.js';
@@ -161,7 +161,14 @@ export function ScoreText({ match, state, revealed, onReveal, spoilerFree, stale
       return (
         <button
           type="button"
-          onClick={onReveal}
+          onClick={e => {
+            e.stopPropagation();
+            onReveal?.();
+          }}
+          onKeyDown={e => {
+            // 按钮在比赛行（role=button）内部：Enter/Space 只揭晓，不再冒泡成选场。
+            if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
+          }}
           className="inline-flex items-center gap-1 rounded border border-line-control/70 bg-surface-raised/80 px-1.5 py-px text-2xs text-text-secondary transition-colors hover:border-accent/40 hover:bg-surface-press hover:text-accent"
           title="点击揭晓比分"
         >
@@ -260,18 +267,17 @@ export function IconButton({ children, label, className = '', ...rest }) {
   );
 }
 
-/** 开关 */
-export function Switch({ on, onChange, label, disabled = false }) {
+/** 开关轨道（纯展示；语义与点击由外层 switch 提供） */
+function SwitchTrack({ on, disabled = false }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => !disabled && onChange(!on)}
-      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-45 ${
-        on ? 'bg-accent' : 'bg-line-control hover:bg-line-control/80'
+    <span
+      aria-hidden="true"
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors ${
+        on
+          ? 'bg-accent'
+          : disabled
+            ? 'bg-line-control'
+            : 'bg-line-control group-hover:bg-line-control/80'
       }`}
     >
       <span
@@ -279,6 +285,68 @@ export function Switch({ on, onChange, label, disabled = false }) {
           on ? 'translate-x-4' : 'translate-x-0'
         }`}
       />
+    </span>
+  );
+}
+
+/** 开关 */
+export function Switch({ on, onChange, label, disabled = false, describedBy = null }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={!!on}
+      aria-label={label}
+      aria-describedby={describedBy || undefined}
+      disabled={disabled}
+      onClick={() => !disabled && onChange?.(!on)}
+      className="group relative inline-flex shrink-0 cursor-pointer items-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-45"
+    >
+      <SwitchTrack on={on} disabled={disabled} />
+    </button>
+  );
+}
+
+/**
+ * 带可见标题与说明的开关行。
+ *
+ * 开关本身只有 20×36，无法独立解释「打开后会发生什么」；筛选项这类
+ * 不可自明的设置必须把 label / desc 与开关绑定在同一行，而不是只传 aria-label。
+ * 整行是同一个 switch 控件：点击文字也能切换，命中区域不再只有那条细轨道。
+ */
+export function SwitchField({
+  on,
+  onChange,
+  label,
+  desc = null,
+  disabled = false,
+  className = ''
+}) {
+  const descId = useId();
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={!!on}
+      aria-label={label}
+      aria-describedby={desc ? descId : undefined}
+      disabled={disabled}
+      onClick={() => !disabled && onChange?.(!on)}
+      className={`group flex w-full items-center justify-between gap-3 rounded-md border border-line-hairline bg-surface-card px-3 py-2 text-left transition-colors focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none ${
+        disabled
+          ? 'cursor-not-allowed opacity-60'
+          : 'cursor-pointer hover:border-line-control hover:bg-surface-raised'
+      } ${className}`}
+    >
+      <span className="min-w-0">
+        <span className="block text-xs font-medium leading-snug text-text-primary">{label}</span>
+        {desc && (
+          <span id={descId} className="mt-0.5 block text-2xs leading-relaxed text-text-muted">
+            {desc}
+          </span>
+        )}
+      </span>
+      <SwitchTrack on={on} disabled={disabled} />
     </button>
   );
 }

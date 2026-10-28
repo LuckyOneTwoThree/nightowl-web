@@ -110,10 +110,93 @@ app.whenReady().then(async () => {
       errors.join(' | ')
     );
 
+    /* 「情报」是页内定位，不是弹窗。1440 下目标本来就完整可见，
+       scrollIntoView 不会产生位移 —— 必须靠高亮 + 焦点给出反馈。 */
+    const heroIntelClicked = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = [...document.querySelectorAll('button')].find(
+          b => (b.textContent || '').trim() === '查看赛前情报'
+        );
+        if (!btn) return false;
+        btn.click();
+        return true;
+      })()
+    `);
+    await sleep(180);
+    const heroIntelFeedback = await win.webContents.executeJavaScript(`
+      (() => {
+        const panel = document.getElementById('intel-panel');
+        return {
+          hasFlash: panel?.classList.contains('locate-focus-flash') || false,
+          focused: document.activeElement === panel
+        };
+      })()
+    `);
+    ok('★ 已选中 Hero 的主按钮可直达赛前情报（不再空动作）',
+      heroIntelClicked && heroIntelFeedback.hasFlash && heroIntelFeedback.focused,
+      JSON.stringify(heroIntelFeedback));
+    await sleep(1100);
+
+    const intelClicked = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = [...document.querySelectorAll('button')].find(
+          b => (b.textContent || '').trim() === '情报'
+        );
+        if (!btn) return false;
+        btn.click();
+        return true;
+      })()
+    `);
+    await sleep(180);
+    const intelFeedback = await win.webContents.executeJavaScript(`
+      (() => {
+        const panel = document.getElementById('intel-panel');
+        return {
+          hasFlash: panel?.classList.contains('locate-focus-flash') || false,
+          focused: document.activeElement === panel,
+          scrollTop: document.querySelectorAll('main > section')[1]?.scrollTop ?? null
+        };
+      })()
+    `);
+    ok('★ 目标已在视口内时「情报」仍有高亮与焦点反馈',
+      intelClicked && intelFeedback.hasFlash && intelFeedback.focused,
+      JSON.stringify(intelFeedback));
+    await sleep(1150);
+    const intelFlashCleared = await win.webContents.executeJavaScript(
+      `!document.getElementById('intel-panel')?.classList.contains('locate-focus-flash')`
+    );
+    ok('情报高亮自动收起', intelFlashCleared);
+
+    const linesClicked = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = [...document.querySelectorAll('button')].find(
+          b => (b.textContent || '').trim() === '查看线路'
+        );
+        if (!btn) return false;
+        btn.click();
+        return true;
+      })()
+    `);
+    await sleep(180);
+    const linesFeedback = await win.webContents.executeJavaScript(`
+      (() => {
+        const head = document.getElementById('match-lines');
+        return {
+          hasFlash: head?.classList.contains('locate-focus-flash') || false,
+          focused: document.activeElement === head,
+          scrollTop: document.querySelectorAll('main > section')[1]?.scrollTop ?? null
+        };
+      })()
+    `);
+    ok('★ 目标已在视口内时「查看线路」同样有高亮与焦点反馈',
+      linesClicked && linesFeedback.hasFlash && linesFeedback.focused,
+      JSON.stringify(linesFeedback));
+
     const searchClicked = await win.webContents.executeJavaScript(`
       (() => {
         const el = document.querySelector('button[aria-label="搜索"]');
         if (!el) return false;
+        el.focus();
         el.click();
         return true;
       })()
@@ -135,6 +218,10 @@ app.whenReady().then(async () => {
       `!document.querySelector('[role="dialog"][aria-label="命令面板"]')`
     );
     ok('命令面板可关闭', paletteClosed);
+    const paletteFocusReturned = await win.webContents.executeJavaScript(
+      `document.activeElement?.getAttribute('aria-label') === '搜索'`
+    );
+    ok('命令面板关闭后焦点回到搜索入口', paletteFocusReturned);
 
     const rowClicked = await win.webContents.executeJavaScript(`
       (() => {
@@ -277,6 +364,7 @@ app.whenReady().then(async () => {
       (() => {
         const btn = document.querySelector('header button[aria-label="积分榜"]');
         if (!btn) return false;
+        btn.focus();
         btn.click();
         return true;
       })()
@@ -301,6 +389,10 @@ app.whenReady().then(async () => {
       `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); true`
     );
     await sleep(250);
+    const standingsFocusReturned = await win.webContents.executeJavaScript(
+      `document.activeElement?.getAttribute('aria-label') === '积分榜'`
+    );
+    ok('完整积分榜关闭后焦点回到顶栏入口', standingsFocusReturned);
 
     const detail = await win.webContents.executeJavaScript(`
       (() => {
@@ -421,6 +513,24 @@ app.whenReady().then(async () => {
     ok('★ 1120 最小窗口有可用列表高度',
       !compact.list || compact.list.h >= 80, JSON.stringify(compact.list));
 
+    const railLines = await win.webContents.executeJavaScript(`
+      (() => {
+        const head = document.querySelector('#match-lines');
+        const grid = head?.nextElementSibling;
+        if (!grid) return null;
+        const kids = [...grid.children].filter(el => el.tagName === 'BUTTON');
+        const gr = grid.getBoundingClientRect();
+        return {
+          count: kids.length,
+          gridW: Math.round(gr.width),
+          firstW: kids[0] ? Math.round(kids[0].getBoundingClientRect().width) : 0
+        };
+      })()
+    `);
+    ok('★ 1120 单条线路占满行宽（不再只占半行）',
+      !railLines || railLines.count !== 1 || railLines.firstW >= railLines.gridW - 24,
+      JSON.stringify(railLines));
+
     /* ---------- 周视图日期口径 ----------
        owlDay 传入日期字符串而不是时间戳会得到 NaN；此前「本周精选」行因此显示 aN/NaN。 */
     await waitLoad(win, `${base}/?view=week`);
@@ -438,7 +548,9 @@ app.whenReady().then(async () => {
     await sleep(1400);
     const filterBtnClicked = await win.webContents.executeJavaScript(`
       (() => {
-        const btn = document.querySelector('button[aria-label="打开赛程筛选面板"]');
+        const btn = [...document.querySelectorAll('button[aria-expanded]')].find(
+          b => (b.textContent || '').includes('筛选')
+        );
         if (!btn) return false;
         btn.click();
         return true;
@@ -448,33 +560,345 @@ app.whenReady().then(async () => {
     const scheduleFilterCheck = await win.webContents.executeJavaScript(`
       (() => {
         const region = document.querySelector('[role="region"][aria-label="赛程筛选面板"]');
+        if (!region) return { opened: false, overflow: true, switches: [], text: '' };
         return {
-          opened: !!region,
-          overflow: region ? region.scrollWidth > region.clientWidth + 1 : true
+          opened: true,
+          overflow: region.scrollWidth > region.clientWidth + 1,
+          switches: [...region.querySelectorAll('[role="switch"]')].map(s => ({
+            label: s.getAttribute('aria-label'),
+            checked: s.getAttribute('aria-checked'),
+            disabled: s.disabled,
+            describedBy: s.getAttribute('aria-describedby')
+          })),
+          text: region.innerText.slice(0, 400)
         };
       })()
     `);
     ok('★ 1366 视口赛程筛选抽屉可打开且不横向溢出',
       filterBtnClicked && scheduleFilterCheck.opened && !scheduleFilterCheck.overflow,
       JSON.stringify(scheduleFilterCheck));
+    ok('★ 赛程筛选两个开关有可见标题、说明与无障碍关联',
+      scheduleFilterCheck.switches.length === 2 &&
+        scheduleFilterCheck.switches.every(s => s.label && s.describedBy) &&
+        scheduleFilterCheck.text.includes('只看关注球队') &&
+        scheduleFilterCheck.text.includes('防剧透模式'),
+      JSON.stringify(scheduleFilterCheck));
 
-    /* ---------- 浅色主题（Light Theme）渲染门禁 ---------- */
-    await win.webContents.executeJavaScript(`localStorage.setItem('nightowl:theme', 'light'); true`);
-    await waitLoad(win, `${base}/?view=tonight`);
-    await sleep(1500);
-    const lightCheck = await win.webContents.executeJavaScript(`
+    const spoilerBefore = await win.webContents.executeJavaScript(`
+      (() => {
+        const region = document.querySelector('[role="region"][aria-label="赛程筛选面板"]');
+        const sw = [...(region?.querySelectorAll('[role="switch"]') || [])].find(
+          s => s.getAttribute('aria-label') === '防剧透模式'
+        );
+        if (!sw) return null;
+        const before = sw.getAttribute('aria-checked');
+        sw.click();
+        return before;
+      })()
+    `);
+    await sleep(300);
+    const spoilerAfter = await win.webContents.executeJavaScript(`
+      (() => {
+        const region = document.querySelector('[role="region"][aria-label="赛程筛选面板"]');
+        const sw = [...(region?.querySelectorAll('[role="switch"]') || [])].find(
+          s => s.getAttribute('aria-label') === '防剧透模式'
+        );
+        return {
+          checked: sw?.getAttribute('aria-checked') ?? null,
+          regionOpen: !!region,
+          text: region?.innerText.slice(0, 200) || ''
+        };
+      })()
+    `);
+    ok('★ 赛程筛选开关点击后可见状态切换',
+      spoilerBefore != null && spoilerAfter.checked !== spoilerBefore && spoilerAfter.regionOpen,
+      JSON.stringify({ spoilerBefore, spoilerAfter }));
+
+    const escapeDispatched = await win.webContents.executeJavaScript(`
+      (() => {
+        const region = document.querySelector('[role="region"][aria-label="赛程筛选面板"]');
+        if (!region) return false;
+        const target = region.contains(document.activeElement) ? document.activeElement : region;
+        target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        return true;
+      })()
+    `);
+    await sleep(300);
+    const filterClosedByEsc = await win.webContents.executeJavaScript(`
       (() => ({
-        isLight: document.documentElement.classList.contains('light'),
-        rootChildren: document.getElementById('root')?.children.length || 0,
-        stageHasDark: !!document.querySelector('.dark.bg-stage-bg')
+        closed: !document.querySelector('[role="region"][aria-label="赛程筛选面板"]'),
+        triggerFocused: document.activeElement?.getAttribute('aria-expanded') === 'false'
       }))()
     `);
-    ok('★ 浅色主题正常挂载（html.light 且主舞台保持深色）',
-      lightCheck.isLight && lightCheck.rootChildren >= 1 && lightCheck.stageHasDark,
-      JSON.stringify(lightCheck));
-    ok('★ 浅色主题无运行时致命错误',
-      !errors.some(m => /Uncaught|ReferenceError|TypeError|is not defined|Cannot read/i.test(m)),
-      errors.join(' | '));
+    ok('★ 赛程筛选面板按 Esc 关闭并归还焦点',
+      escapeDispatched && filterClosedByEsc.closed && filterClosedByEsc.triggerFocused,
+      JSON.stringify(filterClosedByEsc));
+
+    // 全季 + 精确查询：任意日期都能稳定命中这一场未开赛，验证行右侧是指数而不是重复的「未开赛」
+    await win.webContents.executeJavaScript(`
+      (() => {
+        const all = [...document.querySelectorAll('button[aria-pressed]')].find(
+          b => (b.textContent || '').trim() === '全部'
+        );
+        all?.click();
+        return !!all;
+      })()
+    `);
+    await sleep(350);
+    await win.webContents.executeJavaScript(`
+      (() => {
+        const el = document.querySelector('input[placeholder^="搜索球队"]');
+        if (!el) return false;
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(el, 'SA-9-MIL-BOL');
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+      })()
+    `);
+    await sleep(500);
+    const scheduleRowIndex = await win.webContents.executeJavaScript(`
+      (() => {
+        const left = document.querySelector('main > section');
+        const row = [...(left?.querySelectorAll('[role="button"]') || [])].find(
+          n => (n.textContent || '').includes('AC米兰') && (n.textContent || '').includes('博洛尼亚')
+        );
+        return { found: !!row, text: row?.innerText || '' };
+      })()
+    `);
+    ok('★ 赛程未开赛行显示夜猫指数而非重复「未开赛」',
+      scheduleRowIndex.found &&
+        scheduleRowIndex.text.includes('指数') &&
+        !scheduleRowIndex.text.includes('未开赛'),
+      JSON.stringify(scheduleRowIndex));
+
+    /* ---------- 暗色唯一主题 ----------
+       浅色主题已整体移除；旧版本可能残留 localStorage 的 light 偏好，必须被忽略。 */
+    await win.webContents.executeJavaScript(
+      `localStorage.setItem('nightowl:theme', 'light'); localStorage.setItem('theme', 'light'); true`
+    );
+    await waitLoad(win, `${base}/?view=tonight`);
+    await sleep(1500);
+    const darkOnly = await win.webContents.executeJavaScript(`
+      (() => ({
+        isDark: document.documentElement.classList.contains('dark'),
+        hasLight: document.documentElement.classList.contains('light'),
+        dataTheme: document.documentElement.getAttribute('data-theme'),
+        rootChildren: document.getElementById('root')?.children.length || 0
+      }))()
+    `);
+    ok('★ 暗色为唯一主题（残留 light 偏好被忽略）',
+      darkOnly.isDark && !darkOnly.hasLight && darkOnly.dataTheme === 'dark' && darkOnly.rootChildren >= 1,
+      JSON.stringify(darkOnly));
+
+    await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = [...document.querySelectorAll('button')].find(
+          b => (b.textContent || '').includes('偏好与数据')
+        );
+        btn?.focus();
+        btn?.click();
+        return !!btn;
+      })()
+    `);
+    await sleep(400);
+    const settingsThemeRemoved = await win.webContents.executeJavaScript(`
+      (() => {
+        const aside = document.querySelector('aside');
+        const text = aside?.innerText || '';
+        return {
+          open: !!aside,
+          hasThemeSection: text.includes('界面主题') || text.includes('日间演播室'),
+          hasFollowSection: text.includes('关注球队')
+        };
+      })()
+    `);
+    ok('★ 设置中不再出现浅色主题入口',
+      settingsThemeRemoved.open && !settingsThemeRemoved.hasThemeSection && settingsThemeRemoved.hasFollowSection,
+      JSON.stringify(settingsThemeRemoved));
+
+    const resetClicked = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = [...document.querySelectorAll('aside button')].find(
+          b => (b.textContent || '').trim() === '恢复默认'
+        );
+        if (!btn) return false;
+        btn.click();
+        return true;
+      })()
+    `);
+    await sleep(250);
+    const resetPending = await win.webContents.executeJavaScript(`
+      (() => ({
+        confirming: (document.querySelector('aside')?.innerText || '').includes('恢复默认？'),
+        teams: localStorage.getItem('followedTeams')
+      }))()
+    `);
+    ok('★ 恢复默认先进入二次确认，不直接清空偏好',
+      resetClicked && resetPending.confirming && resetPending.teams === '["ARS"]',
+      JSON.stringify(resetPending));
+
+    const resetCancelled = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = [...document.querySelectorAll('aside button')].find(
+          b => (b.textContent || '').trim() === '取消'
+        );
+        if (!btn) return false;
+        btn.click();
+        return true;
+      })()
+    `);
+    await sleep(250);
+    const resetAfterCancel = await win.webContents.executeJavaScript(`
+      (() => ({
+        stillConfirming: (document.querySelector('aside')?.innerText || '').includes('恢复默认？'),
+        teams: localStorage.getItem('followedTeams')
+      }))()
+    `);
+    ok('取消恢复默认后偏好不变',
+      resetCancelled && !resetAfterCancel.stillConfirming && resetAfterCancel.teams === '["ARS"]',
+      JSON.stringify(resetAfterCancel));
+
+    const updateOpened = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = [...document.querySelectorAll('aside button')].find(
+          b => (b.textContent || '').trim() === '检查更新'
+        );
+        if (!btn) return false;
+        btn.focus();
+        btn.click();
+        return true;
+      })()
+    `);
+    await sleep(350);
+    const updateStack = await win.webContents.executeJavaScript(`
+      (() => {
+        const modal = document.querySelector('[aria-label="版本更新"]');
+        const aside = document.querySelector('aside');
+        return {
+          open: !!modal,
+          lowerInert: !!aside?.parentElement?.hasAttribute('inert'),
+          active: document.activeElement?.getAttribute('aria-label') || ''
+        };
+      })()
+    `);
+    ok('★ 更新弹窗打开时下层设置抽屉退出焦点（inert）',
+      updateOpened && updateStack.open && updateStack.lowerInert && updateStack.active === '关闭',
+      JSON.stringify(updateStack));
+
+    await win.webContents.executeJavaScript(
+      `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); true`
+    );
+    await sleep(300);
+    const updateClosed = await win.webContents.executeJavaScript(`
+      (() => ({
+        closed: !document.querySelector('[aria-label="版本更新"]'),
+        focusBack: (document.activeElement?.textContent || '').includes('检查更新')
+      }))()
+    `);
+    ok('更新弹窗关闭后焦点回到检查更新入口',
+      updateClosed.closed && updateClosed.focusBack, JSON.stringify(updateClosed));
+
+    await win.webContents.executeJavaScript(
+      `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); true`
+    );
+    await sleep(300);
+    const settingsFocusReturned = await win.webContents.executeJavaScript(`
+      document.activeElement?.textContent?.includes('偏好与数据') || false
+    `);
+    ok('设置关闭后焦点回到偏好入口', settingsFocusReturned);
+
+    /* ---------- 首次启动：开屏与引导的焦点交接 ---------- */
+    await win.webContents.executeJavaScript(`localStorage.clear(); true`);
+    await waitLoad(win, `${base}/?view=tonight`);
+    await sleep(500);
+    const firstRun = await win.webContents.executeJavaScript(`
+      (() => ({
+        splash: !!document.querySelector('[aria-label="夜猫看台开屏画面"]'),
+        onboarding: !!document.querySelector('[aria-labelledby="onboarding-title"]'),
+        active: document.activeElement?.getAttribute('aria-label') || document.activeElement?.textContent?.trim().slice(0, 20)
+      }))()
+    `);
+    ok('★ 首启开屏期间不挂载引导（避免焦点落在被遮挡输入）',
+      firstRun.splash && !firstRun.onboarding, JSON.stringify(firstRun));
+    await sleep(2600);
+    const onboardingReady = await win.webContents.executeJavaScript(`
+      (() => ({
+        visible: !!document.querySelector('[aria-labelledby="onboarding-title"]'),
+        step: document.querySelector('#onboarding-title')?.parentElement?.innerText || '',
+        placeholder: document.activeElement?.placeholder || ''
+      }))()
+    `);
+    ok('★ 开屏结束后引导第 1 步自动聚焦球队搜索',
+      onboardingReady.visible &&
+        onboardingReady.step.includes('第 1 / 2 步') &&
+        onboardingReady.placeholder.includes('搜索 111 支球队'),
+      JSON.stringify(onboardingReady));
+
+    const onboardingNext = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = [...document.querySelectorAll('button')].find(
+          b => (b.textContent || '').trim().startsWith('下一步')
+        );
+        if (!btn) return false;
+        btn.click();
+        return true;
+      })()
+    `);
+    await sleep(400);
+    const onboardingStep2 = await win.webContents.executeJavaScript(`
+      (() => ({
+        step: document.querySelector('#onboarding-title')?.parentElement?.innerText || '',
+        active: document.activeElement?.textContent?.trim() || ''
+      }))()
+    `);
+    ok('★ 引导第 2 步聚焦第一个联赛选项',
+      onboardingNext && onboardingStep2.step.includes('第 2 / 2 步') && onboardingStep2.active === '英超',
+      JSON.stringify(onboardingStep2));
+
+    await win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+    await sleep(400);
+    const onboardingEscaped = await win.webContents.executeJavaScript(`
+      (() => ({
+        visible: !!document.querySelector('[aria-labelledby="onboarding-title"]'),
+        done: localStorage.getItem('onboardingDone')
+      }))()
+    `);
+    ok('★ 引导按 Esc 关闭时写入完成标记（下次启动不再重复）',
+      !onboardingEscaped.visible && onboardingEscaped.done === '1',
+      JSON.stringify(onboardingEscaped));
+
+    await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = [...document.querySelectorAll('button')].find(
+          b => (b.textContent || '').includes('偏好与数据')
+        );
+        btn?.click();
+        return !!btn;
+      })()
+    `);
+    await sleep(400);
+    const rerunClicked = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = [...document.querySelectorAll('aside button')].find(
+          b => (b.textContent || '').trim() === '重新引导'
+        );
+        btn?.click();
+        return !!btn;
+      })()
+    `);
+    await sleep(500);
+    const onboardingRerun = await win.webContents.executeJavaScript(`
+      (() => ({
+        visible: !!document.querySelector('[aria-labelledby="onboarding-title"]'),
+        step: document.querySelector('#onboarding-title')?.parentElement?.innerText || '',
+        placeholder: document.activeElement?.placeholder || ''
+      }))()
+    `);
+    ok('★ 重新引导回到第 1 步并恢复球队搜索焦点',
+      rerunClicked && onboardingRerun.visible &&
+        onboardingRerun.step.includes('第 1 / 2 步') &&
+        onboardingRerun.placeholder.includes('搜索 111 支球队'),
+      JSON.stringify(onboardingRerun));
   } catch (err) {
     ok('渲染冒烟执行完成', false, String(err?.stack || err));
   } finally {

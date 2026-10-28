@@ -5,7 +5,7 @@ import { getFixtures, LEAGUE_ORDER, LEAGUE_NAMES, leagueColor } from '../data/in
 import { evalOne, stateOf, defaultScheduleFilters, owlDayOffset } from '../core/owl.js';
 import * as E from '../core/engine.js';
 import MatchRow from './MatchRow.jsx';
-import { Button, EmptyState, Hint, Meta, SectionLabel, Switch, TogglePill } from './atoms.jsx';
+import { Button, EmptyState, Hint, Meta, SectionLabel, SwitchField, TogglePill } from './atoms.jsx';
 import {
   IconCalendar,
   IconChevronLeft,
@@ -46,12 +46,15 @@ export default function ScheduleView({
   onOpenStandings
 }) {
   const [filterOpen, setFilterOpen] = useState(false);
+  const filterBtnRef = useRef(null);
+  const filterCloseRef = useRef(null);
   const allSelected = filters.leagues.length === LEAGUE_ORDER.length;
   const activeFilterCount = (allSelected ? 0 : 1) + (filters.onlyFollowed ? 1 : 0);
+  const filterKey = `${filters.query}|${filters.leagues.join(',')}|${filters.onlyFollowed ? 1 : 0}`;
   const matchCount = useMemo(() => rows.filter(r => r.type === 'match').length, [rows]);
   const standingsLeague = useMemo(() => {
     const supported = filters.leagues.filter(code => code !== 'SCG');
-    return supported.length === 1 ? supported[0] : 'PL';
+    return supported.length === 1 ? supported[0] : supported.includes('PL') ? 'PL' : supported[0] || null;
   }, [filters.leagues]);
 
   // rows 由父组件按 dataRev 重建，数据变化时随之重算，与列表口径保持一致
@@ -85,6 +88,16 @@ export default function ScheduleView({
       });
     }
   }, [selDate, showAll]);
+
+  // 筛选层打开后把焦点移入面板：否则 Esc / Tab 仍作用在背后的列表上。
+  useEffect(() => {
+    if (filterOpen) filterCloseRef.current?.focus();
+  }, [filterOpen]);
+
+  const closeFilter = () => {
+    setFilterOpen(false);
+    window.requestAnimationFrame(() => filterBtnRef.current?.focus());
+  };
 
   const dayStrip = useMemo(() => {
     const counts = new Map();
@@ -197,9 +210,10 @@ export default function ScheduleView({
         </div>
         <button
           type="button"
-          onClick={() => onOpenStandings?.(standingsLeague)}
-          title="查看联赛积分榜"
-          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-line-control bg-surface-card px-2.5 text-xs font-medium text-text-secondary shadow-card transition-colors hover:border-line-control hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
+          onClick={() => standingsLeague && onOpenStandings?.(standingsLeague)}
+          disabled={!standingsLeague}
+          title={standingsLeague ? '查看联赛积分榜' : '当前筛选联赛暂无积分榜'}
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-line-control bg-surface-card px-2.5 text-xs font-medium text-text-secondary shadow-card transition-colors hover:border-line-control hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface-card disabled:hover:text-text-secondary cursor-pointer"
         >
           <IconStandings size={13} />
           <span>积分榜</span>
@@ -277,10 +291,11 @@ export default function ScheduleView({
         </div>
 
         <button
+          ref={filterBtnRef}
           type="button"
           onClick={() => setFilterOpen(v => !v)}
           aria-expanded={filterOpen}
-          aria-label="打开赛程筛选面板"
+          aria-label={filterOpen ? '关闭赛程筛选面板' : '打开赛程筛选面板'}
           className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-2xs font-medium transition-all focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
             filterOpen || activeFilterCount > 0
               ? 'border-accent/50 bg-surface-accent text-accent shadow-card'
@@ -376,6 +391,13 @@ export default function ScheduleView({
           <div
             role="region"
             aria-label="赛程筛选面板"
+            onKeyDown={e => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                closeFilter();
+              }
+            }}
             className="absolute inset-0 z-20 flex flex-col justify-between overflow-y-auto rounded-xl border border-line-control bg-surface-panel/95 p-3.5 shadow-pop backdrop-blur-xl"
           >
             <div className="space-y-3.5">
@@ -386,8 +408,9 @@ export default function ScheduleView({
                   联赛筛选
                 </SectionLabel>
                 <button
+                  ref={filterCloseRef}
                   type="button"
-                  onClick={() => setFilterOpen(false)}
+                  onClick={closeFilter}
                   aria-label="关闭筛选"
                   className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
                 >
@@ -416,18 +439,24 @@ export default function ScheduleView({
               </div>
 
               <div className="space-y-2.5 border-t border-line-hairline pt-3">
-                <Switch
-                  checked={filters.onlyFollowed}
+                <SwitchField
+                  on={filters.onlyFollowed}
                   onChange={v => set({ onlyFollowed: v })}
                   label="只看关注球队"
-                  desc={prefs.followedTeams.length === 0 ? '尚未在设置中添加关注球队' : `仅展示已关注的 ${prefs.followedTeams.length} 支球队场次`}
-                  disabled={prefs.followedTeams.length === 0}
+                  desc={
+                    prefs.followedTeams.length === 0
+                      ? filters.onlyFollowed
+                        ? '尚未设置关注球队；关闭此筛选后显示全部场次'
+                        : '尚未在设置中添加关注球队'
+                      : `仅展示已关注的 ${prefs.followedTeams.length} 支球队场次`
+                  }
+                  disabled={prefs.followedTeams.length === 0 && !filters.onlyFollowed}
                 />
-                <Switch
-                  checked={prefs.spoilerFree}
+                <SwitchField
+                  on={prefs.spoilerFree}
                   onChange={v => onPrefsChange({ ...prefs, spoilerFree: v })}
                   label="防剧透模式"
-                  desc="已完赛场次默认隐藏比分，点击揭晓后显示"
+                  desc="已完赛场次默认隐藏比分，点击揭晓"
                 />
               </div>
             </div>
@@ -439,7 +468,7 @@ export default function ScheduleView({
               >
                 重置筛选
               </Button>
-              <Button variant="primary" onClick={() => setFilterOpen(false)}>
+              <Button variant="primary" onClick={closeFilter}>
                 完成
               </Button>
             </div>
@@ -474,7 +503,7 @@ export default function ScheduleView({
               }
             />
           ) : (
-            <div className="scrollbar-thin h-full overflow-y-auto pr-1">
+            <div key={`${selDate}-${filterKey}`} className="scrollbar-thin h-full overflow-y-auto pr-1">
               {dayGroups.groups.map(g => (
                 <div key={g.code || '__rest__'} className="mb-2">
                   {g.code && (
@@ -489,7 +518,7 @@ export default function ScheduleView({
                     </div>
                   )}
                   {g.list.map(m => {
-                    const { ev } = evalOne(m, prefs);
+                    const { ev, index } = evalOne(m, prefs);
                     return (
                       <div className="pb-1" key={m.id}>
                         <MatchRow
@@ -503,6 +532,7 @@ export default function ScheduleView({
                           onReveal={onReveal}
                           rivalry={ev.rivalry}
                           followedTeams={prefs.followedTeams}
+                          index={index}
                         />
                       </div>
                     );
@@ -527,7 +557,7 @@ export default function ScheduleView({
             }
           />
         ) : (
-          <VList data={rows} style={{ height: '100%' }} className="scrollbar-thin">
+          <VList key={`all-${filterKey}`} data={rows} style={{ height: '100%' }} className="scrollbar-thin">
             {row => {
               if (row.type === 'date') {
                 return (
@@ -544,7 +574,7 @@ export default function ScheduleView({
               }
 
               const m = row.m;
-              const { ev } = evalOne(m, prefs);
+              const { ev, index } = evalOne(m, prefs);
               return (
                 <div className="pb-1">
                   <MatchRow
@@ -558,6 +588,7 @@ export default function ScheduleView({
                     onReveal={onReveal}
                     rivalry={ev.rivalry}
                     followedTeams={prefs.followedTeams}
+                    index={index}
                   />
                 </div>
               );

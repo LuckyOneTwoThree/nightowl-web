@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getFixtures, FOLLOWABLE_LEAGUES, LEAGUE_NAMES, leagueColor } from '../data/index.js';
 import { defaultPrefs } from '../core/prefs.js';
 import { summarizeSyncResponse } from '../core/sync-outcome.js';
-import { BrandLogo, Button, Chip, Fieldset, Hint, Meta, Segmented, Switch, TogglePill } from './atoms.jsx';
-import { IconClose, IconReset, IconSun, IconTonight } from './icons.jsx';
+import { BrandLogo, Button, Chip, Fieldset, Hint, Meta, Switch, TogglePill } from './atoms.jsx';
+import { IconClose, IconReset } from './icons.jsx';
 import TeamPicker from './TeamPicker.jsx';
 
 /**
@@ -28,8 +28,6 @@ export default function SettingsDrawer({
   open,
   prefs,
   onPrefsChange,
-  theme = 'dark',
-  onThemeChange,
   onClose,
   onRerunOnboarding,
   onReplaySplash,
@@ -40,6 +38,12 @@ export default function SettingsDrawer({
   const leagueCount = prefs.followedLeagues.length;
   const bonusActive = leagueCount > 0 && leagueCount < 6;
   const closeBtnRef = useRef(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  // 抽屉关闭后不保留二次确认态，避免下次打开时一直停在「确认恢复？」。
+  useEffect(() => {
+    if (!open) setConfirmReset(false);
+  }, [open]);
 
   // 抽屉打开时把焦点移进对话框：背景已 inert，若焦点留在原按钮上，
   // 键盘用户会直接失去可见焦点。
@@ -202,22 +206,6 @@ export default function SettingsDrawer({
         </div>
 
         <div className="scrollbar-thin min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
-          {/* 界面主题（暗夜转播台 / 日间演播室） */}
-          <Fieldset
-            title="界面主题"
-            hint="暗夜转播台适合深夜关灯看球；日间演播室适合白天查赛程、看积分榜与复盘。播放器舞台始终保持深色高对比度。"
-          >
-            <Segmented
-              ariaLabel="选择界面主题"
-              value={theme}
-              onChange={v => onThemeChange?.(v)}
-              items={[
-                { id: 'dark', label: '暗夜转播台', icon: <IconTonight size={12} /> },
-                { id: 'light', label: '日间演播室', icon: <IconSun size={12} /> }
-              ]}
-            />
-          </Fieldset>
-
           {/* 关注球队 */}
           <Fieldset
             title="关注球队"
@@ -409,28 +397,53 @@ export default function SettingsDrawer({
         {/* 底部 */}
         <div className="flex items-center justify-between border-t border-line-hairline px-5 py-3">
           <div className="flex min-w-0 items-center gap-2 text-2xs text-text-faint">
-            <button
-              type="button"
-              onClick={() => onPrefsChange(defaultPrefs())}
-              className="inline-flex items-center gap-1 transition-colors hover:text-text-secondary"
-            >
-              <IconReset size={11} />
-              恢复默认
-            </button>
-            {onRerunOnboarding && (
-              <>
-                <span aria-hidden="true">·</span>
-                <button type="button" onClick={onRerunOnboarding} className="transition-colors hover:text-text-secondary">
-                  重新引导
+            {confirmReset ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="text-warn">恢复默认？</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onPrefsChange(defaultPrefs());
+                    setConfirmReset(false);
+                  }}
+                  className="font-medium text-warn underline underline-offset-2 transition-colors hover:text-warn/80"
+                >
+                  确认
                 </button>
-              </>
-            )}
-            {onReplaySplash && (
-              <>
-                <span aria-hidden="true">·</span>
-                <button type="button" onClick={onReplaySplash} className="transition-colors hover:text-text-secondary">
-                  开屏动画
+                <button
+                  type="button"
+                  onClick={() => setConfirmReset(false)}
+                  className="transition-colors hover:text-text-secondary"
+                >
+                  取消
                 </button>
+              </span>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setConfirmReset(true)}
+                  className="inline-flex items-center gap-1 transition-colors hover:text-text-secondary"
+                >
+                  <IconReset size={11} />
+                  恢复默认
+                </button>
+                {onRerunOnboarding && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <button type="button" onClick={onRerunOnboarding} className="transition-colors hover:text-text-secondary">
+                      重新引导
+                    </button>
+                  </>
+                )}
+                {onReplaySplash && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <button type="button" onClick={onReplaySplash} className="transition-colors hover:text-text-secondary">
+                      开屏动画
+                    </button>
+                  </>
+                )}
               </>
             )}
           </div>

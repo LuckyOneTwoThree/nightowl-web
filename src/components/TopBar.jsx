@@ -206,7 +206,7 @@ export default function TopBar({
         <button
           type="button"
           onClick={onOpenPalette}
-          title="搜索球队、比赛或功能（Ctrl+K）"
+          title={`搜索球队、比赛或功能（${isMacDesktop ? '⌘K' : 'Ctrl+K'}）`}
           aria-label="搜索"
           className="inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-line-hairline bg-surface-card px-2.5 text-xs text-text-secondary transition-colors hover:border-line-control hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
         >

@@ -90,7 +90,9 @@ export default function IntelPanel({
   return (
     <section
       id="intel-panel"
-      className="broadcast-sheen glass-lift scroll-mt-4 animate-reveal-up overflow-hidden rounded-2xl border border-line-hairline bg-surface-panel/75 shadow-card backdrop-blur-xl motion-reduce:animate-none"
+      tabIndex={-1}
+      aria-label="赛前情报"
+      className="broadcast-sheen glass-lift scroll-mt-4 animate-reveal-up overflow-hidden rounded-2xl border border-line-hairline bg-surface-panel/75 shadow-card backdrop-blur-xl focus:outline-none motion-reduce:animate-none"
     >
       {/* 面板头：只放视图切换，不放对阵信息 */}
       <div className="flex items-center justify-between gap-3 border-b border-line-hairline px-4 py-3">

@@ -7,6 +7,7 @@ import HighlightsPanel from './HighlightsPanel.jsx';
 import LiveMatchPanel from './LiveMatchPanel.jsx';
 import MatchCanvas from './MatchCanvas.jsx';
 import RecapTimeline from './RecapTimeline.jsx';
+import { locateSection } from './locate.js';
 import { sourceUrlFor } from '../core/watch-sources.js';
 import { eventKey, shouldNotifyEvent } from '../core/live-events.js';
 import { liveEventNotification, fullTimeNotification } from '../core/notifications.js';
@@ -787,17 +788,16 @@ export default function PlayerStage({
     fetchLines({ reset: false, autoPlay: true });
   };
 
-  /** 平滑定位到页内区块；尊重系统减弱动效设置 */
-  const scrollToId = id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
-  };
-
   /** 协同模式滚到右栏线路，剧场模式滚到视频下方的紧凑线路条 */
   const showLines = () => {
-    scrollToId(document.getElementById('match-lines') ? 'match-lines' : 'match-lines-theater');
+    locateSection(document.getElementById('match-lines') ? 'match-lines' : 'match-lines-theater', {
+      focus: true
+    });
+  };
+
+  /** 「情报」同样只是页内定位；高亮与焦点是目标已在视口内时的唯一反馈 */
+  const showIntel = () => {
+    locateSection('intel-panel', { focus: true });
   };
 
   if (!match) {
@@ -888,10 +888,10 @@ export default function PlayerStage({
           onReveal={() => onReveal?.(match.id)}
           onPlay={playFirstLine}
           onRefreshLines={() => fetchLines({ reset: false, autoPlay: true })}
-          onScrollToIntel={() => scrollToId('intel-panel')}
+          onScrollToIntel={showIntel}
           onShowLines={showLines}
-          onScrollToRecap={() => scrollToId('match-recap')}
-          onScrollToHighlights={() => scrollToId('match-highlights')}
+          onScrollToRecap={() => locateSection('match-recap', { focus: true })}
+          onScrollToHighlights={() => locateSection('match-highlights', { focus: true })}
         />
       )}
 
@@ -966,7 +966,12 @@ export default function PlayerStage({
 
       {!finished && (
         <>
-          <div id="match-lines" className="flex scroll-mt-4 items-center justify-between gap-2 shrink-0">
+          <div
+            id="match-lines"
+            tabIndex={-1}
+            aria-label="直播线路"
+            className="flex scroll-mt-4 items-center justify-between gap-2 shrink-0 focus:outline-none"
+          >
             <span className="inline-flex items-center gap-2">
               <IconLive className={live ? 'text-live' : 'text-text-faint'} />
               <span className="text-xs font-medium text-text-primary">直播线路</span>
@@ -999,8 +1004,11 @@ export default function PlayerStage({
           </div>
 
           {lines.length > 0 ? (
-            // 1120 宽度下用两列压缩高度；xl 协同模式再回到单列
-            <div className="scrollbar-thin -mr-1 mt-2.5 grid min-h-[48px] max-h-[220px] grid-cols-1 content-start gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2 xl:min-h-[56px] xl:grid-cols-1">
+            // 1120 宽度下用两列压缩高度；xl 协同模式再回到单列。
+            // 只有一条线路时不要切成两列 —— 否则单按钮只占半行，右半边整块留白。
+            <div className={`scrollbar-thin -mr-1 mt-2.5 grid min-h-[48px] max-h-[220px] content-start gap-1.5 overflow-y-auto pr-1 ${
+              lines.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'
+            } xl:min-h-[56px] xl:grid-cols-1`}>
               {lines.map(l => (
                 <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={manualSelectLine} />
               ))}
@@ -1027,11 +1035,11 @@ export default function PlayerStage({
         </div>
       )}
 
-      <div id="match-recap" className="shrink-0 scroll-mt-4">
+      <div id="match-recap" tabIndex={-1} aria-label="赛后回顾" className="shrink-0 scroll-mt-4 focus:outline-none">
         <RecapTimeline match={match} spoilerFree={spoilerFree} revealed={revealed} />
       </div>
 
-      <div id="match-highlights" className="shrink-0 scroll-mt-4">
+      <div id="match-highlights" tabIndex={-1} aria-label="官方集锦" className="shrink-0 scroll-mt-4 focus:outline-none">
         <HighlightsPanel
           match={match}
           sources={sources}
@@ -1111,7 +1119,9 @@ export default function PlayerStage({
           {!theaterLinesExpanded ? (
             <div
               id="match-lines-theater"
-              className="flex w-full scroll-mt-4 items-center justify-between gap-2.5 rounded-xl border border-line-hairline bg-surface-card px-3 py-2 shadow-card"
+              tabIndex={-1}
+              aria-label="直播线路"
+              className="flex w-full scroll-mt-4 items-center justify-between gap-2.5 rounded-xl border border-line-hairline bg-surface-card px-3 py-2 shadow-card focus:outline-none"
             >
               <div className="no-scrollbar flex min-w-0 items-center gap-1.5 overflow-x-auto py-0.5">
                 <span className="mr-1 inline-flex shrink-0 items-center gap-1.5">
@@ -1177,7 +1187,9 @@ export default function PlayerStage({
           ) : (
             <div
               id="match-lines-theater"
-              className="w-full scroll-mt-4 rounded-xl border border-line-hairline bg-surface-card p-3 shadow-card"
+              tabIndex={-1}
+              aria-label="全部线路"
+              className="w-full scroll-mt-4 rounded-xl border border-line-hairline bg-surface-card p-3 shadow-card focus:outline-none"
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-2">

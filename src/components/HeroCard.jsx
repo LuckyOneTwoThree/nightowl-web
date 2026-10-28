@@ -2,7 +2,8 @@ import { hm, zhDate, weekdayOf, datePart, liveMinute, humanCountdownShort } from
 import { teamName, leagueName, teamColor } from '../data/index.js';
 import { ts, sleepTier, countdown as engineCountdown } from '../core/engine.js';
 import { Button, Chip, Crest, Hint, LiveDot, Meta, SleepBadge, Stars } from './atoms.jsx';
-import { IconPlay, IconWarn } from './icons.jsx';
+import { IconCalendar, IconInfo, IconPlay, IconSignal, IconWarn } from './icons.jsx';
+import { locateSection } from './locate.js';
 
 /**
  * 三档措辞。指数 < 5 时不吹不硬推 —— 这是产品纪律，不是样式分支。
@@ -52,10 +53,19 @@ export default function HeroCard({
 
   const live = state === 'live';
   const minute = live ? liveMinute(ts(m.t), now) : 0;
+  const finished = state === 'finished' || state === 'ended_pending';
   const tierInfo = sleepTier(m.t);
   const tierCost = tierInfo.cost;
   const homeColor = teamColor(m.h);
   const awayColor = teamColor(m.a);
+
+  // 已选中时按钮不能继续只做「再选中一次」：那会让首屏主行动点了毫无变化。
+  // 改为直达右侧对应区块（滚动 + 高亮 + 焦点），按钮文案随状态变化。
+  const activeAction = live
+    ? { label: '查看直播线路', target: 'match-lines', icon: <IconSignal /> }
+    : finished
+      ? { label: '查看赛后回顾', target: 'match-recap', icon: <IconCalendar /> }
+      : { label: '查看赛前情报', target: 'intel-panel', icon: <IconInfo /> };
 
   // 倒计时：仅未开赛时展示，秒级由父层 30s tick 足够（Hero 不需要秒跳）
   let countdownLabel = null;
@@ -127,11 +137,11 @@ export default function HeroCard({
         <Button
           variant="ghost"
           size="md"
-          icon={<IconPlay />}
-          onClick={() => onWatch(m.id)}
+          icon={active ? activeAction.icon : <IconPlay />}
+          onClick={() => (active ? locateSection(activeAction.target, { focus: true }) : onWatch(m.id))}
           className="relative mt-2 w-full"
         >
-          {copy.cta}
+          {active ? activeAction.label : copy.cta}
         </Button>
       </article>
     );
@@ -271,11 +281,11 @@ export default function HeroCard({
         <Button
           variant={copy.ctaVariant}
           size="md"
-          icon={<IconPlay />}
-          onClick={() => onWatch(m.id)}
+          icon={active ? activeAction.icon : <IconPlay />}
+          onClick={() => (active ? locateSection(activeAction.target, { focus: true }) : onWatch(m.id))}
           className={`w-full ${copy.ctaVariant === 'primary' ? 'shadow-pop' : ''}`}
         >
-          {live ? '进入直播间' : active ? `${copy.cta} · 聚焦本场` : copy.cta}
+          {active ? activeAction.label : live ? '进入直播间' : copy.cta}
         </Button>
       </div>
     </article>

@@ -28,7 +28,7 @@ import StandingsModal from './components/StandingsModal.jsx';
 import PlayerStage from './components/PlayerStage.jsx';
 import NextUpRail from './components/NextUpRail.jsx';
 import SettingsDrawer from './components/SettingsDrawer.jsx';
-import Onboarding, { shouldShowOnboarding } from './components/Onboarding.jsx';
+import Onboarding, { shouldShowOnboarding, markOnboardingDone } from './components/Onboarding.jsx';
 import SplashScreen from './components/SplashScreen.jsx';
 import UpdateModal from './components/UpdateModal.jsx';
 import { IconClose } from './components/icons.jsx';
@@ -50,6 +50,21 @@ function buildMatchMap() {
 }
 
 const VALID_VIEWS = ['tonight', 'week', 'schedule'];
+
+/** 浮层打开前的焦点落点：关闭后若原元素仍可聚焦就归还，避免键盘用户被丢到 body。 */
+function rememberFocus(ref) {
+  ref.current = typeof document !== 'undefined' ? document.activeElement : null;
+}
+function restoreFocus(ref) {
+  const el = ref.current;
+  ref.current = null;
+  if (!el?.isConnected || typeof window === 'undefined') return;
+  // 状态更新后 React 才移除背景的 inert，必须在下一帧再判断可聚焦性。
+  window.requestAnimationFrame(() => {
+    if (!el.isConnected || el.closest?.('[inert]')) return;
+    el.focus?.();
+  });
+}
 
 /** 读取 URL 深链（?view=week&match=PL-12-ARS-MCI），使三个视图可直接分享/刷新定位 */
 function initialFromUrl() {
@@ -84,35 +99,6 @@ export default function App() {
 
   // ---- 偏好（本地存储）----
   const [prefs, setPrefsState] = useState(() => loadPrefs());
-  const [theme, setThemeState] = useState(() => {
-    try {
-      return localStorage.getItem('nightowl:theme') === 'light' ? 'light' : 'dark';
-    } catch {
-      return 'dark';
-    }
-  });
-
-  const setTheme = useCallback(nextTheme => {
-    const resolved = nextTheme === 'light' ? 'light' : 'dark';
-    setThemeState(resolved);
-    try {
-      localStorage.setItem('nightowl:theme', resolved);
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const root = document.documentElement;
-    if (theme === 'light') {
-      root.classList.add('light');
-      root.classList.remove('dark');
-      root.setAttribute('data-theme', 'light');
-    } else {
-      root.classList.add('dark');
-      root.classList.remove('light');
-      root.setAttribute('data-theme', 'dark');
-    }
-  }, [theme, prefs]);
 
   const setPrefs = useCallback(next => {
     setPrefsState(next);
@@ -133,6 +119,10 @@ export default function App() {
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const settingsReturnRef = useRef(null);
+  const paletteReturnRef = useRef(null);
+  const standingsReturnRef = useRef(null);
+  const updateReturnRef = useRef(null);
   const [revealed, setRevealed] = useState(() => new Set());
   const [filters, setFilters] = useState(() => defaultScheduleFilters());
   // 完整积分榜是参考视图：{ league, matchId }；matchId 为空表示从赛程入口全局查看
@@ -140,6 +130,12 @@ export default function App() {
 
   // 首次引导：未完成标记且未设主队时展示（跳过或完成都会写入标记，不再骚扰）
   const [onboardingOpen, setOnboardingOpen] = useState(() => shouldShowOnboarding(prefs));
+  const closeOnboarding = useCallback(() => {
+    // Esc 与点击关闭也必须落标记，否则下次启动会再次弹出；
+    // 跳过/完成按钮自己也会写一次，重复写入是幂等的。
+    markOnboardingDone();
+    setOnboardingOpen(false);
+  }, []);
   const rerunOnboarding = () => {
     setSettingsOpen(false);
     setOnboardingOpen(true);
@@ -168,6 +164,33 @@ export default function App() {
     try {
       sessionStorage.setItem('nightowl:update_toast_dismissed', '1');
     } catch {}
+  }, []);
+
+  /* 浮层开关统一收口：记录打开前的焦点，关闭时归还。
+     此前 Esc 关闭设置/积分榜/命令面板后焦点直接落到 body，键盘用户会失去上下文。 */
+  const openSettings = useCallback(() => {
+    rememberFocus(settingsReturnRef);
+    setSettingsOpen(true);
+  }, []);
+  const closeSettings = useCallback(() => {
+    setSettingsOpen(false);
+    restoreFocus(settingsReturnRef);
+  }, []);
+  const openPalette = useCallback(() => {
+    rememberFocus(paletteReturnRef);
+    setPaletteOpen(true);
+  }, []);
+  const closePalette = useCallback(() => {
+    setPaletteOpen(false);
+    restoreFocus(paletteReturnRef);
+  }, []);
+  const openUpdateModal = useCallback(() => {
+    rememberFocus(updateReturnRef);
+    setUpdateModalOpen(true);
+  }, []);
+  const closeUpdateModal = useCallback(() => {
+    setUpdateModalOpen(false);
+    restoreFocus(updateReturnRef);
   }, []);
 
   useEffect(() => {
@@ -268,6 +291,10 @@ export default function App() {
       localStorage.setItem('nightowl:splash_shown', '1');
     } catch {}
   }, []);
+
+  // 首次启动时开屏在最上层；引导必须先等开屏退场再挂载。
+  // 否则 TeamPicker 的 autoFocus 发生在被开屏遮住的 DOM 里，开屏一关焦点落到 body。
+  const onboardingVisible = onboardingOpen && !splashOpen;
 
   const replaySplash = useCallback(() => {
     setSettingsOpen(false);
@@ -593,9 +620,13 @@ export default function App() {
   const select = useCallback(id => setActiveMatchId(id), []);
 
   const openStandings = useCallback((league, matchId = null) => {
+    rememberFocus(standingsReturnRef);
     setStandingsState({ league, matchId });
   }, []);
-  const closeStandings = useCallback(() => setStandingsState(null), []);
+  const closeStandings = useCallback(() => {
+    setStandingsState(null);
+    restoreFocus(standingsReturnRef);
+  }, []);
   const openStandingsForActive = useCallback(() => {
     const league = activeMatch && STANDINGS_LEAGUES.includes(activeMatch.l) ? activeMatch.l : 'PL';
     openStandings(league, league === activeMatch?.l ? activeMatch.id : null);
@@ -621,15 +652,15 @@ export default function App() {
       if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'k') return;
       e.preventDefault();
       if (paletteOpen) {
-        setPaletteOpen(false);
+        closePalette();
         return;
       }
       if (settingsOpen || onboardingOpen || updateModalOpen || splashOpen || standingsState) return;
-      setPaletteOpen(true);
+      openPalette();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [paletteOpen, settingsOpen, onboardingOpen, updateModalOpen, splashOpen, standingsState]);
+  }, [paletteOpen, settingsOpen, onboardingOpen, updateModalOpen, splashOpen, standingsState, openPalette, closePalette]);
 
   const runPaletteItem = useCallback(item => {
     const action = item?.action;
@@ -663,7 +694,7 @@ export default function App() {
   // 任一全屏浮层打开时，背景内容必须同时退出键盘焦点与点击（inert）。
   // 只靠遮罩挡鼠标，Tab 仍会跑进后面的列表，这是真实的无障碍缺陷。
   const overlayOpen =
-    settingsOpen || onboardingOpen || updateModalOpen || splashOpen || paletteOpen || !!standingsState;
+    settingsOpen || onboardingVisible || updateModalOpen || splashOpen || paletteOpen || !!standingsState;
 
   /**
    * Escape 浮层栈：一次 Esc 只关最上层浮层。
@@ -675,16 +706,16 @@ export default function App() {
    */
   const overlayCloseStack = useMemo(() => {
     const stack = [];
-    if (settingsOpen) stack.push(() => setSettingsOpen(false));
-    if (onboardingOpen) stack.push(() => setOnboardingOpen(false));
-    if (updateModalOpen) stack.push(() => setUpdateModalOpen(false));
+    if (settingsOpen) stack.push(closeSettings);
+    if (onboardingVisible) stack.push(closeOnboarding);
+    if (updateModalOpen) stack.push(closeUpdateModal);
     if (standingsState) stack.push(closeStandings);
-    if (paletteOpen) stack.push(() => setPaletteOpen(false));
+    if (paletteOpen) stack.push(closePalette);
     // 开屏永远在最顶层（z 最高），也入栈：它自带 Esc 跳过键，与栈派发对同一动作
     // 重复触发是无害幂等；不入栈则首次启动「开屏 + 引导」同屏时一次 Esc 会连关两层
     if (splashOpen) stack.push(handleCloseSplash);
     return stack;
-  }, [settingsOpen, onboardingOpen, updateModalOpen, standingsState, paletteOpen, splashOpen, closeStandings, handleCloseSplash]);
+  }, [settingsOpen, onboardingVisible, updateModalOpen, standingsState, paletteOpen, splashOpen, closeStandings, closeSettings, closeUpdateModal, closePalette, closeOnboarding, handleCloseSplash]);
 
   useEffect(() => {
     if (overlayCloseStack.length === 0) return undefined;
@@ -706,12 +737,12 @@ export default function App() {
           liveCount={liveCount}
           prefs={prefs}
           dataHealth={dataHealth}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onOpenPalette={() => setPaletteOpen(true)}
+          onOpenSettings={openSettings}
+          onOpenPalette={openPalette}
           updateAvailable={updateAvailable}
           updateVersion={updateState.info?.version}
           onOpenUpdate={() => {
-            setUpdateModalOpen(true);
+            openUpdateModal();
             if (updateState.status === 'idle') handleCheckUpdate();
           }}
           onOpenStandings={openStandingsForActive}
@@ -833,36 +864,39 @@ export default function App() {
       {paletteOpen && (
         <CommandPalette
           items={paletteItems}
-          onClose={() => setPaletteOpen(false)}
+          onClose={closePalette}
           onRun={runPaletteItem}
         />
       )}
 
-      <SettingsDrawer
-        open={settingsOpen}
-        prefs={prefs}
-        onPrefsChange={setPrefs}
-        theme={theme}
-        onThemeChange={setTheme}
-        onClose={() => setSettingsOpen(false)}
-        onRerunOnboarding={rerunOnboarding}
-        onReplaySplash={replaySplash}
-        onDataRefresh={refreshData}
-        updateState={updateState}
-        onOpenUpdateModal={() => {
-          setUpdateModalOpen(true);
-          if (updateState.status === 'idle') {
-            handleCheckUpdate();
-          }
-        }}
-      />
+      {/* 更新的 z 层高于设置抽屉；抽屉开着时再打开更新弹窗，必须把下层移出焦点 */}
+      <div inert={updateModalOpen || undefined}>
+        <SettingsDrawer
+          open={settingsOpen}
+          prefs={prefs}
+          onPrefsChange={setPrefs}
+          onClose={closeSettings}
+          onRerunOnboarding={rerunOnboarding}
+          onReplaySplash={replaySplash}
+          onDataRefresh={refreshData}
+          updateState={updateState}
+          onOpenUpdateModal={() => {
+            openUpdateModal();
+            if (updateState.status === 'idle') {
+              handleCheckUpdate();
+            }
+          }}
+        />
+      </div>
 
-      <Onboarding
-        open={onboardingOpen}
-        prefs={prefs}
-        onPrefsChange={setPrefs}
-        onClose={() => setOnboardingOpen(false)}
-      />
+      <div inert={updateModalOpen || undefined}>
+        <Onboarding
+          open={onboardingVisible}
+          prefs={prefs}
+          onPrefsChange={setPrefs}
+          onClose={closeOnboarding}
+        />
+      </div>
 
       {splashOpen && <SplashScreen onClose={handleCloseSplash} />}
 
@@ -879,7 +913,7 @@ export default function App() {
 
       <UpdateModal
         open={updateModalOpen}
-        onClose={() => setUpdateModalOpen(false)}
+        onClose={closeUpdateModal}
         currentVersion={__APP_VERSION__}
         updateState={updateState}
         onCheck={handleCheckUpdate}
@@ -905,7 +939,7 @@ export default function App() {
           <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
-              onClick={() => setUpdateModalOpen(true)}
+              onClick={openUpdateModal}
               className="rounded-lg bg-accent px-2.5 py-1 text-2xs font-semibold text-accent-ink transition-transform hover:brightness-110 active:scale-95 cursor-pointer"
             >
               查看

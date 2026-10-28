@@ -36,6 +36,8 @@ export default function CommandPalette({ items = [], onClose, onRun }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef(null);
   const listRef = useRef(null);
+  const shortcutLabel =
+    typeof window !== 'undefined' && window.desktop?.platform === 'darwin' ? '⌘K' : 'Ctrl K';
 
   const results = useMemo(() => searchPalette(items, query, 12), [items, query]);
 
@@ -160,7 +162,7 @@ export default function CommandPalette({ items = [], onClose, onRun }) {
 
         <div className="flex items-center justify-between border-t border-line-hairline px-4 py-2 text-2xs text-text-faint">
           <span>↑↓ 选择 · Enter 打开 · Esc 关闭</span>
-          <span className="font-num">Ctrl K</span>
+          <span className="font-num">{shortcutLabel}</span>
         </div>
       </section>
     </div>

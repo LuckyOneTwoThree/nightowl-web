@@ -1,8 +1,8 @@
 /**
- * Design token 对比度门禁（WCAG AA 4.5:1 · Dark + Light 双主题全量校验）
+ * Design token 对比度门禁（WCAG AA 4.5:1 · 暗夜单主题全量校验）
  *
- * 为什么需要：11px 元信息、S0~S4 徽章与语义胶囊在暗色/浅色两套主题下
- * 都必须通过 WCAG AA (4.5:1)。每次改 token 时对 :root(.dark) 与 .light 各跑 26 项（共 52 项）。
+ * 为什么需要：11px 元信息、S0~S4 徽章与语义胶囊在暗色主题下
+ * 必须通过 WCAG AA (4.5:1)。每次改 token 时对 :root(.dark) 跑 26 项。
  *
  * 运行：node tools/check-contrast.mjs
  */
@@ -26,7 +26,6 @@ function extractBlockVars(selectorRegex) {
 }
 
 const darkVars = extractBlockVars(/:root,\s*\.dark\s*\{([\s\S]*?)\n\}/);
-const lightVars = extractBlockVars(/\.light\s*\{([\s\S]*?)\n\}/);
 
 function rgb(hex) {
   const h = hex.replace('#', '');
@@ -118,9 +117,8 @@ function runSuite(themeName, vars) {
   }
 }
 
-console.log('Design token 对比度门禁（Dark 26 项 + Light 26 项 = 52 项）');
+console.log('Design token 对比度门禁（Dark 26 项）');
 runSuite('Dark', darkVars);
-runSuite('Light', lightVars);
 
 console.log('');
 console.log('────────────────────────────────────────────────────');
