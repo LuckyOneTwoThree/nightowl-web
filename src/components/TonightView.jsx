@@ -42,7 +42,12 @@ export default function TonightView({
   // 按状态分区：进行中置顶（最该看）、未开赛按时间、已结束默认折叠不占屏。
   // 此前三类混在一个列表里 —— 用户分不清当前状态，刚终场还显示待录比分的
   // 场次会和真正未开赛的排在一起。
-  const groups = useMemo(() => groupTonight(slice, now), [slice, now]);
+  // Hero 已在左栏单独展示，列表不再重复同一场；手机端一直是这个口径。
+  const listSlice = useMemo(
+    () => (hero ? slice.filter(m => m.id !== hero.m.id) : slice),
+    [slice, hero]
+  );
+  const groups = useMemo(() => groupTonight(listSlice, now), [listSlice, now]);
   const [showFinished, setShowFinished] = useState(false);
   const listRef = useRef(null);
 
@@ -54,7 +59,7 @@ export default function TonightView({
   };
 
   const renderRow = m => {
-    const { ev } = evalOne(m, prefs);
+    const { ev, index } = evalOne(m, prefs);
     const st = stateOf(m, now);
     return (
       <MatchRow
@@ -70,6 +75,7 @@ export default function TonightView({
         rivalry={ev.rivalry}
         minefield={minefieldIds.has(m.id)}
         followedTeams={prefs.followedTeams}
+        index={index}
       />
     );
   };
@@ -104,7 +110,9 @@ export default function TonightView({
     </div>
   );
 
-  const total = groups.live.length + groups.upcoming.length + groups.finished.length;
+  const listed = groups.live.length + groups.upcoming.length + groups.finished.length;
+  const heroLive = !!hero && stateOf(hero.m, now) === 'live';
+  const liveCount = groups.live.length + (heroLive ? 1 : 0);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -136,25 +144,38 @@ export default function TonightView({
                 补看 {replayPicks.length}
               </button>
             )}
-            {replayPicks.length > 0 && (groups.live.length > 0 || total > 0) && (
+            {replayPicks.length > 0 && (liveCount > 0 || listed > 0) && (
               <span className="text-text-faint" aria-hidden="true">·</span>
             )}
-            {groups.live.length > 0 ? (
+            {liveCount > 0 ? (
               <span className="inline-flex items-center gap-1.5 text-2xs text-live">
                 <LiveDot />
-                {groups.live.length} 场进行中
+                {liveCount} 场进行中
               </span>
-            ) : total > 0 ? (
-              <span className="font-num text-2xs tabular-nums text-text-faint">{total} 场</span>
+            ) : listed > 0 ? (
+              <span className="font-num text-2xs tabular-nums text-text-faint">
+                {hero ? `其余 ${listed} 场` : `${listed} 场`}
+              </span>
             ) : null}
           </span>
         }
       >
         今晚赛程 · {zhDate(night)} {weekdayOf(night)}
+        <span className="text-text-faint"> · 含次日凌晨</span>
       </SectionLabel>
 
-      <div ref={listRef} className="scrollbar-thin -mr-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1">
-        {total > 0 && (
+      <div
+        ref={listRef}
+        className={`scrollbar-thin -mr-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1 ${
+          listed > 0 || replayPicks.length > 0 ? 'min-h-[96px]' : ''
+        }`}
+      >
+        {listed === 0 && hero && (
+          <p className="rounded-lg border border-line-hairline bg-surface-card/50 px-3 py-3 text-center text-2xs text-text-faint">
+            今晚只有今晚之选这一场。
+          </p>
+        )}
+        {listed > 0 && (
           <>
             {groups.live.length > 0 && (
               <>

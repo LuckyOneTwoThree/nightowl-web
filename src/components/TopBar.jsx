@@ -114,15 +114,15 @@ export default function TopBar({
       className="drag-region relative flex h-[52px] min-h-[52px] select-none items-center justify-between border-b border-line-hairline bg-surface-panel/95 px-5 backdrop-blur-xl shadow-sm"
       style={{ paddingLeft: isMacDesktop ? 80 : undefined }}
     >
-      <div className="flex items-center gap-5">
-        <div className="flex items-center gap-2.5">
+      <div className="flex min-w-0 items-center gap-5">
+        <div className="flex shrink-0 items-center gap-2.5">
           <BrandLogo size={26} rounded="md" withGlow={false} />
-          <span className="text-sm font-bold tracking-tight text-text-primary">
+          <span className="whitespace-nowrap text-sm font-bold tracking-tight text-text-primary">
             夜猫看台
           </span>
         </div>
 
-        <nav className="no-drag flex items-center gap-0.5" aria-label="视图切换" role="tablist">
+        <nav className="no-drag flex shrink-0 items-center gap-0.5" aria-label="视图切换" role="tablist">
           {VIEWS.map(it => {
             const active = it.id === view;
             return (
@@ -132,7 +132,7 @@ export default function TopBar({
                 role="tab"
                 aria-selected={active}
                 onClick={() => onViewChange(it.id)}
-                className={`relative inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-all focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none ${
+                className={`relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs transition-all focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none ${
                   active
                     ? 'bg-surface-raised/85 font-semibold text-text-primary shadow-sm'
                     : 'text-text-muted hover:bg-white/[0.04] hover:text-text-primary'
@@ -152,7 +152,7 @@ export default function TopBar({
         </nav>
       </div>
 
-      <div className="no-drag hidden items-center gap-3 lg:flex">
+      <div className="no-drag hidden shrink-0 items-center gap-3 xl:flex">
         <div className="flex items-center gap-2 rounded-full border border-line-hairline bg-surface-card/70 px-3 py-1">
           <span className="h-1.5 w-1.5 rounded-full bg-accent/80" aria-hidden="true" />
           <span className="font-num text-xs font-semibold tabular-nums text-text-primary">
@@ -171,17 +171,17 @@ export default function TopBar({
         )}
       </div>
 
-      <div className="no-drag flex items-center gap-1.5">
+      <div className="no-drag flex shrink-0 items-center gap-1.5">
         <button
           type="button"
           onClick={onOpenPalette}
           title="搜索球队、比赛或功能（Ctrl+K）"
           aria-label="搜索"
-          className="inline-flex h-7 items-center gap-1.5 rounded-md border border-line-hairline bg-surface-card/80 px-2 text-2xs text-text-muted transition-colors hover:border-line-control hover:bg-surface-raised hover:text-text-primary"
+          className="inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-line-hairline bg-surface-card/80 px-2 text-2xs text-text-muted transition-colors hover:border-line-control hover:bg-surface-raised hover:text-text-primary"
         >
           <IconSearch size={13} />
           <span className="hidden sm:inline">搜索</span>
-          <kbd className="hidden rounded border border-line-hairline bg-surface-panel px-1 py-px font-num text-2xs text-text-faint md:inline">
+          <kbd className="hidden shrink-0 rounded border border-line-hairline bg-surface-panel px-1 py-px font-num text-2xs text-text-faint md:inline">
             {isMacDesktop ? '⌘K' : 'Ctrl K'}
           </kbd>
         </button>
@@ -199,7 +199,7 @@ export default function TopBar({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs text-text-primary transition-colors hover:bg-surface-raised"
+            className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1 text-xs text-text-primary transition-colors hover:bg-surface-raised"
           >
             <Crest id={primaryTeam} size={16} />
             <span className="font-medium">{teamName(primaryTeam)}</span>
@@ -211,7 +211,7 @@ export default function TopBar({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-raised hover:text-text-primary"
+            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-raised hover:text-text-primary"
           >
             设置关注球队
           </button>
@@ -236,7 +236,7 @@ export default function TopBar({
         <button
           type="button"
           onClick={onOpenSettings}
-          className="relative inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary"
+          className="relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary"
         >
           <IconSettings />
           偏好与数据

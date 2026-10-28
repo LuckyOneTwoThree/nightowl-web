@@ -26,6 +26,7 @@ import {
 import { getFixtures } from '../src/data/index.js';
 import { compareSemver, isNewerVersion } from '../src/core/semver.js';
 import { datePart, zhDate } from '../src/core/format.js';
+import { weekDistributionAdvice } from '../src/core/narrative.js';
 
 /** 运行时数据源（与界面一致：保鲜同步后可替换） */
 const fixtures = getFixtures();
@@ -123,6 +124,11 @@ console.log('二、本周视图');
   const todayMMDD = '09-13';
   ok('★ 周度建议不指向已过去的日期', pastDates.every(d => d >= todayMMDD),
     `建议：${w.advice}`);
+  const heavyWeekAdvice = weekDistributionAdvice(
+    ['09-14', '09-15', '09-16', '09-17', '09-18'].map((date, i) => ({ date, cost: 3.5, count: i + 1 }))
+  );
+  ok('★ 重度档覆盖 5 天以上时给出取舍动作，而不是逐日复述',
+    heavyWeekAdvice.includes('主看夜'), heavyWeekAdvice);
 
   const usedRatio = w.plan.budget > 0 ? w.plan.used / w.plan.budget : 0;
   ok('占用不超预算', w.plan.used <= w.plan.budget + 1e-9, `${w.plan.used}/${w.plan.budget}`);
@@ -443,6 +449,27 @@ console.log('八、周计划时间模型（P0：精选 = 可执行计划）');
       p.zeroList.filter(z => p.best.some(b => overlap(z, b))).map(z => z.m.id).join(','));
     ok('零成本顺带计数等于实际列表长度', p.zeroCount === p.zeroList.length,
       `${p.zeroCount} vs ${p.zeroList.length}`);
+  }
+
+  // 10) 不限数量（maxPicks 缺省）也遵守时间互斥；精选按开球时间排序
+  {
+    const four = [
+      mk('N1', '2026-11-05T23:00', 'ARS', 'NFO'),
+      mk('N2', '2026-11-05T23:00', 'LIV', 'BUR'),
+      mk('N3', '2026-11-05T23:00', 'MCI', 'WOL'),
+      mk('N4', '2026-11-05T23:00', 'CHE', 'EVE')
+    ];
+    const p = E.planWeek(four, {}, [], [], [], 8.0, ['PL'], { nowTs: E.ts('2026-11-01T12:00') });
+    ok('★ maxPicks 缺省时同开球仍最多一场', p.best.length === 1, `入选 ${p.best.length} 场`);
+
+    const ordered = [
+      mk('ORD-A', '2026-11-06T23:30', 'ARS', 'NFO'),
+      mk('ORD-B', '2026-11-05T23:00', 'LIV', 'BUR')
+    ];
+    const po = planOf(ordered, ['ARS'], 8.0);
+    ok('★ 精选按开球时间升序（关注队不会把后一天排到前面）',
+      po.best.length === 2 && po.best[0].m.id === 'ORD-B' && po.best[1].m.id === 'ORD-A',
+      po.best.map(e => `${e.m.t}:${e.m.id}`).join(' → '));
   }
 }
 

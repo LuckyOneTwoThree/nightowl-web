@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, TriangleAlert } from 'lucide-react-native';
 
 import { leagueName, teamName } from '@data/index.js';
 import { computeWeek } from '@core/owl.js';
-import { nightOf, sleepTier } from '@core/engine.js';
+import { owlDay, sleepTier } from '@core/engine.js';
 import { hm, hmCost, zhDate } from '@core/format.js';
 import { animateLayout } from '@/lib/layoutAnimation';
 import { useNow } from '@/lib/useNow';
@@ -84,7 +84,7 @@ export default function PlanScreen() {
   const bestDaySet = useMemo(() => {
     const s = new Set<string>();
     for (const entry of plan.best) {
-      s.add(nightOf(entry.m.t));
+      s.add(owlDay(entry.m.t));
     }
     return s;
   }, [plan.best]);
@@ -117,7 +117,7 @@ export default function PlanScreen() {
         <View>
           <Text style={styles.title}>本周规划</Text>
           <Text style={styles.subline}>
-            {start.slice(5).replace('-', '/')} – {end.slice(5).replace('-', '/')}
+            {start.slice(5).replace('-', '/')} – {end.slice(5).replace('-', '/')} 夜
           </Text>
         </View>
         <View style={styles.weekNav}>
@@ -433,6 +433,11 @@ function PickRow({
 }) {
   const match = entry.m;
   const tier = sleepTier(match.t);
+  const night = owlDay(match.t);
+  const dateLabel =
+    night === match.t.slice(0, 10)
+      ? match.t.slice(5, 10).replace('-', '/')
+      : `${night.slice(5).replace('-', '/')} 夜`;
   const groupAlternatives = kickoffGroup
     ? kickoffGroup.entries.filter(x => x.m.id !== match.id)
     : [];
@@ -455,7 +460,7 @@ function PickRow({
       <View style={[styles.pickBar, { backgroundColor: leagueColor(match.l) }]} />
       <View style={styles.pickTime}>
         <Text style={styles.pickTimeText}>{hm(match.t)}</Text>
-        <Text style={styles.pickDate}>{match.t.slice(5, 10).replace('-', '/')}</Text>
+        <Text style={styles.pickDate}>{dateLabel}</Text>
       </View>
       <View style={styles.pickMain}>
         <View style={styles.pickTop}>
@@ -478,9 +483,15 @@ function PickRow({
           {reason}
         </Text>
         {groupAlternatives.length > 0 ? (
-          <Text style={styles.pickConflict} numberOfLines={1}>
-            同时开球 · 只能看一场 · 组内 {groupSize} 场
-          </Text>
+          <>
+            <Text style={styles.pickConflict} numberOfLines={1}>
+              同时开球 · 只能看一场 · 组内 {groupSize} 场
+            </Text>
+            <Text style={styles.pickConflictNames} numberOfLines={1}>
+              同组：{groupAlternatives.slice(0, 2).map(x => `${teamName(x.m.h)} vs ${teamName(x.m.a)}`).join('、')}
+              {groupAlternatives.length > 2 ? ' 等' : ''}
+            </Text>
+          </>
         ) : null}
       </View>
     </Pressable>
@@ -589,6 +600,7 @@ const styles = StyleSheet.create({
   pickVs: { color: colors.textFaint, fontSize: fontSize.xxs },
   pickReason: { color: colors.textFaint, fontSize: fontSize.xs },
   pickConflict: { color: colors.warn, fontSize: fontSize.xxs, fontWeight: '600' },
+  pickConflictNames: { color: colors.textFaint, fontSize: fontSize.xxs },
   zeroRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -66,6 +66,89 @@ export default function HeroCard({
     }
   }
 
+  // 弱夜不占首屏主位：保留「仍要观看」入口，但用结论卡替代大倒计时 Hero，
+  // 把纵向空间还给今晚列表（1120/1366 下列表被挤到不可用的直接原因之一）。
+  if (isWeak && !live) {
+    return (
+      <article
+        className={`no-drag card-lift relative overflow-hidden rounded-2xl bg-gradient-to-br from-white/[0.035] via-surface-card/90 to-surface-panel p-3 ring-1 transition-all ${
+          active ? 'ring-line-control' : 'ring-white/[0.06]'
+        }`}
+      >
+        <TeamAura color={homeColor} side="home" />
+        <TeamAura color={awayColor} side="away" />
+        <div className="relative flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="text-2xs font-semibold tracking-wide text-text-muted">{copy.label}</span>
+            <Stars star={ev.star} />
+            {ev.isFollowed && <Chip tone="neutral">主队</Chip>}
+          </div>
+          <div className="flex shrink-0 items-baseline gap-1">
+            <span className="text-2xs text-text-faint">夜猫指数</span>
+            <span className="font-num text-2xl font-bold leading-none tabular-nums text-text-secondary">
+              {hero.index.toFixed(1)}
+            </span>
+            <Hint title="夜猫指数说明" content={indexHint} side="bottom" align="end" />
+          </div>
+        </div>
+
+        <div className="relative mt-2.5 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+          <div className="flex min-w-0 flex-col items-center gap-1">
+            <Crest id={m.h} size={30} />
+            <span className="w-full truncate text-center text-sm font-semibold text-text-primary" title={teamName(m.h)}>
+              {teamName(m.h)}
+            </span>
+          </div>
+          <div className="flex min-w-[72px] flex-col items-center">
+            <span className="font-num text-xl font-bold leading-none tabular-nums text-text-primary">
+              {m.tbd ? '--:--' : hm(m.t)}
+            </span>
+            <span className="mt-0.5 text-2xs text-text-faint">
+              {m.tbd ? '时间待定' : countdownLabel ? `距开球 ${countdownLabel}` : '开球'}
+            </span>
+            <span className="mt-0.5 font-num text-2xs text-text-faint">VS</span>
+          </div>
+          <div className="flex min-w-0 flex-col items-center gap-1">
+            <Crest id={m.a} size={30} />
+            <span className="w-full truncate text-center text-sm font-semibold text-text-primary" title={teamName(m.a)}>
+              {teamName(m.a)}
+            </span>
+          </div>
+        </div>
+
+        <div className="relative mt-1.5 flex items-center justify-center gap-2 truncate text-2xs text-text-muted">
+          <Meta num>
+            {m.tbd ? '时间待定' : `${zhDate(datePart(m.t))} ${weekdayOf(datePart(m.t))} ${hm(m.t)}`}
+          </Meta>
+          <Meta>{leagueName(m.l)} 第 {m.r} 轮</Meta>
+        </div>
+
+        <p className="relative mt-2 border-t border-white/[0.06] pt-2 text-2xs leading-relaxed text-text-secondary">
+          今晚之选指数低于 5.0 推荐线；如果仍想看，这是今晚相对可接受的一场。
+        </p>
+
+        <div className="relative mt-2 flex items-center gap-2">
+          <SleepBadge match={m} />
+          {active && (
+            <span className="ml-auto inline-flex items-center gap-1 text-2xs text-text-muted">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent/80" aria-hidden="true" />
+              右侧展示中
+            </span>
+          )}
+        </div>
+        <Button
+          variant="ghost"
+          size="md"
+          icon={<IconPlay />}
+          onClick={() => onWatch(m.id)}
+          className="relative mt-2 w-full"
+        >
+          {copy.cta}
+        </Button>
+      </article>
+    );
+  }
+
   return (
     <article
       className={`no-drag card-lift relative overflow-hidden rounded-2xl p-4 transition-all ${

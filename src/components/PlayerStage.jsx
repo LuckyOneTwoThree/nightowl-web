@@ -287,7 +287,8 @@ export default function PlayerStage({
   revealed = false,
   onReveal,
   notifyLiveEvents = true,
-  underVideo = null
+  underVideo = null,
+  asideExtra = null
 }) {
   // 秒级刷新只存在于本组件（倒计时文本与进行中的分钟数）。
   // 若由 App 供秒级 now，每秒重渲染会波及整个视图树 —— 赛程视图会每秒
@@ -1013,6 +1014,8 @@ export default function PlayerStage({
           )}
         </>
       )}
+
+      {!finished && asideExtra && <div className="shrink-0">{asideExtra}</div>}
 
       {notices.length > 0 && (
         <div className="mt-2.5 shrink-0 space-y-1.5">

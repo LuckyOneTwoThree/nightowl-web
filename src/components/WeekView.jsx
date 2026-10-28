@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { zhDate, hmCost, hm } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { stateOf } from '../core/owl.js';
-import { nightOf, sleepTier } from '../core/engine.js';
+import { owlDay, sleepTier } from '../core/engine.js';
 import { Chip, Crest, Fieldset, Meta, SleepBadge, Stars } from './atoms.jsx';
 import { IconChevronDown, IconChevronUp, IconWarn } from './icons.jsx';
 import MatchRow from './MatchRow.jsx';
@@ -59,7 +59,7 @@ export default function WeekView({
   const bestDaySet = useMemo(() => {
     const s = new Set();
     for (const e of plan.best) {
-      s.add(nightOf(e.m.t));
+      s.add(owlDay(e.m.t));
     }
     return s;
   }, [plan.best]);
@@ -74,9 +74,20 @@ export default function WeekView({
     () => (selectedDay ? days.find(d => d.date === selectedDay) || null : null),
     [selectedDay, days]
   );
+  const weekRange = days.length
+    ? `${days[0].date.slice(5).replace('-', '/')} – ${days[days.length - 1].date.slice(5).replace('-', '/')}`
+    : '';
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden">
+      {/* 夜猫周口径：日格是「某一天入夜之后」，周一格包含周二凌晨 */}
+      <div className="flex items-center justify-between gap-2 px-0.5 text-2xs text-text-muted">
+        <span className="font-num tabular-nums">{weekRange} 夜</span>
+        <span className="truncate text-text-faint" title="周一格从周一 06:00 起，含周二凌晨；周日格含周一凌晨">
+          06:00 前归前一夜
+        </span>
+      </div>
+
       {/* ---- 睡眠预算 ---- */}
       <section className="overflow-hidden rounded-xl border border-line-hairline bg-surface-card">
         <button
@@ -180,15 +191,25 @@ export default function WeekView({
             </div>
           ) : (
             <div className="space-y-1">
-              {plan.best.map(e => (
-                <PickRow
-                  key={e.m.id}
-                  e={e}
-                  active={e.m.id === activeMatchId}
-                  kickoffGroup={kickoffGroupByMatch.get(e.m.id)}
-                  onSelect={onSelect}
-                />
-              ))}
+              {plan.best.map(e => {
+                const group = kickoffGroupByMatch.get(e.m.id);
+                return (
+                  <div key={e.m.id}>
+                    <PickRow
+                      e={e}
+                      active={e.m.id === activeMatchId}
+                      kickoffGroup={group}
+                      onSelect={onSelect}
+                    />
+                    <KickoffAlternatives
+                      group={group}
+                      selectedId={e.m.id}
+                      activeMatchId={activeMatchId}
+                      onSelect={onSelect}
+                    />
+                  </div>
+                );
+              })}
             </div>
           )}
         </Fieldset>
@@ -197,7 +218,7 @@ export default function WeekView({
         {plan.zeroCount > 0 && (
           <Fieldset
             title="零成本顺带"
-            hint="这些场次开球在睡前，睡眠成本 0 小时：不占额度，也不算精选名额。"
+            hint={`这些场次开球在睡前，睡眠成本 0 小时，不占额度，也不算精选名额；但同一时段只能选一场。可执行 ${plan.zeroCount} 场，共 ${plan.zeroPool?.length ?? plan.zeroCount} 场候选。`}
             right={
               <button
                 type="button"
@@ -205,7 +226,7 @@ export default function WeekView({
                 aria-expanded={showZero}
                 className="inline-flex items-center gap-1 text-2xs text-text-muted transition-colors hover:text-text-primary"
               >
-                {plan.zeroCount} 场
+                {plan.zeroCount} 场可执行
                 {showZero ? <IconChevronUp size={12} /> : <IconChevronDown size={12} />}
               </button>
             }
@@ -313,8 +334,9 @@ export default function WeekView({
                         title={`${zhDate(d.date)} · ${d.count} 场 · 最高 ${hmCost(d.cost)}`}
                       />
                     </div>
-                    <span className={`text-2xs ${isSelected ? 'font-semibold text-accent' : 'text-text-faint'}`}>
-                      周{WEEKDAY_SHORT[i]}
+                    <span className={`flex flex-col items-center gap-0.5 text-2xs ${isSelected ? 'font-semibold text-accent' : 'text-text-faint'}`}>
+                      <span>周{WEEKDAY_SHORT[i]}</span>
+                      <span className="font-num tabular-nums text-text-faint">{d.date.slice(5).replace('-', '/')}</span>
                     </span>
                   </button>
                 );
@@ -364,7 +386,7 @@ export default function WeekView({
         {plan.alt.length > 0 && (
           <Fieldset
             title="备选"
-            hint="落选通常是因为本周名额或预算已满，或单场睡眠成本偏高。"
+            hint="落选通常是因为本周名额或预算已满、与已选场次时间重叠，或单场睡眠成本偏高。"
             right={<Meta num>{plan.alt.length}</Meta>}
           >
             <div className="space-y-0.5">
@@ -395,6 +417,55 @@ export default function WeekView({
 }
 
 /**
+ * 同开球组的落选场次。默认收起，避免把「精选 2 场」扩成 6 行；
+ * 展开后只切换右侧预览，不改变算法精选（计划不是手动编辑列表）。
+ */
+function KickoffAlternatives({ group, selectedId, activeMatchId, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const others = (group?.entries || []).filter(e => e.m.id !== selectedId);
+  if (others.length === 0) return null;
+  return (
+    <div className="pl-3">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        title="仅切换右侧预览，不改变本周精选"
+        className="inline-flex items-center gap-1 pt-0.5 text-2xs text-text-faint transition-colors hover:text-text-secondary focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none"
+      >
+        同组其他 {others.length} 场
+        {open ? <IconChevronUp size={11} /> : <IconChevronDown size={11} />}
+      </button>
+      {open && (
+        <div className="mt-1 space-y-0.5">
+          {others.map(x => (
+            <button
+              key={x.m.id}
+              type="button"
+              onClick={() => onSelect?.(x.m.id)}
+              aria-current={x.m.id === activeMatchId ? 'true' : undefined}
+              className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors ${
+                x.m.id === activeMatchId ? 'bg-surface-raised' : 'hover:bg-surface-raised/60'
+              }`}
+            >
+              <span className="w-9 shrink-0 font-num text-2xs tabular-nums text-text-faint">
+                {x.m.t.split('T')[1]}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-2xs text-text-secondary">
+                {teamName(x.m.h)} vs {teamName(x.m.a)}
+              </span>
+              <span className="shrink-0 font-num text-2xs tabular-nums text-text-muted">
+                {x.index.toFixed(1)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * 背包入选行
  *
  * 与 MatchRow 的区别只有一件事：这里要说明**为什么入选**，
@@ -402,6 +473,11 @@ export default function WeekView({
  */
 function PickRow({ e, active, kickoffGroup, onSelect }) {
   const m = e.m;
+  const night = owlDay(m.t);
+  const crossesMidnight = night !== m.t.slice(0, 10);
+  const dateLabel = crossesMidnight
+    ? `${night.slice(5).replace('-', '/')} 夜`
+    : m.t.slice(5, 10).replace('-', '/');
   const groupAlternatives = kickoffGroup
     ? kickoffGroup.entries.filter(x => x.m.id !== m.id)
     : [];
@@ -463,22 +539,19 @@ function PickRow({ e, active, kickoffGroup, onSelect }) {
             <Stars star={e.ev.star} />
             {/* 入选理由只有一处需要解释，所以用文字而不是又一个胶囊 */}
             <span className="min-w-0 truncate text-2xs text-text-faint">{reason}</span>
-            <Meta num className="ml-auto shrink-0">
-              {m.t.slice(5, 10).replace('-', '/')} · {sleepTier(m.t).cost}h
-            </Meta>
+            <span
+              className="ml-auto shrink-0"
+              title={`开球 ${m.t.slice(5, 10).replace('-', '/')} ${m.t.split('T')[1]}${crossesMidnight ? ` · 归属 ${dateLabel}` : ''}`}
+            >
+              <Meta num>
+                {dateLabel} · {sleepTier(m.t).cost}h
+              </Meta>
+            </span>
           </div>
           {groupAlternatives.length > 0 && (
             <div className="mt-1 flex items-center gap-1 text-2xs text-warn">
               <IconWarn size={11} />
               <span className="shrink-0">同时开球 · 只能看一场</span>
-              <span
-                className="min-w-0 truncate text-text-faint"
-                title={groupAlternatives
-                  .map(x => `${teamName(x.m.h)} vs ${teamName(x.m.a)}`)
-                  .join('、')}
-              >
-                · 组内 {kickoffGroup.entries.length} 场，其余不同时看
-              </span>
             </div>
           )}
         </div>

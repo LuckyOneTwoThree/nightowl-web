@@ -720,6 +720,9 @@ export default function App() {
                 revealed={activeMatch ? revealed.has(activeMatch.id) : false}
                 onReveal={reveal}
                 notifyLiveEvents={prefs.notifyLiveEvents}
+                asideExtra={
+                  <SameNightPicks match={activeMatch} prefs={prefs} onSelect={select} compact />
+                }
                 underVideo={
                   <IntelPanel
                     match={activeMatch}
@@ -733,10 +736,8 @@ export default function App() {
                   />
                 }
               />
-              <div className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-2">
-                <UpcomingFixtures match={activeMatch} prefs={prefs} onSelect={select} />
-                <SameNightPicks match={activeMatch} prefs={prefs} onSelect={select} />
-              </div>
+              {/* 同夜替代已上移到右栏；这里保留当前场次双方的后续赛程 */}
+              <UpcomingFixtures match={activeMatch} prefs={prefs} onSelect={select} />
             </div>
           </section>
         </main>

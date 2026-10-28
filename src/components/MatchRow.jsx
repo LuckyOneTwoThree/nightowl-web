@@ -43,7 +43,8 @@ export default function MatchRow({
   dateLabel = null,
   badge = null,
   showSleep = true,
-  followedTeams = []
+  followedTeams = [],
+  index = null
 }) {
   const live = state === 'live';
   const minute = live ? liveMinute(ts(m.t), now) : 0;
@@ -120,6 +121,14 @@ export default function MatchRow({
                 <span className="inline-flex items-center gap-1.5">
                   <LiveDot />
                   <span className="font-num text-xs font-semibold tabular-nums text-live">{minute}′</span>
+                </span>
+              ) : state === 'sched' && index != null ? (
+                <span
+                  className="font-num text-xs font-semibold tabular-nums text-text-secondary"
+                  title="夜猫指数"
+                  aria-label={`夜猫指数 ${index.toFixed(1)}`}
+                >
+                  {index.toFixed(1)}
                 </span>
               ) : (
                 <ScoreText

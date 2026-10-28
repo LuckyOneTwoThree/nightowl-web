@@ -355,7 +355,7 @@ function IdentitySection({ match, identity }) {
 function AttributionSection({ ev, tier, index, storyB, followedB, leagueB }) {
   const tierStyle = TIER_MAP[tier.label] || TIER_MAP.S0;
   const rows = [
-    ['看点星级', `${ev.star} / 3`, (ev.star / 3) * 100, 'bg-text-secondary'],
+    ['看点星级', `${ev.star} 星`, (ev.star / 3) * 100, 'bg-text-secondary'],
     ['故事线加成', storyB, Math.min(100, (storyB / 16) * 100), 'bg-text-secondary'],
     ['主队加成', followedB, Math.min(100, (followedB / 16) * 100), 'bg-text-secondary'],
     ['联赛加成', leagueB, Math.min(100, (leagueB / 16) * 100), 'bg-text-secondary'],

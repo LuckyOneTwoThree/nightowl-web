@@ -17,14 +17,14 @@ const TIER_TONE = Object.fromEntries(
   Object.entries(TIER_MAP).map(([label, t]) => [label, t.text])
 );
 
-export default function SameNightPicks({ match, prefs, onSelect }) {
+export default function SameNightPicks({ match, prefs, onSelect, compact = false }) {
   // ⚠️ hooks 必须在 early-return 之前调用（同 UpcomingFixtures：match null→非 null
   // 的切换路径会让 hooks 数量变化，React 直接抛错整页白屏）。
   // 判空放钩子内：sameNightPicks 首行就读 m.t，不接 null。
   const picks = useMemo(() => (match ? sameNightPicks(match, prefs, 3) : []), [match, prefs]);
 
   if (!match) {
-    return (
+    return compact ? null : (
       <section className="flex h-full flex-col justify-center overflow-hidden rounded-xl border border-line-hairline bg-surface-card p-4 shadow-card">
         <EmptyState
           icon={null}
@@ -32,6 +32,48 @@ export default function SameNightPicks({ match, prefs, onSelect }) {
           desc="同夜开球场次横向对比，发现更高性价比对决。"
         />
       </section>
+    );
+  }
+
+  if (compact) {
+    return (
+      <div className="mt-2.5 shrink-0 border-t border-white/[0.06] pt-2.5">
+        <div className="mb-1.5 flex items-center justify-between">
+          <h3 className="text-2xs font-semibold tracking-wide text-text-primary">同夜其他</h3>
+          <Meta>{picks.length} 场</Meta>
+        </div>
+        {picks.length === 0 ? (
+          <p className="py-1 text-2xs text-text-faint">今晚没有其他可推荐的场次</p>
+        ) : (
+          <ul className="space-y-1">
+            {picks.map(({ m, index, tier }) => (
+              <li key={m.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect?.(m.id)}
+                  className="flex w-full items-center gap-1.5 rounded-md border border-transparent px-1.5 py-1 text-left transition-colors hover:border-line-hairline hover:bg-surface-raised focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none"
+                >
+                  <span className="w-8 shrink-0 font-num text-2xs tabular-nums text-text-faint">{hm(m.t)}</span>
+                  <span
+                    className="h-2.5 w-0.5 shrink-0 rounded"
+                    style={{ background: leagueColor(m.l) }}
+                    title={leagueName(m.l)}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-2xs text-text-primary">
+                    {teamName(m.h)} vs {teamName(m.a)}
+                  </span>
+                  <span className="shrink-0 font-num text-2xs font-semibold tabular-nums text-text-primary">
+                    {index.toFixed(1)}
+                  </span>
+                  <span className={`shrink-0 font-num text-2xs font-semibold ${TIER_TONE[tier.label] || ''}`}>
+                    {tier.label}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     );
   }
 

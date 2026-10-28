@@ -148,6 +148,10 @@ export function weekDistributionAdvice(days) {
     return `本周没有需要熬夜的场次，全部落在 S0–S2 区间`;
   }
   const heavyStr = heavy.map(d => `${d.date.slice(5)}`).join('、');
+  // 重度档覆盖大半周时，逐日列出等于没有建议；改为给出取舍动作。
+  if (heavy.length >= 5) {
+    return `本周重度档覆盖 ${heavy.length} 天（${heavyStr}），建议只保留 1–2 个主看夜，其余用零成本场或回放代替`;
+  }
   if (light.length) {
     return `本周重度档集中在 ${heavyStr}；其余晚间为 S0–S1 低档，可从容安排`;
   }

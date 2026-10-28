@@ -535,14 +535,15 @@ export function planWeek(matches, recMap, rivalries, storylines, followed, budge
   const followedLeagueNeutralEvs = evs.filter(e => !e.ev.isFollowed && e.ev.isLeagueFollowed);
   const otherNeutralEvs = evs.filter(e => !e.ev.isFollowed && !e.ev.isLeagueFollowed);
 
-  const limited = Number.isFinite(maxPicks);
-  const fill = (list, bud, remaining) => limited
-    ? knapsackLimited(list, bud, w, remaining)
-    : knapsack(list, bud, w, capRatio);
+  // 无论是否限制数量，都必须走互斥版内核：旧 knapsack 只约束预算，
+  // 会在 maxPicks 未传时把同开球 / 区间重叠的场次重新装进来。
+  // 不限数量时把名额上限设为候选数，语义等价于「只受预算与时间约束」。
+  const fill = (list, bud, remaining) =>
+    knapsackLimited(list, bud, w, Number.isFinite(remaining) ? remaining : list.length);
 
   let best = [];
   let curBudget = budget;
-  const room = () => (limited ? maxPicks - best.length : Infinity);
+  const room = () => (Number.isFinite(maxPicks) ? maxPicks - best.length : Infinity);
   const conflicts = (m) => best.some(e => exclusiveMatches(e.m, m));
 
   // 主队比赛：预算内必保（原版行为）；与已入选场次互斥时按二选一判据让位（不重复计成本）
@@ -567,6 +568,10 @@ export function planWeek(matches, recMap, rivalries, storylines, followed, budge
     best = best.concat(filled);
     curBudget -= filled.reduce((s, e) => s + tierOf(e.m).cost, 0);
   }
+
+  // 「本周精选」是观赛计划，按开球时间排序；关注球队优先只影响入选，不改变计划顺序。
+  // （否则周一凌晨场会排在周六晚场之前，用户会把计划读成倒序。）
+  best.sort((a, b) => ts(a.m.t) - ts(b.m.t) || String(a.m.id).localeCompare(String(b.m.id)));
 
   const bestIds = {};
   best.forEach(e => { bestIds[e.m.id] = true; });

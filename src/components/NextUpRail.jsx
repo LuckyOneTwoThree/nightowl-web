@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { upcomingForTeams } from '../core/owl.js';
 import { hm, weekdayOf, zhDate } from '../core/format.js';
 import { teamName } from '../data/index.js';
 import { tierOf } from '../core/engine.js';
 import { TIER_MAP } from '../core/narrative.js';
 import { Crest } from './atoms.jsx';
+import { IconChevronDown, IconChevronUp } from './icons.jsx';
 
 const TIER_TONE = Object.fromEntries(
   Object.entries(TIER_MAP).map(([label, tier]) => [label, tier.text])
@@ -15,6 +16,22 @@ const TIER_TONE = Object.fromEntries(
  * 同时把当前选中场次之后的决策信息放在手边。
  */
 export default function NextUpRail({ match, onSelect, onOpenWeek, onOpenSchedule }) {
+  // 最小窗口（1366×768 / 1120×700）下默认收起：这是补白模块，不能挤掉今晚列表。
+  const [collapsed, setCollapsed] = useState(
+    () => typeof window !== 'undefined' && window.innerHeight < 820
+  );
+
+  // 窗口从 1440 拖到 1120 时 state 初始化值不会变；用媒体查询跟随高度，
+  // 只有高度跨过阈值才重置，用户手动展开/收起在阈值内仍然生效。
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const mq = window.matchMedia('(max-height: 820px)');
+    const sync = () => setCollapsed(mq.matches);
+    sync();
+    mq.addEventListener?.('change', sync);
+    return () => mq.removeEventListener?.('change', sync);
+  }, []);
+
   const items = useMemo(() => {
     if (!match) return [];
     const { home, away } = upcomingForTeams(match);
@@ -30,10 +47,19 @@ export default function NextUpRail({ match, onSelect, onOpenWeek, onOpenSchedule
   }, [match]);
 
   return (
-    <section className="rounded-xl bg-surface-card/40 p-3 ring-1 ring-white/[0.05]">
+    <section className={`rounded-xl bg-surface-card/40 ring-1 ring-white/[0.05] ${collapsed ? 'p-2.5' : 'p-3'}`}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-2xs font-semibold tracking-wide text-text-muted">接下来</span>
-        {onOpenWeek && (
+        <button
+          type="button"
+          onClick={() => setCollapsed(v => !v)}
+          aria-expanded={!collapsed}
+          title={collapsed ? '展开接下来' : '收起接下来'}
+          className="inline-flex items-center gap-1 rounded-md text-2xs font-semibold tracking-wide text-text-muted transition-colors hover:text-text-primary focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none"
+        >
+          接下来
+          {collapsed ? <IconChevronDown size={11} /> : <IconChevronUp size={11} />}
+        </button>
+        {!collapsed && onOpenWeek && (
           <button
             type="button"
             onClick={onOpenWeek}
@@ -45,12 +71,12 @@ export default function NextUpRail({ match, onSelect, onOpenWeek, onOpenSchedule
       </div>
 
       {match && (
-        <p className="mt-1 truncate text-2xs text-text-faint">
+        <p className="mt-0.5 truncate text-2xs text-text-faint">
           {teamName(match.h)} / {teamName(match.a)} 的下一场
         </p>
       )}
 
-      {items.length > 0 ? (
+      {collapsed ? null : items.length > 0 ? (
         <ul className="mt-2 space-y-1">
           {items.map(item => {
             const tier = tierOf(item);
@@ -95,7 +121,7 @@ export default function NextUpRail({ match, onSelect, onOpenWeek, onOpenSchedule
         </div>
       )}
 
-      {items.length > 0 && (
+      {!collapsed && items.length > 0 && (
         <div className="mt-2 flex items-center justify-between border-t border-white/[0.06] pt-2">
           <span className="text-2xs text-text-faint">
             {zhDate(items[0].t.slice(0, 10))} {weekdayOf(items[0].t.slice(0, 10))} 起

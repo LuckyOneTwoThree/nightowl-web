@@ -15,13 +15,19 @@ const FORM_DOT = {
 function FormDots({ form }) {
   if (!form?.length) return <Meta>暂无近况</Meta>;
   return (
-    <div className="flex items-center gap-1" aria-label="近 5 场战绩">
+    <div className="flex items-center gap-0.5" aria-label="近 5 场战绩">
       {form.map(x => (
         <span
           key={`${x.matchId}-${x.date}`}
+          role="img"
+          aria-label={`${x.isHome ? '主场' : '客场'} 对 ${teamName(x.opponent)} ${x.score}，${x.result === 'W' ? '胜' : x.result === 'D' ? '平' : '负'}`}
           title={`${x.isHome ? '主' : '客'} vs ${teamName(x.opponent)} ${x.score}`}
-          className={`h-2 w-2 rounded-full ${FORM_DOT[x.result] || 'bg-line-control'}`}
-        />
+          className={`inline-flex h-4 w-4 items-center justify-center rounded-sm text-2xs font-semibold text-bg-app ${
+            FORM_DOT[x.result] || 'bg-line-control'
+          }`}
+        >
+          {x.result === 'W' ? '胜' : x.result === 'D' ? '平' : '负'}
+        </span>
       ))}
     </div>
   );
@@ -105,7 +111,9 @@ export default function MatchCanvas({
         : '已终场，等待比分录入'
       : live
         ? '等待实时事件'
-        : '赛前情报与线路已就绪';
+        : hasLines
+          ? '赛前情报与线路已就绪'
+          : '赛前情报已就绪 · 直播线路待接入';
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden">
@@ -263,11 +271,11 @@ export default function MatchCanvas({
                 ) : null}
               </div>
             ) : (
-              <Meta>暂无交锋</Meta>
+              <Meta>本赛季暂无交锋</Meta>
             )}
           </StatCell>
 
-          <StatCell title="赛季">
+          <StatCell title="赛季 · 胜-平-负">
             <div className="space-y-1 font-num text-2xs text-text-secondary">
               <div className="flex items-center justify-between gap-2" title="胜-平-负">
                 <span className="truncate">{teamName(match.h)}</span>

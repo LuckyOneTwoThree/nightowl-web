@@ -351,6 +351,50 @@ app.whenReady().then(async () => {
       ),
       errors.join(' | ')
     );
+
+    /* ---------- 最小窗口布局门禁 ----------
+       1120×700 是应用声明的最小窗口；此前顶栏换行、今晚列表被 Hero/接下来挤到 21px。
+       这里只断言像素级可用性，不依赖具体比赛数据：有列表时必须留下可滚动高度。 */
+    win.setContentSize(1120, 700);
+    await waitLoad(win, `${base}/?view=tonight`);
+    await sleep(1600);
+    const compact = await win.webContents.executeJavaScript(`
+      (() => {
+        const header = document.querySelector('header');
+        const nav = [...document.querySelectorAll('nav[aria-label="视图切换"] button')];
+        const navHeights = nav.map(b => Math.round(b.getBoundingClientRect().height));
+        const left = document.querySelector('main > section');
+        const candidates = [...(left?.querySelectorAll('.overflow-y-auto') || [])]
+          .filter(el => {
+            const r = el.getBoundingClientRect();
+            return r.width > 150 && el.scrollHeight > el.clientHeight + 20;
+          })
+          .map(el => ({ h: Math.round(el.getBoundingClientRect().height), sh: el.scrollHeight }));
+        const visibleList = candidates.sort((a, b) => b.sh - a.sh)[0] || null;
+        return {
+          w: innerWidth, h: innerHeight,
+          headerH: header ? Math.round(header.getBoundingClientRect().height) : null,
+          navHeights,
+          list: visibleList,
+          text: document.body.innerText.slice(0, 160)
+        };
+      })()
+    `);
+    ok('★ 1120 最小窗口顶栏不换行', compact.navHeights.length === 3 &&
+      compact.navHeights.every(h => h <= 34), JSON.stringify(compact.navHeights));
+    ok('★ 1120 最小窗口有可用列表高度',
+      !compact.list || compact.list.h >= 80, JSON.stringify(compact.list));
+
+    /* ---------- 周视图日期口径 ----------
+       owlDay 传入日期字符串而不是时间戳会得到 NaN；此前「本周精选」行因此显示 aN/NaN。 */
+    await waitLoad(win, `${base}/?view=week`);
+    await sleep(1400);
+    const weekText = await win.webContents.executeJavaScript(
+      `document.body.innerText.slice(0, 1600)`
+    );
+    ok('★ 周视图有本周精选', weekText.includes('本周精选'));
+    ok('★ 周视图日期无 NaN（owlDay 字符串口径）',
+      !/NaN|aN\/NaN/.test(weekText), weekText.slice(0, 240));
   } catch (err) {
     ok('渲染冒烟执行完成', false, String(err?.stack || err));
   } finally {
