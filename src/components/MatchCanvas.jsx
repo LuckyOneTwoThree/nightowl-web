@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { hm, zhDate, weekdayOf, datePart } from '../core/format.js';
+import { MATCH_DURATION_MS, ts } from '../core/engine.js';
 import { teamName, teamColor, leagueName } from '../data/index.js';
 import { eventSummary } from '../core/live-events.js';
 import { Button, Chip, Crest, LiveDot, Meta, SleepBadge, Stars } from './atoms.jsx';
@@ -38,6 +39,11 @@ export default function MatchCanvas({
   const live = state === 'live';
   const postponed = state === 'pp';
   const hidden = spoilerFree && !revealed;
+  // 已过完赛窗口但上游还没给比分：此时没有比分可揭晓。
+  // 旧实现仍然渲染「揭晓比分」，点下去只是把 — 露出来，看起来像按钮坏了。
+  const endedPending = finished && !hasFinal;
+  const stalePending =
+    endedPending && Date.now() - (ts(match.t) + MATCH_DURATION_MS) > 24 * 3600000;
 
   const homeColor = teamColor(match.h);
   const awayColor = teamColor(match.a);
@@ -70,7 +76,9 @@ export default function MatchCanvas({
     : finished
       ? hasFinal
         ? '比赛已结束，查看回顾或集锦'
-        : '已终场，等待比分录入'
+        : stalePending
+          ? '上游数据源未提供该场比分，可稍后重新同步'
+          : '已终场，等待上游更新比分'
       : live
         ? '等待实时事件'
         : hasLines
@@ -126,41 +134,57 @@ export default function MatchCanvas({
                 <span className="mt-1.5 text-xs font-medium text-text-muted">本场延期</span>
               </>
             ) : finished ? (
-              <>
-                {hidden ? (
-                  <Button variant="default" onClick={onReveal}>
-                    揭晓比分
-                  </Button>
-                ) : (
-                  <span
-                    key={match.sc}
-                    className="animate-score-pop font-num text-display font-bold leading-none text-text-primary"
-                  >
-                    {score ? `${score.h} - ${score.a}` : '—'}
+              endedPending ? (
+                <>
+                  <span className="font-num text-2xl font-semibold text-text-muted">—</span>
+                  <span className="mt-1.5 text-xs font-medium text-text-muted">
+                    {stalePending ? '上游数据源未提供该场比分' : '等待上游更新比分'}
                   </span>
-                )}
-                <span className="mt-1.5 text-xs font-medium text-text-muted">
-                  {hidden ? '比分已隐藏' : '终场'}
-                </span>
-              </>
+                </>
+              ) : (
+                <>
+                  {hidden ? (
+                    <Button variant="default" onClick={onReveal}>
+                      揭晓比分
+                    </Button>
+                  ) : (
+                    <span
+                      key={match.sc}
+                      className="animate-score-pop font-num text-display font-bold leading-none text-text-primary"
+                    >
+                      {score ? `${score.h} - ${score.a}` : '—'}
+                    </span>
+                  )}
+                  <span className="mt-1.5 text-xs font-medium text-text-muted">
+                    {hidden ? '比分已隐藏' : '终场'}
+                  </span>
+                </>
+              )
             ) : live ? (
-              <>
-                {hidden ? (
-                  <Button variant="default" onClick={onReveal}>
-                    揭晓实时比分
-                  </Button>
-                ) : (
-                  <span
-                    key={score ? `${score.h}-${score.a}` : 'live'}
-                    aria-live="polite"
-                    aria-atomic="true"
-                    className="animate-score-pop font-num text-display font-bold leading-none text-text-primary"
-                  >
-                    {score ? `${score.h} - ${score.a}` : '—'}
-                  </span>
-                )}
-                <span className="mt-1.5 text-xs font-medium text-live">{minuteLabel}</span>
-              </>
+              !score ? (
+                <>
+                  <span className="font-num text-2xl font-semibold text-text-muted">—</span>
+                  <span className="mt-1.5 text-xs font-medium text-text-muted">等待实时比分</span>
+                </>
+              ) : (
+                <>
+                  {hidden ? (
+                    <Button variant="default" onClick={onReveal}>
+                      揭晓实时比分
+                    </Button>
+                  ) : (
+                    <span
+                      key={`${score.h}-${score.a}`}
+                      aria-live="polite"
+                      aria-atomic="true"
+                      className="animate-score-pop font-num text-display font-bold leading-none text-text-primary"
+                    >
+                      {score.h} - {score.a}
+                    </span>
+                  )}
+                  <span className="mt-1.5 text-xs font-medium text-live">{minuteLabel}</span>
+                </>
+              )
             ) : match.tbd ? (
               <>
                 <span className="font-num text-2xl font-semibold text-text-muted">--:--</span>

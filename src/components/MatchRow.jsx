@@ -146,10 +146,7 @@ export default function MatchRow({
                   state={state}
                   revealed={revealed}
                   spoilerFree={spoilerFree}
-                  onReveal={e => {
-                    e.stopPropagation();
-                    onReveal?.(m.id);
-                  }}
+                  onReveal={() => onReveal?.(m.id)}
                 />
               )}
             </span>

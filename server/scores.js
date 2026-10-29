@@ -15,7 +15,7 @@
  *   会把正在进行的焦点战排除，Hero 卡会在开球那一刻消失。
  */
 
-import { ts } from '../src/core/engine.js';
+import { ts, MATCH_DURATION_MS } from '../src/core/engine.js';
 import { fetchAllEvents, mergeEvents, DEFAULT_ORDER } from './sources/index.js';
 
 export const ALLOWED_ST = ['sched', 'done', 'pp'];
@@ -152,6 +152,16 @@ export function activeSyncTargets(fixtures = [], nowTs = Date.now(), opts = {}) 
         targets.get(m.l).add(ymd);
       };
       add(t);
+      // 已开球但未录入的场次：同时查前后一天。
+      // 上游改期或不同源对同一场比赛的日期口径可能差一天（实测 PSG–OL：
+      // 本地/openfootball 是 10-26 03:45，ESPN 记在 10-27 03:30），只按本地日期
+      // 精确查询会永远查不到这场，界面就会一直显示「待录比分」。
+      // 只对 14 天内的缺分展开，避免历史积压把每个场次永久放大成 3 个请求。
+      // 匹配仍走 planPatches 的 4 天窗口 + 60 天唯一对阵改期保护，不会误配。
+      if (!m.tbd && t + MATCH_DURATION_MS < nowTs && nowTs - t <= 14 * 86400000) {
+        add(t - 86400000);
+        add(t + 86400000);
+      }
       // tbd：占位日可能不是真实比赛日，向前后展开覆盖整轮。
       // 只对「占位日仍可能覆盖真实比赛日」的场次展开 —— ESPN 在开球前数日就公布真实时间，
       // 此时占位日在未来或临近。占位日已过去很久仍为 tbd 的场次（积压），展开窗口早已整体

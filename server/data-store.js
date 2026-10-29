@@ -74,22 +74,29 @@ export function saveFixtures(next) {
  * 数据新鲜度：给界面用，避免用户以为「应用坏了」——
  * 其实是数据旧。返回最后比分时间、落后场数、来源。
  */
-export function freshness(fixtures, nowTs = Date.now()) {
+export function freshness(fixtures, nowTs = Date.now(), opts = {}) {
+  const usingUser = opts.usingUser ?? (activeFixturesPath() !== BUILT_IN);
   let lastScoreTs = 0;
   let stale = 0;
+  let staleMissing = 0;
   let live = 0;
   for (const m of fixtures) {
     const t = ts(m.t);
     if (Number.isNaN(t)) continue;
     if (m.st === 'done' && m.sc) lastScoreTs = Math.max(lastScoreTs, t);
-    if (m.st === 'sched' && !m.tbd && nowTs > t + MATCH_DURATION_MS) stale++;
-    else if (m.st === 'sched' && !m.tbd && nowTs >= t && nowTs <= t + MATCH_DURATION_MS) live++;
+    if (m.st === 'sched' && !m.tbd && nowTs > t + MATCH_DURATION_MS) {
+      stale++;
+      // 只有已经同步到用户数据后，超过 24h 仍无比分才说明上游没提供；
+      // 内置快照本身可能落后，别把「还没同步」误报成「上游缺分」。
+      if (usingUser && nowTs - (t + MATCH_DURATION_MS) > 24 * 3600000) staleMissing++;
+    } else if (m.st === 'sched' && !m.tbd && nowTs >= t && nowTs <= t + MATCH_DURATION_MS) live++;
   }
   return {
-    source: activeFixturesPath() === BUILT_IN ? 'builtin' : 'user',
+    source: usingUser ? 'user' : 'builtin',
     lastScoreAt: lastScoreTs ? new Date(lastScoreTs).toISOString() : null,
     staleHours: lastScoreTs ? +((nowTs - lastScoreTs) / 3600000).toFixed(1) : null,
     pendingCount: stale,
+    stalePendingCount: staleMissing,
     liveCount: live,
     writable: !!userFixturesPath()
   };

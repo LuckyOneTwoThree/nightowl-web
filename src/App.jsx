@@ -380,6 +380,8 @@ export default function App() {
       const errors = Number(j?.lastSync?.errors || 0);
       const writtenOk = j?.lastSync?.written?.ok !== false;
       const pending = Number(j?.freshness?.pendingCount || 0);
+      const stalePending = Number(j?.freshness?.stalePendingCount || 0);
+      const recentPending = Math.max(0, pending - stalePending);
       const stale = Number(j?.freshness?.staleHours || 0);
       let state = 'ok';
       let label = '数据未检查';
@@ -391,9 +393,14 @@ export default function App() {
       } else if (j?.lastSync && (errors > 0 || !writtenOk)) {
         state = 'error';
         label = errors > 0 ? `同步失败 · ${errors} 个来源` : '同步写盘失败';
-      } else if (pending > 0) {
+      } else if (recentPending > 0) {
         state = 'warn';
-        label = `待录 ${pending} 场`;
+        label = `待录 ${recentPending} 场`;
+      } else if (stalePending > 0) {
+        // 超过 24h 仍无比分：上游没有该场或改期未被识别。
+        // 继续显示「待录」会让用户以为应用一直在等一个永远不会来的结果。
+        state = 'warn';
+        label = `上游缺分 ${stalePending} 场`;
       } else if (stale >= 24) {
         state = 'warn';
         label = `数据落后 ${Math.floor(stale / 24)} 天`;

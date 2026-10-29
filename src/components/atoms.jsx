@@ -162,8 +162,10 @@ export function ScoreText({ match, state, revealed, onReveal, spoilerFree, stale
         <button
           type="button"
           onClick={e => {
+            // 行本身也是可点击区域：揭晓按钮必须先截断冒泡，
+            // 否则同一次点击会同时揭晓并切换选中场次。
             e.stopPropagation();
-            onReveal?.();
+            onReveal?.(e);
           }}
           onKeyDown={e => {
             // 按钮在比赛行（role=button）内部：Enter/Space 只揭晓，不再冒泡成选场。

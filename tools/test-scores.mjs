@@ -145,7 +145,7 @@ console.log('五、增量定向同步（activeSyncTargets）');
   const now = new Date('2026-09-16T15:00:00+08:00').getTime();
   const sampleFixtures = [
     // 1. 已完赛且有比分：必须被排除
-    { id: '1', l: 'PL', t: '2026-09-14T03:00', st: 'done', sc: '3-0' },
+    { id: '1', l: 'PL', t: '2026-09-12T03:00', st: 'done', sc: '3-0' },
     // 2. 过去未完赛（待录入）：必须纳入目标
     { id: '2', l: 'PL', t: '2026-09-15T03:00', st: 'sched', sc: null },
     // 3. 未来 24 小时内的比赛：必须纳入目标
@@ -157,9 +157,13 @@ console.log('五、增量定向同步（activeSyncTargets）');
   ];
 
   const targets = activeSyncTargets(sampleFixtures, now);
-  ok('已完赛记录不纳入同步目标', !targets.get('PL')?.has('20260913'));
+  ok('已完赛记录不纳入同步目标', !targets.get('PL')?.has('20260911'));
   ok('未同步的过去比赛纳入目标并准确转换为 UTC 日期', targets.get('PL')?.has('20260914'));
+  ok('★ 待录场次同时查询前后一天（覆盖改期/源日期漂移）',
+    targets.get('PL')?.has('20260913') && targets.get('PL')?.has('20260915'),
+    [...(targets.get('PL') || [])].join(','));
   ok('近期未来比赛纳入目标', targets.get('PD')?.has('20260916'));
+  ok('未来比赛不展开前后一天', targets.get('PD')?.size === 1, `实际 ${targets.get('PD')?.size}`);
   ok('远期比赛不纳入目标', !targets.has('SA'));
   ok('无时间的改期比赛不纳入目标', !targets.has('BL'));
 }
@@ -422,16 +426,18 @@ console.log('七、数据新鲜度语义（lastScoreAt 是赛果时间，不是�
   const sample = [
     { id: 'd1', l: 'PL', t: '2026-09-15T03:00', st: 'done', sc: '2-1' },
     { id: 'p1', l: 'PL', t: '2026-09-16T03:00', st: 'sched', sc: null }, // 已过完赛窗口 → 待录
+    { id: 'pOld', l: 'SA', t: '2026-09-10T03:00', st: 'sched', sc: null }, // 超过 24h → 上游缺分
     { id: 'l1', l: 'PL', t: '2026-09-16T14:00', st: 'sched', sc: null }, // 进行中窗口
     { id: 'f1', l: 'PL', t: '2026-09-18T03:00', st: 'sched', sc: null }  // 未来 → 不计
   ];
-  const f = freshness(sample, now);
+  const f = freshness(sample, now, { usingUser: true });
   ok('★ lastScoreAt 取最近完赛的开球时间',
     f.lastScoreAt === new Date(ts('2026-09-15T03:00')).toISOString(), f.lastScoreAt);
-  ok('pendingCount 只计已过完赛窗口的 sched 场次', f.pendingCount === 1, `实际 ${f.pendingCount}`);
+  ok('pendingCount 只计已过完赛窗口的 sched 场次', f.pendingCount === 2, `实际 ${f.pendingCount}`);
+  ok('★ stalePendingCount 单独标记超过 24h 的缺分场次', f.stalePendingCount === 1, `实际 ${f.stalePendingCount}`);
   ok('liveCount 只计进行中窗口的 sched 场次', f.liveCount === 1, `实际 ${f.liveCount}`);
   ok('freshness 字段完整',
-    ['source', 'lastScoreAt', 'staleHours', 'pendingCount', 'liveCount', 'writable']
+    ['source', 'lastScoreAt', 'staleHours', 'pendingCount', 'stalePendingCount', 'liveCount', 'writable']
       .every(k => k in f));
 }
 

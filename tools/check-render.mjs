@@ -465,6 +465,53 @@ app.whenReady().then(async () => {
       errors.join(' | ')
     );
 
+    /* ---------- 列表行「揭晓」回归 ----------
+       MatchRow 里的揭晓按钮曾把 ScoreText 的无参回调当成事件对象，
+       点击即抛 e.stopPropagation is not a function，比分永远不揭开。
+       这里必须点左栏列表的「揭晓」（右栏舞台是另一条路径）。 */
+    await waitLoad(win, `${base}/?view=schedule`);
+    await sleep(1400);
+    await win.webContents.executeJavaScript(`
+      (() => {
+        const all = [...document.querySelectorAll('main > section button')].find(
+          b => (b.textContent || '').trim() === '全部'
+        );
+        all?.click();
+        return !!all;
+      })()
+    `);
+    await sleep(900);
+    const listRevealBefore = await win.webContents.executeJavaScript(`
+      (() => {
+        const rows = [...document.querySelectorAll('main > section [role="button"]')];
+        const row = rows.find(r =>
+          [...r.querySelectorAll('button')].some(b => (b.textContent || '').trim() === '揭晓')
+        );
+        if (!row) return { found: false };
+        row.setAttribute('data-reveal-test', '1');
+        const btn = [...row.querySelectorAll('button')].find(
+          b => (b.textContent || '').trim() === '揭晓'
+        );
+        btn.click();
+        return { found: true, text: row.innerText.slice(0, 120) };
+      })()
+    `);
+    await sleep(500);
+    const listRevealAfter = await win.webContents.executeJavaScript(`
+      (() => {
+        const row = document.querySelector('[data-reveal-test="1"]');
+        return {
+          text: row?.innerText?.slice(0, 120) || '',
+          stillHasReveal: [...(row?.querySelectorAll('button') || [])].some(
+            b => (b.textContent || '').trim() === '揭晓'
+          )
+        };
+      })()
+    `);
+    ok('★ 列表行「揭晓」点击后比分可见',
+      listRevealBefore.found && !listRevealAfter.stillHasReveal && /\d+-\d+/.test(listRevealAfter.text),
+      JSON.stringify({ before: listRevealBefore, after: listRevealAfter }));
+
     /* ---------- 失效深链自愈 ----------
        ?match=<不存在> → activeMatch null → 自动降级今晚之选（null→非 null）。
        UpcomingFixtures/SameNightPicks 曾在 useMemo 前 early-return，

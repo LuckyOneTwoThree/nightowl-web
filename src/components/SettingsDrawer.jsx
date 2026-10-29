@@ -117,6 +117,11 @@ export default function SettingsDrawer({
     return `${Math.floor(h / 24)} 天前`;
   }, [fresh]);
 
+  const pendingSplit = useMemo(() => {
+    const stale = Number(fresh?.stalePendingCount || 0);
+    return { recent: Math.max(0, Number(fresh?.pendingCount || 0) - stale), stale };
+  }, [fresh]);
+
   const syncText = useMemo(() => {
     if (!lastSync?.at) return '本次启动后未同步';
     const t = Date.parse(lastSync.at);
@@ -351,8 +356,11 @@ export default function SettingsDrawer({
                   <div className="mt-1.5 border-t border-line-hairline pt-1.5">
                     <p>
                       最新赛果 <span className="text-text-primary">{freshText}</span>
-                      {fresh?.pendingCount > 0 && (
-                        <span className="text-warn"> · {fresh.pendingCount} 场待录比分</span>
+                      {pendingSplit.recent > 0 && (
+                        <span className="text-warn"> · {pendingSplit.recent} 场待录比分</span>
+                      )}
+                      {pendingSplit.stale > 0 && (
+                        <span className="text-warn"> · {pendingSplit.stale} 场上游未提供</span>
                       )}
                     </p>
                     <p className="mt-0.5">
