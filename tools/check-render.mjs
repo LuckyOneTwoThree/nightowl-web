@@ -473,35 +473,46 @@ app.whenReady().then(async () => {
     await sleep(1400);
     await win.webContents.executeJavaScript(`
       (() => {
+        // 先滚回列表顶部：Windows 隐藏窗口下 VList 可能保留上一视图的滚动位置
+        document.querySelectorAll('main > section *').forEach(el => {
+          if (el.scrollHeight > el.clientHeight) el.scrollTop = 0;
+        });
         const all = [...document.querySelectorAll('main > section button')].find(
-          b => (b.textContent || '').trim() === '全部'
+          b => (b.textContent || '').trim() === '全部' && b.hasAttribute('aria-pressed')
         );
         all?.click();
         return !!all;
       })()
     `);
-    await sleep(900);
-    const listRevealBefore = await win.webContents.executeJavaScript(`
-      (() => {
-        const rows = [...document.querySelectorAll('main > section [role="button"]')];
-        const row = rows.find(r =>
-          [...r.querySelectorAll('button')].some(b => (b.textContent || '').trim() === '揭晓')
-        );
-        if (!row) return { found: false };
-        row.setAttribute('data-reveal-test', '1');
-        const btn = [...row.querySelectorAll('button')].find(
-          b => (b.textContent || '').trim() === '揭晓'
-        );
-        btn.click();
-        return { found: true, text: row.innerText.slice(0, 120) };
-      })()
-    `);
+    // 全季列表在慢 runner 上可能 >1s 才渲染；轮询到「揭晓」出现为止，最多 5s
+    let listRevealBefore = { found: false };
+    for (let i = 0; i < 20; i++) {
+      listRevealBefore = await win.webContents.executeJavaScript(`
+        (() => {
+          const rows = [...document.querySelectorAll('main > section [role="button"]')];
+          const row = rows.find(r =>
+            [...r.querySelectorAll('button')].some(b => (b.textContent || '').trim() === '揭晓')
+          );
+          if (!row) return { found: false };
+          row.setAttribute('data-reveal-test', '1');
+          const btn = [...row.querySelectorAll('button')].find(
+            b => (b.textContent || '').trim() === '揭晓'
+          );
+          btn.click();
+          return { found: true, text: row.textContent.slice(0, 160) };
+        })()
+      `);
+      if (listRevealBefore.found) break;
+      await sleep(250);
+    }
     await sleep(500);
     const listRevealAfter = await win.webContents.executeJavaScript(`
       (() => {
         const row = document.querySelector('[data-reveal-test="1"]');
+        const scoreEl = row?.querySelector('.font-bold.tabular-nums');
         return {
-          text: row?.innerText?.slice(0, 120) || '',
+          text: row?.textContent?.slice(0, 160) || '',
+          score: scoreEl?.textContent?.trim() || '',
           stillHasReveal: [...(row?.querySelectorAll('button') || [])].some(
             b => (b.textContent || '').trim() === '揭晓'
           )
@@ -509,7 +520,7 @@ app.whenReady().then(async () => {
       })()
     `);
     ok('★ 列表行「揭晓」点击后比分可见',
-      listRevealBefore.found && !listRevealAfter.stillHasReveal && /\d+-\d+/.test(listRevealAfter.text),
+      listRevealBefore.found && !listRevealAfter.stillHasReveal && /^\d+-\d+$/.test(listRevealAfter.score),
       JSON.stringify({ before: listRevealBefore, after: listRevealAfter }));
 
     /* ---------- 失效深链自愈 ----------
