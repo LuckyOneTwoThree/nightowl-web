@@ -14,7 +14,6 @@ import { Check, ChevronDown, Search, X } from 'lucide-react-native';
 import { LEAGUE_ORDER, leagueName } from '@data/index.js';
 import {
   computeScheduleRows,
-  dayCounts,
   owlDayOffset,
 } from '@core/owl.js';
 import { nightOf } from '@core/engine.js';
@@ -25,6 +24,7 @@ import { animateLayout } from '@/lib/layoutAnimation';
 import { useNow } from '@/lib/useNow';
 import { useDataRev } from '@/state/app';
 import { usePrefs } from '@/state/prefs';
+import { useSyncState } from '@/data/sync/useSync';
 import { Chip } from '@/ui/Chip';
 import { EmptyState } from '@/ui/EmptyState';
 import { MatchRow } from '@/ui/MatchRow';
@@ -61,6 +61,7 @@ export default function ScheduleScreen() {
   const prefs = usePrefs();
   const rev = useDataRev();
   const now = useNow(60_000);
+  const { syncing, quickSyncing } = useSyncState();
 
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [selectedDate, setSelectedDate] = useState<string | 'all' | null>(null);
@@ -86,8 +87,6 @@ export default function ScheduleScreen() {
     }
   }, [params.q, params.date]);
 
-  const counts = useMemo(() => dayCounts() as Record<string, number>, [rev]);
-
   const dates = useMemo(
     () => Array.from({ length: 15 }, (_, index) => owlDayOffset(index - 2, now)),
     [now]
@@ -101,6 +100,16 @@ export default function ScheduleScreen() {
       query: filters.query,
     }) as Row[];
   }, [mode, now, prefs, filters, rev]);
+
+  // 日期条计数必须与当前筛选后的列表同口径：
+  // 只看意甲时，日期卡不应继续显示全季 23 场。
+  const counts = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const row of rows) {
+      if (row.type === 'date') map[row.date] = row.count;
+    }
+    return map;
+  }, [rows]);
 
   const followedDates = useMemo(() => {
     const s = new Set<string>();
@@ -196,6 +205,8 @@ export default function ScheduleScreen() {
       ? '未选联赛'
       : `${filters.leagues.length} 个联赛`;
   const filtersDirty = !allLeaguesSelected || filters.onlyFollowed;
+  const hasFollowedTeams = prefs.followedTeams.length > 0;
+  const onlyFollowedWithoutTeams = filters.onlyFollowed && !hasFollowedTeams;
 
   const toggleLeague = (code: string) => {
     setFilters(current => {
@@ -233,12 +244,14 @@ export default function ScheduleScreen() {
             <Search size={18} color={colors.textSecondary} />
           </Pressable>
         </View>
-        <Text style={[styles.subline, mode === 'schedule' && (checking || refreshNote) && styles.sublineNote]}>
+        <Text style={[styles.subline, mode === 'schedule' && (checking || syncing || quickSyncing || refreshNote) && styles.sublineNote]}>
           {mode === 'standings'
             ? '本地已同步赛果 · 同分简化排序'
             : checking
               ? '正在检查比分…'
-              : refreshNote ?? '全季赛程 · 北京时间 · 夜猫日口径'}
+              : syncing || quickSyncing
+                ? '正在更新比分…'
+                : refreshNote ?? '全季赛程 · 北京时间 · 夜猫日口径'}
         </Text>
       </View>
 
@@ -258,6 +271,9 @@ export default function ScheduleScreen() {
       >
         <Pressable
           onPress={() => setSelectedDate('all')}
+          accessibilityRole="button"
+          accessibilityState={{ selected: activeDate === 'all' }}
+          accessibilityLabel="全季赛程"
           style={[styles.dateCard, styles.allCard, activeDate === 'all' && styles.dateCardActive]}
         >
           <Text style={[styles.dateWeekday, activeDate === 'all' && styles.dateActiveText]}>
@@ -277,6 +293,9 @@ export default function ScheduleScreen() {
             <Pressable
               key={date}
               onPress={() => setSelectedDate(date)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`${zhDate(date)} ${weekdayOf(date)}，${count} 场`}
               style={[
                 styles.dateCard,
                 isToday && !active && styles.dateCardToday,
@@ -308,9 +327,13 @@ export default function ScheduleScreen() {
           </Chip>
           <Chip
             selected={filters.onlyFollowed}
-            onPress={() =>
-              setFilters(current => ({ ...current, onlyFollowed: !current.onlyFollowed }))
-            }
+            onPress={() => {
+              if (!hasFollowedTeams && !filters.onlyFollowed) {
+                router.push('/team-picker');
+                return;
+              }
+              setFilters(current => ({ ...current, onlyFollowed: !current.onlyFollowed }));
+            }}
           >
             只看关注
           </Chip>
@@ -323,7 +346,8 @@ export default function ScheduleScreen() {
                   onlyFollowed: false,
                 }))
               }
-              hitSlop={10}
+              hitSlop={8}
+              style={styles.resetHit}
             >
               <Text style={styles.reset}>重置</Text>
             </Pressable>
@@ -351,7 +375,7 @@ export default function ScheduleScreen() {
           keyExtractor={item => item.id}
           showsVerticalScrollIndicator={false}
           stickySectionHeadersEnabled
-          refreshing={false}
+          refreshing={checking}
           onRefresh={refresh}
           contentContainerStyle={styles.listContent}
           renderSectionHeader={({ section }) => (
@@ -376,14 +400,20 @@ export default function ScheduleScreen() {
           ListEmptyComponent={
             <EmptyState
               icon={<Search size={20} color={colors.textMuted} />}
-              title="这一天没有比赛"
+              title={onlyFollowedWithoutTeams ? '还没有关注球队' : '这一天没有比赛'}
               description={
-                filters.query
-                  ? '当前搜索或筛选条件下没有匹配的场次。'
-                  : '换个日期，或查看全季赛程。'
+                onlyFollowedWithoutTeams
+                  ? '先添加关注球队，或关闭「只看关注」查看全部场次。'
+                  : filters.query
+                    ? '当前搜索或筛选条件下没有匹配的场次。'
+                    : '换个日期，或查看全季赛程。'
               }
-              actionLabel="查看全部"
+              actionLabel={onlyFollowedWithoutTeams ? '去添加关注' : '查看全部'}
               onAction={() => {
+                if (onlyFollowedWithoutTeams) {
+                  router.push('/team-picker');
+                  return;
+                }
                 setSelectedDate('all');
                 setFilters(DEFAULT_FILTERS());
               }}
@@ -402,13 +432,15 @@ export default function ScheduleScreen() {
               onPress={() =>
                 setFilters(current => ({ ...current, leagues: [...LEAGUE_ORDER] }))
               }
-              hitSlop={10}
+              hitSlop={8}
+              style={styles.resetHit}
             >
               <Text style={styles.reset}>全选</Text>
             </Pressable>
             <Pressable
               onPress={() => setFilters(current => ({ ...current, leagues: [] }))}
-              hitSlop={10}
+              hitSlop={8}
+              style={styles.resetHit}
             >
               <Text style={styles.reset}>清空</Text>
             </Pressable>
@@ -474,6 +506,7 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   allCard: { width: 58 },
+  resetHit: { minHeight: 32, justifyContent: 'center' },
   reset: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' },
   dateCardToday: { borderColor: colors.control },
   dateCardActive: { borderColor: colors.accent, backgroundColor: colors.raised },
@@ -493,7 +526,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
-  dateCount: { color: colors.textFaint, fontSize: fontSize.xxs },
+  dateCount: { color: colors.textFaint, fontSize: fontSize.xs },
   dateActiveText: { color: colors.accent },
   dateActiveCount: { color: colors.textSecondary },
   filterBlock: { paddingTop: spacing.sm, gap: spacing.sm },

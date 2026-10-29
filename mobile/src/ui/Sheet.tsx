@@ -73,7 +73,7 @@ export function Sheet({ visible, onClose, title, children, scroll = false }: Pro
           {title ? (
             <View style={styles.header}>
               <Text style={styles.title}>{title}</Text>
-              <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="关闭">
+              <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="关闭">
                 <X size={20} color={colors.textMuted} />
               </Pressable>
             </View>

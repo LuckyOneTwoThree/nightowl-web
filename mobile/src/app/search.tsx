@@ -75,7 +75,7 @@ export default function SearchScreen() {
 
   const goSchedule = (q: string) => {
     router.dismissAll();
-    router.push({ pathname: '/schedule', params: { q } });
+    router.push({ pathname: '/schedule', params: { q, date: 'all' } });
   };
 
   const openTeam = (teamId: string) => {
@@ -93,6 +93,8 @@ export default function SearchScreen() {
           <SearchIcon size={16} color={colors.textFaint} />
           <TextInput
             autoFocus
+            autoCorrect={false}
+            autoCapitalize="none"
             value={query}
             onChangeText={setQuery}
             placeholder="搜索球队、比赛或联赛"
@@ -101,12 +103,12 @@ export default function SearchScreen() {
             returnKeyType="search"
           />
           {query ? (
-            <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="清空搜索">
+            <Pressable onPress={() => setQuery('')} hitSlop={14} accessibilityLabel="清空搜索">
               <X size={16} color={colors.textFaint} />
             </Pressable>
           ) : null}
         </View>
-        <Pressable onPress={() => router.back()} hitSlop={8}>
+        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.cancelHit}>
           <Text style={styles.cancel}>取消</Text>
         </Pressable>
       </View>
@@ -226,6 +228,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   input: { flex: 1, color: colors.text, fontSize: fontSize.md, paddingVertical: 0 },
+  cancelHit: { minHeight: 32, justifyContent: 'center' },
   cancel: { color: colors.accent, fontSize: fontSize.sm, fontWeight: '600' },
   body: { flex: 1 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxxl, gap: spacing.lg },
@@ -237,6 +240,7 @@ const styles = StyleSheet.create({
   },
   teamChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   teamChip: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -250,6 +254,8 @@ const styles = StyleSheet.create({
   teamChipText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '600' },
   leagueChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   leagueChip: {
+    minHeight: 44,
+    justifyContent: 'center',
     borderRadius: radius.full,
     borderWidth: 1,
     borderColor: colors.hairline,

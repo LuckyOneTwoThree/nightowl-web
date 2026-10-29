@@ -22,7 +22,7 @@ export function SectionHeader({ title, count, live = false, actionLabel, onActio
       </View>
       {right}
       {actionLabel && onAction ? (
-        <Pressable onPress={onAction} hitSlop={8}>
+        <Pressable onPress={onAction} hitSlop={8} style={styles.actionHit}>
           <Text style={styles.action}>{actionLabel}</Text>
         </Pressable>
       ) : null}
@@ -47,5 +47,6 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   action: { color: colors.textSecondary, fontSize: fontSize.xs, fontWeight: '600' },
+  actionHit: { minHeight: 32, justifyContent: 'center' },
   liveDot: { width: 6, height: 6, borderRadius: 999, backgroundColor: colors.live },
 });

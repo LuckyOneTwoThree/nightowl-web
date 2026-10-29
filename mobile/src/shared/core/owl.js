@@ -245,6 +245,9 @@ export function owlDayOffset(n, nowTs = Date.now()) {
  * 单场评估（供列表行按需取星级 / 德比名 / 指数）
  * evaluate 成本很低（20 条德比 + 8 条故事线的线性扫描），虚拟滚动下每次只算可见行。
  */
+/** 列表行指数的强调阈值；桌面与移动端必须共用，避免同一个数字两端判断不同。 */
+export const INDEX_HIGHLIGHT_THRESHOLD = 8;
+
 export function evalOne(m, prefs) {
   const ev = E.evaluate(m, REC_MAP, rivalries, storylines, prefs.followedTeams, prefs.followedLeagues);
   return { ev, index: E.owlIndex(ev, m, E.PRODUCT_WEIGHTS) };

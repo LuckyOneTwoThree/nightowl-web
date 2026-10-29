@@ -88,7 +88,7 @@ export default function OnboardingScreen() {
             <Text style={styles.brandSub}>让算法替你决定今晚值不值得熬</Text>
           </View>
         </View>
-        <Pressable onPress={finish} hitSlop={10}>
+        <Pressable onPress={finish} hitSlop={12} style={styles.skipHit}>
           <Text style={styles.skip}>跳过</Text>
         </Pressable>
       </View>
@@ -213,6 +213,7 @@ export default function OnboardingScreen() {
             <Switch
               value={prefs.notifyBefore15}
               onValueChange={value => setPrefs({ notifyBefore15: value })}
+              accessibilityLabel="赛前 15 分钟提醒"
               trackColor={{ false: colors.control, true: colors.accent }}
               thumbColor={prefs.notifyBefore15 ? colors.accentInk : colors.textMuted}
             />
@@ -261,6 +262,7 @@ const styles = StyleSheet.create({
   },
   brand: { color: colors.text, fontSize: fontSize.lg, fontWeight: '800', letterSpacing: 0.4 },
   brandSub: { color: colors.textFaint, fontSize: fontSize.xs, marginTop: 1 },
+  skipHit: { minHeight: 32, justifyContent: 'center' },
   skip: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: '600' },
   progress: {
     flexDirection: 'row',

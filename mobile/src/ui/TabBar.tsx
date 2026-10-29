@@ -122,11 +122,11 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: -5,
-    right: -11,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
+    top: -6,
+    right: -12,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: colors.live,
     alignItems: 'center',
     justifyContent: 'center',
@@ -134,5 +134,5 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.panel,
   },
-  badgeText: { color: '#FFFFFF', fontSize: fontSize.xxs, fontWeight: '800' },
+  badgeText: { color: '#FFFFFF', fontSize: fontSize.xs, fontWeight: '800' },
 });

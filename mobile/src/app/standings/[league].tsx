@@ -27,6 +27,7 @@ export default function StandingsScreen() {
         <Pressable
           onPress={() => router.back()}
           style={styles.headerButton}
+          hitSlop={4}
           accessibilityLabel="返回"
         >
           <ChevronLeft size={20} color={colors.text} />
@@ -69,5 +70,5 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 38, height: 38 },
   headerText: { flex: 1, gap: 2 },
   title: { color: colors.text, fontSize: fontSize.lg, fontWeight: '700' },
-  subline: { color: colors.textMuted, fontSize: fontSize.xxs },
+  subline: { color: colors.textMuted, fontSize: fontSize.xs },
 });

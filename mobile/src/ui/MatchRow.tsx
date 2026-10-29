@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AlertTriangle, Eye } from 'lucide-react-native';
 
-import { evalOne, stateOf } from '@core/owl.js';
+import { evalOne, stateOf, INDEX_HIGHLIGHT_THRESHOLD } from '@core/owl.js';
 import { sleepTier, ts } from '@core/engine.js';
 import { hm, liveMinute } from '@core/format.js';
 import { leagueColor, leagueName, teamName } from '@data/index.js';
@@ -46,6 +46,17 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
   const hasScore = isDone && !!match.sc;
   const winner = hasScore && scoreVisible ? parseScoreWinner(match.sc) : null;
   const tColor = tierColor(tier.tier);
+  const stateLabel = isLive
+    ? `进行中 ${minute} 分钟`
+    : hasScore
+      ? scoreVisible
+        ? `已结束 ${match.sc}`
+        : '已结束，比分未揭晓'
+      : isDone
+        ? '已结束'
+        : state === 'pp'
+          ? '延期'
+          : '未开赛';
 
   return (
     <Pressable
@@ -55,7 +66,10 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
       }}
       android_ripple={{ color: colors.press }}
       accessibilityRole="button"
-      accessibilityLabel={`${teamName(match.h)} 对 ${teamName(match.a)}，${hm(match.t)}，${leagueName(match.l)}`}
+      accessibilityLabel={`${teamName(match.h)} 对 ${teamName(match.a)}，${leagueName(match.l)}，${hm(
+        match.t
+      )}，${stateLabel}，夜猫指数 ${index.toFixed(1)}`}
+      accessibilityHint="双击查看比赛详情"
       style={({ pressed }) => [
         styles.row,
         (homeFollowed || awayFollowed) && styles.rowFollowed,
@@ -147,7 +161,7 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
           <Text
             style={[
               styles.index,
-              { color: index >= 15 ? colors.accent : colors.textSecondary },
+              { color: index >= INDEX_HIGHLIGHT_THRESHOLD ? colors.accent : colors.textSecondary },
             ]}
           >
             {index.toFixed(1)}
@@ -211,7 +225,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
-  doneSub: { color: colors.textFaint, fontSize: fontSize.xxs },
+  doneSub: { color: colors.textFaint, fontSize: fontSize.xs },
   doneText: { color: colors.textFaint, fontSize: fontSize.xs },
   revealPill: {
     flexDirection: 'row',
@@ -226,7 +240,7 @@ const styles = StyleSheet.create({
   },
   revealPillText: {
     color: colors.accent,
-    fontSize: fontSize.xxs,
+    fontSize: fontSize.xs,
     fontWeight: '700',
   },
   livePill: {
@@ -236,9 +250,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: radius.full,
-    backgroundColor: 'rgba(226,86,79,0.12)',
+    backgroundColor: withAlpha(colors.live, 0.12),
     borderWidth: 1,
-    borderColor: 'rgba(226,86,79,0.32)',
+    borderColor: withAlpha(colors.live, 0.32),
   },
   liveDot: { width: 6, height: 6, borderRadius: radius.full, backgroundColor: colors.live },
   liveText: {

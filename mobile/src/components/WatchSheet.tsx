@@ -22,7 +22,7 @@ import { usePlayerStore } from '@/state/player';
 import { Crest } from '@/ui/Crest';
 import { Skeleton } from '@/ui/Skeleton';
 import { Sheet } from '@/ui/Sheet';
-import { colors, fontSize, radius, spacing } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, withAlpha } from '@/ui/theme';
 import type { LiveData } from '@/data/useLiveMatch';
 import type { Match } from '@/types';
 
@@ -189,7 +189,7 @@ export function WatchSheet({
             <Text style={styles.sectionTitle}>直链线路</Text>
             <Pressable
               onPress={() => void reloadSources()}
-              hitSlop={8}
+              hitSlop={15}
               disabled={sourceLoading}
               accessibilityLabel="刷新直链"
             >
@@ -233,7 +233,7 @@ export function WatchSheet({
               <Text style={styles.emptyDirectText}>
                 {sourceError ? '直链抓取暂时不可用' : '暂未匹配到直链'}
               </Text>
-              <Pressable onPress={() => void reloadSources()} hitSlop={8}>
+              <Pressable onPress={() => void reloadSources()} hitSlop={12}>
                 <Text style={styles.playText}>重试</Text>
               </Pressable>
             </View>
@@ -272,7 +272,7 @@ export function WatchSheet({
             <Text style={styles.sectionTitle}>YouTube 集锦</Text>
             <Pressable
               onPress={() => void reloadHighlights()}
-              hitSlop={8}
+              hitSlop={15}
               disabled={highlightsLoading}
               accessibilityLabel="刷新 YouTube 集锦"
             >
@@ -387,8 +387,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   statusLive: {
-    borderColor: 'rgba(226,86,79,0.35)',
-    backgroundColor: 'rgba(226,86,79,0.10)',
+    borderColor: withAlpha(colors.live, 0.35),
+    backgroundColor: withAlpha(colors.live, 0.10),
   },
   liveLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   liveDot: { width: 6, height: 6, borderRadius: radius.full, backgroundColor: colors.live },
@@ -445,6 +445,8 @@ const styles = StyleSheet.create({
   spoilerButton: {
     alignSelf: 'flex-start',
     marginTop: spacing.xs,
+    minHeight: 44,
+    justifyContent: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.lg,

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
-import { colors, fontSize, radius, spacing } from './theme';
+import { colors, fontSize, radius, spacing, withAlpha } from './theme';
 
 type Tone = 'default' | 'accent' | 'warn' | 'live' | 'muted';
 
@@ -19,7 +19,7 @@ const TONE_COLORS: Record<Tone, { fg: string; bg: string; border: string }> = {
   default: { fg: colors.textSecondary, bg: colors.panel, border: colors.hairline },
   accent: { fg: colors.accent, bg: colors.goldSoft, border: colors.accent },
   warn: { fg: colors.warn, bg: 'rgba(224,168,46,0.10)', border: colors.warn },
-  live: { fg: colors.live, bg: 'rgba(226,86,79,0.10)', border: colors.live },
+  live: { fg: colors.live, bg: withAlpha(colors.live, 0.10), border: colors.live },
   muted: { fg: colors.textFaint, bg: 'transparent', border: colors.hairline },
 };
 

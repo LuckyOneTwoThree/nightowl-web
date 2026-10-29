@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   },
   legendText: { color: colors.textMuted, fontSize: fontSize.xs },
   matchSummary: { color: colors.textSecondary, fontSize: fontSize.xs, marginTop: 2 },
-  hintText: { color: colors.textFaint, fontSize: fontSize.xxs, marginTop: 2 },
+  hintText: { color: colors.textFaint, fontSize: fontSize.xs, marginTop: 2 },
   tableHead: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     borderColor: colors.hairline,
     backgroundColor: colors.panel,
   },
-  headText: { color: colors.textFaint, fontSize: fontSize.xxs, fontWeight: '600' },
+  headText: { color: colors.textFaint, fontSize: fontSize.xs, fontWeight: '600' },
   rows: { flex: 1 },
   rowsContent: { paddingBottom: spacing.xxl },
   row: {
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
   ptsCol: { width: 38, textAlign: 'right' },
   rankText: {
     color: colors.textMuted,
-    fontSize: fontSize.xxs,
+    fontSize: fontSize.xs,
     fontVariant: ['tabular-nums'],
   },
   teamName: {
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
   },
   matchBadge: {
     color: colors.textSecondary,
-    fontSize: fontSize.xxs,
+    fontSize: fontSize.xs,
     backgroundColor: colors.raised,
     borderWidth: 1,
     borderColor: colors.hairline,
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
   },
   groupLabel: {
     color: colors.textFaint,
-    fontSize: fontSize.xxs,
+    fontSize: fontSize.xs,
     fontWeight: '600',
     letterSpacing: 0.6,
   },

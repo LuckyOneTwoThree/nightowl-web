@@ -186,7 +186,7 @@ function PlayerView({
           { top: insets.top + spacing.sm, opacity: hudOpacity },
         ]}
       >
-        <Pressable onPress={onBack} style={styles.topButton} accessibilityLabel="返回">
+        <Pressable onPress={onBack} style={styles.topButton} hitSlop={2} accessibilityLabel="返回">
           <ChevronLeft size={20} color={colors.text} />
         </Pressable>
         <View style={styles.titlePill}>
@@ -201,6 +201,7 @@ function PlayerView({
             setPanelOpen(value => !value);
           }}
           style={styles.topButton}
+          hitSlop={2}
           accessibilityLabel="选择线路"
         >
           <ListVideo size={18} color={colors.text} />

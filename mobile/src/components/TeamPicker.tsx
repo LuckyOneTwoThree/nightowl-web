@@ -55,13 +55,15 @@ export function TeamPicker({ selected, onChange, autoFocus = false }: Props) {
           value={query}
           onChangeText={setQuery}
           autoFocus={autoFocus}
+          autoCorrect={false}
+          autoCapitalize="none"
           placeholder={`搜索 ${teams.length} 支球队（中文 / 英文 / 缩写）`}
           placeholderTextColor={colors.textFaint}
           style={styles.searchInput}
           returnKeyType="search"
         />
         {query ? (
-          <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="清空搜索">
+          <Pressable onPress={() => setQuery('')} hitSlop={14} accessibilityLabel="清空搜索">
             <X size={16} color={colors.textFaint} />
           </Pressable>
         ) : null}
@@ -79,6 +81,9 @@ export function TeamPicker({ selected, onChange, autoFocus = false }: Props) {
             <Pressable
               key={code}
               onPress={() => setLeague(code)}
+              hitSlop={7}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
               style={[
                 styles.tab,
                 active && styles.activeTab,
@@ -98,7 +103,7 @@ export function TeamPicker({ selected, onChange, autoFocus = false }: Props) {
           {selected.length === 0 ? ' · 不设主队也能用' : ''}
         </Text>
         {selected.length > 0 ? (
-          <Pressable onPress={() => onChange([])} hitSlop={10}>
+          <Pressable onPress={() => onChange([])} hitSlop={12} style={styles.clearHit}>
             <Text style={styles.clear}>清空</Text>
           </Pressable>
         ) : null}
@@ -117,6 +122,7 @@ export function TeamPicker({ selected, onChange, autoFocus = false }: Props) {
               <Pressable
                 key={id}
                 onPress={() => toggle(id)}
+                hitSlop={8}
                 style={({ pressed }) => [styles.selectedChip, pressed && styles.pressed]}
                 accessibilityRole="button"
                 accessibilityLabel={`取消关注 ${team?.zh || id}`}
@@ -244,6 +250,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm + 2,
   },
   selectedName: { color: colors.textSecondary, fontSize: fontSize.xs, maxWidth: 90 },
+  clearHit: { minHeight: 32, justifyContent: 'center' },
   clear: { color: colors.accent, fontSize: fontSize.xs, fontWeight: '600' },
   list: { flex: 1, minHeight: 0 },
   grid: { paddingBottom: spacing.xxl, gap: spacing.sm },
@@ -280,7 +287,7 @@ const styles = StyleSheet.create({
   teamName: { color: colors.text, fontSize: fontSize.xs, fontWeight: '600', maxWidth: '96%' },
   teamMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   leagueDot: { width: 5, height: 5, borderRadius: radius.full },
-  teamId: { color: colors.textFaint, fontSize: fontSize.xxs, fontVariant: ['tabular-nums'] },
+  teamId: { color: colors.textFaint, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   empty: { paddingVertical: spacing.xxxl, alignItems: 'center' },
   emptyText: { color: colors.textMuted, fontSize: fontSize.sm },
   listFooter: {

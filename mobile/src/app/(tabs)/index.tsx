@@ -63,7 +63,7 @@ export default function TonightScreen() {
   const rev = useDataRev();
   const source = useAppStore(state => state.source);
   const now = useNow(30_000);
-  const { syncing, syncError } = useSyncState();
+  const { syncing, quickSyncing, syncError } = useSyncState();
   const [showFinished, setShowFinished] = useState(false);
   const [checking, setChecking] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
@@ -166,7 +166,7 @@ export default function TonightScreen() {
   const todayLabel = `${bjDate(now)} ${weekdayOf(bjDate(now))}`;
 
   return (
-    <Screen scroll onRefresh={pullRefresh}>
+    <Screen scroll onRefresh={pullRefresh} refreshing={checking}>
       <View style={styles.header}>
         <View style={styles.brandBlock}>
           <Image
@@ -185,6 +185,7 @@ export default function TonightScreen() {
         <Pressable
           onPress={() => router.push('/search')}
           style={styles.iconButton}
+          hitSlop={3}
           accessibilityLabel="搜索球队或比赛"
         >
           <Search size={18} color={colors.textSecondary} />
@@ -192,13 +193,13 @@ export default function TonightScreen() {
       </View>
 
       <View style={styles.contextRow}>
-        {syncing || checking ? (
+        {syncing || quickSyncing || checking ? (
           <ActivityIndicator size="small" color={colors.accent} />
         ) : (
           <View style={styles.contextDot} />
         )}
         <Text style={styles.contextText}>
-          {syncing
+          {syncing || quickSyncing
             ? '正在更新比分…'
             : checking
               ? '正在检查比分…'
@@ -247,6 +248,8 @@ export default function TonightScreen() {
       {prefs.followedTeams.length === 0 ? (
         <Pressable
           onPress={() => router.push('/team-picker')}
+          accessibilityRole="button"
+          accessibilityLabel="管理关注球队"
           style={({ pressed }) => [styles.prompt, pressed && styles.pressed]}
         >
           <View style={styles.promptIcon}>
@@ -344,6 +347,8 @@ export default function TonightScreen() {
               <Pressable
                 key={pick.m.id}
                 onPress={() => openMatch(pick.m.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`${pick.reason}，${teamName(pick.m.h)} 对 ${teamName(pick.m.a)}`}
                 style={({ pressed }) => [styles.replayCard, pressed && styles.pressed]}
               >
                 <View style={styles.replayTop}>
@@ -571,7 +576,12 @@ function FocalCard({
 }) {
   const countdown = engineCountdown(ts(entry.m.t), now);
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [pressed && styles.pressed]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`下一场焦点战，${teamName(entry.m.h)} 对 ${teamName(entry.m.a)}`}
+      style={({ pressed }) => [pressed && styles.pressed]}
+    >
       <Card style={styles.focal}>
         <Text style={styles.heroLeague}>下一场焦点战</Text>
         <Text style={styles.focalTitle}>
@@ -642,7 +652,7 @@ const styles = StyleSheet.create({
   eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   heroEyebrow: {
     color: colors.textFaint,
-    fontSize: fontSize.xxs,
+    fontSize: fontSize.xs,
     fontWeight: '700',
     letterSpacing: 1,
   },
@@ -710,7 +720,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
   },
   metric: { flex: 1, gap: 3 },
-  metricLabel: { color: colors.textFaint, fontSize: fontSize.xxs, letterSpacing: 0.4 },
+  metricLabel: { color: colors.textFaint, fontSize: fontSize.xs, letterSpacing: 0.4 },
   metricIndexRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   metricAccent: {
     color: colors.accent,

@@ -63,6 +63,7 @@ import { Crest } from '@/ui/Crest';
 import { LiveTimeline } from '@/components/LiveTimeline';
 import { WatchSheet } from '@/components/WatchSheet';
 import { EmptyState } from '@/ui/EmptyState';
+import { FormDots } from '@/ui/FormDots';
 import { SegmentedControl } from '@/ui/SegmentedControl';
 import { SleepBadge } from '@/ui/SleepBadge';
 import { colors, fontSize, radius, spacing, tierColor, withAlpha } from '@/ui/theme';
@@ -214,7 +215,7 @@ export default function MatchScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.headerButton}>
+          <Pressable onPress={() => router.back()} style={styles.headerButton} hitSlop={4} accessibilityLabel="返回">
             <ChevronLeft size={20} color={colors.text} />
           </Pressable>
           <Text style={styles.headerTitle}>比赛详情</Text>
@@ -269,7 +270,7 @@ export default function MatchScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.headerButton} accessibilityLabel="返回">
+        <Pressable onPress={() => router.back()} style={styles.headerButton} hitSlop={4} accessibilityLabel="返回">
           <ChevronLeft size={20} color={colors.text} />
         </Pressable>
         <View style={styles.headerTitleWrap}>
@@ -307,7 +308,7 @@ export default function MatchScreen() {
                 : `${teamName(match.h)} vs ${teamName(match.a)}`}
           </Animated.Text>
         </View>
-        <Pressable onPress={share} style={styles.headerButton} accessibilityLabel="分享比赛">
+        <Pressable onPress={share} style={styles.headerButton} hitSlop={4} accessibilityLabel="分享比赛">
           <Share2 size={18} color={colors.text} />
         </Pressable>
       </View>
@@ -360,7 +361,7 @@ export default function MatchScreen() {
                 <Text style={styles.score}>{finalScore}</Text>
               ) : finishedNow && finalScore ? (
                 <>
-                  <Pressable onPress={handleRevealScore} style={styles.revealButton}>
+                  <Pressable onPress={handleRevealScore} style={styles.revealButton} hitSlop={10}>
                     <Eye size={13} color={colors.accent} />
                     <Text style={styles.revealText}>揭晓比分</Text>
                   </Pressable>
@@ -379,7 +380,7 @@ export default function MatchScreen() {
                 </>
               ) : liveNow && liveScoreText ? (
                 <>
-                  <Pressable onPress={handleRevealScore} style={styles.revealButton}>
+                  <Pressable onPress={handleRevealScore} style={styles.revealButton} hitSlop={10}>
                     <Eye size={13} color={colors.accent} />
                     <Text style={styles.revealText}>揭晓实时比分</Text>
                   </Pressable>
@@ -429,7 +430,7 @@ export default function MatchScreen() {
                   <CheckCircle2 size={14} color={colors.textMuted} />
                   <Text style={styles.stateText}>已结束</Text>
                 </View>
-                <Pressable onPress={() => setWatchOpen(true)} hitSlop={10}>
+                <Pressable onPress={() => setWatchOpen(true)} hitSlop={16}>
                   <Text style={styles.stateAction}>看集锦</Text>
                 </Pressable>
               </>
@@ -442,7 +443,7 @@ export default function MatchScreen() {
                   </Text>
                 </View>
                 <View style={styles.stateActions}>
-                  <Pressable onPress={() => setWatchOpen(true)} hitSlop={10}>
+                  <Pressable onPress={() => setWatchOpen(true)} hitSlop={16}>
                     <Text style={styles.stateSecondary}>观看入口</Text>
                   </Pressable>
                   {reminded ? (
@@ -481,7 +482,7 @@ export default function MatchScreen() {
           </View>
 
           {finishedNow && scoreVisible && finalScore ? (
-            <Pressable onPress={handleHideScore} style={styles.hideScore}>
+            <Pressable onPress={handleHideScore} style={styles.hideScore} hitSlop={14}>
               <EyeOff size={13} color={colors.textMuted} />
               <Text style={styles.hideScoreText}>重新隐藏比分</Text>
             </Pressable>
@@ -662,6 +663,7 @@ function IntelTab({
             setShowAttribution(value => !value);
           }}
           style={styles.attributionHeader}
+          hitSlop={8}
           accessibilityRole="button"
           accessibilityState={{ expanded: showAttribution }}
         >
@@ -1069,24 +1071,7 @@ function FormRow({
       </View>
       <View style={styles.formDots}>
         {form.length > 0 ? (
-          form.map((item, index) => (
-            <View
-              key={`${item.date}-${index}`}
-              style={[
-                styles.formDot,
-                {
-                  backgroundColor:
-                    item.result === 'W'
-                      ? colors.success
-                      : item.result === 'L'
-                        ? colors.danger
-                        : colors.textMuted,
-                },
-              ]}
-            >
-              <Text style={styles.formDotText}>{item.result}</Text>
-            </View>
-          ))
+          <FormDots form={form} />
         ) : (
           <Text style={styles.cardLine}>暂无已完赛记录</Text>
         )}
@@ -1257,8 +1242,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   stateStripLive: {
-    borderColor: 'rgba(226,86,79,0.35)',
-    backgroundColor: 'rgba(226,86,79,0.10)',
+    borderColor: withAlpha(colors.live, 0.35),
+    backgroundColor: withAlpha(colors.live, 0.10),
   },
   stateLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   stateActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
@@ -1314,6 +1299,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   attributionHeader: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1332,7 +1318,7 @@ const styles = StyleSheet.create({
   meter: { flexDirection: 'row', gap: 5, marginTop: spacing.sm },
   meterBar: { flex: 1, height: 6, borderRadius: radius.full },
   meterLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
-  meterLabel: { color: colors.textFaint, fontSize: fontSize.xxs },
+  meterLabel: { color: colors.textFaint, fontSize: fontSize.xs },
   attrRowWrap: {
     gap: 4,
     paddingVertical: 3,
@@ -1375,14 +1361,15 @@ const styles = StyleSheet.create({
   },
   upcomingBlock: { gap: spacing.sm },
   upcomingTeam: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '600' },
-  upcomingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  upcomingRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 },
   upcomingTeams: { flex: 1, color: colors.textMuted, fontSize: fontSize.xs },
   upcomingTime: {
     color: colors.textFaint,
-    fontSize: fontSize.xxs,
+    fontSize: fontSize.xs,
     fontVariant: ['tabular-nums'],
   },
   sameNightRow: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -1405,16 +1392,8 @@ const styles = StyleSheet.create({
   formRow: { gap: spacing.sm },
   formTeam: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   formTeamName: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
-  formDots: { flexDirection: 'row', gap: 5 },
-  formDot: {
-    width: 22,
-    height: 22,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  formDotText: { color: colors.resultInk, fontSize: fontSize.xxs, fontWeight: '800' },
-  formSummary: { color: colors.textFaint, fontSize: fontSize.xs },
+  formDots: { flexDirection: 'row', gap: 6 },
+  formSummary: { color: colors.textMuted, fontSize: fontSize.xs },
   tableHead: { flexDirection: 'row', alignItems: 'center', paddingBottom: spacing.xs },
   tableLabel: { flex: 1 },
   tableTeam: {
@@ -1455,7 +1434,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
-  h2hLabel: { color: colors.textFaint, fontSize: fontSize.xxs },
+  h2hLabel: { color: colors.textFaint, fontSize: fontSize.xs },
   meetingRow: {
     minHeight: 44,
     flexDirection: 'row',
@@ -1467,7 +1446,7 @@ const styles = StyleSheet.create({
   },
   standingsAsOf: {
     color: colors.textFaint,
-    fontSize: fontSize.xxs,
+    fontSize: fontSize.xs,
     fontVariant: ['tabular-nums'],
     marginTop: 2,
   },
@@ -1510,14 +1489,16 @@ const styles = StyleSheet.create({
   },
   standingsHint: {
     color: colors.textFaint,
-    fontSize: fontSize.xxs,
+    fontSize: fontSize.xs,
     lineHeight: 15,
     marginTop: spacing.sm,
   },
   standingsLink: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-end',
+    justifyContent: 'center',
     gap: 4,
     marginTop: spacing.xs,
     paddingVertical: 4,
@@ -1528,7 +1509,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: '600',
   },
-  meetingDate: { width: 48, color: colors.textFaint, fontSize: fontSize.xxs },
+  meetingDate: { width: 48, color: colors.textFaint, fontSize: fontSize.xs },
   meetingTeams: { flex: 1, color: colors.textSecondary, fontSize: fontSize.xs },
   meetingScore: {
     color: colors.text,

@@ -16,11 +16,14 @@ export const colors = {
   accent: '#F5B942',
   accentInk: '#1A1204',
   goldSoft: 'rgba(245, 185, 66, 0.12)',
-  live: '#E2564F',
+  live: '#E86A62',
   resource: '#45BFAE',
   warn: '#E0A82E',
   danger: '#F2776B',
   resultInk: '#000000',
+  resultWin: '#35A06F',
+  resultDraw: '#6B7686',
+  resultLoss: '#C9524C',
   dangerSoft: 'rgba(242, 119, 107, 0.12)',
   success: '#35A06F',
   overlay: 'rgba(0, 0, 0, 0.68)',
@@ -58,7 +61,7 @@ export const radius = {
 } as const;
 
 export const fontSize = {
-  xxs: 10,
+  // 手机端可读性下限：微字也保持 11px。
   xs: 11,
   sm: 12,
   md: 13,

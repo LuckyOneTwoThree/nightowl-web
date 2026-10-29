@@ -17,6 +17,7 @@ import { usePrefs, usePrefsStore } from '@/state/prefs';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
 import { Crest } from '@/ui/Crest';
+import { FormDots } from '@/ui/FormDots';
 import { MatchRow } from '@/ui/MatchRow';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { colors, fontSize, radius, spacing } from '@/ui/theme';
@@ -115,7 +116,7 @@ export default function TeamScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.back}>
+          <Pressable onPress={() => router.back()} style={styles.back} hitSlop={4} accessibilityLabel="返回">
             <ChevronLeft size={20} color={colors.text} />
           </Pressable>
           <Text style={styles.headerTitle}>球队</Text>
@@ -134,7 +135,7 @@ export default function TeamScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.back} accessibilityLabel="返回">
+        <Pressable onPress={() => router.back()} style={styles.back} hitSlop={4} accessibilityLabel="返回">
           <ChevronLeft size={20} color={colors.text} />
         </Pressable>
         <Text style={styles.headerTitle}>球队</Text>
@@ -159,6 +160,7 @@ export default function TeamScreen() {
           <Pressable
             onPress={() => toggleTeam(id)}
             style={[styles.follow, followed && styles.followActive]}
+            hitSlop={5}
             accessibilityRole="button"
             accessibilityState={{ selected: followed }}
           >
@@ -176,6 +178,8 @@ export default function TeamScreen() {
         {next ? (
           <Pressable
             onPress={() => openMatch(next.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`下一场，${teamName(next.h)} 对 ${teamName(next.a)}`}
             style={({ pressed }) => [pressed && styles.pressed]}
           >
             <Card tone="panel" style={styles.nextCard}>
@@ -211,24 +215,7 @@ export default function TeamScreen() {
           {form.length > 0 ? (
             <>
               <View style={styles.formDots}>
-                {form.map((item, index) => (
-                  <View
-                    key={`${item.date}-${index}`}
-                    style={[
-                      styles.formDot,
-                      {
-                        backgroundColor:
-                          item.result === 'W'
-                            ? colors.success
-                            : item.result === 'L'
-                              ? colors.danger
-                              : colors.textMuted,
-                      },
-                    ]}
-                  >
-                    <Text style={styles.formDotText}>{item.result}</Text>
-                  </View>
-                ))}
+                <FormDots form={form} />
               </View>
               <Text style={styles.formSummary}>
                 {formSummary.wins}胜 {formSummary.draws}平 {formSummary.losses}负
@@ -367,15 +354,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   card: { gap: spacing.sm },
-  formDots: { flexDirection: 'row', gap: 6, paddingTop: spacing.xs },
-  formDot: {
-    width: 24,
-    height: 24,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  formDotText: { color: colors.resultInk, fontSize: fontSize.xxs, fontWeight: '800' },
+  formDots: { paddingTop: spacing.xs },
   formSummary: { color: colors.textMuted, fontSize: fontSize.xs },
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingTop: spacing.xs },
   stat: {

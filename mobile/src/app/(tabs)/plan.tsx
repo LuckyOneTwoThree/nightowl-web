@@ -65,6 +65,7 @@ export default function PlanScreen() {
   const now = useNow(60_000);
   const [weekOffset, setWeekOffset] = useState(0);
   const [showZero, setShowZero] = useState(false);
+  const [showMinefield, setShowMinefield] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const week = useMemo(
@@ -102,12 +103,18 @@ export default function PlanScreen() {
     [selectedDay, week.days]
   );
 
+  const periodLabel =
+    weekOffset === 0 ? '本周规划' : weekOffset > 0 ? '未来周规划' : '历史周规划';
+  const weekWord = weekOffset === 0 ? '本周' : '该周';
+
   const openMatch = (id: string) =>
     router.push({ pathname: '/match/[id]', params: { id } });
 
   const changeWeek = (delta: number) => {
     void Haptics.selectionAsync();
     setSelectedDay(null);
+    setShowZero(false);
+    setShowMinefield(false);
     setWeekOffset(value => value + delta);
   };
 
@@ -115,27 +122,31 @@ export default function PlanScreen() {
     <Screen scroll>
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>本周规划</Text>
+          <Text style={styles.title}>{periodLabel}</Text>
           <Text style={styles.subline}>
             {start.slice(5).replace('-', '/')} – {end.slice(5).replace('-', '/')} 夜
           </Text>
         </View>
         <View style={styles.weekNav}>
-          <Pressable onPress={() => changeWeek(-1)} style={styles.navButton} accessibilityLabel="上一周">
+          <Pressable onPress={() => changeWeek(-1)} style={styles.navButton} hitSlop={6} accessibilityLabel="上一周">
             <ChevronLeft size={18} color={colors.textSecondary} />
           </Pressable>
           <Pressable
             onPress={() => {
               void Haptics.selectionAsync();
+              setSelectedDay(null);
+              setShowZero(false);
+              setShowMinefield(false);
               setWeekOffset(0);
             }}
+            hitSlop={7}
             style={[styles.todayButton, weekOffset === 0 && styles.todayButtonActive]}
           >
             <Text style={[styles.todayText, weekOffset === 0 && styles.todayTextActive]}>
               本周
             </Text>
           </Pressable>
-          <Pressable onPress={() => changeWeek(1)} style={styles.navButton} accessibilityLabel="下一周">
+          <Pressable onPress={() => changeWeek(1)} style={styles.navButton} hitSlop={6} accessibilityLabel="下一周">
             <ChevronRight size={18} color={colors.textSecondary} />
           </Pressable>
         </View>
@@ -197,7 +208,7 @@ export default function PlanScreen() {
 
       <View style={styles.section}>
         <SectionHeader
-          title="本周精选"
+          title={`${weekWord}精选`}
           count={plan.best.length}
           right={<Text style={styles.ratio}>{plan.best.length} / 5</Text>}
         />
@@ -216,9 +227,9 @@ export default function PlanScreen() {
           <Card tone="panel" style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>
               {!hasAnyMatches
-                ? '本周暂无比赛'
+                ? `${weekWord}暂无比赛`
                 : plan.evs.length === 0
-                  ? '本周暂无可安排的未开赛场次'
+                  ? `${weekWord}暂无可安排的未开赛场次`
                   : '当前预算下暂未选出场次'}
             </Text>
             {plan.evs.length > 0 && plan.budget < 8 ? (
@@ -246,10 +257,12 @@ export default function PlanScreen() {
           />
           {showZero ? (
             <View style={styles.list}>
-              {plan.zeroList.slice(0, 20).map(entry => (
+              {plan.zeroList.map(entry => (
                 <Pressable
                   key={entry.m.id}
                   onPress={() => openMatch(entry.m.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${teamName(entry.m.h)} 对 ${teamName(entry.m.a)}，指数 ${entry.index.toFixed(1)}`}
                   style={({ pressed }) => [styles.zeroRow, pressed && styles.pressed]}
                 >
                   <Text style={styles.zeroTime}>{hm(entry.m.t)}</Text>
@@ -266,12 +279,28 @@ export default function PlanScreen() {
 
       {week.minefield.length > 0 ? (
         <View style={styles.section}>
-          <SectionHeader title="本周雷区" count={week.minefield.length} />
+          <SectionHeader
+            title={`${weekWord}雷区`}
+            count={week.minefield.length}
+            actionLabel={
+              week.minefield.length > 4 ? (showMinefield ? '收起' : '查看全部') : undefined
+            }
+            onAction={
+              week.minefield.length > 4
+                ? () => {
+                    animateLayout();
+                    setShowMinefield(value => !value);
+                  }
+                : undefined
+            }
+          />
           <View style={styles.list}>
-            {week.minefield.slice(0, 4).map(item => (
+            {(showMinefield ? week.minefield : week.minefield.slice(0, 4)).map(item => (
               <Pressable
                 key={item.m.id}
                 onPress={() => openMatch(item.m.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`${teamName(item.m.h)} 对 ${teamName(item.m.a)}，雷区，${hm(item.m.t)}`}
                 style={({ pressed }) => [styles.mineRow, pressed && styles.pressed]}
               >
                 <TriangleAlert size={15} color={colors.warn} />
@@ -291,7 +320,7 @@ export default function PlanScreen() {
       ) : null}
 
       <View style={styles.section}>
-        <SectionHeader title="本周熬夜分布" />
+        <SectionHeader title={`${weekWord}熬夜分布`} />
         <Card tone="panel">
           {hasAnyMatches ? (
             <>
@@ -318,6 +347,9 @@ export default function PlanScreen() {
                         animateLayout();
                         setSelectedDay(cur => (cur === day.date ? null : day.date));
                       }}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isSelected }}
+                      accessibilityLabel={`周${WEEKDAYS[index]}，${day.count} 场，最高消耗 ${hmCost(day.cost)}`}
                       style={[
                         styles.chartColumn,
                         isSelected && styles.chartColumnActive,
@@ -362,22 +394,31 @@ export default function PlanScreen() {
                     </Text>
                   </View>
                   {activeDayObj.matches.length > 0 ? (
-                    activeDayObj.matches.slice(0, 4).map(m => (
-                      <Pressable
-                        key={m.id}
-                        onPress={() => openMatch(m.id)}
-                        style={({ pressed }) => [
-                          styles.dayPreviewRow,
-                          pressed && styles.pressed,
-                        ]}
-                      >
-                        <Text style={styles.dayPreviewTime}>{hm(m.t)}</Text>
-                        <Text style={styles.dayPreviewTeams} numberOfLines={1}>
-                          {teamName(m.h)} vs {teamName(m.a)}
+                    <>
+                      {activeDayObj.matches.slice(0, 4).map(m => (
+                        <Pressable
+                          key={m.id}
+                          onPress={() => openMatch(m.id)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${teamName(m.h)} 对 ${teamName(m.a)}，${hm(m.t)}`}
+                          style={({ pressed }) => [
+                            styles.dayPreviewRow,
+                            pressed && styles.pressed,
+                          ]}
+                        >
+                          <Text style={styles.dayPreviewTime}>{hm(m.t)}</Text>
+                          <Text style={styles.dayPreviewTeams} numberOfLines={1}>
+                            {teamName(m.h)} vs {teamName(m.a)}
+                          </Text>
+                          <SleepBadge tier={sleepTier(m.t)} />
+                        </Pressable>
+                      ))}
+                      {activeDayObj.matches.length > 4 ? (
+                        <Text style={styles.dayPreviewMore}>
+                          还有 {activeDayObj.matches.length - 4} 场，可在赛程中查看
                         </Text>
-                        <SleepBadge tier={sleepTier(m.t)} />
-                      </Pressable>
-                    ))
+                      ) : null}
+                    </>
                   ) : (
                     <Text style={styles.emptyText}>当日暂无未开赛场次</Text>
                   )}
@@ -386,7 +427,7 @@ export default function PlanScreen() {
               <Text style={styles.advice}>{week.advice}</Text>
             </>
           ) : (
-            <Text style={styles.emptyText}>本周暂无未开赛场次，暂无分布数据。</Text>
+            <Text style={styles.emptyText}>{weekWord}暂无未开赛场次，暂无分布数据。</Text>
           )}
         </Card>
       </View>
@@ -399,6 +440,8 @@ export default function PlanScreen() {
               <Pressable
                 key={entry.m.id}
                 onPress={() => openMatch(entry.m.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`${teamName(entry.m.h)} 对 ${teamName(entry.m.a)}，指数 ${entry.index.toFixed(1)}`}
                 style={({ pressed }) => [styles.altRow, pressed && styles.pressed]}
               >
                 <View style={styles.altDate}>
@@ -416,7 +459,7 @@ export default function PlanScreen() {
       ) : null}
 
       <Text style={styles.footer}>
-        「本周精选」按睡眠预算与看点做二维背包，不是睡眠额度；零成本场次不计入。
+        「{weekWord}精选」按睡眠预算与看点做二维背包，不是睡眠额度；零成本场次不计入。
       </Text>
     </Screen>
   );
@@ -455,6 +498,8 @@ function PickRow({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${teamName(match.h)} 对 ${teamName(match.a)}，${dateLabel} ${hm(match.t)}，指数 ${entry.index.toFixed(1)}`}
       style={({ pressed }) => [styles.pickRow, pressed && styles.pressed]}
     >
       <View style={[styles.pickBar, { backgroundColor: leagueColor(match.l) }]} />
@@ -569,7 +614,7 @@ const styles = StyleSheet.create({
   },
   emptyCard: { alignItems: 'center', gap: spacing.xs },
   emptyTitle: { color: colors.textSecondary, fontSize: fontSize.sm, textAlign: 'center' },
-  addBudget: { marginTop: spacing.sm, height: 38 },
+  addBudget: { marginTop: spacing.sm, height: 44 },
   pickRow: {
     flexDirection: 'row',
     minHeight: 92,
@@ -584,7 +629,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
-  pickDate: { color: colors.textFaint, fontSize: fontSize.xxs },
+  pickDate: { color: colors.textFaint, fontSize: fontSize.xs },
   pickMain: { flex: 1, paddingVertical: spacing.md, paddingRight: spacing.md, gap: 6 },
   pickTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   pickLeague: { color: colors.textMuted, fontSize: fontSize.xs },
@@ -597,10 +642,10 @@ const styles = StyleSheet.create({
   },
   pickTeams: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   pickTeamName: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600', maxWidth: '34%' },
-  pickVs: { color: colors.textFaint, fontSize: fontSize.xxs },
+  pickVs: { color: colors.textFaint, fontSize: fontSize.xs },
   pickReason: { color: colors.textFaint, fontSize: fontSize.xs },
-  pickConflict: { color: colors.warn, fontSize: fontSize.xxs, fontWeight: '600' },
-  pickConflictNames: { color: colors.textFaint, fontSize: fontSize.xxs },
+  pickConflict: { color: colors.warn, fontSize: fontSize.xs, fontWeight: '600' },
+  pickConflictNames: { color: colors.textFaint, fontSize: fontSize.xs },
   zeroRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -652,7 +697,7 @@ const styles = StyleSheet.create({
   chartBarWrap: { height: 60, width: '100%', justifyContent: 'flex-end', alignItems: 'center' },
   chartBar: { width: '62%', borderRadius: radius.sm, minHeight: 3 },
   chartLabel: { color: colors.textFaint, fontSize: fontSize.xs },
-  chartCount: { color: colors.textMuted, fontSize: fontSize.xxs, fontVariant: ['tabular-nums'] },
+  chartCount: { color: colors.textMuted, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   dayPreview: {
     marginTop: spacing.sm,
     paddingTop: spacing.sm,
@@ -667,8 +712,10 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   dayPreviewTitle: { color: colors.text, fontSize: fontSize.xs, fontWeight: '700' },
-  dayPreviewCost: { color: colors.textMuted, fontSize: fontSize.xxs, fontVariant: ['tabular-nums'] },
+  dayPreviewCost: { color: colors.textMuted, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
+  dayPreviewMore: { color: colors.textFaint, fontSize: fontSize.xs, paddingTop: 2 },
   dayPreviewRow: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -694,7 +741,7 @@ const styles = StyleSheet.create({
   },
   altDate: { width: 70, gap: 1 },
   altTime: { color: colors.textSecondary, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
-  altDay: { color: colors.textFaint, fontSize: fontSize.xxs },
+  altDay: { color: colors.textFaint, fontSize: fontSize.xs },
   altTeams: { flex: 1, color: colors.textSecondary, fontSize: fontSize.sm },
   altIndex: { color: colors.textMuted, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   footer: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 17, textAlign: 'center' },

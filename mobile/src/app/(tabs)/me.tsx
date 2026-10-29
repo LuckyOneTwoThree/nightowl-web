@@ -95,12 +95,12 @@ export default function MeScreen() {
   }, []);
 
   const version = Constants.expoConfig?.version ?? '0.1.0';
-  const followedTeamNames = prefs.followedTeams
-    .map(id => ({ id, name: teamName(id) }))
-    .slice(0, 12);
+  const followedTeamNames = prefs.followedTeams.map(id => ({ id, name: teamName(id) }));
+  const visibleTeamNames = followedTeamNames.slice(0, 12);
+  const hiddenTeamCount = Math.max(0, followedTeamNames.length - visibleTeamNames.length);
 
   return (
-    <Screen scroll>
+    <Screen scroll onRefresh={runSync} refreshing={syncing}>
       <View style={styles.header}>
         <Text style={styles.title}>我的</Text>
         <Text style={styles.subline}>个人观赛档案与数据服务</Text>
@@ -142,7 +142,7 @@ export default function MeScreen() {
             </View>
             {followedTeamNames.length > 0 ? (
               <View style={styles.chips}>
-                {followedTeamNames.map(team => (
+                {visibleTeamNames.map(team => (
                   <Chip
                     key={team.id}
                     icon={<Crest id={team.id} size={14} />}
@@ -153,6 +153,11 @@ export default function MeScreen() {
                     {team.name}
                   </Chip>
                 ))}
+                {hiddenTeamCount > 0 ? (
+                  <Chip onPress={() => router.push('/team-picker')}>
+                    +{hiddenTeamCount} 支
+                  </Chip>
+                ) : null}
               </View>
             ) : (
               <Text style={styles.emptyText}>还没有关注球队，点右上角管理添加。</Text>
@@ -396,7 +401,7 @@ export default function MeScreen() {
         ) : null}
       </View>
 
-      <Text style={styles.footer}>夜猫看台 · Android 移动端 · Phase 1</Text>
+      <Text style={styles.footer}>夜猫看台 · Android 移动端 · v{version}</Text>
     </Screen>
   );
 }
@@ -444,6 +449,7 @@ function SettingSwitch({
       <Switch
         value={value}
         onValueChange={onValueChange}
+        accessibilityLabel={label}
         trackColor={{ false: colors.control, true: colors.accent }}
         thumbColor={value ? colors.accentInk : colors.textMuted}
       />
@@ -513,8 +519,8 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   error: { color: colors.danger, fontSize: fontSize.xs, lineHeight: 17 },
-  syncButton: { height: 42 },
-  testRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  syncButton: { height: 44 },
+  testRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 44 },
   permissionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -527,6 +533,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     lineHeight: 17,
   },
+  permissionButton: { minHeight: 32, justifyContent: 'center' },
   permissionLink: { color: colors.accent, fontSize: fontSize.xs, fontWeight: '700' },
   linkRow: {
     flexDirection: 'row',

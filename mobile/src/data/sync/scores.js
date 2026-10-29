@@ -206,8 +206,8 @@ export function uclWeeklyTargets(nowTs = Date.now(), targets = new Map()) {
 
 /** 下拉快检只回看最近 72 小时，避免一次手势带来全季历史扫描 */
 export const QUICK_SYNC_WINDOW_MS = 72 * 3600000;
-/** 每个联赛最多回看 2 个比赛日，避免积压时把快检放大成几十个请求 */
-const MAX_QUICK_DATES = 2;
+/** 每个联赛最多回看 3 个比赛日（覆盖 72h 窗口内的周五/周六/周日），避免积压时放大成几十个请求 */
+const MAX_QUICK_DATES = 3;
 
 /**
  * 下拉刷新用的轻量目标：只查最近 72 小时内已开球的场次。

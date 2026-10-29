@@ -62,8 +62,10 @@ export function syncNow(options: SyncOptions = {}): Promise<SyncOutcome> {
     return inFlight;
   }
 
-  if (!quick) {
-    const app = useAppStore.getState();
+  const app = useAppStore.getState();
+  if (quick) {
+    app.setQuickSyncing(true);
+  } else {
     app.setSyncing(true);
     app.setSyncError(null);
   }
@@ -150,7 +152,8 @@ export function syncNow(options: SyncOptions = {}): Promise<SyncOutcome> {
       throw error;
     })
     .finally(() => {
-      if (!quick) useAppStore.getState().setSyncing(false);
+      if (quick) useAppStore.getState().setQuickSyncing(false);
+      else useAppStore.getState().setSyncing(false);
       inFlight = null;
       inFlightQuick = false;
     });

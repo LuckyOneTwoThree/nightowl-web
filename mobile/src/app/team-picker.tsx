@@ -28,7 +28,7 @@ export default function TeamPickerScreen() {
       >
       <View style={styles.header}>
         <Text style={styles.title}>关注球队</Text>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.close}>
+        <Pressable onPress={() => router.back()} hitSlop={5} style={styles.close} accessibilityLabel="关闭">
           <X size={20} color={colors.textMuted} />
         </Pressable>
       </View>

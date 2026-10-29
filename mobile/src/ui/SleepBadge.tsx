@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   labelSm: {
-    fontSize: fontSize.xxs,
+    fontSize: fontSize.xs,
   },
   labelMd: {
     fontSize: fontSize.xs,

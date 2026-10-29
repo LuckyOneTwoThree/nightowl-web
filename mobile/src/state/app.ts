@@ -6,6 +6,7 @@ type AppStore = {
   rev: number;
   source: DataSource;
   syncing: boolean;
+  quickSyncing: boolean;
   syncError: string | null;
   lastCheckedAt: number | null;
   lastSyncedAt: number | null;
@@ -17,6 +18,7 @@ type AppStore = {
     syncedAt?: number;
   }) => void;
   setSyncing: (value: boolean) => void;
+  setQuickSyncing: (value: boolean) => void;
   setSyncError: (message: string | null) => void;
   setMeta: (meta: {
     source?: DataSource;
@@ -33,6 +35,7 @@ export const useAppStore = create<AppStore>(set => ({
   rev: 0,
   source: 'bundled',
   syncing: false,
+  quickSyncing: false,
   syncError: null,
   lastCheckedAt: null,
   lastSyncedAt: null,
@@ -47,6 +50,7 @@ export const useAppStore = create<AppStore>(set => ({
       lastSyncErrorAt: null,
     })),
   setSyncing: value => set({ syncing: value }),
+  setQuickSyncing: value => set({ quickSyncing: value }),
   setSyncError: message => set({ syncError: message }),
   setMeta: meta =>
     set(state => ({
