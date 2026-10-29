@@ -12,6 +12,7 @@
     "server": "node server/index.js",
     "electron:dev": "electron .",
     "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:mac": "npm run build && electron-builder --mac --publish never",
     "migrate:data": "node tools/migrate-data.mjs",
     "sync:scores": "node tools/sync-scores.mjs",
     "sync:scores:apply": "node tools/sync-scores.mjs --apply",
@@ -72,6 +73,7 @@
     "appId": "com.nightowl.terrace",
     "productName": "NightOwl Terrace",
     "asar": false,
+    "afterPack": "build/after-pack.cjs",
     "directories": {
       "output": "release"
     },
@@ -98,6 +100,26 @@
         "nsis"
       ],
       "icon": "build/icon.ico"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.sports",
+      "identity": null,
+      "artifactName": "NightOwl-Terrace-${version}-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,

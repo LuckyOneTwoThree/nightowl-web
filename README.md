@@ -5,11 +5,11 @@
 
   **熬夜看球之前，先让算法替你算一算 —— 今晚该看哪场、值不值得熬。**
 
-  <sub>本机运行的观赛决策工作台 · 桌面 Windows + 手机 Android · 赛程 / 比分 / 情报 / 直播入口，一屏看全</sub>
+  <sub>本机运行的观赛决策工作台 · 桌面 Windows / macOS + 手机 Android · 赛程 / 比分 / 情报 / 直播入口，一屏看全</sub>
 
   <br />
 
-  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Android-2b6cb0?style=flat-square" alt="platform" />
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Android-2b6cb0?style=flat-square" alt="platform" />
   <img src="https://img.shields.io/badge/release-v0.1.40-2f855a?style=flat-square" alt="release" />
   <img src="https://img.shields.io/badge/electron-33-47848f?style=flat-square" alt="electron" />
   <img src="https://img.shields.io/badge/expo%20sdk-58-000020?style=flat-square" alt="expo" />
@@ -52,7 +52,7 @@
 
 ## 功能
 
-> 以下主要描述 Windows 桌面端；Android 端的页面形态与能力差异见 [Android 手机端](#android-手机端)。
+> 以下主要描述桌面端（Windows / macOS 共用同一套界面与能力）；Android 端的页面形态与能力差异见 [Android 手机端](#android-手机端)。
 
 ### 🧠 决策大脑（纯函数算法，可回归测试）
 
@@ -169,12 +169,16 @@ npm run eas:preview        # EAS 云构建 arm64 内测 APK
 
 ### 桌面端 · 下载安装（推荐）
 
-前往 [Releases](../../releases/latest) 下载 `NightOwl-Terrace-Setup-<版本>.exe` 安装。
+前往 [Releases](../../releases/latest) 下载：
 
-- 系统要求：Windows 10 / 11（x64）
-- 首次安装启动会播放一次开屏动画（可跳过，设置中可回放）
+- **Windows x64**：`NightOwl-Terrace-Setup-<版本>.exe`
+- **macOS Apple Silicon (arm64)**：`NightOwl-Terrace-<版本>-arm64.dmg`
+
+系统要求：Windows 10 / 11（x64）；macOS 11+（Apple Silicon，Intel Mac 暂未出包）。首次安装启动会播放一次开屏动画（可跳过，设置中可回放）。
+
+- macOS 首次打开若提示「无法验证开发者」：右键 App → **打开**，或到 **系统设置 → 隐私与安全性** 点「仍要打开」；也可执行 `xattr -dr com.apple.quarantine "/Applications/NightOwl Terrace.app"` 后重试
 - **比分自动保鲜**：启动后会自动拉取最新比分，无需手动操作；数据更新时间与待录场次可在「设置 → 数据与服务」查看
-- 应用内更新：从 v0.1.8 起，新版本会在应用内提示并支持一键下载安装
+- 应用内更新：Windows 从 v0.1.8 起支持应用内提示与一键更新；macOS 当前为 ad-hoc 签名、未做 Apple 公证，更新不保证可用，建议下载最新 DMG 覆盖安装
 
 ### 桌面端 · 从源码运行
 
@@ -253,7 +257,7 @@ mobile/          Android 客户端（Expo SDK 58 + React Native）
 - **手机端不做代理**：不内置签名频道、不跑本地 / 远程中转，只直连运行时抓到的公开直链；原生能力（通知 / PiP / 明文 HTTP）必须以真机 APK 验收
 - **时区口径**：数据时间为北京墙钟，全部换算走纯 UTC 算术（禁用设备本地时区解析）
 - **状态只落三值**：`sched` / `done` / `pp`，进行中状态运行时推导，避免落库状态与真实时间打架
-- **打包自检**：跨平台 node 脚本扫描产物内的相对 import 与运行时依赖，并断言本地签名直链与运行期缓存未入包；本地与 CI 共用同一份逻辑（开发环境是 mac，CI 是 Windows——验证脚本必须两边都能跑）
+- **打包自检**：跨平台 node 脚本扫描产物内的相对 import 与运行时依赖，并断言本地签名直链与运行期缓存未入包；本地与 CI 共用同一份逻辑（开发环境是 mac，CI 同时跑 Windows 与 macOS——验证脚本必须两边都能跑）
 - **测试即验收**：离线套件与联网检查分离——`npm run test:all` 不联网、不写盘，400+ 项断言串行跑完；`npm run test:online` 单独验证真实上游（含错配零容忍的直播源匹配回归）
 
 详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
