@@ -106,7 +106,7 @@ export function Chip({ tone = 'neutral', children, className = '' }) {
   const tones = {
     neutral: 'bg-surface-raised border border-line-hairline text-text-muted',
     accent: 'bg-accent/15 border border-accent/30 text-accent',
-    live: 'bg-live/15 border border-live/30 text-live',
+    live: 'bg-live/10 border border-live/30 text-live',
     warn: 'bg-warn/15 border border-warn/30 text-warn',
     danger: 'bg-danger/15 border border-danger/30 text-danger',
     resource: 'bg-resource/15 border border-resource/30 text-resource'

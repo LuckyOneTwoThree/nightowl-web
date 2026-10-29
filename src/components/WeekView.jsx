@@ -182,7 +182,7 @@ export default function WeekView({
               step="0.5"
               value={plan.budget}
               onChange={e => onBudgetChange(Number(e.target.value))}
-              className="mt-2 w-full accent-[rgb(var(--resource))]"
+              className="mt-2 w-full accent-[rgb(var(--resource-rgb))]"
               aria-label="每周熬夜预算（小时）"
             />
 

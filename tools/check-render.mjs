@@ -16,11 +16,12 @@
  */
 
 import { app, BrowserWindow } from 'electron';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from '../server/index.js';
 import { loadRules } from '../server/proxy.js';
+import { ts as fixtureTs } from '../src/core/engine.js';
 
 app.disableHardwareAcceleration();
 
@@ -28,6 +29,12 @@ const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const DIST = resolve(ROOT, 'dist');
 const PRELOAD = resolve(ROOT, 'electron/preload.cjs');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/** 选择一个明确仍在未来的场次，避免赛后数据更新后把「指数」断言误判成完赛行。 */
+const repoFixtures = JSON.parse(readFileSync(resolve(ROOT, 'src/data/fixtures.json'), 'utf8'));
+const futureFixture = repoFixtures.find(
+  m => m.st === 'sched' && !m.tbd && fixtureTs(m.t) > Date.now() + 2 * 3600000
+);
 let pass = 0;
 let fail = 0;
 
@@ -650,7 +657,7 @@ app.whenReady().then(async () => {
         const el = document.querySelector('input[placeholder^="搜索球队"]');
         if (!el) return false;
         const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-        setter.call(el, 'SA-9-MIL-BOL');
+        setter.call(el, ${JSON.stringify(futureFixture?.id || 'SA-9-MIL-BOL')});
         el.dispatchEvent(new Event('input', { bubbles: true }));
         return true;
       })()
@@ -660,7 +667,7 @@ app.whenReady().then(async () => {
       (() => {
         const left = document.querySelector('main > section');
         const row = [...(left?.querySelectorAll('[role="button"]') || [])].find(
-          n => (n.textContent || '').includes('AC米兰') && (n.textContent || '').includes('博洛尼亚')
+          n => (n.textContent || '').includes('指数')
         );
         return { found: !!row, text: row?.textContent || '' };
       })()

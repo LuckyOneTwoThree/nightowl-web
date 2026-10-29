@@ -155,7 +155,7 @@ export default function SplashScreen({
         </div>
 
         {/* 主标题：夜猫看台 */}
-        <h1 className="mb-2 bg-gradient-to-r from-text-primary via-text-primary to-accent bg-clip-text text-3xl font-extrabold tracking-wider text-transparent sm:text-4xl drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">
+        <h1 className="mb-2 bg-gradient-to-r from-text-primary via-text-primary to-accent bg-clip-text text-3xl font-extrabold tracking-wider text-transparent drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">
           夜猫看台
         </h1>
 

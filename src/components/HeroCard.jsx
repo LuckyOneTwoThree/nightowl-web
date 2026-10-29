@@ -179,7 +179,7 @@ export default function HeroCard({
           <span className="text-xs text-text-muted">· {leagueName(m.l)} 第 {m.r} 轮</span>
           {ev.isFollowed && <Chip tone="neutral">主队</Chip>}
           {live && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-live/15 px-2 py-0.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-live/10 px-2 py-0.5">
               <LiveDot />
               <span className="font-num text-2xs font-semibold tabular-nums text-live">{minute}′</span>
             </span>

@@ -1,6 +1,7 @@
 import { hm, liveMinute } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { ts, MATCH_DURATION_MS } from '../core/engine.js';
+import { INDEX_HIGHLIGHT_THRESHOLD } from '../core/owl.js';
 import { Crest, Chip, LiveDot, ScoreText, SleepBadge } from './atoms.jsx';
 import { IconDerby, IconWarn } from './icons.jsx';
 
@@ -132,7 +133,7 @@ export default function MatchRow({
                   aria-label={`夜猫指数 ${index.toFixed(1)}`}
                 >
                   <span className="text-2xs font-normal text-text-faint">指数</span>
-                  <span className={index >= 8 ? 'text-accent' : 'text-text-secondary'}>
+                  <span className={index >= INDEX_HIGHLIGHT_THRESHOLD ? 'text-accent' : 'text-text-secondary'}>
                     {index.toFixed(1)}
                   </span>
                 </span>

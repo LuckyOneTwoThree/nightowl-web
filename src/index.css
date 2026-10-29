@@ -32,30 +32,9 @@
 @font-face {
   font-family: 'Hanken Grotesk';
   font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/hankengrotesk-400.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Hanken Grotesk';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('/fonts/hankengrotesk-500.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Hanken Grotesk';
-  font-style: normal;
   font-weight: 600;
   font-display: swap;
   src: url('/fonts/hankengrotesk-600.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Hanken Grotesk';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('/fonts/hankengrotesk-700.woff2') format('woff2');
 }
 @font-face {
   font-family: 'JetBrains Mono';
@@ -144,8 +123,8 @@
 
   /* ---- 语义状态：各司其职，禁止挪作装饰 ----
      铁律：Chip 仅用于系统异常（延期/雷区/起播失败/缺失），严禁用 Chip 表达睡眠档位！ */
-  --live: #e2564f;
-  --live-rgb: 226 86 79;
+  --live: #e86a62;
+  --live-rgb: 232 106 98;
   --resource: #45bfae; /* 睡眠额度 / 预算 —— 全应用只有"额度"用它 */
   --resource-rgb: 69 191 174;
   --warn: #e0a82e;

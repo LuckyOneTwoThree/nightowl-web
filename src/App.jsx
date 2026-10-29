@@ -383,7 +383,12 @@ export default function App() {
       const stale = Number(j?.freshness?.staleHours || 0);
       let state = 'ok';
       let label = '数据未检查';
-      if (j?.lastSync && (errors > 0 || !writtenOk)) {
+      if (j?.syncing) {
+        // 后台保鲜会持续几十秒（openfootball 兜底较慢）；期间明确告知用户，
+        // 完成后下一次短轮询会检测到 lastSync 变化并热更新 fixtures。
+        state = 'ok';
+        label = '正在更新比分…';
+      } else if (j?.lastSync && (errors > 0 || !writtenOk)) {
         state = 'error';
         label = errors > 0 ? `同步失败 · ${errors} 个来源` : '同步写盘失败';
       } else if (pending > 0) {
@@ -399,20 +404,27 @@ export default function App() {
         state = 'unknown';
       }
       setDataHealth({ state, label });
+      return { syncing: !!j?.syncing };
     } catch {
       setDataHealth({ state: 'error', label: '本地服务未连接' });
+      return { syncing: false };
     }
   }, [refreshData]);
 
   useEffect(() => {
-    let interval = null;
-    const timer = setTimeout(() => {
-      refreshHealth();
-      interval = setInterval(refreshHealth, 120000);
-    }, 4000);
+    let alive = true;
+    let timer = null;
+    const tick = async () => {
+      const info = await refreshHealth();
+      if (!alive) return;
+      // 后台同步期间缩短到 3 秒；完成后 status 的 lastSync.at 会变化，
+      // refreshHealth 内部触发热更新，不必等 120 秒的常规轮询。
+      timer = setTimeout(tick, info?.syncing ? 3000 : 120000);
+    };
+    timer = setTimeout(tick, 4000);
     return () => {
-      clearTimeout(timer);
-      if (interval) clearInterval(interval);
+      alive = false;
+      if (timer) clearTimeout(timer);
     };
   }, [refreshHealth]);
 
@@ -438,13 +450,32 @@ export default function App() {
           refreshData();
         }
       } else if (r.status === 409) {
-        // 后台任务正在进行，延迟 2 秒获取最新写入结果
-        setTimeout(refreshData, 2000);
+        // 后台完整保鲜可能持续几十秒（openfootball 兜底慢）。
+        // 旧实现只等 2 秒就放弃，用户要等下一次 120 秒健康轮询才看到比分。
+        const startedAt = Date.now();
+        const pollCompletion = async () => {
+          if (Date.now() - startedAt > 120000) return;
+          try {
+            const sr = await fetch('/api/scores/status');
+            if (sr.ok) {
+              const sj = await sr.json();
+              if (sj?.syncing) {
+                setTimeout(pollCompletion, 3000);
+                return;
+              }
+              await refreshData();
+              await refreshHealth();
+              return;
+            }
+          } catch {}
+          setTimeout(pollCompletion, 3000);
+        };
+        setTimeout(pollCompletion, 1500);
       }
     } catch {
       /* 静默降级 */
     }
-  }, [refreshData]);
+  }, [refreshData, refreshHealth]);
 
   // 每次刚启动/进入就检查是否有未同步完赛比分，有则立即更新
   useEffect(() => {
@@ -468,6 +499,20 @@ export default function App() {
       }
     }
   }, [view, triggerSync]);
+
+  useEffect(() => {
+    // 比赛窗口内（开球后 3 小时）每 5 分钟主动补一次：
+    // 服务端后台每 30 分钟一轮太慢，用户停留在「今晚」时刚终场的比分可能迟迟不落。
+    // 只覆盖刚开球/刚终场的窗口，避免全天高频扫描。
+    const timer = setInterval(() => {
+      const now = Date.now();
+      const hasActive = getFixtures().some(
+        m => m.st === 'sched' && !m.tbd && now >= ts(m.t) && now - ts(m.t) <= 3 * 3600000
+      );
+      if (hasActive) triggerSync();
+    }, 5 * 60 * 1000);
+    return () => clearInterval(timer);
+  }, [triggerSync]);
 
   useEffect(() => {
     // 页面重新聚焦时轻量校准一次

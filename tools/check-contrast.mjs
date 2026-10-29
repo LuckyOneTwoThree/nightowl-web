@@ -2,12 +2,13 @@
  * Design token 对比度门禁（WCAG AA 4.5:1 · 暗夜单主题全量校验）
  *
  * 为什么需要：11px 元信息、S0~S4 徽章与语义胶囊在暗色主题下
- * 必须通过 WCAG AA (4.5:1)。每次改 token 时对 :root(.dark) 跑 26 项。
+ * 必须通过 WCAG AA (4.5:1)。每次改 token 时对 :root(.dark) 跑 31 项，
+ * 并静态校验 rgb(var(--…)) 只能引用 -rgb 三元组。
  *
  * 运行：node tools/check-contrast.mjs
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
@@ -85,7 +86,7 @@ function runSuite(themeName, vars) {
   const press = need('surface-press');
   const panel = need('surface-panel');
 
-  console.log(`\n=== ${themeName} 主题对比度（WCAG AA 4.5:1 · 26 项） ===`);
+  console.log(`\n=== ${themeName} 主题对比度（WCAG AA 4.5:1 · 31 项） ===`);
 
   console.log('一、文本层级');
   check('text-primary / card', need('text-primary'), card);
@@ -105,6 +106,11 @@ function runSuite(themeName, vars) {
   console.log('二、品牌与语义色');
   check('accent / surface-accent', need('accent'), need('accent-soft'));
   check('live / panel', need('live'), panel);
+  check('live / card', need('live'), card);
+  check('live / raised', need('live'), raised);
+  check('live / live-10 card', need('live'), blend(need('live'), card, 0.10));
+  check('live / live-10 raised', need('live'), blend(need('live'), raised, 0.10));
+  check('accent-ink / danger', need('accent-ink'), need('danger'));
   check('danger / card', need('danger'), card);
   check('danger / danger-15 card', need('danger'), blend(need('danger'), card, 0.15));
   check('danger / danger-15 raised', need('danger'), blend(need('danger'), raised, 0.15));
@@ -117,8 +123,36 @@ function runSuite(themeName, vars) {
   }
 }
 
-console.log('Design token 对比度门禁（Dark 26 项）');
+console.log('Design token 对比度门禁（Dark 31 项 + 变量引用 1 项）');
 runSuite('Dark', darkVars);
+
+/* 变量引用类型：rgb(var(--x)) 里的 x 必须是以 -rgb 结尾的三元组。 */
+console.log('\n=== 变量引用类型 ===');
+const badRefs = [];
+const walk = dir => {
+  for (const name of readdirSync(dir)) {
+    const full = resolve(dir, name);
+    if (statSync(full).isDirectory()) {
+      if (name !== 'node_modules' && name !== 'dist' && name !== '.git') walk(full);
+      continue;
+    }
+    if (!/\.(jsx?|css)$/.test(name)) continue;
+    const body = readFileSync(full, 'utf8');
+    for (const m of body.matchAll(/rgb\(\s*var\(--([\w-]+)\)\s*\)/g)) {
+      if (!m[1].endsWith('-rgb')) badRefs.push(`${full.replace(ROOT + '/', '')}: rgb(var(--${m[1]}))`);
+    }
+  }
+};
+walk(resolve(ROOT, 'src'));
+if (badRefs.length) {
+  fail++;
+  failures.push(...badRefs.map(x => `变量引用不是 -rgb 三元组：${x}`));
+  console.log(`  ❌ 发现 ${badRefs.length} 处非法 rgb(var(--…))`);
+  badRefs.slice(0, 8).forEach(x => console.log(`     ${x}`));
+} else {
+  pass++;
+  console.log('  ✅ 所有 rgb(var(--…)) 均引用 -rgb 三元组');
+}
 
 console.log('');
 console.log('────────────────────────────────────────────────────');

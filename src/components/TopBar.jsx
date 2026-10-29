@@ -42,7 +42,7 @@ function WindowControls() {
       <button
         type="button"
         onClick={() => window.desktop?.close()}
-        className={`${base} hover:bg-danger hover:text-white`}
+        className={`${base} hover:bg-danger hover:text-accent-ink`}
         aria-label="关闭"
         title="关闭"
       >
@@ -144,7 +144,7 @@ export default function TopBar({
                 {it.label}
                 {showLiveBadge && (
                   <span
-                    className="ml-0.5 inline-flex items-center gap-1 rounded-full bg-live/15 px-1.5 py-px font-num text-2xs font-semibold tabular-nums text-live"
+                    className="ml-0.5 inline-flex items-center gap-1 rounded-full bg-live/10 px-1.5 py-px font-num text-2xs font-semibold tabular-nums text-live"
                     title={`${liveCount} 场比赛正在进行`}
                   >
                     <LiveDot />

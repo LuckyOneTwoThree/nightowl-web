@@ -266,6 +266,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
           const fresh = freshness(fixtures);
           sendJSON(res, 200, {
             ok: true,
+            syncing,
             freshness: fresh,
             lastSync,
             note: fresh.writable
@@ -494,53 +495,90 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
     }
   });
 
-  // 自动化后台常态保鲜：服务启动 3 秒后执行首次增量自检，随后每 30 分钟自检一次
+  /** 执行一轮同步并落盘、更新 lastSync；返回下一轮应使用的 fixtures。 */
+  const runSyncStage = async (fixtures, sources, label) => {
+    const startedAt = Date.now();
+    const result = await syncScoresImpl({ fixtures, rules, sources, log });
+    let written = { ok: true, changed: 0, note: '没有需要写入的补丁' };
+    let applied = false;
+    let nextFixtures = fixtures;
+    if (result.patches.size > 0) {
+      const { fixtures: next, changed } = applyPatches(fixtures, result.patches);
+      const issues = validateFixtures(next);
+      if (issues.length) {
+        written = { ok: false, reason: '校验未通过，已放弃写盘', issues: issues.slice(0, 5) };
+      } else {
+        const saved = saveFixturesImpl(next) || { ok: false, reason: '写盘结果缺失' };
+        // ⚠️ 不能不看 saved.ok 就报「完成」：数据目录不可写时 saveFixtures 返回
+        //    {ok:false, reason}，此时日志在撒谎、lastSync.applied 也错报为 true。
+        written = { ...saved, changed };
+        applied = saved.ok === true;
+        if (applied) nextFixtures = next;
+        log[applied ? 'log' : 'warn']?.(
+          applied
+            ? `[scores] ${label}完成：写入 ${changed} 场新完赛比分 (${Date.now() - startedAt}ms)`
+            : `[scores] ${label}写盘失败：${saved?.reason || '未知原因'}（${changed} 场未落盘）`
+        );
+      }
+    }
+    // 即使没有补丁也要记录「这次检查发生过」；否则设置页会永远显示
+    // 「本次启动后未运行」，用户无法区分健康自检与从未执行。
+    lastSync = {
+      at: new Date().toISOString(),
+      ms: Date.now() - startedAt,
+      patches: result.patches.size,
+      attempted: result.attempted !== false,
+      applied,
+      written,
+      errors: result.errors.length,
+      stats: result.stats,
+      bySource: result.bySource
+    };
+    return nextFixtures;
+  };
+
+  // 自动化后台常态保鲜：先跑 ESPN 快通道让当前比分尽快可见，再用 openfootball 补全历史/时间。
+  // openfootball 在部分网络会走 curl 兜底，单轮可达数十秒；不能让它拖住首屏比分。
   const runBackgroundSync = async () => {
     if (rules.scores?.enabled === false || syncing) return;
+    syncing = true;
+    let fixtures = null;
+    let espnOk = true;
     try {
-      syncing = true;
-      const startedAt = Date.now();
-      const fixtures = await loadFixturesImpl();
-      const result = await syncScoresImpl({ fixtures, rules, log });
-      let written = { ok: true, changed: 0, note: '没有需要写入的补丁' };
-      let applied = false;
-      if (result.patches.size > 0) {
-        const { fixtures: next, changed } = applyPatches(fixtures, result.patches);
-        const issues = validateFixtures(next);
-        if (issues.length) {
-          written = { ok: false, reason: '校验未通过，已放弃写盘', issues: issues.slice(0, 5) };
-        } else {
-          const saved = saveFixturesImpl(next) || { ok: false, reason: '写盘结果缺失' };
-          // ⚠️ 不能不看 saved.ok 就报「完成」：数据目录不可写时 saveFixtures 返回
-          //    {ok:false, reason}，此时日志在撒谎、lastSync.applied 也错报为 true。
-          written = { ...saved, changed };
-          applied = saved.ok === true;
-          log[applied ? 'log' : 'warn']?.(
-            applied
-              ? `[scores] 后台自动保鲜完成：写入 ${changed} 场新完赛比分 (${Date.now() - startedAt}ms)`
-              : `[scores] 后台自动保鲜写盘失败：${saved?.reason || '未知原因'}（${changed} 场未落盘）`
-          );
-        }
+      fixtures = await loadFixturesImpl();
+      try {
+        fixtures = await runSyncStage(fixtures, ['espn'], '后台快检');
+      } catch (err) {
+        espnOk = false;
+        log.warn?.(`[scores] 后台快检异常: ${err?.message || String(err)}`);
       }
-      // 即使没有补丁也要记录「这次检查发生过」；否则设置页会永远显示
-      // 「本次启动后未运行」，用户无法区分健康自检与从未执行。
-      lastSync = {
-        at: new Date().toISOString(),
-        ms: Date.now() - startedAt,
-        patches: result.patches.size,
-        attempted: result.attempted !== false,
-        applied,
-        written,
-        errors: result.errors.length,
-        stats: result.stats,
-        bySource: result.bySource
-      };
+      try {
+        fixtures = await runSyncStage(
+          fixtures,
+          espnOk ? ['openfootball'] : undefined,
+          espnOk ? '后台补全' : '后台完整保鲜'
+        );
+      } catch (err) {
+        const message = err?.message || String(err);
+        log.warn?.(`[scores] 后台补全异常: ${message}`);
+        lastSync = {
+          at: new Date().toISOString(),
+          ms: 0,
+          patches: 0,
+          attempted: true,
+          applied: false,
+          written: { ok: false, reason: message },
+          errors: 1,
+          stats: {},
+          bySource: {}
+        };
+      }
     } catch (err) {
       const message = err?.message || String(err);
       log.warn?.(`[scores] 后台保鲜异常: ${message}`);
       lastSync = {
         at: new Date().toISOString(),
-        ms: Date.now() - startedAt,
+        ms: 0,
         patches: 0,
         attempted: true,
         applied: false,

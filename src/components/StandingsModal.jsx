@@ -193,6 +193,7 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
                 {table.note || '本联赛暂无已同步赛果'}
               </div>
             ) : (
+              <>
               <table
                 key={activeLeague}
                 className="w-full table-fixed animate-view-enter border-collapse text-left motion-reduce:animate-none"
@@ -277,6 +278,9 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
                   })}
                 </tbody>
               </table>
+              {/* 给底部「共 N 队 · 滚动查看」浮层留出空间，避免遮住最后一行 */}
+              <div className="h-10" aria-hidden="true" />
+              </>
             )}
           </div>
           {rows.length > 0 && (
