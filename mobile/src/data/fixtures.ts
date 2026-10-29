@@ -90,6 +90,7 @@ export type Freshness = {
   lastScoreAt: string | null;
   staleHours: number | null;
   pendingCount: number;
+  stalePendingCount: number;
   liveCount: number;
 };
 
@@ -100,6 +101,7 @@ export function freshnessOf(
 ): Freshness {
   let lastScoreTs = 0;
   let pendingCount = 0;
+  let stalePendingCount = 0;
   let liveCount = 0;
 
   for (const m of fixtures) {
@@ -107,8 +109,14 @@ export function freshnessOf(
     if (Number.isNaN(kickoff)) continue;
     if (m.st === 'done' && m.sc) lastScoreTs = Math.max(lastScoreTs, kickoff);
     if (m.st === 'sched' && !m.tbd) {
-      if (now > kickoff + MATCH_DURATION_MS) pendingCount++;
-      else if (now >= kickoff && now <= kickoff + MATCH_DURATION_MS) liveCount++;
+      if (now > kickoff + MATCH_DURATION_MS) {
+        pendingCount++;
+        // 只有已经同步到本地后，超过 24h 仍无比分才说明上游没提供；
+        // 内置快照本身可能落后，别把「还没同步」误报成「上游缺分」。
+        if (source === 'stored' && now - (kickoff + MATCH_DURATION_MS) > 24 * 3600000) {
+          stalePendingCount++;
+        }
+      } else if (now >= kickoff && now <= kickoff + MATCH_DURATION_MS) liveCount++;
     }
   }
 
@@ -117,6 +125,7 @@ export function freshnessOf(
     lastScoreAt: lastScoreTs ? new Date(lastScoreTs).toISOString() : null,
     staleHours: lastScoreTs ? +((now - lastScoreTs) / 3600000).toFixed(1) : null,
     pendingCount,
+    stalePendingCount,
     liveCount,
   };
 }

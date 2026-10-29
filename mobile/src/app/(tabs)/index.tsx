@@ -105,6 +105,10 @@ export default function TonightScreen() {
     () => freshnessOf(getFixtures(), now, source),
     [now, source, rev]
   );
+  const pendingSplit = useMemo(() => {
+    const stale = Number(freshness.stalePendingCount || 0);
+    return { stale, recent: Math.max(0, freshness.pendingCount - stale) };
+  }, [freshness]);
 
   const refresh = useCallback(async () => {
     try {
@@ -206,7 +210,13 @@ export default function TonightScreen() {
               : refreshNote ??
                 `今晚 ${tonight.slice.length} 场${
                   liveCount > 0 ? ` · ${liveCount} 场进行中` : ''
-                }${freshness.pendingCount > 0 ? ` · ${freshness.pendingCount} 场待录` : ''}`}
+                }${
+                  pendingSplit.recent > 0
+                    ? ` · ${pendingSplit.recent} 场待录`
+                    : pendingSplit.stale > 0
+                      ? ` · ${pendingSplit.stale} 场上游缺分`
+                      : ''
+                }`}
         </Text>
       </View>
 
@@ -387,7 +397,12 @@ export default function TonightScreen() {
         </Text>
         <Text style={styles.footerText}>
           {freshness.pendingCount > 0
-            ? `${freshness.pendingCount} 场已开球但比分待录`
+            ? [
+                pendingSplit.recent > 0 ? `${pendingSplit.recent} 场已开球但比分待录` : '',
+                pendingSplit.stale > 0 ? `${pendingSplit.stale} 场上游未提供` : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')
             : '比分已保持新鲜'}
         </Text>
       </View>

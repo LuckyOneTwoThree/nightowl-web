@@ -15,7 +15,7 @@
  *   会把正在进行的焦点战排除，Hero 卡会在开球那一刻消失。
  */
 
-import { ts } from '../../shared/core/engine.js';
+import { ts, MATCH_DURATION_MS } from '../../shared/core/engine.js';
 import { fetchAllEvents, mergeEvents, DEFAULT_ORDER } from './sources.js';
 
 export const ALLOWED_ST = ['sched', 'done', 'pp'];
@@ -152,6 +152,13 @@ export function activeSyncTargets(fixtures = [], nowTs = Date.now(), opts = {}) 
         targets.get(m.l).add(ymd);
       };
       add(t);
+      // 已开球但未录入的场次：同时查前后一天。上游改期或不同源对同一场比赛的
+      // 日期口径可能差一天（实测 PSG–OL），只按本地日期查询会永远查不到。
+      // 只对 14 天内的缺分展开，避免历史积压放大请求量。
+      if (!m.tbd && t + MATCH_DURATION_MS < nowTs && nowTs - t <= 14 * 86400000) {
+        add(t - 86400000);
+        add(t + 86400000);
+      }
       // tbd：占位日可能不是真实比赛日，向前后展开覆盖整轮。
       // 只对「占位日仍可能覆盖真实比赛日」的场次展开 —— ESPN 在开球前数日就公布真实时间，
       // 此时占位日在未来或临近。占位日已过去很久仍为 tbd 的场次（积压），展开窗口早已整体
@@ -230,6 +237,15 @@ export function quickSyncTargets(fixtures = [], nowTs = Date.now()) {
     const ymd = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
     if (!targets.has(m.l)) targets.set(m.l, new Set());
     targets.get(m.l).add(ymd);
+    // 近 72h 内已开球但仍未录入的场次，前后一天也查：覆盖改期/源日期漂移。
+    if (t + MATCH_DURATION_MS <= nowTs) {
+      for (const offset of [-86400000, 86400000]) {
+        const dd = new Date(t + offset);
+        targets.get(m.l).add(
+          `${dd.getUTCFullYear()}${pad(dd.getUTCMonth() + 1)}${pad(dd.getUTCDate())}`
+        );
+      }
+    }
   }
 
   for (const [league, dates] of targets) {

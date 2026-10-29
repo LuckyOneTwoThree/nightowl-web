@@ -85,6 +85,10 @@ export default function MeScreen() {
     () => freshnessOf(getFixtures(), now, source),
     [now, source, rev]
   );
+  const pendingSplit = useMemo(() => {
+    const stale = Number(freshness.stalePendingCount || 0);
+    return { stale, recent: Math.max(0, freshness.pendingCount - stale) };
+  }, [freshness]);
 
   const runSync = useCallback(async () => {
     try {
@@ -308,7 +312,10 @@ export default function MeScreen() {
                 : '尚未同步'
             }
           />
-          <InfoRow label="待录比分" value={`${freshness.pendingCount} 场`} />
+          <InfoRow label="待录比分" value={`${pendingSplit.recent} 场`} />
+          {pendingSplit.stale > 0 && (
+            <InfoRow label="上游未提供" value={`${pendingSplit.stale} 场`} />
+          )}
           <InfoRow label="进行中" value={`${freshness.liveCount} 场`} />
           <InfoRow
             label="最近比分"
