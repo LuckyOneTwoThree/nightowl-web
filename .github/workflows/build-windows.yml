@@ -35,12 +35,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # 把 tag 版本同步进 package.json —— 前端 __APP_VERSION__ 与 electron-builder
-      # 的包元数据都从它读取。此前只用 extraMetadata 改包元数据，package.json 不动，
-      # 于是界面显示旧版本（实测：装的是 v0.1.9，界面写着 v0.1.3）。
-      - name: Sync version from tag
+      # tag 触发时把 tag 版本同步进 package.json —— 前端 __APP_VERSION__ 与 electron-builder
+      # 的包元数据都从它读取。手动 Run workflow（ref=main）没有 tag 版本，沿用 package.json，
+      # 否则 npm version "main" 会直接失败。
+      - name: Resolve version
         shell: bash
-        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            npm version "$VERSION" --no-git-tag-version --allow-same-version
+          else
+            VERSION="$(node -p "require('./package.json').version")"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Build frontend
         run: npm run build
@@ -66,7 +73,7 @@ jobs:
       #    latest.yml / blockmap 是构建产物，--publish never 下照样生成，由后续步骤一并上传。
       - name: Package Windows (NSIS)
         shell: bash
-        run: npx electron-builder --win --publish never -c.extraMetadata.version="${GITHUB_REF_NAME#v}"
+        run: npx electron-builder --win --publish never -c.extraMetadata.version="$VERSION"
 
       # 打包后自检（两道）：与本地共用同一份跨平台脚本 tools/verify-package.mjs ——
       # 验证逻辑本身必须能在开发环境（mac）执行，否则自检的 bug 只能到 CI 才发现
@@ -156,9 +163,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Sync version from tag
+      - name: Resolve version
         shell: bash
-        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            npm version "$VERSION" --no-git-tag-version --allow-same-version
+          else
+            VERSION="$(node -p "require('./package.json').version")"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Build frontend
         run: npm run build
@@ -171,7 +185,7 @@ jobs:
       # 由 build/after-pack.cjs 做 ad-hoc 签名，否则 arm64 机器连本机都无法启动。
       - name: Package macOS (DMG + ZIP)
         shell: bash
-        run: npx electron-builder --mac --publish never -c.extraMetadata.version="${GITHUB_REF_NAME#v}"
+        run: npx electron-builder --mac --publish never -c.extraMetadata.version="$VERSION"
 
       - name: Verify packaged files
         run: node tools/verify-package.mjs "release/mac-arm64/NightOwl Terrace.app/Contents/Resources/app"
