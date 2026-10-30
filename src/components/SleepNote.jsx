@@ -9,9 +9,11 @@ export function sleepProfileFromPrefs(prefs) {
 }
 
 export function sleepLedgerFor(match, prefs) {
-  if (!match?.t) return null;
+  if (!match?.t || match.st === 'done') return null;
   const ledger = sleepLedger(match.t, sleepProfileFromPrefs(prefs));
-  return ledger.valid && ledger.ready ? ledger : null;
+  // 已经过去的场次不再显示“看完还剩多少睡眠”，避免把历史赛程当成今晚决策。
+  if (!ledger.valid || !ledger.ready || ledger.endTs < Date.now()) return null;
+  return ledger;
 }
 
 export function sleepLedgerText(ledger) {

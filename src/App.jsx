@@ -4,6 +4,17 @@ import { countdown as engineCountdown, ts, MATCH_DURATION_MS, sleepTier } from '
 import { bjClock, humanCountdownShort } from './core/format.js';
 import { STANDINGS_LEAGUES } from './core/standings.js';
 import { loadPrefs, savePrefs } from './core/prefs.js';
+import { addToQueue, markQueueWatched, normalizeQueue, pendingQueue, removeFromQueue } from './core/queue.js';
+import { loadWatchLater, saveWatchLater } from './components/watch-later-storage.js';
+import { loadStopLossStates, saveStopLossStates } from './components/stop-loss-storage.js';
+import {
+  ignoreStopLoss,
+  markStopLossPrompted,
+  shouldStopLossPrompt,
+  sleepStopLoss,
+  snoozeStopLoss,
+  stopLossNightKey
+} from './core/stop-loss.js';
 import { isPrematchDue, prematchNotification } from './core/notifications.js';
 import {
   computeTonight,
@@ -31,6 +42,7 @@ import SettingsDrawer from './components/SettingsDrawer.jsx';
 import Onboarding, { shouldShowOnboarding, markOnboardingDone } from './components/Onboarding.jsx';
 import SplashScreen from './components/SplashScreen.jsx';
 import UpdateModal from './components/UpdateModal.jsx';
+import StopLossBanner from './components/StopLossBanner.jsx';
 import { IconClose } from './components/icons.jsx';
 import { compareSemver } from './core/semver.js';
 import { VIEW_COMMANDS, ACTION_COMMANDS, buildMatchCommands } from './core/command-palette.js';
@@ -100,6 +112,42 @@ export default function App() {
   const setPrefs = useCallback(next => {
     setPrefsState(next);
     savePrefs(next);
+  }, []);
+
+  // ---- 明早补看（本地单机，只存比赛 ID / 夜晚 / 状态，不存比分）----
+  const [watchLater, setWatchLater] = useState(() => loadWatchLater());
+  const watchLaterRef = useRef(watchLater);
+  watchLaterRef.current = watchLater;
+  const commitWatchLater = useCallback(next => {
+    const normalized = normalizeQueue(next);
+    watchLaterRef.current = normalized;
+    setWatchLater(normalized);
+    saveWatchLater(normalized);
+    return normalized;
+  }, []);
+  const addWatchLater = useCallback(match => {
+    const result = addToQueue(watchLaterRef.current, match);
+    if (result.ok && result.added) commitWatchLater(result.queue);
+    return result;
+  }, [commitWatchLater]);
+  const removeWatchLater = useCallback(id => {
+    commitWatchLater(removeFromQueue(watchLaterRef.current, id));
+  }, [commitWatchLater]);
+  const markWatchLaterWatched = useCallback(id => {
+    commitWatchLater(markQueueWatched(watchLaterRef.current, id));
+  }, [commitWatchLater]);
+
+  // ---- 止损提醒：只在前台、到达个人止损点且比赛尚未结束时出现 ----
+  const [stopLossStates, setStopLossStates] = useState(() => loadStopLossStates());
+  const stopLossStatesRef = useRef(stopLossStates);
+  stopLossStatesRef.current = stopLossStates;
+  const [stopLossContext, setStopLossContext] = useState(null);
+  const [stopLossNotice, setStopLossNotice] = useState(null);
+  const commitStopLoss = useCallback((night, state) => {
+    const next = { ...stopLossStatesRef.current, [night]: state };
+    stopLossStatesRef.current = next;
+    setStopLossStates(next);
+    saveStopLossStates(next);
   }, []);
 
   // ---- 视图与选中 ----
@@ -598,6 +646,45 @@ export default function App() {
   const matchMap = useMemo(buildMatchMap, [dataRev]);
   const activeMatch = activeMatchId ? matchMap[activeMatchId] || null : null;
 
+  // 切换比赛时收起上一场的提示，避免旧止损卡停留在新场次上。
+  useEffect(() => {
+    setStopLossContext(null);
+    setStopLossNotice(null);
+  }, [activeMatchId]);
+
+  useEffect(() => {
+    if (
+      !activeMatch || !prefs.sleepEnabled || stopLossContext ||
+      settingsOpen || onboardingOpen || splashOpen || updateModalOpen || standingsState
+    ) {
+      return;
+    }
+    const night = stopLossNightKey(activeMatch);
+    if (!night) return;
+    const profile = {
+      enabled: true,
+      wakeTime: prefs.sleepWakeTime,
+      minSleep: prefs.sleepMinHours
+    };
+    const prompt = shouldStopLossPrompt(activeMatch, profile, clockTs, stopLossStates[night]);
+    if (!prompt) return;
+    setStopLossContext({ ...prompt, match: activeMatch });
+    setStopLossNotice(null);
+    commitStopLoss(night, markStopLossPrompted(stopLossStates[night]));
+  }, [
+    activeMatch, clockTs, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepMinHours,
+    stopLossStates, stopLossContext, settingsOpen, onboardingOpen, splashOpen,
+    updateModalOpen, standingsState, commitStopLoss
+  ]);
+
+  useEffect(() => {
+    if (!stopLossContext) return;
+    if (clockTs > stopLossContext.ledger.endTs) {
+      setStopLossContext(null);
+      setStopLossNotice(null);
+    }
+  }, [clockTs, stopLossContext]);
+
   /**
    * 当前选中是否属于左栏当前列表。
    *
@@ -652,6 +739,36 @@ export default function App() {
 
   // 今晚已完赛但未揭晓的场次：积分榜、近况、赛季统计和比赛详情共用同一集合。
   // 必须由 App 统一计算，不能每个面板各自判断（旧实现正是这样漏掉积分榜和球队页的）。
+  const handleStopLossSleep = () => {
+    if (!stopLossContext) return;
+    const result = addWatchLater(stopLossContext.match);
+    if (!result?.ok) {
+      setStopLossNotice('补看队列已满，请先在「偏好与数据 → 明早补看」移除旧条目');
+      return;
+    }
+    commitStopLoss(stopLossContext.night, sleepStopLoss(stopLossStatesRef.current[stopLossContext.night]));
+    setStopLossContext(null);
+    setStopLossNotice(null);
+  };
+  const handleStopLossSnooze = () => {
+    if (!stopLossContext) return;
+    commitStopLoss(
+      stopLossContext.night,
+      snoozeStopLoss(stopLossStatesRef.current[stopLossContext.night])
+    );
+    setStopLossContext(null);
+    setStopLossNotice(null);
+  };
+  const handleStopLossIgnore = () => {
+    if (!stopLossContext) return;
+    markWatchLaterWatched(stopLossContext.match.id);
+    commitStopLoss(
+      stopLossContext.night,
+      ignoreStopLoss(stopLossStatesRef.current[stopLossContext.night])
+    );
+    setStopLossContext(null);
+    setStopLossNotice(null);
+  };
   const spoilerExcludedIds = useMemo(
     () => unrevealedTonightIds(getFixtures(), clockTs, prefs.spoilerFree, revealed),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -915,6 +1032,8 @@ export default function App() {
                     onSelect={select}
                     onOpenStandings={openStandings}
                     now={clockTs}
+                    watchLater={pendingQueue(watchLater).some(item => item.id === activeMatch?.id)}
+                    onWatchLater={() => addWatchLater(activeMatch)}
                   />
                 }
               />
@@ -922,6 +1041,16 @@ export default function App() {
           </section>
         </main>
       </div>
+
+      {!settingsOpen && !onboardingOpen && !splashOpen && !updateModalOpen && !standingsState && (
+        <StopLossBanner
+          context={stopLossContext}
+          notice={stopLossNotice}
+          onSleep={handleStopLossSleep}
+          onSnooze={handleStopLossSnooze}
+          onIgnore={handleStopLossIgnore}
+        />
+      )}
 
       {paletteOpen && (
         <CommandPalette
@@ -942,6 +1071,9 @@ export default function App() {
           onReplaySplash={replaySplash}
           onDataRefresh={refreshData}
           updateState={updateState}
+          watchLater={watchLater}
+          onRemoveWatchLater={removeWatchLater}
+          onMarkWatchLaterWatched={markWatchLaterWatched}
           onOpenUpdateModal={() => {
             openUpdateModal();
             if (updateState.status === 'idle') {

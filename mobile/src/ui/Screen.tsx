@@ -22,6 +22,7 @@ type Props = {
   onRefresh?: () => void;
   contentContainerStyle?: StyleProp<ViewStyle>;
   edges?: Array<'top' | 'bottom' | 'left' | 'right'>;
+  overlay?: ReactNode;
 };
 
 export function Screen({
@@ -32,6 +33,7 @@ export function Screen({
   onRefresh,
   contentContainerStyle,
   edges = ['top'],
+  overlay = null,
 }: Props) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(6)).current;
@@ -94,6 +96,7 @@ export function Screen({
       ) : (
         <View style={[styles.flex, padded && styles.padded]}>{children}</View>
       )}
+      {overlay}
       </Animated.View>
     </SafeAreaView>
   );

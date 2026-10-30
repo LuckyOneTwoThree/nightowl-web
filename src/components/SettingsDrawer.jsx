@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getFixtures, FOLLOWABLE_LEAGUES, LEAGUE_NAMES, leagueColor } from '../data/index.js';
+import { getFixtures, FOLLOWABLE_LEAGUES, LEAGUE_NAMES, leagueColor, leagueName, teamName } from '../data/index.js';
 import { defaultPrefs } from '../core/prefs.js';
+import { queueWithMatches } from '../core/queue.js';
 import { summarizeSyncResponse } from '../core/sync-outcome.js';
 import { BrandLogo, Button, Chip, Fieldset, Hint, Meta, Switch, TogglePill } from './atoms.jsx';
+import { hm } from '../core/format.js';
 import { IconClose, IconReset } from './icons.jsx';
 import TeamPicker from './TeamPicker.jsx';
 
@@ -33,7 +35,10 @@ export default function SettingsDrawer({
   onReplaySplash,
   onDataRefresh,
   updateState,
-  onOpenUpdateModal
+  onOpenUpdateModal,
+  watchLater = [],
+  onRemoveWatchLater,
+  onMarkWatchLaterWatched
 }) {
   const leagueCount = prefs.followedLeagues.length;
   const bonusActive = leagueCount > 0 && leagueCount < 6;
@@ -332,6 +337,52 @@ export default function SettingsDrawer({
                 </label>
               </div>
             )}
+          </Fieldset>
+
+          <Fieldset title="明早补看" hint="只保存比赛 ID 与状态，不保存比分；最多 10 条，7 天过期。">
+            {(() => {
+              const entries = queueWithMatches(watchLater, getFixtures()).sort((a, b) =>
+                String(a.match?.t || '').localeCompare(String(b.match?.t || ''))
+              );
+              if (!entries.length) {
+                return <Meta>还没有加入补看。可在比赛情报里点「明早补看」。</Meta>;
+              }
+              return (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between px-0.5">
+                    <Meta>{entries.length} 场待看</Meta>
+                    <Meta>最早 {entries[0]?.match ? hm(entries[0].match.t) : '—'}</Meta>
+                  </div>
+                  {entries.map(({ item, match }) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between gap-2 rounded-md border border-line-hairline bg-surface-card px-2.5 py-1.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium text-text-primary">
+                          {match ? `${teamName(match.h)} vs ${teamName(match.a)}` : '比赛数据已移除'}
+                        </p>
+                        <Meta className="mt-0.5">
+                          {match ? `${leagueName(match.l)} · ${hm(match.t)}` : item.id}
+                        </Meta>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        {match && onMarkWatchLaterWatched && (
+                          <Button variant="ghost" size="xs" onClick={() => onMarkWatchLaterWatched(item.id)}>
+                            已看
+                          </Button>
+                        )}
+                        {onRemoveWatchLater && (
+                          <Button variant="ghost" size="xs" onClick={() => onRemoveWatchLater(item.id)}>
+                            移除
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </Fieldset>
 
           {/* 通知：偏好早就在，v0.1.24 真正接上系统通知 */}

@@ -9,13 +9,14 @@ import { colors, fontSize } from './theme';
 type SleepPrefs = Pick<Prefs, 'sleepEnabled' | 'sleepWakeTime' | 'sleepMinHours'>;
 
 export function sleepLedgerFor(match: Match | null | undefined, prefs: SleepPrefs) {
-  if (!match?.t || !prefs.sleepEnabled) return null;
+  if (!match?.t || !prefs.sleepEnabled || match.st === 'done') return null;
   const ledger = sleepLedger(match.t, {
     enabled: prefs.sleepEnabled,
     wakeTime: prefs.sleepWakeTime,
     minSleep: prefs.sleepMinHours,
   });
-  return ledger.valid && ledger.ready ? ledger : null;
+  if (!ledger.valid || !ledger.ready || (ledger.endTs ?? 0) < Date.now()) return null;
+  return ledger;
 }
 
 export function SleepNote({

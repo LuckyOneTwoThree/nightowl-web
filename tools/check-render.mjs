@@ -158,6 +158,35 @@ app.whenReady().then(async () => {
     await waitLoad(win, `${base}/?view=tonight&match=${futureFixture.id}`);
     await sleep(1400);
 
+    const queueAddClicked = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = [...document.querySelectorAll('button')].find(
+          b => (b.textContent || '').trim() === '明早补看'
+        );
+        if (!btn) return false;
+        btn.click();
+        return true;
+      })()
+    `);
+    await sleep(300);
+    const queueAddState = await win.webContents.executeJavaScript(`
+      (() => {
+        const saved = JSON.parse(localStorage.getItem('nightowl:watchLater:v1') || '[]');
+        return {
+          button: [...document.querySelectorAll('button')].some(
+            b => (b.textContent || '').trim() === '已加入明早补看'
+          ),
+          savedIds: saved.map(item => item.id),
+          hasScore: [...document.querySelectorAll('button')].some(
+            b => (b.textContent || '').includes('比分')
+          )
+        };
+      })()
+    `);
+    ok('★ 比赛详情可加入明早补看并本地持久化',
+      queueAddClicked && queueAddState.button && queueAddState.savedIds.includes(futureFixture.id),
+      JSON.stringify(queueAddState));
+
     const intelClicked = await win.webContents.executeJavaScript(`
       (() => {
         const btn = [...document.querySelectorAll('button')].find(
@@ -776,10 +805,10 @@ app.whenReady().then(async () => {
       localStorage.setItem('sleepMinHours','7');
       true
     `);
-    await waitLoad(win, `${base}/?view=tonight`);
+    await waitLoad(win, `${base}/?view=tonight&match=${futureFixture.id}`);
     await sleep(1500);
     const sleepLedgerText = await win.webContents.executeJavaScript(`document.body.innerText.slice(0, 1400)`);
-    ok('★ 启用睡眠档案后 Hero 显示个人剩余睡眠',
+    ok('★ 启用睡眠档案后页面显示个人剩余睡眠',
       sleepLedgerText.includes('起床') &&
         /看完约剩|看完直接到起床点/.test(sleepLedgerText),
       sleepLedgerText.slice(0, 240));
@@ -804,14 +833,16 @@ app.whenReady().then(async () => {
           hasThemeSection: text.includes('界面主题') || text.includes('日间演播室'),
           hasFollowSection: text.includes('关注球队'),
           hasSleepSection: text.includes('个人睡眠'),
-          hasSleepTime: !!aside?.querySelector('input[type="time"]')
+          hasSleepTime: !!aside?.querySelector('input[type="time"]'),
+          hasWatchLater: text.includes('明早补看')
         };
       })()
     `);
     ok('★ 设置中不再出现浅色主题入口',
       settingsThemeRemoved.open && !settingsThemeRemoved.hasThemeSection &&
         settingsThemeRemoved.hasFollowSection &&
-        settingsThemeRemoved.hasSleepSection && settingsThemeRemoved.hasSleepTime,
+        settingsThemeRemoved.hasSleepSection && settingsThemeRemoved.hasSleepTime &&
+        settingsThemeRemoved.hasWatchLater,
       JSON.stringify(settingsThemeRemoved));
 
     const resetClicked = await win.webContents.executeJavaScript(`

@@ -24,10 +24,12 @@ import {
 } from 'lucide-react-native';
 
 import { FOLLOWABLE_LEAGUES, leagueName, teamName } from '@data/index.js';
-import { bjClock, bjDate } from '@core/format.js';
+import { bjClock, bjDate, hm } from '@core/format.js';
 import watchSources from '../../shared/server/watch-sources.json';
 import { freshnessOf } from '@/data/fixtures';
 import { syncNow } from '@/data/sync/run';
+import { queueWithMatches } from '@core/queue.js';
+import { useWatchLaterStore } from '@/state/queue';
 import { useSyncState } from '@/data/sync/useSync';
 import { animateLayout } from '@/lib/layoutAnimation';
 import { useNow } from '@/lib/useNow';
@@ -54,6 +56,9 @@ export default function MeScreen() {
   const router = useRouter();
   const prefs = usePrefs();
   const rev = useDataRev();
+  const watchLaterItems = useWatchLaterStore(state => state.items);
+  const removeWatchLater = useWatchLaterStore(state => state.remove);
+  const markWatchLaterWatched = useWatchLaterStore(state => state.markWatched);
   const now = useNow(60_000);
   const source = useAppStore(state => state.source);
   const { syncing, syncError, lastCheckedAt } = useSyncState();
@@ -116,7 +121,9 @@ export default function MeScreen() {
     setPrefs({ sleepWakeTime: formatWakeMinutes(parseWakeMinutes(prefs.sleepWakeTime) + deltaMinutes) });
   };
   const adjustMinSleep = (deltaHours: number) => {
-    const next = Math.min(10, Math.max(4, Number(prefs.sleepMinHours ?? 7) + deltaHours));
+    const current = Number(prefs.sleepMinHours);
+    const base = Number.isFinite(current) ? current : 7;
+    const next = Math.min(10, Math.max(4, base + deltaHours));
     setPrefs({ sleepMinHours: Math.round(next * 2) / 2 });
   };
 
@@ -349,6 +356,46 @@ export default function MeScreen() {
               />
             </>
           ) : null}
+        </Card>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="明早补看" />
+        <Card style={styles.cardGap}>
+          {queueWithMatches(watchLaterItems, getFixtures()).length === 0 ? (
+            <Text style={styles.emptyText}>还没有加入补看。可在比赛详情点「明早补看」。</Text>
+          ) : (
+            queueWithMatches(watchLaterItems, getFixtures()).map(({ item, match }) => (
+              <View key={item.id} style={styles.queueRow}>
+                <View style={styles.queueText}>
+                  <Text style={styles.queueTitle} numberOfLines={1}>
+                    {match ? `${teamName(match.h)} vs ${teamName(match.a)}` : '比赛数据已移除'}
+                  </Text>
+                  <Text style={styles.queueMeta}>
+                    {match ? `${leagueName(match.l)} · ${hm(match.t)}` : item.id}
+                  </Text>
+                </View>
+                {match ? (
+                  <Pressable
+                    onPress={() => markWatchLaterWatched(item.id)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="标记已看"
+                  >
+                    <Text style={styles.queueAction}>已看</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  onPress={() => removeWatchLater(item.id)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="移除补看"
+                >
+                  <Text style={styles.queueRemove}>移除</Text>
+                </Pressable>
+              </View>
+            ))
+          )}
         </Card>
       </View>
 
@@ -614,6 +661,17 @@ const styles = StyleSheet.create({
   blockHint: { marginLeft: 'auto', color: colors.textFaint, fontSize: fontSize.xs },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   hint: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 17 },
+  queueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  queueText: { flex: 1, gap: 2 },
+  queueTitle: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
+  queueMeta: { color: colors.textFaint, fontSize: fontSize.xs },
+  queueAction: { color: colors.accent, fontSize: fontSize.xs, fontWeight: '600' },
+  queueRemove: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' },
   emptyText: { color: colors.textMuted, fontSize: fontSize.sm },
   divider: { height: 1, backgroundColor: colors.hairline },
   settingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },

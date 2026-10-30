@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   AppState,
@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -21,6 +21,7 @@ import {
   ChevronUp,
   Eye,
   EyeOff,
+  Bookmark,
   Share2,
   Sparkles,
 } from 'lucide-react-native';
@@ -54,7 +55,10 @@ import { animateLayout } from '@/lib/layoutAnimation';
 import { hasScheduledMatchReminder, scheduleMatchReminder } from '@/lib/reminders';
 import { useLiveMatch, type LiveData } from '@/data/useLiveMatch';
 import { useNow } from '@/lib/useNow';
+import { useStopLossPrompt } from '@/lib/useStopLoss';
 import { useAppStore, useDataRev } from '@/state/app';
+import { useWatchLaterStore } from '@/state/queue';
+import { pendingQueue } from '@core/queue.js';
 import { usePrefs } from '@/state/prefs';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
@@ -62,6 +66,7 @@ import { Chip } from '@/ui/Chip';
 import { Crest } from '@/ui/Crest';
 import { LiveTimeline } from '@/components/LiveTimeline';
 import { WatchSheet } from '@/components/WatchSheet';
+import { StopLossBanner } from '@/components/StopLossBanner';
 import { EmptyState } from '@/ui/EmptyState';
 import { FormDots } from '@/ui/FormDots';
 import { SegmentedControl } from '@/ui/SegmentedControl';
@@ -105,6 +110,8 @@ export default function MatchScreen() {
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const prefs = usePrefs();
   const rev = useDataRev();
+  const watchLaterItems = useWatchLaterStore(state => state.items);
+  const addWatchLater = useWatchLaterStore(state => state.add);
   const now = useNow(30_000);
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('intel');
@@ -113,7 +120,15 @@ export default function MatchScreen() {
   const revealMatch = useAppStore(s => s.revealMatch);
   const hideMatch = useAppStore(s => s.hideMatch);
   const [forceHidden, setForceHidden] = useState(false);
+  const [focused, setFocused] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      return () => setFocused(false);
+    }, [])
+  );
   const scoreVisible = prefs.spoilerFree ? revealedInStore : !forceHidden;
+  const queuedForMorning = pendingQueue(watchLaterItems).some(item => item.id === id);
   const handleRevealScore = () => {
     setForceHidden(false);
     if (id) revealMatch(id);
@@ -153,6 +168,7 @@ export default function MatchScreen() {
     () => getFixtures().find((item: Match) => item.id === id) as Match | undefined,
     [id, rev]
   );
+  const stopLoss = useStopLossPrompt(match ?? null, prefs, now, focused);
 
   const spoilerExcludedIds = useMemo(
     () => unrevealedTonightIds(getFixtures(), now, prefs.spoilerFree, revealedIds),
@@ -490,6 +506,35 @@ export default function MatchScreen() {
 
           <SleepNote match={match} prefs={prefs} style={styles.sleepNote} />
 
+          <Pressable
+            onPress={() => {
+              if (!queuedForMorning) {
+                const result = addWatchLater(match);
+                setToast(
+                  result.ok
+                    ? '已加入明早补看'
+                    : result.reason === 'full'
+                      ? '补看队列已满，请先在「我的」移除旧条目'
+                      : '加入补看失败'
+                );
+              }
+            }}
+            disabled={queuedForMorning}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={queuedForMorning ? '已加入明早补看' : '加入明早补看'}
+            style={({ pressed }) => [
+              styles.watchLaterButton,
+              queuedForMorning && styles.watchLaterButtonOn,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Bookmark size={14} color={queuedForMorning ? colors.accent : colors.textSecondary} />
+            <Text style={[styles.watchLaterText, queuedForMorning && styles.watchLaterTextOn]}>
+              {queuedForMorning ? '已加入明早补看' : '明早补看'}
+            </Text>
+          </Pressable>
+
           {finishedNow && scoreVisible && finalScore ? (
             <Pressable onPress={handleHideScore} style={styles.hideScore} hitSlop={14}>
               <EyeOff size={13} color={colors.textMuted} />
@@ -561,6 +606,14 @@ export default function MatchScreen() {
           <Text style={styles.toastText}>{toast}</Text>
         </View>
       ) : null}
+
+      <StopLossBanner
+        context={stopLoss.context}
+        notice={stopLoss.notice}
+        onSleep={stopLoss.sleep}
+        onSnooze={stopLoss.snooze}
+        onIgnore={stopLoss.ignore}
+      />
 
       <WatchSheet
         visible={watchOpen}
@@ -1282,6 +1335,25 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   sleepNote: { marginTop: spacing.xs + 2 },
+  watchLaterButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    backgroundColor: colors.panel,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs + 1,
+  },
+  watchLaterButtonOn: {
+    borderColor: colors.accent,
+    backgroundColor: colors.goldSoft,
+  },
+  watchLaterText: { color: colors.textSecondary, fontSize: fontSize.xs, fontWeight: '600' },
+  watchLaterTextOn: { color: colors.accent },
   metrics: {
     flexDirection: 'row',
     alignItems: 'center',

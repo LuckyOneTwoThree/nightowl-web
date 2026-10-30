@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import {
@@ -45,6 +45,8 @@ import { useNow } from '@/lib/useNow';
 import { useAppStore, useDataRev } from '@/state/app';
 import { usePrefs } from '@/state/prefs';
 import { SleepNote } from '@/ui/SleepNote';
+import { StopLossBanner } from '@/components/StopLossBanner';
+import { useStopLossPrompt } from '@/lib/useStopLoss';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
@@ -62,6 +64,13 @@ export default function TonightScreen() {
   const router = useRouter();
   const prefs = usePrefs();
   const rev = useDataRev();
+  const [focused, setFocused] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      return () => setFocused(false);
+    }, [])
+  );
   const source = useAppStore(state => state.source);
   const now = useNow(30_000);
   const { syncing, quickSyncing, syncError } = useSyncState();
@@ -110,6 +119,7 @@ export default function TonightScreen() {
     const stale = Number(freshness.stalePendingCount || 0);
     return { stale, recent: Math.max(0, freshness.pendingCount - stale) };
   }, [freshness]);
+  const stopLoss = useStopLossPrompt(tonight.hero?.m ?? null, prefs, now, focused);
 
   const refresh = useCallback(async () => {
     try {
@@ -171,7 +181,20 @@ export default function TonightScreen() {
   const todayLabel = `${bjDate(now)} ${weekdayOf(bjDate(now))}`;
 
   return (
-    <Screen scroll onRefresh={pullRefresh} refreshing={checking}>
+    <Screen
+      scroll
+      onRefresh={pullRefresh}
+      refreshing={checking}
+      overlay={
+        <StopLossBanner
+          context={stopLoss.context}
+          notice={stopLoss.notice}
+          onSleep={stopLoss.sleep}
+          onSnooze={stopLoss.snooze}
+          onIgnore={stopLoss.ignore}
+        />
+      }
+    >
       <View style={styles.header}>
         <View style={styles.brandBlock}>
           <Image

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { hm, datePart, bjDate } from '../core/format.js';
 import { storylines, teamName, TEAM_MAP, leagueName } from '../data/index.js';
 import { sleepTier, storyBonus, followedBonus, leagueBonus, PRODUCT_WEIGHTS, WATCH_COST } from '../core/engine.js';
@@ -13,7 +13,7 @@ import {
 } from '../core/narrative.js';
 import { evalOne } from '../core/owl.js';
 import { computeMatchStats } from '../core/stats.js';
-import { Chip, Crest, Hint, Meta, SectionLabel } from './atoms.jsx';
+import { Button, Chip, Crest, Hint, Meta, SectionLabel } from './atoms.jsx';
 import UpcomingFixtures from './UpcomingFixtures.jsx';
 import SleepNote, { sleepLedgerFor } from './SleepNote.jsx';
 import SameNightPicks from './SameNightPicks.jsx';
@@ -53,7 +53,9 @@ export default function IntelPanel({
   isHeroMatch = false,
   onSelect,
   onOpenStandings,
-  now
+  now,
+  watchLater = false,
+  onWatchLater
 }) {
   const [tab, setTab] = useState('decision');
 
@@ -120,7 +122,13 @@ export default function IntelPanel({
       {tab === 'decision' ? (
         <div className="grid grid-cols-1 gap-x-0 gap-y-0 p-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
           <div className="space-y-4 lg:border-r lg:border-line-hairline lg:pr-6">
-            <SleepCostSection tier={tier} match={match} prefs={prefs} />
+            <SleepCostSection
+              tier={tier}
+              match={match}
+              prefs={prefs}
+              watchLater={watchLater}
+              onWatchLater={onWatchLater}
+            />
             <NarrativeSection narrative={narrative} stories={stories} ev={ev} hideHeadline={isHeroMatch} />
           </div>
           <div className="space-y-4 pt-4 lg:pl-6 lg:pt-0">
@@ -220,7 +228,9 @@ function Block({ icon, title, right, children }) {
 /* 决策视图                                                            */
 /* ------------------------------------------------------------------ */
 
-function SleepCostSection({ tier, match, prefs }) {
+function SleepCostSection({ tier, match, prefs, watchLater = false, onWatchLater }) {
+  const [queueMsg, setQueueMsg] = useState(null);
+  useEffect(() => setQueueMsg(null), [match?.id]);
   const style = TIER_MAP[tier.label] || TIER_MAP.S0;
   return (
     <Block icon={<IconTier />} title="睡眠代价" right={<Meta num>{match.tbd ? '时间待定' : `${hm(match.t)} 开球`}</Meta>}>
@@ -258,6 +268,25 @@ function SleepCostSection({ tier, match, prefs }) {
         <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-line-hairline bg-surface-raised/40 px-2.5 py-1.5">
           <span className="text-2xs text-text-muted">个人睡眠</span>
           <SleepNote match={match} prefs={prefs} size="md" />
+        </div>
+      )}
+      {onWatchLater && (
+        <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+          {queueMsg && <Meta className="mr-auto">{queueMsg}</Meta>}
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => {
+              const result = onWatchLater?.();
+              if (result?.ok) setQueueMsg(result.added ? '已加入明早补看' : '已在补看队列中');
+              else if (result?.reason === 'full') setQueueMsg('队列已满，请先在设置中移除旧条目');
+              else setQueueMsg('加入补看失败');
+            }}
+            disabled={watchLater}
+            title={watchLater ? '已加入明早补看，可在「偏好与数据 → 明早补看」移除' : '不熬夜，明早再看这场'}
+          >
+            {watchLater ? '已加入明早补看' : '明早补看'}
+          </Button>
         </div>
       )}
     </Block>
