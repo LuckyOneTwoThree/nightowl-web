@@ -4,6 +4,7 @@ import { ts, sleepTier, countdown as engineCountdown } from '../core/engine.js';
 import { Button, Chip, Crest, Hint, LiveDot, Meta, SleepBadge, Stars } from './atoms.jsx';
 import { IconCalendar, IconInfo, IconPlay, IconSignal, IconWarn } from './icons.jsx';
 import { locateSection } from './locate.js';
+import SleepNote from './SleepNote.jsx';
 
 /**
  * 三档措辞。指数 < 5 时不吹不硬推 —— 这是产品纪律，不是样式分支。
@@ -42,7 +43,8 @@ export default function HeroCard({
   active = false,
   now,
   onWatch,
-  indexHint
+  indexHint,
+  prefs
 }) {
   const m = hero.m;
   const ev = hero.ev;
@@ -126,8 +128,9 @@ export default function HeroCard({
         </div>
 
         <div className="relative mt-2 flex items-center justify-between gap-2 border-t border-line-hairline pt-2">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <SleepBadge match={m} />
+            <SleepNote match={m} prefs={prefs} />
             <span className="text-xs text-text-muted">指数低于 5.0 推荐线 · 仅供顺带参考</span>
           </div>
           {active && (
@@ -263,8 +266,9 @@ export default function HeroCard({
 
       {/* 底部：睡眠代价 + 全宽主行动 */}
       <div className="relative mt-3 space-y-2">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <SleepBadge match={m} />
+          <SleepNote match={m} prefs={prefs} warn={tierCost >= 3.5} />
           {tierCost >= 3.5 && (
             <span className="inline-flex items-center gap-1 text-xs text-danger">
               <IconWarn size={12} />

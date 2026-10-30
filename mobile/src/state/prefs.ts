@@ -11,6 +11,9 @@ export type Prefs = {
   spoilerFree: boolean;
   notifyBefore15: boolean;
   notifyLiveEvents: boolean;
+  sleepEnabled: boolean;
+  sleepWakeTime: string;
+  sleepMinHours: number;
   theme: 'dark';
   onboardingDone: boolean;
 };
@@ -22,6 +25,9 @@ export const DEFAULT_PREFS: Prefs = {
   spoilerFree: true,
   notifyBefore15: true,
   notifyLiveEvents: true,
+  sleepEnabled: false,
+  sleepWakeTime: '07:30',
+  sleepMinHours: 7,
   theme: 'dark',
   onboardingDone: false,
 };

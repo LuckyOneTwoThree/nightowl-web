@@ -66,6 +66,7 @@ import { EmptyState } from '@/ui/EmptyState';
 import { FormDots } from '@/ui/FormDots';
 import { SegmentedControl } from '@/ui/SegmentedControl';
 import { SleepBadge } from '@/ui/SleepBadge';
+import { SleepNote } from '@/ui/SleepNote';
 import { colors, fontSize, radius, spacing, tierColor, withAlpha } from '@/ui/theme';
 import type { Entry, Ev, Match, MatchStandings, Narrative, Tier } from '@/types';
 
@@ -486,6 +487,8 @@ export default function MatchScreen() {
             </View>
             <Text style={styles.metricMuted}>看点 {intel.ev.star} 星</Text>
           </View>
+
+          <SleepNote match={match} prefs={prefs} style={styles.sleepNote} />
 
           {finishedNow && scoreVisible && finalScore ? (
             <Pressable onPress={handleHideScore} style={styles.hideScore} hitSlop={14}>
@@ -1278,6 +1281,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.hairline,
     zIndex: 2,
   },
+  sleepNote: { marginTop: spacing.xs + 2 },
   metrics: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -16,7 +16,10 @@ const KEY = {
   spoilerFree: 'spoilerFree',
   notify: 'notifyBefore15',
   liveNotify: 'notifyLiveEvents',
-  theme: 'theme'
+  theme: 'theme',
+  sleepEnabled: 'sleepEnabled',
+  sleepWakeTime: 'sleepWakeTime',
+  sleepMinHours: 'sleepMinHours'
 };
 
 /** 首启默认：只关注英超。刻意不设为"全部 6 个"，否则 +8 加成恒为 0 */
@@ -33,7 +36,10 @@ export const defaultPrefs = () => ({
   spoilerFree: true,
   notifyBefore15: true,
   notifyLiveEvents: true,
-  theme: DEFAULT_THEME
+  theme: DEFAULT_THEME,
+  sleepEnabled: false,
+  sleepWakeTime: '07:30',
+  sleepMinHours: 7
 });
 
 function readJSON(key, fallback) {
@@ -89,7 +95,10 @@ export function loadPrefs() {
     spoilerFree: readJSON(KEY.spoilerFree, d.spoilerFree) !== false,
     notifyBefore15: readJSON(KEY.notify, d.notifyBefore15) !== false,
     notifyLiveEvents: readJSON(KEY.liveNotify, d.notifyLiveEvents) !== false,
-    theme: 'dark'
+    theme: 'dark',
+    sleepEnabled: readJSON(KEY.sleepEnabled, d.sleepEnabled) === true,
+    sleepWakeTime: readString(KEY.sleepWakeTime, d.sleepWakeTime),
+    sleepMinHours: readNumber(KEY.sleepMinHours, d.sleepMinHours)
   };
 }
 
@@ -102,6 +111,9 @@ export function savePrefs(p) {
     localStorage.setItem(KEY.notify, JSON.stringify(p.notifyBefore15));
     localStorage.setItem(KEY.liveNotify, JSON.stringify(p.notifyLiveEvents));
     localStorage.setItem(KEY.theme, 'dark');
+    localStorage.setItem(KEY.sleepEnabled, JSON.stringify(!!p.sleepEnabled));
+    localStorage.setItem(KEY.sleepWakeTime, String(p.sleepWakeTime || '07:30'));
+    localStorage.setItem(KEY.sleepMinHours, String(Number.isFinite(p.sleepMinHours) ? p.sleepMinHours : 7));
   } catch {
     // 存储不可用时静默降级：本次会话仍可用，只是不持久化
   }

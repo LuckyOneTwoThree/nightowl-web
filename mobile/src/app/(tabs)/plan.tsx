@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, TriangleAlert } from 'lucide-react-native';
 import { leagueName, teamName } from '@data/index.js';
 import { computeWeek } from '@core/owl.js';
 import { owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '@core/engine.js';
+import { formatSleepHours, sleepLedger } from '@core/sleep.js';
 import { hm, hmCost, zhDate } from '@core/format.js';
 import { animateLayout } from '@/lib/layoutAnimation';
 import { useNow } from '@/lib/useNow';
@@ -83,6 +84,26 @@ export default function PlanScreen() {
     .slice(0, 10);
   const plan = week.plan;
   const remain = Math.max(0, plan.budget - plan.used);
+  const sleepSummary = useMemo(() => {
+    if (!prefs.sleepEnabled) return null;
+    const profile = {
+      enabled: true,
+      wakeTime: prefs.sleepWakeTime,
+      minSleep: prefs.sleepMinHours,
+    };
+    const ledgers = plan.best
+      .map(entry => sleepLedger(entry.m.t, profile))
+      .filter(ledger => ledger.valid && ledger.ready);
+    if (!ledgers.length) return null;
+    const below = ledgers.filter(ledger => ledger.belowFloor);
+    const lowest = ledgers.reduce((a, b) => ((a.remainingHours ?? 0) <= (b.remainingHours ?? 0) ? a : b));
+    return {
+      wakeTime: ledgers[0].profile.wakeTime,
+      minSleep: ledgers[0].profile.minSleep,
+      below: below.length,
+      lowest: lowest.remainingHours,
+    };
+  }, [plan.best, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepMinHours]);
   const hasAnyMatches = week.days.some(day => day.count > 0);
   const bestDaySet = useMemo(() => {
     const s = new Set<string>();
@@ -207,6 +228,15 @@ export default function PlanScreen() {
           零成本 S0 场次不占额度，但同一时段仍只能看一场；背包最多 5 场，是本周可安排的场次上限。
         </Text>
       </Card>
+
+      {sleepSummary ? (
+        <Text style={[styles.sleepSummary, sleepSummary.below > 0 && styles.sleepSummaryWarn]}>
+          按 {sleepSummary.wakeTime} 起床 ·{' '}
+          {sleepSummary.below > 0
+            ? `精选有 ${sleepSummary.below} 晚低于 ${sleepSummary.minSleep}h 底线，最低约剩 ${formatSleepHours(sleepSummary.lowest)}`
+            : `精选均在 ${sleepSummary.minSleep}h 底线内`}
+        </Text>
+      ) : null}
 
       <View style={styles.section}>
         <SectionHeader
@@ -605,6 +635,8 @@ const styles = StyleSheet.create({
   },
   budgetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingTop: spacing.xs },
   hint: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 17 },
+  sleepSummary: { color: colors.textMuted, fontSize: fontSize.xs, paddingHorizontal: spacing.xs },
+  sleepSummaryWarn: { color: colors.warn, fontWeight: '600' },
   section: { gap: spacing.sm },
   ratio: { color: colors.textFaint, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   list: {

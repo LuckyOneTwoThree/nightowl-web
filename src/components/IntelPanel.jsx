@@ -15,6 +15,7 @@ import { evalOne } from '../core/owl.js';
 import { computeMatchStats } from '../core/stats.js';
 import { Chip, Crest, Hint, Meta, SectionLabel } from './atoms.jsx';
 import UpcomingFixtures from './UpcomingFixtures.jsx';
+import SleepNote, { sleepLedgerFor } from './SleepNote.jsx';
 import SameNightPicks from './SameNightPicks.jsx';
 import {
   IconCalendar,
@@ -119,7 +120,7 @@ export default function IntelPanel({
       {tab === 'decision' ? (
         <div className="grid grid-cols-1 gap-x-0 gap-y-0 p-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
           <div className="space-y-4 lg:border-r lg:border-line-hairline lg:pr-6">
-            <SleepCostSection tier={tier} match={match} />
+            <SleepCostSection tier={tier} match={match} prefs={prefs} />
             <NarrativeSection narrative={narrative} stories={stories} ev={ev} hideHeadline={isHeroMatch} />
           </div>
           <div className="space-y-4 pt-4 lg:pl-6 lg:pt-0">
@@ -219,7 +220,7 @@ function Block({ icon, title, right, children }) {
 /* 决策视图                                                            */
 /* ------------------------------------------------------------------ */
 
-function SleepCostSection({ tier, match }) {
+function SleepCostSection({ tier, match, prefs }) {
   const style = TIER_MAP[tier.label] || TIER_MAP.S0;
   return (
     <Block icon={<IconTier />} title="睡眠代价" right={<Meta num>{match.tbd ? '时间待定' : `${hm(match.t)} 开球`}</Meta>}>
@@ -253,6 +254,12 @@ function SleepCostSection({ tier, match }) {
       </div>
 
       <p className="mt-2 text-xs leading-relaxed text-text-secondary">{tierAdviceOf(match)}</p>
+      {sleepLedgerFor(match, prefs) && (
+        <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-line-hairline bg-surface-raised/40 px-2.5 py-1.5">
+          <span className="text-2xs text-text-muted">个人睡眠</span>
+          <SleepNote match={match} prefs={prefs} size="md" />
+        </div>
+      )}
     </Block>
   );
 }

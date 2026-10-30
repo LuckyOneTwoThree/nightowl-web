@@ -297,6 +297,43 @@ export default function SettingsDrawer({
             </div>
           </Fieldset>
 
+          <Fieldset title="个人睡眠" hint="按自己的起床时间估算看完比赛后的剩余睡眠；默认关闭，不影响推荐排序。">
+            <SwitchRow
+              label="启用睡眠账本"
+              hint="启用后 Hero、周规划与比赛详情会显示个人剩余睡眠；低于底线会明确提示。"
+              on={prefs.sleepEnabled}
+              onChange={v => patch({ sleepEnabled: v })}
+            />
+            {prefs.sleepEnabled && (
+              <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-line-hairline bg-surface-card px-3 py-2.5">
+                <label className="text-2xs text-text-muted">
+                  起床时间
+                  <input
+                    type="time"
+                    value={prefs.sleepWakeTime || '07:30'}
+                    onChange={e => patch({ sleepWakeTime: e.target.value })}
+                    className="mt-1 block w-full rounded-md border border-line-control bg-surface-panel px-2 py-1 font-num text-xs text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+                    aria-label="起床时间"
+                  />
+                </label>
+                <label className="text-2xs text-text-muted">
+                  最低睡眠
+                  <span className="ml-1 font-num text-text-primary">{Number(prefs.sleepMinHours ?? 7).toFixed(1)}h</span>
+                  <input
+                    type="range"
+                    min="4"
+                    max="10"
+                    step="0.5"
+                    value={prefs.sleepMinHours ?? 7}
+                    onChange={e => patch({ sleepMinHours: Number(e.target.value) })}
+                    className="mt-2 w-full accent-accent"
+                    aria-label="最低睡眠小时数"
+                  />
+                </label>
+              </div>
+            )}
+          </Fieldset>
+
           {/* 通知：偏好早就在，v0.1.24 真正接上系统通知 */}
           <Fieldset title="提醒" hint="通知仅在应用运行时生效；点击通知会回到对应比赛。">
             <div className="space-y-1.5">

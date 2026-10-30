@@ -14,6 +14,7 @@ import { Image } from 'expo-image';
 import {
   Bell,
   ChevronRight,
+  MoonStar,
   EyeOff,
   Info,
   Radio,
@@ -110,6 +111,14 @@ export default function MeScreen() {
       setQuickPulling(false);
     }
   }, []);
+
+  const adjustWake = (deltaMinutes: number) => {
+    setPrefs({ sleepWakeTime: formatWakeMinutes(parseWakeMinutes(prefs.sleepWakeTime) + deltaMinutes) });
+  };
+  const adjustMinSleep = (deltaHours: number) => {
+    const next = Math.min(10, Math.max(4, Number(prefs.sleepMinHours ?? 7) + deltaHours));
+    setPrefs({ sleepMinHours: Math.round(next * 2) / 2 });
+  };
 
   const version = Constants.expoConfig?.version ?? '0.1.0';
   const followedTeamNames = prefs.followedTeams.map(id => ({ id, name: teamName(id) }));
@@ -311,6 +320,39 @@ export default function MeScreen() {
       </View>
 
       <View style={styles.section}>
+        <SectionHeader title="个人睡眠" />
+        <Card style={styles.cardGap}>
+          <SettingSwitch
+            icon={<MoonStar size={16} color={colors.textMuted} />}
+            label="启用睡眠账本"
+            hint="按你的起床时间估算看完比赛后的剩余睡眠；默认关闭"
+            value={prefs.sleepEnabled}
+            onValueChange={value => setPrefs({ sleepEnabled: value })}
+          />
+          {prefs.sleepEnabled ? (
+            <>
+              <View style={styles.divider} />
+              <SleepStepper
+                label="起床时间"
+                hint="按你的日常作息计算，不是设备时区"
+                value={prefs.sleepWakeTime || '07:30'}
+                onMinus={() => adjustWake(-30)}
+                onPlus={() => adjustWake(30)}
+              />
+              <View style={styles.divider} />
+              <SleepStepper
+                label="最低睡眠"
+                hint="低于这条线会在推荐与详情中明确提示"
+                value={`${Number(prefs.sleepMinHours ?? 7).toFixed(1)}h`}
+                onMinus={() => adjustMinSleep(-0.5)}
+                onPlus={() => adjustMinSleep(0.5)}
+              />
+            </>
+          ) : null}
+        </Card>
+      </View>
+
+      <View style={styles.section}>
         <SectionHeader title="数据与服务" />
         <Card style={styles.cardGap}>
           <InfoRow
@@ -446,6 +488,63 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function parseWakeMinutes(value: string): number {
+  const m = String(value || '').match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return 7 * 60 + 30;
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  return Number.isFinite(hh) && Number.isFinite(mm) ? hh * 60 + mm : 7 * 60 + 30;
+}
+
+function formatWakeMinutes(minutes: number): string {
+  const total = ((Math.round(minutes) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+function SleepStepper({
+  label,
+  hint,
+  value,
+  onMinus,
+  onPlus,
+}: {
+  label: string;
+  hint: string;
+  value: string;
+  onMinus: () => void;
+  onPlus: () => void;
+}) {
+  return (
+    <View style={styles.sleepRow}>
+      <View style={styles.sleepLabelBlock}>
+        <Text style={styles.settingLabel}>{label}</Text>
+        <Text style={styles.settingHint}>{hint}</Text>
+      </View>
+      <View style={styles.sleepStepper}>
+        <Pressable
+          onPress={onMinus}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`${label}减少`}
+          style={({ pressed }) => [styles.sleepStepButton, pressed && styles.pressed]}
+        >
+          <Text style={styles.sleepStepText}>−</Text>
+        </Pressable>
+        <Text style={styles.sleepStepValue}>{value}</Text>
+        <Pressable
+          onPress={onPlus}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`${label}增加`}
+          style={({ pressed }) => [styles.sleepStepButton, pressed && styles.pressed]}
+        >
+          <Text style={styles.sleepStepText}>+</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function SettingSwitch({
   icon,
   label,
@@ -529,6 +628,34 @@ const styles = StyleSheet.create({
   settingText: { flex: 1, gap: 2 },
   settingLabel: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
   settingHint: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 16 },
+  sleepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  sleepLabelBlock: { flex: 1, gap: 2 },
+  sleepStepper: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  sleepStepButton: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.raised,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+  },
+  sleepStepText: { color: colors.textSecondary, fontSize: fontSize.lg, fontWeight: '600', lineHeight: 20 },
+  sleepStepValue: {
+    minWidth: 48,
+    textAlign: 'center',
+    color: colors.text,
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
   infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   infoLabel: { color: colors.textMuted, fontSize: fontSize.sm },
   infoValue: {

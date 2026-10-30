@@ -44,6 +44,7 @@ import { animateLayout } from '@/lib/layoutAnimation';
 import { useNow } from '@/lib/useNow';
 import { useAppStore, useDataRev } from '@/state/app';
 import { usePrefs } from '@/state/prefs';
+import { SleepNote } from '@/ui/SleepNote';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
@@ -238,6 +239,7 @@ export default function TonightScreen() {
           narrative={heroNarrative}
           now={now}
           level={heroTier(hero.index) as 'highlight' | 'standard' | 'weak'}
+          prefs={prefs}
           onPress={openHero}
         />
       ) : tonight.focal ? (
@@ -415,12 +417,14 @@ function HeroCard({
   narrative,
   now,
   level,
+  prefs,
   onPress,
 }: {
   hero: Entry;
   narrative: Narrative | null;
   now: number;
   level: 'highlight' | 'standard' | 'weak';
+  prefs: ReturnType<typeof usePrefs>;
   onPress: () => void;
 }) {
   const tier = sleepTier(hero.m.t) as Tier;
@@ -546,6 +550,8 @@ function HeroCard({
           </View>
         </View>
 
+        <SleepNote match={hero.m} prefs={prefs} style={styles.heroSleep} />
+
         {narrative ? (
           <View style={styles.narrative}>
             <Text style={styles.headline} numberOfLines={2}>
@@ -662,6 +668,7 @@ const styles = StyleSheet.create({
   heroWeak: {
     borderColor: colors.hairline,
   },
+  heroSleep: { marginTop: -2 },
   heroTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   heroTopLeft: { gap: 3 },
   eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },

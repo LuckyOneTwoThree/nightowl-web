@@ -119,30 +119,44 @@ app.whenReady().then(async () => {
 
     /* 「情报」是页内定位，不是弹窗。1440 下目标本来就完整可见，
        scrollIntoView 不会产生位移 —— 必须靠高亮 + 焦点给出反馈。 */
-    const heroIntelClicked = await win.webContents.executeJavaScript(`
+    const heroAction = await win.webContents.executeJavaScript(`
       (() => {
-        const btn = [...document.querySelectorAll('button')].find(
-          b => (b.textContent || '').trim() === '查看赛前情报'
+        const hero = document.querySelector('main > section');
+        const buttons = [...(hero?.querySelectorAll('button') || [])];
+        const btn = buttons.find(b =>
+          ['查看赛前情报', '查看直播线路', '查看赛后回顾', '进入直播间'].includes(
+            (b.textContent || '').trim()
+          )
         );
-        if (!btn) return false;
+        if (!btn) return { clicked: false, target: null };
+        const text = (btn.textContent || '').trim();
+        const target = text.includes('情报')
+          ? 'intel-panel'
+          : text.includes('线路')
+            ? 'match-lines'
+            : 'match-recap';
         btn.click();
-        return true;
+        return { clicked: true, target };
       })()
     `);
     await sleep(180);
-    const heroIntelFeedback = await win.webContents.executeJavaScript(`
+    const heroActionFeedback = await win.webContents.executeJavaScript(`
       (() => {
-        const panel = document.getElementById('intel-panel');
+        const el = document.getElementById(${JSON.stringify(heroAction.target)});
         return {
-          hasFlash: panel?.classList.contains('locate-focus-flash') || false,
-          focused: document.activeElement === panel
+          hasFlash: el?.classList.contains('locate-focus-flash') || false,
+          focused: document.activeElement === el
         };
       })()
     `);
-    ok('★ 已选中 Hero 的主按钮可直达赛前情报（不再空动作）',
-      heroIntelClicked && heroIntelFeedback.hasFlash && heroIntelFeedback.focused,
-      JSON.stringify(heroIntelFeedback));
+    ok('★ 已选中 Hero 的主按钮可直达当前状态对应区块',
+      heroAction.clicked && heroActionFeedback.hasFlash && heroActionFeedback.focused,
+      JSON.stringify({ action: heroAction, feedback: heroActionFeedback }));
     await sleep(1100);
+
+    // 固定切到未来场次：当前时刻 Hero 可能正好是直播场，直播态没有“情报/查看线路”入口。
+    await waitLoad(win, `${base}/?view=tonight&match=${futureFixture.id}`);
+    await sleep(1400);
 
     const intelClicked = await win.webContents.executeJavaScript(`
       (() => {
@@ -755,6 +769,21 @@ app.whenReady().then(async () => {
       darkOnly.isDark && !darkOnly.hasLight && darkOnly.dataTheme === 'dark' && darkOnly.rootChildren >= 1,
       JSON.stringify(darkOnly));
 
+    // 睡眠档案启用后，Hero 必须出现个人剩余睡眠，而不是只显示抽象的 S 档。
+    await win.webContents.executeJavaScript(`
+      localStorage.setItem('sleepEnabled','true');
+      localStorage.setItem('sleepWakeTime','07:30');
+      localStorage.setItem('sleepMinHours','7');
+      true
+    `);
+    await waitLoad(win, `${base}/?view=tonight`);
+    await sleep(1500);
+    const sleepLedgerText = await win.webContents.executeJavaScript(`document.body.innerText.slice(0, 1400)`);
+    ok('★ 启用睡眠档案后 Hero 显示个人剩余睡眠',
+      sleepLedgerText.includes('起床') &&
+        /看完约剩|看完直接到起床点/.test(sleepLedgerText),
+      sleepLedgerText.slice(0, 240));
+
     await win.webContents.executeJavaScript(`
       (() => {
         const btn = [...document.querySelectorAll('button')].find(
@@ -773,12 +802,16 @@ app.whenReady().then(async () => {
         return {
           open: !!aside,
           hasThemeSection: text.includes('界面主题') || text.includes('日间演播室'),
-          hasFollowSection: text.includes('关注球队')
+          hasFollowSection: text.includes('关注球队'),
+          hasSleepSection: text.includes('个人睡眠'),
+          hasSleepTime: !!aside?.querySelector('input[type="time"]')
         };
       })()
     `);
     ok('★ 设置中不再出现浅色主题入口',
-      settingsThemeRemoved.open && !settingsThemeRemoved.hasThemeSection && settingsThemeRemoved.hasFollowSection,
+      settingsThemeRemoved.open && !settingsThemeRemoved.hasThemeSection &&
+        settingsThemeRemoved.hasFollowSection &&
+        settingsThemeRemoved.hasSleepSection && settingsThemeRemoved.hasSleepTime,
       JSON.stringify(settingsThemeRemoved));
 
     const resetClicked = await win.webContents.executeJavaScript(`

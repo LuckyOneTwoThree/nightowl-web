@@ -3,6 +3,7 @@ import { zhDate, hmCost, hm } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { stateOf } from '../core/owl.js';
 import { owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '../core/engine.js';
+import { formatSleepHours, sleepLedger } from '../core/sleep.js';
 import { Chip, Crest, Hint, Meta, SectionLabel, SleepBadge, Stars } from './atoms.jsx';
 import { IconChevronDown, IconChevronUp, IconClose, IconWarn } from './icons.jsx';
 import MatchRow from './MatchRow.jsx';
@@ -54,6 +55,26 @@ export default function WeekView({
   const { plan, minefield, days, advice } = week;
   const hasScheduledMatches = days.some(day => day.count > 0);
   const remaining = Math.max(0, plan.budget - plan.used);
+  const sleepSummary = useMemo(() => {
+    if (!prefs.sleepEnabled) return null;
+    const profile = {
+      enabled: true,
+      wakeTime: prefs.sleepWakeTime,
+      minSleep: prefs.sleepMinHours
+    };
+    const ledgers = plan.best
+      .map(e => sleepLedger(e.m.t, profile))
+      .filter(l => l.valid && l.ready);
+    if (!ledgers.length) return null;
+    const below = ledgers.filter(l => l.belowFloor);
+    const lowest = ledgers.reduce((a, b) => (a.remainingHours <= b.remainingHours ? a : b));
+    return {
+      wakeTime: ledgers[0].profile.wakeTime,
+      minSleep: ledgers[0].profile.minSleep,
+      below: below.length,
+      lowest: lowest.remainingHours
+    };
+  }, [plan.best, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepMinHours]);
 
   const bestDaySet = useMemo(() => {
     const s = new Set();
@@ -119,6 +140,15 @@ export default function WeekView({
           本周熬夜规划
         </SectionLabel>
       </div>
+
+      {sleepSummary && (
+        <div className={`px-0.5 text-2xs ${sleepSummary.below > 0 ? 'text-warn' : 'text-text-muted'}`}>
+          按 <span className="font-num tabular-nums">{sleepSummary.wakeTime}</span> 起床 ·{' '}
+          {sleepSummary.below > 0
+            ? `精选有 ${sleepSummary.below} 晚低于 ${sleepSummary.minSleep}h 底线，最低约剩 ${formatSleepHours(sleepSummary.lowest)}`
+            : `精选均在 ${sleepSummary.minSleep}h 底线内`}
+        </div>
+      )}
 
       {/* ---- 顶部仪表盘卡片：睡眠预算 + 7 晚熬夜负荷柱 ---- */}
       <section className="shrink-0 overflow-hidden rounded-xl border border-line-hairline bg-surface-card shadow-card">

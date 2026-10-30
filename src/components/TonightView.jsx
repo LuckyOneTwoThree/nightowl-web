@@ -126,6 +126,7 @@ export default function TonightView({
           now={now}
           onWatch={onSelect}
           indexHint={INDEX_HINT}
+          prefs={prefs}
         />
       ) : (
         <NoMatchCard focal={focal} countdown={countdownText} onSelect={onSelect} />
