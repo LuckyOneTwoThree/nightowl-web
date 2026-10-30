@@ -261,6 +261,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
       // 数据新鲜度：界面据此显示「数据更新于 X · 落后 N 场待录」，
       // 而不是让用户误以为应用坏了
       if (pathname === '/api/scores/status' && req.method === 'GET') {
+        if (rejectForeignOrigin(req, res)) return;
         try {
           const fixtures = await loadFixturesImpl();
           const fresh = freshness(fixtures);
@@ -281,19 +282,15 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
 
       // 当前生效的赛程数据（前端启动时拉取，用于把静态快照热更新为最新数据）
       if (pathname === '/api/fixtures' && req.method === 'GET') {
+        if (rejectForeignOrigin(req, res)) return;
         try {
           const fixtures = await loadFixturesImpl();
-          sendJSON(
-            res,
-            200,
-            {
-              ok: true,
-              count: fixtures.length,
-              freshness: freshness(fixtures),
-              fixtures
-            },
-            { 'Cache-Control': 'no-store' }
-          );
+          sendJSON(res, 200, {
+            ok: true,
+            count: fixtures.length,
+            freshness: freshness(fixtures),
+            fixtures
+          });
         } catch (err) {
           sendJSON(res, 500, { error: String(err?.message || err) });
         }
@@ -381,7 +378,14 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
         syncing = true;
         const startedAt = Date.now();
         try {
-          const body = await readJsonBody(req).catch(() => ({}));
+          let body;
+          try {
+            body = await readJsonBody(req);
+          } catch (err) {
+            // 非法/超长请求体是客户端问题，不能静默降级成 dry-run 后回 200。
+            sendJSON(res, 400, { error: `解析请求体失败：${err.message}` });
+            return;
+          }
           // apply=true 时写回用户数据目录；否则只预览（保持旧行为）
           const apply = body?.apply === true || searchParams.get('apply') === '1';
           const allMonths = body?.allMonths === true || searchParams.get('all') === '1';
@@ -440,6 +444,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
 
       /* ---------------- 观赛源注册表 ---------------- */
       if (pathname === '/api/watch-sources') {
+        if (rejectForeignOrigin(req, res)) return;
         try {
           const reg = JSON.parse(await readFile(resolve(ROOT, 'server/watch-sources.json'), 'utf8'));
           sendJSON(res, 200, {
@@ -454,6 +459,8 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
 
       /* ---------------- 自动赛事直播源 ---------------- */
       if (pathname === '/api/live-sources') {
+        // 该接口会联网抓取并自动授权代理域名，必须校验来源，不能只依赖回环绑定。
+        if (rejectForeignOrigin(req, res)) return;
         const matchId = searchParams.get('matchId') || '';
         const h = searchParams.get('h') || '';
         const a = searchParams.get('a') || '';
@@ -482,6 +489,11 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
       }
 
       /* ---------------- 静态资源 ---------------- */
+      // 未匹配的 /api/* 必须回 404：回落 index.html 会让客户端把坏路径当成功解析。
+      if (pathname.startsWith('/api/')) {
+        sendJSON(res, 404, { error: 'not found', path: pathname });
+        return;
+      }
       await serveStatic(pathname, res);
     } catch (err) {
       if (err instanceof ProxyError) {
@@ -495,7 +507,47 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
     }
   });
 
-  /** 执行一轮同步并落盘、更新 lastSync；返回下一轮应使用的 fixtures。 */
+  /** 合并后台多阶段同步的结果：任一阶段的错误/写盘失败都不能被后一阶段覆盖掉。 */
+  const combineSyncStages = infos => {
+    const list = infos.filter(Boolean);
+    if (!list.length) return null;
+    const bySource = {};
+    const stats = {};
+    for (const info of list) {
+      for (const [key, value] of Object.entries(info.bySource || {})) {
+        const current = bySource[key] || { events: 0, requests: 0, ok: 0, failed: 0 };
+        bySource[key] = {
+          events: current.events + (value.events || 0),
+          requests: current.requests + (value.requests || 0),
+          ok: current.ok + (value.ok || 0),
+          failed: current.failed + (value.failed || 0)
+        };
+      }
+      for (const [key, value] of Object.entries(info.stats || {})) {
+        if (typeof value === 'number') stats[key] = (stats[key] || 0) + value;
+      }
+    }
+    const errors = list.reduce((sum, info) => sum + (info.errors || 0), 0);
+    const patches = list.reduce((sum, info) => sum + (info.patches || 0), 0);
+    const changed = list.reduce((sum, info) => sum + (info.written?.changed || 0), 0);
+    const failedWrites = list.filter(info => info.written?.ok === false);
+    return {
+      at: new Date().toISOString(),
+      ms: list.reduce((sum, info) => sum + (info.ms || 0), 0),
+      patches,
+      attempted: list.some(info => info.attempted !== false),
+      applied: list.some(info => info.applied),
+      written: failedWrites.length
+        ? { ok: false, changed, reason: failedWrites[0].written.reason || '写盘失败' }
+        : { ok: true, changed },
+      errors,
+      error: list.map(info => info.error).filter(Boolean).join('；') || undefined,
+      stats,
+      bySource
+    };
+  };
+
+  /** 执行一轮同步并落盘；返回下一阶段应使用的 fixtures 与本阶段结果。 */
   const runSyncStage = async (fixtures, sources, label) => {
     const startedAt = Date.now();
     const result = await syncScoresImpl({ fixtures, rules, sources, log });
@@ -523,18 +575,20 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
     }
     // 即使没有补丁也要记录「这次检查发生过」；否则设置页会永远显示
     // 「本次启动后未运行」，用户无法区分健康自检与从未执行。
-    lastSync = {
-      at: new Date().toISOString(),
-      ms: Date.now() - startedAt,
-      patches: result.patches.size,
-      attempted: result.attempted !== false,
-      applied,
-      written,
-      errors: result.errors.length,
-      stats: result.stats,
-      bySource: result.bySource
+    return {
+      fixtures: nextFixtures,
+      info: {
+        at: new Date().toISOString(),
+        ms: Date.now() - startedAt,
+        patches: result.patches.size,
+        attempted: result.attempted !== false,
+        applied,
+        written,
+        errors: result.errors.length,
+        stats: result.stats,
+        bySource: result.bySource
+      }
     };
-    return nextFixtures;
   };
 
   // 自动化后台常态保鲜：先跑 ESPN 快通道让当前比分尽快可见，再用 openfootball 补全历史/时间。
@@ -544,50 +598,48 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
     syncing = true;
     let fixtures = null;
     let espnOk = true;
-    try {
-      fixtures = await loadFixturesImpl();
-      try {
-        fixtures = await runSyncStage(fixtures, ['espn'], '后台快检');
-      } catch (err) {
-        espnOk = false;
-        log.warn?.(`[scores] 后台快检异常: ${err?.message || String(err)}`);
-      }
-      try {
-        fixtures = await runSyncStage(
-          fixtures,
-          espnOk ? ['openfootball'] : undefined,
-          espnOk ? '后台补全' : '后台完整保鲜'
-        );
-      } catch (err) {
-        const message = err?.message || String(err);
-        log.warn?.(`[scores] 后台补全异常: ${message}`);
-        lastSync = {
-          at: new Date().toISOString(),
-          ms: 0,
-          patches: 0,
-          attempted: true,
-          applied: false,
-          written: { ok: false, reason: message },
-          errors: 1,
-          stats: {},
-          bySource: {}
-        };
-      }
-    } catch (err) {
-      const message = err?.message || String(err);
-      log.warn?.(`[scores] 后台保鲜异常: ${message}`);
-      lastSync = {
+    const stages = [];
+    const recordFailure = (label, message) => {
+      log.warn?.(`[scores] ${label}异常: ${message}`);
+      stages.push({
         at: new Date().toISOString(),
         ms: 0,
         patches: 0,
         attempted: true,
         applied: false,
-        written: { ok: false, reason: message },
+        // 本阶段异常不等于写盘失败：写盘结果由已完成阶段的 info 保留。
+        written: { ok: true, changed: 0, note: '本阶段异常，未写盘' },
         errors: 1,
         stats: {},
-        bySource: {}
-      };
+        bySource: {},
+        error: `[${label}] ${message}`
+      });
+    };
+    try {
+      fixtures = await loadFixturesImpl();
+      try {
+        const stage = await runSyncStage(fixtures, ['espn'], '后台快检');
+        fixtures = stage.fixtures;
+        stages.push(stage.info);
+      } catch (err) {
+        espnOk = false;
+        recordFailure('后台快检', err?.message || String(err));
+      }
+      try {
+        const stage = await runSyncStage(
+          fixtures,
+          espnOk ? ['openfootball'] : undefined,
+          espnOk ? '后台补全' : '后台完整保鲜'
+        );
+        fixtures = stage.fixtures;
+        stages.push(stage.info);
+      } catch (err) {
+        recordFailure('后台补全', err?.message || String(err));
+      }
+    } catch (err) {
+      recordFailure('后台保鲜', err?.message || String(err));
     } finally {
+      lastSync = combineSyncStages(stages);
       syncing = false;
     }
   };

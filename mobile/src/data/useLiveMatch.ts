@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import rules from '../shared/server/rules.json';
@@ -42,14 +42,24 @@ export function useLiveMatch(
   const [loading, setLoading] = useState(false);
   const matchId = match?.id;
   const kickoff = match?.t;
+  // 记录当前数据归属的比赛：切场时先清空，避免用上一场比分渲染新比赛。
+  const dataMatchRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!enabled || !match) {
+      dataMatchRef.current = null;
       setData(null);
       setError(null);
       setLastSuccessAt(null);
       setLoading(false);
       return;
+    }
+
+    if (dataMatchRef.current !== match.id) {
+      dataMatchRef.current = match.id;
+      setData(null);
+      setError(null);
+      setLastSuccessAt(null);
     }
 
     let cancelled = false;

@@ -166,10 +166,10 @@ export default function IntelPanel({
       ) : (
         <div className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <div className="lg:border-r lg:border-line-hairline lg:pr-6">
-            <UpcomingFixtures match={match} prefs={prefs} onSelect={onSelect} embedded />
+            <UpcomingFixtures match={match} prefs={prefs} now={now} onSelect={onSelect} embedded />
           </div>
           <div className="pt-3 lg:pl-2 lg:pt-0">
-            <SameNightPicks match={match} prefs={prefs} onSelect={onSelect} embedded />
+            <SameNightPicks match={match} prefs={prefs} now={now} onSelect={onSelect} embedded />
           </div>
         </div>
       )}

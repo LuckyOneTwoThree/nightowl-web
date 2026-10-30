@@ -11,6 +11,7 @@
 
 import * as espn from './espn.js';
 import * as openfootball from './openfootball.js';
+import { ts } from '../../src/core/engine.js';
 
 /** 注册表：priority 数字越小优先级越高 */
 export const SOURCES = { espn, openfootball };
@@ -104,6 +105,55 @@ export async function fetchAllEvents({ leagues, months, targets, targetDates, se
   return { events, bySource, errors };
 }
 
+/** 跨源同一场比赛允许的开球时间偏差（实测最多约 24h，留一倍余量） */
+const SAME_FIXTURE_WINDOW_MS = 48 * 3600000;
+
+/** 合并一个「同一场次」的事件簇（簇内都是同一时刻附近的跨源结果） */
+function mergeCluster(list, rank, key, conflicts) {
+  const sorted = [...list].sort((a, b) => (rank.get(a.source) ?? 99) - (rank.get(b.source) ?? 99));
+
+  // 比分：优先取已完赛且有比分的，同级取优先级高的
+  const withScore = sorted.filter(e => e.state === 'done' && e.homeScore != null && e.awayScore != null);
+  const scorePick = withScore[0] || null;
+
+  // 多源比分不一致 → 记录冲突（不静默）
+  const scoreSet = new Set(withScore.map(e => `${e.homeScore}-${e.awayScore}`));
+  if (scoreSet.size > 1) {
+    conflicts.push({
+      key,
+      kind: 'score',
+      values: [...scoreSet],
+      sources: withScore.map(e => ({ source: e.source, score: `${e.homeScore}-${e.awayScore}` }))
+    });
+  }
+
+  // 开球时间：只信 kickoffTrusted 的源
+  const timePick = sorted.find(e => e.kickoffTrusted && e.kickoff) || null;
+
+  // 状态：改期优先；其次取有比分依据的状态
+  const postponed = sorted.some(e => e.state === 'pp');
+  const live = sorted.some(e => e.state === 'live');
+  let state;
+  if (postponed) state = 'pp';
+  else if (scorePick) state = 'done';
+  else if (live) state = 'live';
+  else state = 'sched';
+
+  return {
+    league: sorted[0].league,
+    homeId: sorted[0].homeId,
+    awayId: sorted[0].awayId,
+    kickoff: timePick?.kickoff || sorted[0].kickoff || null,
+    kickoffTrusted: !!timePick,
+    state,
+    homeScore: scorePick?.homeScore ?? null,
+    awayScore: scorePick?.awayScore ?? null,
+    scoreSource: scorePick?.source || null,
+    timeSource: timePick?.source || null,
+    sources: sorted.map(e => e.source)
+  };
+}
+
 /**
  * 多源合并
  * @param {object[]} events 统一事件数组
@@ -123,49 +173,29 @@ export function mergeEvents(events, priorityOrder = DEFAULT_ORDER) {
   const merged = [];
   const conflicts = [];
 
-  for (const [k, list] of groups) {
-    const sorted = [...list].sort((a, b) => (rank.get(a.source) ?? 99) - (rank.get(b.source) ?? 99));
-
-    // 比分：优先取已完赛且有比分的，同级取优先级高的
-    const withScore = sorted.filter(e => e.state === 'done' && e.homeScore != null && e.awayScore != null);
-    const scorePick = withScore[0] || null;
-
-    // 多源比分不一致 → 记录冲突（不静默）
-    const scoreSet = new Set(withScore.map(e => `${e.homeScore}-${e.awayScore}`));
-    if (scoreSet.size > 1) {
-      conflicts.push({
-        key: k,
-        kind: 'score',
-        values: [...scoreSet],
-        sources: withScore.map(e => ({ source: e.source, score: `${e.homeScore}-${e.awayScore}` }))
-      });
+  for (const [pairKey, list] of groups) {
+    // 同一对阵在一个赛季可能出现两次（欧冠联赛阶段 + 淘汰赛复赛）。
+    // 先按开球时间聚类，只有同一时刻附近的跨源事件才合并，避免两场被揉成一场。
+    const clusters = [];
+    const orphans = [];
+    for (const e of list) {
+      const kickoffTs = ts(e.kickoff);
+      if (!Number.isFinite(kickoffTs)) {
+        orphans.push(e);
+        continue;
+      }
+      const hit = clusters.find(c => Math.abs(c.ts - kickoffTs) <= SAME_FIXTURE_WINDOW_MS);
+      if (hit) hit.list.push(e);
+      else clusters.push({ ts: kickoffTs, list: [e] });
     }
+    // 缺时间的事件只有唯一一场时才并入；多场同对阵时不猜归属。
+    if (orphans.length && clusters.length === 1) clusters[0].list.push(...orphans);
+    else if (orphans.length && clusters.length === 0) clusters.push({ ts: NaN, list: orphans });
 
-    // 开球时间：只信 kickoffTrusted 的源
-    const timePick = sorted.find(e => e.kickoffTrusted && e.kickoff) || null;
-
-    // 状态：改期优先；其次取有比分依据的状态
-    const postponed = sorted.some(e => e.state === 'pp');
-    const live = sorted.some(e => e.state === 'live');
-    let state;
-    if (postponed) state = 'pp';
-    else if (scorePick) state = 'done';
-    else if (live) state = 'live';
-    else state = 'sched';
-
-    merged.push({
-      league: sorted[0].league,
-      homeId: sorted[0].homeId,
-      awayId: sorted[0].awayId,
-      kickoff: timePick?.kickoff || sorted[0].kickoff || null,
-      kickoffTrusted: !!timePick,
-      state,
-      homeScore: scorePick?.homeScore ?? null,
-      awayScore: scorePick?.awayScore ?? null,
-      scoreSource: scorePick?.source || null,
-      timeSource: timePick?.source || null,
-      sources: sorted.map(e => e.source)
-    });
+    for (const cluster of clusters) {
+      const key = clusters.length > 1 ? `${pairKey}@${cluster.ts}` : pairKey;
+      merged.push(mergeCluster(cluster.list, rank, key, conflicts));
+    }
   }
 
   return { merged, conflicts };

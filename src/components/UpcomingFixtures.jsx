@@ -61,14 +61,14 @@ function TeamColumn({ teamId, list, side, onSelect }) {
   );
 }
 
-export default function UpcomingFixtures({ match, prefs, onSelect, embedded = false }) {
+export default function UpcomingFixtures({ match, prefs, now = Date.now(), onSelect, embedded = false }) {
   // ⚠️ hooks 必须在 early-return 之前调用：match 从 null 变非 null（失效深链
   // 自动降级到今晚之选）会让两次渲染的 hooks 数量不同，React 直接抛
   // "Rendered more hooks than during the previous render" 整页白屏。
   // 判空放钩子内而不是省略钩子调用；upcomingForTeams 本身不接 null（首行就读 m.t）。
   const { home, away } = useMemo(
-    () => (match ? upcomingForTeams(match) : { home: [], away: [] }),
-    [match]
+    () => (match ? upcomingForTeams(match, undefined, 4, now) : { home: [], away: [] }),
+    [match, now]
   );
 
   if (!match) {

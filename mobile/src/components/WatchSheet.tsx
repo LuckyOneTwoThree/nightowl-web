@@ -13,7 +13,6 @@ import { leagueName, teamName } from '@data/index.js';
 import { countdown as engineCountdown, ts } from '@core/engine.js';
 import { hm, humanCountdownShort, liveMinute } from '@core/format.js';
 import { sourceUrlFor } from '@core/watch-sources.js';
-import { liveScoreForDisplay, isScoreVisible } from '@core/reveal.js';
 import watchSources from '../shared/server/watch-sources.json';
 
 import { useHighlights } from '@/data/useHighlights';
@@ -46,7 +45,7 @@ type Props = {
   live?: LiveData | null;
   isDone: boolean;
   isLive: boolean;
-  spoilerFree: boolean;
+  /** 调用方已合成「防剧透开关 + 是否揭晓 + 手动隐藏」的最终可见性 */
   revealed: boolean;
   onReveal: () => void;
 };
@@ -59,7 +58,6 @@ export function WatchSheet({
   live,
   isDone,
   isLive,
-  spoilerFree,
   revealed,
   onReveal,
 }: Props) {
@@ -79,10 +77,10 @@ export function WatchSheet({
     router.push('/player');
   };
 
-  const hiddenBySpoiler = isDone && spoilerFree && !revealed;
-  // 直播比分同样受防剧透控制：看直播入口不等于允许提前知道当前比分。
-  const showLiveScore = isScoreVisible(spoilerFree, revealed);
-  const liveScore = liveScoreForDisplay(live?.score, spoilerFree, revealed);
+  // 只看调用方合成的 revealed：
+  // 关闭防剧透后用户仍可手动「隐藏比分」，不能再按 spoilerFree 短路成可见。
+  const hiddenBySpoiler = isDone && !revealed;
+  const liveScore = revealed ? live?.score : null;
   const {
     data: highlights,
     loading: highlightsLoading,

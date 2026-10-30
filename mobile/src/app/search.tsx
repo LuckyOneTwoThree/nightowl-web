@@ -75,7 +75,9 @@ export default function SearchScreen() {
 
   const goSchedule = (q: string) => {
     router.dismissAll();
-    router.push({ pathname: '/schedule', params: { q, date: 'all' } });
+    // nav 是一次性的导航令牌：同关键词再次搜索时参数不会变，
+    // 没有它赛程页会认为“已应用过”而忽略这次跳转。
+    router.push({ pathname: '/schedule', params: { q, date: 'all', nav: String(Date.now()) } });
   };
 
   const openTeam = (teamId: string) => {

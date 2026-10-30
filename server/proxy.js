@@ -294,6 +294,12 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
 
       const location = res.headers.get('location');
       if (res.status >= 300 && res.status < 400 && location) {
+        // 无论是否继续跳转，都先丢弃本跳 body：拒绝重定向时同样不能把连接挂住。
+        try {
+          await res.body?.cancel();
+        } catch {
+          /* 无 body 或已关闭，忽略 */
+        }
         // 相对 Location 按本跳 URL 解析（//host、/path、相对路径都要处理）
         const next = new URL(location, url);
         if (next.protocol !== 'https:' && next.protocol !== 'http:') {
@@ -301,12 +307,6 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
         }
         if (!isHostAllowed(next.hostname, rules, sessionAllowed)) {
           throw new ProxyError('blocked', `重定向目标不在白名单：${next.hostname}`, 403);
-        }
-        // 丢弃重定向响应的 body，避免连接挂起
-        try {
-          await res.body?.cancel();
-        } catch {
-          /* 无 body 或已关闭，忽略 */
         }
         url = next.toString();
         continue;
@@ -403,6 +403,12 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
 
       /* ---- 上游无源：明确区别于网络失败 ---- */
       if (!upstream.ok) {
+        // 失败响应也要消费/取消 body，否则 keep-alive 连接与并发槽位会被挂住。
+        try {
+          await upstream.body?.cancel();
+        } catch {
+          /* 忽略 */
+        }
         releaseOnce();
         const kind = upstream.status === 404 || upstream.status === 410 ? 'upstream-absent' : 'network';
         throw new ProxyError(kind, `上游返回 ${upstream.status}`, upstream.status === 404 ? 404 : 502);

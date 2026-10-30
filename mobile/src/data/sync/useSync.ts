@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { getFixtures } from '@data/index.js';
 import { MATCH_DURATION_MS, ts } from '@core/engine.js';
@@ -16,6 +17,7 @@ const CHECK_TICK_MS = 60 * 1000;
 const BACKFILL_COOLDOWN_MS = 30 * 60 * 1000;
 const BACKFILL_SAME_GAP_RETRY_MS = 6 * 60 * 60 * 1000;
 const BACKFILL_WINDOW_MS = 14 * 86400000;
+const BACKFILL_META_KEY = 'nightowl:sync:backfill:v2';
 
 /**
  * 快检只覆盖 72h；更早但仍属于近期的待录比分需要一次完整补扫。
@@ -58,9 +60,25 @@ function staleThreshold(now = Date.now()) {
 
 export function useSyncOnLaunch() {
   // 启动/回前台只做比分快检；只有发现「72h 快检窗口之外、14 天内」的积压待录时，
-  // 才在后台追加一次完整补扫。完整同步仍不跟随每次手势。
-  const lastBackfillAtRef = useRef(0);
-  const lastBackfillGapRef = useRef('');
+  // 才在后台追加一次完整补扫。完整同步不跟随手势，也不占用首页的同步状态。
+  const backfillMetaRef = useRef({ at: 0, gap: '' });
+  const backfillMetaPromiseRef = useRef<Promise<void> | null>(null);
+  const backfillRetryAtRef = useRef(0);
+
+  useEffect(() => {
+    backfillMetaPromiseRef.current = AsyncStorage.getItem(BACKFILL_META_KEY)
+      .then(raw => {
+        if (!raw) return;
+        const saved = JSON.parse(raw) as { at?: number; gap?: string };
+        backfillMetaRef.current = {
+          at: Number.isFinite(saved?.at) ? Number(saved.at) : 0,
+          gap: typeof saved?.gap === 'string' ? saved.gap : '',
+        };
+      })
+      .catch(() => {})
+      .finally(() => {});
+  }, []);
+
   const refresh = useCallback(async () => {
     let outcome: Awaited<ReturnType<typeof syncNow>> | null = null;
     try {
@@ -69,16 +87,46 @@ export function useSyncOnLaunch() {
       // 快检失败仍可能靠副源完整补扫成功；继续检查积压。
     }
     if (outcome?.busy) return outcome;
+
+    // 等持久化的补扫冷却读出来，避免每次冷启动都重扫同一批积压。
+    await backfillMetaPromiseRef.current?.catch(() => {});
+
     const gapIds = backfillGapIds();
     // 单场长期缺分通常是上游确实没有；不要每次启动都花几十秒重扫，交给「立即同步」。
-    if (gapIds.length >= 2) {
+    if (gapIds.length >= 2 && Date.now() >= backfillRetryAtRef.current) {
       const gapKey = gapIds.join(',');
-      const sameGap = gapKey === lastBackfillGapRef.current;
+      const meta = backfillMetaRef.current;
+      const sameGap = gapKey === meta.gap;
       const wait = sameGap ? BACKFILL_SAME_GAP_RETRY_MS : BACKFILL_COOLDOWN_MS;
-      if (Date.now() - lastBackfillAtRef.current > wait) {
-        lastBackfillGapRef.current = gapKey;
-        lastBackfillAtRef.current = Date.now();
-        void syncNow().catch(() => {});
+      if (Date.now() - meta.at > wait) {
+        // 先在内存里占位，防止本轮 60s tick 又触发一次；
+        // 成功完成后再把结果持久化，进程被杀时下次仍会重试。
+        backfillMetaRef.current = { at: Date.now(), gap: gapKey };
+        void syncNow({ silent: true })
+          .then(outcome => {
+            if (outcome.status === 'failed' || outcome.status === 'partial_failure') {
+              // 弱网下部分来源失败：不落 6 小时冷却，5 分钟后允许再试。
+              backfillMetaRef.current = { at: 0, gap: gapKey };
+              backfillRetryAtRef.current = Date.now() + 5 * 60 * 1000;
+              return;
+            }
+            const remaining = backfillGapIds();
+            const next = {
+              at: Date.now(),
+              gap: remaining.length ? remaining.join(',') : '',
+            };
+            backfillMetaRef.current = next;
+            backfillRetryAtRef.current = 0;
+            void AsyncStorage.setItem(
+              BACKFILL_META_KEY,
+              JSON.stringify(next)
+            ).catch(() => {});
+          })
+          .catch(() => {
+            // 失败不落 6 小时冷却；5 分钟后允许再试，避免一次弱网把待录锁死。
+            backfillMetaRef.current = { at: 0, gap: gapKey };
+            backfillRetryAtRef.current = Date.now() + 5 * 60 * 1000;
+          });
       }
     }
     return outcome;

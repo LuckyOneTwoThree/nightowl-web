@@ -17,11 +17,11 @@ const TIER_TONE = Object.fromEntries(
   Object.entries(TIER_MAP).map(([label, t]) => [label, t.text])
 );
 
-export default function SameNightPicks({ match, prefs, onSelect, compact = false, embedded = false }) {
+export default function SameNightPicks({ match, prefs, now = Date.now(), onSelect, compact = false, embedded = false }) {
   // ⚠️ hooks 必须在 early-return 之前调用（同 UpcomingFixtures：match null→非 null
   // 的切换路径会让 hooks 数量变化，React 直接抛错整页白屏）。
   // 判空放钩子内：sameNightPicks 首行就读 m.t，不接 null。
-  const picks = useMemo(() => (match ? sameNightPicks(match, prefs, 3) : []), [match, prefs]);
+  const picks = useMemo(() => (match ? sameNightPicks(match, prefs, 3, now) : []), [match, prefs, now]);
 
   if (!match) {
     if (compact || embedded) return null;

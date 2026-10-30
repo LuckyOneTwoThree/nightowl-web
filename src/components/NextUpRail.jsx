@@ -15,7 +15,7 @@ const TIER_TONE = Object.fromEntries(
  * 左栏底部的“接下来”：列表内容不足时，用真实后续赛程补足纵向空间，
  * 同时把当前选中场次之后的决策信息放在手边。
  */
-export default function NextUpRail({ match, onSelect, onOpenWeek, onOpenSchedule }) {
+export default function NextUpRail({ match, now = Date.now(), onSelect, onOpenWeek, onOpenSchedule }) {
   // 最小窗口（1366×768 / 1120×700）下默认收起：这是补白模块，不能挤掉今晚列表。
   const [collapsed, setCollapsed] = useState(
     () => typeof window !== 'undefined' && window.innerHeight < 820
@@ -34,7 +34,7 @@ export default function NextUpRail({ match, onSelect, onOpenWeek, onOpenSchedule
 
   const items = useMemo(() => {
     if (!match) return [];
-    const { home, away } = upcomingForTeams(match);
+    const { home, away } = upcomingForTeams(match, undefined, 4, now);
     const seen = new Set();
     return [...home, ...away]
       .filter(item => {
@@ -44,7 +44,7 @@ export default function NextUpRail({ match, onSelect, onOpenWeek, onOpenSchedule
       })
       .sort((a, b) => String(a.t).localeCompare(String(b.t)))
       .slice(0, 3);
-  }, [match]);
+  }, [match, now]);
 
   return (
     <section className={`rounded-xl border border-line-hairline bg-surface-card shadow-card ${collapsed ? 'p-2.5' : 'p-3'}`}>

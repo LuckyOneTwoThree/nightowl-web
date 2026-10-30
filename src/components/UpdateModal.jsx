@@ -78,12 +78,11 @@ export default function UpdateModal({
     }
   }, [currentVersion]);
 
-  // 打开弹窗且非桌面端时，自动走 Web 探测
+  // 每次打开弹窗且非桌面端都重新探测：
+  // 只探测一次会让「发现新版本」在首次关闭后永远停留在旧结果，后续发布再也看不到。
   useEffect(() => {
-    if (open && !isDesktop && !webCheck.checked && !webCheck.loading) {
-      checkWebUpdate();
-    }
-  }, [open, isDesktop, webCheck.checked, webCheck.loading, checkWebUpdate]);
+    if (open && !isDesktop) checkWebUpdate();
+  }, [open, isDesktop, checkWebUpdate]);
 
   // Escape 关闭已上收到 App 的浮层栈统一派发（一次 Esc 只关最上层）；这里不再各自监听。
 

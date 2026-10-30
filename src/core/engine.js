@@ -28,10 +28,19 @@ export function ts(t) {
   return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) - 8 * 3600000;
 }
 
-/** "2026-08-22T03:00" → 当日分钟数 */
+/**
+ * "2026-08-22T03:00" → 当日分钟数
+ *
+ * 空串/缺 T/缺分钟一律返回 NaN，不抛 TypeError：
+ * t 可能来自同步数据，格式坏掉时应该由校验拦截，而不是让整页渲染崩溃。
+ */
 export function parseMin(t) {
-  const hm = t.split('T')[1].split(':');
-  return Number(hm[0]) * 60 + Number(hm[1]);
+  const time = String(t || '').split('T')[1];
+  if (!time) return NaN;
+  const hm = time.split(':');
+  const hh = Number(hm[0]);
+  const mm = Number(hm[1]);
+  return Number.isFinite(hh) && Number.isFinite(mm) ? hh * 60 + mm : NaN;
 }
 
 export function dateOf(t) { return t.split('T')[0]; }
@@ -69,6 +78,8 @@ export const TIERS = [
 
 export function sleepTier(t) {
   const m = parseMin(t);
+  // 时间不可解析时给最轻档而不是抛异常；validateFixtures 会在落库前拦截这类脏数据。
+  if (!Number.isFinite(m)) return TIERS[1];
   if (m <= 30) return TIERS[1];            // 00:00–00:30 → S1
   if (m <= 150) return TIERS[2];           // 00:30–02:30 → S2
   if (m < 240) return TIERS[3];            // 02:30–04:00 → S3

@@ -359,10 +359,15 @@ export function stateOf(m, nowTs) {
  * 双方球队在「本场之后」的赛程（右栏时间轴用）
  *
  * 直接服务核心决策：如果主队/客队几天后还有更值得看的比赛，
- * 这场就不必熬夜。排除本场自身与 tbd；只取本场开球之后的；每队最多 limit 场。
+ * 这场就不必熬夜。排除本场自身与 tbd；只取本场开球之后、且尚未过去的场次；
+ * 每队最多 limit 场。
  */
-export function upcomingForTeams(m, all = getFixtures(), limit = 4) {
+export function upcomingForTeams(m, all = getFixtures(), limit = 4, nowTs = Date.now()) {
   const kick = E.ts(m.t);
+  const now = Number.isFinite(nowTs) ? nowTs : Date.now();
+  // 「后续」从「本场开球」与「当前时间」的较晚者开始：
+  // 查看历史场次时不要把已经过去的比赛继续列为“接下来”。
+  const floor = Number.isFinite(kick) ? Math.max(kick, now) : now;
   const pickFor = teamId =>
     all
       .filter(
@@ -374,7 +379,7 @@ export function upcomingForTeams(m, all = getFixtures(), limit = 4) {
       )
       .filter(x => {
         const t = E.ts(x.t);
-        return !Number.isNaN(t) && t > kick;
+        return !Number.isNaN(t) && t > floor;
       })
       .sort(byTs)
       .slice(0, limit);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Match } from '@/types';
 
@@ -30,10 +30,14 @@ export function useLiveSources(match: Match | null, enabled: boolean) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const matchId = match?.id;
+  // 请求序号：切场/关闭后旧请求仍可能返回，必须让它无法覆盖新比赛的结果。
+  const requestIdRef = useRef(0);
 
   const load = useCallback(
     async (force = false) => {
       if (!match) return;
+      const requestId = requestIdRef.current + 1;
+      requestIdRef.current = requestId;
       setLoading(true);
       setError(null);
       try {
@@ -45,19 +49,31 @@ export function useLiveSources(match: Match | null, enabled: boolean) {
           t: match.t,
           force,
         })) as LiveSourcesData;
+        if (requestIdRef.current !== requestId) return;
         setData(result);
         if (result?.scrapeError) setError(result.scrapeError);
       } catch (err) {
+        if (requestIdRef.current !== requestId) return;
         setError(err instanceof Error ? err.message : String(err));
       } finally {
-        setLoading(false);
+        if (requestIdRef.current === requestId) setLoading(false);
       }
     },
     [matchId, match?.h, match?.a, match?.t]
   );
 
   useEffect(() => {
-    if (!enabled || !match) return;
+    if (!enabled || !match) {
+      // 关闭面板/切场时作废在途请求，并把旧线路从状态里摘掉。
+      requestIdRef.current += 1;
+      setData(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    requestIdRef.current += 1;
+    setData(null);
+    setError(null);
     void load(false);
   }, [enabled, matchId, load]);
 

@@ -57,7 +57,7 @@ const DEFAULT_FILTERS = (): Filters => ({
 
 export default function ScheduleScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ q?: string; date?: string }>();
+  const params = useLocalSearchParams<{ q?: string; date?: string; nav?: string }>();
   const prefs = usePrefs();
   const rev = useDataRev();
   const now = useNow(60_000);
@@ -76,7 +76,7 @@ export default function ScheduleScreen() {
   const activeDate = selectedDate ?? today;
 
   useEffect(() => {
-    const key = `${params.q ?? ''}|${params.date ?? ''}`;
+    const key = `${params.nav ?? ''}|${params.q ?? ''}|${params.date ?? ''}`;
     if (appliedParams.current === key) return;
     appliedParams.current = key;
     if (params.q) {
@@ -85,7 +85,7 @@ export default function ScheduleScreen() {
     if (params.date) {
       setSelectedDate(params.date);
     }
-  }, [params.q, params.date]);
+  }, [params.nav, params.q, params.date]);
 
   const dates = useMemo(
     () => Array.from({ length: 15 }, (_, index) => owlDayOffset(index - 2, now)),

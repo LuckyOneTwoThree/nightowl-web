@@ -467,5 +467,14 @@ export function validateFixtures(fixtures) {
     );
   }
 
+  // 时间格式：污染后 sleepTier/owlDay 会全部失真，必须在落库前拒绝。
+  const badTime = fixtures.filter(m => !Number.isFinite(ts(m.t)));
+  if (badTime.length) {
+    const sample = badTime.slice(0, 10).map(m => `${m.id}=${m.t}`).join('、');
+    issues.push(
+      `${badTime.length} 场次开球时间不可解析：${sample}${badTime.length > 10 ? ` … 共 ${badTime.length} 场` : ''}`
+    );
+  }
+
   return issues;
 }

@@ -168,7 +168,7 @@ export default function MatchScreen() {
       narrative: narrativeOf(match, ev, storylines) as Narrative,
       stats: computeMatchStats(match, null, { excludeIds: spoilerExcludedIds }) as StatsData,
       standings: computeMatchStandings(match, getFixtures(), { nowTs: now, excludeIds: spoilerExcludedIds }) as MatchStandings,
-      upcoming: upcomingForTeams(match) as { home: Match[]; away: Match[] },
+      upcoming: upcomingForTeams(match, undefined, 4, now) as { home: Match[]; away: Match[] },
       sameNight: sameNightPicks(match, prefs, 3, now) as Entry[],
     };
   }, [match, prefs, now, rev, spoilerExcludedIds]);
@@ -182,6 +182,12 @@ export default function MatchScreen() {
   const liveEvents = live.data?.events;
   const prevLiveEvents = useRef(new Set<string>());
   const liveInitFor = useRef<string | null>(null);
+
+  // 切场先作废上一场的事件基线：否则新比赛首个快照里的历史事件会被当成“新事件”提示。
+  useEffect(() => {
+    liveInitFor.current = null;
+    prevLiveEvents.current = new Set();
+  }, [match?.id]);
 
   useEffect(() => {
     if (!match || !liveEvents?.length) return;
@@ -561,7 +567,6 @@ export default function MatchScreen() {
         live={liveData}
         isDone={finishedNow}
         isLive={liveNow}
-        spoilerFree={prefs.spoilerFree}
         revealed={scoreVisible}
         onReveal={handleRevealScore}
       />

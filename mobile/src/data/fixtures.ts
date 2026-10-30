@@ -66,8 +66,12 @@ export async function loadStoredFixtures(): Promise<{
 export async function saveFixtures(next: unknown[]): Promise<{ ok: boolean; reason?: string }> {
   try {
     const file = fixturesFile();
-    if (!file.exists) file.create();
-    await file.write(JSON.stringify(next));
+    // 先写临时文件再整体替换：直接覆盖时进程被杀会留下半截 JSON，
+    // 下次启动只能回退内置快照，已同步的比分全部丢失。
+    const tmp = new File(Paths.document, `${FIXTURES_FILE}.tmp`);
+    if (!tmp.exists) tmp.create();
+    await tmp.write(JSON.stringify(next));
+    await tmp.move(file, { overwrite: true });
 
     const meta = metaFile();
     if (!meta.exists) meta.create();

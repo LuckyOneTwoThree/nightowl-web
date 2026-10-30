@@ -29,13 +29,16 @@ export type SyncOutcome = {
   busy?: boolean;
 };
 
-type SyncOptions = { quick?: boolean };
+type SyncOptions = { quick?: boolean; silent?: boolean };
 
 let inFlight: Promise<SyncOutcome> | null = null;
 let inFlightQuick = false;
 
 export function syncNow(options: SyncOptions = {}): Promise<SyncOutcome> {
   const quick = !!options.quick;
+  // 自动补扫不占用首页的「正在更新比分…」状态：它可能跑几十秒，
+  // 但用户没有发起同步，不该被一个常驻 spinner 误认为卡死。
+  const silent = !quick && !!options.silent;
 
   if (inFlight) {
     // 完整同步在飞时，下拉快检不能陪它一起等：手势应立即结束，
@@ -53,19 +56,34 @@ export function syncNow(options: SyncOptions = {}): Promise<SyncOutcome> {
         busy: true
       });
     }
-    if (!quick && inFlightQuick) {
+    // 已在跑的快检：复用同一个任务，不能把它升级成完整同步状态。
+    if (quick) return inFlight;
+    if (inFlightQuick) {
       // 用户显式点了完整同步：先告诉界面“正在更新”，等快检结束后再启动完整同步
-      useAppStore.getState().setSyncing(true);
-      return inFlight.catch(() => undefined).then(() => syncNow());
+      if (!silent) useAppStore.getState().setSyncing(true);
+      return inFlight.catch(() => undefined).then(() => syncNow(options));
     }
-    if (!quick) useAppStore.getState().setSyncing(true);
+    if (!silent) {
+      useAppStore.getState().setSyncing(true);
+      // 原任务可能是静默补扫，它不会在 finally 里清 syncing；
+      // 由这次显式请求的包装器负责归还状态，并把失败暴露给用户。
+      return inFlight
+        .catch(error => {
+          useAppStore
+            .getState()
+            .setSyncError(error instanceof Error ? error.message : String(error));
+          useAppStore.getState().setMeta({ lastSyncErrorAt: Date.now() });
+          throw error;
+        })
+        .finally(() => useAppStore.getState().setSyncing(false));
+    }
     return inFlight;
   }
 
   const app = useAppStore.getState();
   if (quick) {
     app.setQuickSyncing(true);
-  } else {
+  } else if (!silent) {
     app.setSyncing(true);
     app.setSyncError(null);
   }
@@ -73,7 +91,16 @@ export function syncNow(options: SyncOptions = {}): Promise<SyncOutcome> {
 
   const task = (async (): Promise<SyncOutcome> => {
     const fixtures = getFixtures();
-    const result = await syncScores({ fixtures, rules, log: console, quick });
+    // 移动端固定 ESPN 单源：这里没有桌面端的 curl 兜底，openfootball 的整季文件
+    // 在弱网/受限网络下会连续超时，把一轮同步拖到截止时间之后，用户只看到
+    // 状态灯常亮和“上游未提供”。ESPN 已覆盖当前待录场次；桌面端仍保留多源。
+    const result = await syncScores({
+      fixtures,
+      rules,
+      log: console,
+      quick,
+      sources: ['espn']
+    });
 
     let changed = 0;
     let source = useAppStore.getState().source;
@@ -124,9 +151,12 @@ export function syncNow(options: SyncOptions = {}): Promise<SyncOutcome> {
         status === 'partial_failure'
           ? `部分来源失败（${errors.length} 个），已保留成功补丁`
           : `同步失败（${errors.length} 个来源未返回有效数据）`;
-      useAppStore.getState().setSyncError(message);
-      useAppStore.getState().setMeta({ lastSyncErrorAt: checkedAt });
-    } else if (attempted || status === 'not_needed') {
+      // 后台静默补扫失败不劫持首页错误条；用户没有发起这次同步。
+      if (!silent) {
+        useAppStore.getState().setSyncError(message);
+        useAppStore.getState().setMeta({ lastSyncErrorAt: checkedAt });
+      }
+    } else if (!silent && (attempted || status === 'not_needed')) {
       useAppStore.getState().setSyncError(null);
       useAppStore.getState().setMeta({ lastSyncErrorAt: null });
     }
@@ -145,15 +175,17 @@ export function syncNow(options: SyncOptions = {}): Promise<SyncOutcome> {
 
   const tracked = task
     .catch(error => {
-      useAppStore
-        .getState()
-        .setSyncError(error instanceof Error ? error.message : String(error));
-      useAppStore.getState().setMeta({ lastSyncErrorAt: Date.now() });
+      if (!silent) {
+        useAppStore
+          .getState()
+          .setSyncError(error instanceof Error ? error.message : String(error));
+        useAppStore.getState().setMeta({ lastSyncErrorAt: Date.now() });
+      }
       throw error;
     })
     .finally(() => {
       if (quick) useAppStore.getState().setQuickSyncing(false);
-      else useAppStore.getState().setSyncing(false);
+      else if (!silent) useAppStore.getState().setSyncing(false);
       inFlight = null;
       inFlightQuick = false;
     });

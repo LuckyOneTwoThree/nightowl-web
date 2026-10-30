@@ -2,12 +2,15 @@ import { useMemo, useState } from 'react';
 import { zhDate, hmCost, hm } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { stateOf } from '../core/owl.js';
-import { owlDay, sleepTier } from '../core/engine.js';
+import { owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '../core/engine.js';
 import { Chip, Crest, Hint, Meta, SectionLabel, SleepBadge, Stars } from './atoms.jsx';
 import { IconChevronDown, IconChevronUp, IconClose, IconWarn } from './icons.jsx';
 import MatchRow from './MatchRow.jsx';
 
 const WEEKDAY_SHORT = ['一', '二', '三', '四', '五', '六', '日'];
+
+/** 精选名额上限以算法配置为唯一出处，界面不再手写 /5 */
+const PLAN_MAX_PICKS = PRODUCT_PLAN_OPTS.maxPicks;
 
 /**
  * 档位分布柱状图的色阶。
@@ -97,7 +100,7 @@ export default function WeekView({
   // Tab 计数必须与当前列表口径一致：单晚筛选生效时显示当晚数量，
   // 否则会出现「标签写 21 场、列表只渲染 9 行」的静默截断。
   const tabCounts = {
-    best: selectedDay ? `${filteredBest.length}/5` : `${plan.best.length}/5`,
+    best: selectedDay ? `${filteredBest.length}/${PLAN_MAX_PICKS}` : `${plan.best.length}/${PLAN_MAX_PICKS}`,
     zero: selectedDay ? `${filteredZero.length}` : `${plan.zeroCount}`,
     alt: selectedDay
       ? `${filteredAlt.length + filteredMinefield.length}`
@@ -314,7 +317,7 @@ export default function WeekView({
         {selectedDay && activeDayObj && (
           <div className="rounded-lg border border-accent/30 bg-surface-accent px-2.5 py-1.5 text-2xs text-text-primary">
             正在筛选：<span className="font-semibold text-accent">{zhDate(activeDayObj.date)} 夜</span>（共{' '}
-            {activeDayObj.count} 场未开赛） · 点上方「清除」取消
+            {activeDayObj.count} 场） · 点上方「清除」取消
           </div>
         )}
 

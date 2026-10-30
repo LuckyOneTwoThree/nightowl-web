@@ -213,8 +213,12 @@ export function uclWeeklyTargets(nowTs = Date.now(), targets = new Map()) {
 
 /** 下拉快检只回看最近 72 小时，避免一次手势带来全季历史扫描 */
 export const QUICK_SYNC_WINDOW_MS = 72 * 3600000;
-/** 每个联赛最多回看 3 个比赛日（覆盖 72h 窗口内的周五/周六/周日），避免积压时放大成几十个请求 */
-const MAX_QUICK_DATES = 3;
+/**
+ * 每个联赛最多回看的比赛日数量。
+ * 72h 窗口最多覆盖 4 个自然日；已完赛场次再向前后各展开一天，最多 6 个日期。
+ * 之前截到 3 个会丢掉最早那天，导致那天的待录场次长期查不到。
+ */
+const MAX_QUICK_DATES = 6;
 
 /**
  * 下拉刷新用的轻量目标：只查最近 72 小时内已开球的场次。
@@ -250,6 +254,7 @@ export function quickSyncTargets(fixtures = [], nowTs = Date.now()) {
 
   for (const [league, dates] of targets) {
     if (dates.size > MAX_QUICK_DATES) {
+      // 保留靠后的日期（更接近当前待录窗口），但不再裁到 3 个。
       targets.set(league, new Set([...dates].sort().slice(-MAX_QUICK_DATES)));
     }
   }
@@ -471,8 +476,10 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
 
   const { events, bySource, errors } = await fetchAllEvents({
     leagues, months: list, targets, order, log, season,
-    // 下拉快检不能让单次超时占住手势：6s / 单次尝试；完整同步仍用默认的 25s / 3 次
-    fetchOptions: quick ? { timeoutMs: 6000, retries: 1 } : undefined
+    // 下拉快检不能让单次超时占住手势：6s / 单次尝试；完整同步仍用默认的 20s / 3 次。
+    // 另加总时长上限：快检 20s、完整同步 90s，避免慢网把状态灯拖成常驻。
+    fetchOptions: quick ? { timeoutMs: 6000, retries: 1 } : undefined,
+    deadlineMs: quick ? 20000 : 90000
   });
 
   const { merged, conflicts } = mergeEvents(events, order);
@@ -524,6 +531,15 @@ export function validateFixtures(fixtures) {
     const sample = doneNoScore.slice(0, 10).map(m => m.id).join('、');
     issues.push(
       `${doneNoScore.length} 场次 st=done 但无比分：${sample}${doneNoScore.length > 10 ? ` … 共 ${doneNoScore.length} 场` : ''}`
+    );
+  }
+
+  // 时间格式：污染后 sleepTier/owlDay 会全部失真，必须在落库前拒绝。
+  const badTime = fixtures.filter(m => !Number.isFinite(ts(m.t)));
+  if (badTime.length) {
+    const sample = badTime.slice(0, 10).map(m => `${m.id}=${m.t}`).join('、');
+    issues.push(
+      `${badTime.length} 场次开球时间不可解析：${sample}${badTime.length > 10 ? ` … 共 ${badTime.length} 场` : ''}`
     );
   }
 

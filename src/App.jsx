@@ -480,7 +480,9 @@ export default function App() {
         setTimeout(pollCompletion, 1500);
       }
     } catch {
-      /* 静默降级 */
+      // 网络失败不占住 10s 防抖：否则本次启动/切视图的自动同步失败后，
+      // 用户在 10 秒内的手动“立即同步”会被静默忽略。
+      lastSyncTriggerRef.current = 0;
     }
   }, [refreshData, refreshHealth]);
 
@@ -859,6 +861,7 @@ export default function App() {
             <div className="shrink-0 pt-3">
               <NextUpRail
                 match={activeMatch || tonight.focal?.m || tonight.hero?.m || null}
+                now={clockTs}
                 onSelect={select}
                 onOpenWeek={() => setView('week')}
                 onOpenSchedule={() => setView('schedule')}

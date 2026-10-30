@@ -64,7 +64,6 @@ export function AppTabBar({ state, navigateToTab }: TabBarProps) {
             accessibilityLabel={meta.label}
             style={({ pressed }) => [styles.tab, pressed && styles.pressed]}
           >
-            {focused ? <View style={styles.activeBar} /> : null}
             <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
               {meta.icon(color)}
               {route.name === 'index' && liveCount > 0 ? (
@@ -94,27 +93,21 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    height: 50,
+    height: 54,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    borderRadius: radius.md,
+    gap: 3,
+    borderRadius: radius.lg,
   },
   pressed: { opacity: 0.7 },
-  activeBar: {
-    position: 'absolute',
-    top: 0,
-    width: 22,
-    height: 2,
-    borderRadius: radius.full,
-    backgroundColor: colors.accent,
-  },
   label: { fontSize: fontSize.xs, fontWeight: '600' },
   labelActive: { fontWeight: '700' },
   iconWrap: {
     position: 'relative',
-    paddingHorizontal: 12,
-    paddingVertical: 3,
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radius.full,
   },
   iconWrapActive: {
@@ -122,8 +115,8 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: -6,
-    right: -12,
+    top: -5,
+    right: -7,
     minWidth: 18,
     height: 18,
     borderRadius: 9,

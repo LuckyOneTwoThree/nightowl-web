@@ -12,7 +12,7 @@
  * 桌面端由 main.cjs 把 app.getPath('userData') 注入 NIGHTOWL_USER_DATA。
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
+import { accessSync, constants, existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,6 +34,24 @@ export function userDataDir() {
 export function userFixturesPath() {
   const d = userDataDir();
   return d ? resolve(d, 'fixtures.json') : null;
+}
+
+/**
+ * 数据目录是否真的可写。
+ *
+ * 只看「路径存在」会恒为 true（本地开发总会回落 server/cache/user-data），
+ * 于是设置页永远显示「可写」、同步按钮永远可用，写盘失败时用户没有任何预兆。
+ */
+export function canWriteUserData() {
+  const p = userFixturesPath();
+  if (!p) return false;
+  try {
+    mkdirSync(dirname(p), { recursive: true });
+    accessSync(dirname(p), constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** 当前生效的数据文件（用户优先，否则内置） */
@@ -98,6 +116,6 @@ export function freshness(fixtures, nowTs = Date.now(), opts = {}) {
     pendingCount: stale,
     stalePendingCount: staleMissing,
     liveCount: live,
-    writable: !!userFixturesPath()
+    writable: canWriteUserData()
   };
 }

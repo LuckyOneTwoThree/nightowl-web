@@ -411,8 +411,11 @@ export default function PlayerStage({
 
   const autoSwitchRef = useRef({ matchId: null, count: 0 });
 
-  const liveDataRef = useRef(liveData);
-  liveDataRef.current = liveData;
+  // 切场后的第一帧 state 里可能还留着上一场的快照：按 matchId 过滤后再对外暴露，
+  // 避免用上一场比分渲染新队名，也避免通知基线把旧事件当成新比赛的历史。
+  const liveSnapshot = liveData && liveData.matchId === match?.id ? liveData : null;
+  const liveDataRef = useRef(liveSnapshot);
+  liveDataRef.current = liveSnapshot;
 
   /** 用户主动换线：重置自动换线计数，避免手动操作后仍被“已尝试 2 次”卡住 */
   const manualSelectLine = useCallback(
@@ -628,6 +631,13 @@ export default function PlayerStage({
   // 只依赖 match.id：比赛进行中同步为 done 时不要重跑本 effect，否则会中断正在看的画面。
   useEffect(() => {
     if (!match?.id) return;
+    // 切场必须同时清空上一场的实时快照与通知基线：
+    //   · 否则新场次接口返回前，画布/实时面板会用上一场比分渲染新队名；
+    //   · 通知基线若保留旧场次事件，新场次首个快照里的历史进球会被误判成“新事件”补发。
+    setLiveData(null);
+    setLiveLoading(false);
+    setLiveRefreshing(false);
+    liveNotifyRef.current = { matchId: null, initialized: false, keys: new Set(), state: null };
     if (match.st === 'done') {
       stopPlayback();
       setLines([]);
@@ -667,23 +677,23 @@ export default function PlayerStage({
    * 防剧透未揭晓时全部静默；窗口在前台时由主进程再抑制一次。
    */
   useEffect(() => {
-    if (!liveData?.ok || !match) return;
+    if (!liveSnapshot?.ok || !match) return;
     const ref = liveNotifyRef.current;
 
     if (ref.matchId !== match.id) {
       ref.matchId = match.id;
       ref.initialized = false;
       ref.keys = new Set();
-      ref.state = liveData.state;
+      ref.state = liveSnapshot.state;
     }
 
-    const events = liveData.events || [];
+    const events = liveSnapshot.events || [];
     const keys = events.map(eventKey);
 
     if (!ref.initialized) {
       ref.initialized = true;
       ref.keys = new Set(keys);
-      ref.state = liveData.state;
+      ref.state = liveSnapshot.state;
       return;
     }
 
@@ -698,7 +708,7 @@ export default function PlayerStage({
         if (ref.keys.has(key)) continue;
         ref.keys.add(key);
         if (!shouldNotifyEvent(ev)) continue;
-        const msg = liveEventNotification(match, liveData, ev);
+        const msg = liveEventNotification(match, liveSnapshot, ev);
         window.desktop.notify({
           ...msg,
           matchId: match.id,
@@ -707,8 +717,8 @@ export default function PlayerStage({
         });
       }
 
-      if (ref.state !== 'finished' && liveData.state === 'finished') {
-        const msg = fullTimeNotification(match, liveData);
+      if (ref.state !== 'finished' && liveSnapshot.state === 'finished') {
+        const msg = fullTimeNotification(match, liveSnapshot);
         window.desktop.notify({
           ...msg,
           matchId: match.id,
@@ -721,8 +731,8 @@ export default function PlayerStage({
       for (const key of keys) ref.keys.add(key);
     }
 
-    ref.state = liveData.state;
-  }, [liveData, match?.id, notifyLiveEvents, spoilerFree, revealed]);
+    ref.state = liveSnapshot.state;
+  }, [liveSnapshot, match?.id, notifyLiveEvents, spoilerFree, revealed]);
 
   // 临界窗口自动静默探活机制（赛前 30 分钟 ~ 比赛进行中且缺源）
   useEffect(() => {
@@ -880,7 +890,7 @@ export default function PlayerStage({
           intel={intel}
           stageCountdown={stageCountdown}
           isNearKickoff={isNearKickoff}
-          liveData={liveData}
+          liveData={liveSnapshot}
           lines={lines}
           loadingLines={loadingLines}
           spoilerFree={spoilerFree}
@@ -914,13 +924,13 @@ export default function PlayerStage({
             <span className="inline-flex items-center gap-1.5">
               <LiveDot />
               <span className="font-num text-2xs font-medium tabular-nums text-live">
-                {liveData?.minuteLabel || `${minute}′`}
+                {liveSnapshot?.minuteLabel || `${minute}′`}
               </span>
-              {liveData?.ok &&
-                liveData.state !== 'postponed' &&
+              {liveSnapshot?.ok &&
+                liveSnapshot.state !== 'postponed' &&
                 !(spoilerFree && !revealed) && (
                   <span className="font-num text-2xs font-semibold tabular-nums text-text-primary">
-                    {liveData.score?.h ?? '—'}-{liveData.score?.a ?? '—'}
+                    {liveSnapshot.score?.h ?? '—'}-{liveSnapshot.score?.a ?? '—'}
                   </span>
                 )}
             </span>
@@ -954,7 +964,7 @@ export default function PlayerStage({
       {live && (
         <LiveMatchPanel
           match={match}
-          data={liveData}
+          data={liveSnapshot}
           loading={liveLoading}
           refreshing={liveRefreshing}
           onRefresh={() => loadLive({ manual: true })}

@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, TriangleAlert } from 'lucide-react-native';
 
 import { leagueName, teamName } from '@data/index.js';
 import { computeWeek } from '@core/owl.js';
-import { owlDay, sleepTier } from '@core/engine.js';
+import { owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '@core/engine.js';
 import { hm, hmCost, zhDate } from '@core/format.js';
 import { animateLayout } from '@/lib/layoutAnimation';
 import { useNow } from '@/lib/useNow';
@@ -56,6 +56,8 @@ type KickoffGroup = {
 const BUDGETS = [0, 1, 2, 3, 4, 5, 6, 8];
 const DAY_MS = 86_400_000;
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
+/** 精选名额上限以算法配置为唯一出处 */
+const PLAN_MAX_PICKS = PRODUCT_PLAN_OPTS.maxPicks;
 
 export default function PlanScreen() {
   const router = useRouter();
@@ -210,7 +212,7 @@ export default function PlanScreen() {
         <SectionHeader
           title={`${weekWord}精选`}
           count={plan.best.length}
-          right={<Text style={styles.ratio}>{plan.best.length} / 5</Text>}
+          right={<Text style={styles.ratio}>{plan.best.length} / {PLAN_MAX_PICKS}</Text>}
         />
         {plan.best.length > 0 ? (
           <View style={styles.list}>
@@ -387,7 +389,7 @@ export default function PlanScreen() {
                 <View style={styles.dayPreview}>
                   <View style={styles.dayPreviewHead}>
                     <Text style={styles.dayPreviewTitle}>
-                      {zhDate(activeDayObj.date)} · {activeDayObj.count} 场未开赛
+                      {zhDate(activeDayObj.date)} · {activeDayObj.count} 场
                     </Text>
                     <Text style={styles.dayPreviewCost}>
                       最高消耗 {hmCost(activeDayObj.cost)}
