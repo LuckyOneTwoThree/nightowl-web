@@ -117,7 +117,7 @@ jobs:
               - 生产构建与 Electron 多视口渲染冒烟 53/53 通过
               - 手机端 TypeScript、`expo export:android`、共享层同步校验通过
 
-            > 手机端 APK 见 Release 附件；桌面与手机端各自保存本地数据，互不覆盖。
+            > 手机端 APK 不随桌面 Release 自动上传；如需 Android 安装包，请使用 EAS 预览构建。桌面与手机端各自保存本地数据，互不覆盖。
 
             ### 下载
             - **Windows x64**：`NightOwl-Terrace-Setup-*.exe`
