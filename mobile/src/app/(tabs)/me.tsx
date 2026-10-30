@@ -30,6 +30,8 @@ import { freshnessOf } from '@/data/fixtures';
 import { syncNow } from '@/data/sync/run';
 import { queueWithMatches } from '@core/queue.js';
 import { useWatchLaterStore } from '@/state/queue';
+import { useMorningDigest } from '@/lib/useMorningDigest';
+import { MorningDigestSheet } from '@/components/MorningDigestSheet';
 import { useSyncState } from '@/data/sync/useSync';
 import { animateLayout } from '@/lib/layoutAnimation';
 import { useNow } from '@/lib/useNow';
@@ -59,7 +61,10 @@ export default function MeScreen() {
   const watchLaterItems = useWatchLaterStore(state => state.items);
   const removeWatchLater = useWatchLaterStore(state => state.remove);
   const markWatchLaterWatched = useWatchLaterStore(state => state.markWatched);
+  const revealedIds = useAppStore(state => state.revealedIds);
+  const revealMatch = useAppStore(state => state.revealMatch);
   const now = useNow(60_000);
+  const digest = useMorningDigest(watchLaterItems, getFixtures(), now, prefs, false);
   const source = useAppStore(state => state.source);
   const { syncing, syncError, lastCheckedAt } = useSyncState();
   const setPrefs = usePrefsStore(state => state.setPrefs);
@@ -360,7 +365,7 @@ export default function MeScreen() {
       </View>
 
       <View style={styles.section}>
-        <SectionHeader title="明早补看" />
+        <SectionHeader title="明早补看" actionLabel="看摘要" onAction={digest.open} />
         <Card style={styles.cardGap}>
           {queueWithMatches(watchLaterItems, getFixtures()).length === 0 ? (
             <Text style={styles.emptyText}>还没有加入补看。可在比赛详情点「明早补看」。</Text>
@@ -511,6 +516,18 @@ export default function MeScreen() {
       </View>
 
       <Text style={styles.footer}>夜猫看台 · Android 移动端 · v{version}</Text>
+      <MorningDigestSheet
+        visible={digest.visible}
+        items={digest.items}
+        revealedIds={revealedIds}
+        onReveal={revealMatch}
+        onMarkRead={markWatchLaterWatched}
+        onOpenMatch={id => {
+          digest.close();
+          router.push({ pathname: '/match/[id]', params: { id } });
+        }}
+        onClose={digest.close}
+      />
     </Screen>
   );
 }

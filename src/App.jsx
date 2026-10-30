@@ -43,6 +43,15 @@ import Onboarding, { shouldShowOnboarding, markOnboardingDone } from './componen
 import SplashScreen from './components/SplashScreen.jsx';
 import UpdateModal from './components/UpdateModal.jsx';
 import StopLossBanner from './components/StopLossBanner.jsx';
+import MorningDigest from './components/MorningDigest.jsx';
+import {
+  getMorningDigest,
+  morningDigestNight
+} from './core/morning.js';
+import {
+  loadMorningDigestDismissed,
+  saveMorningDigestDismissed
+} from './components/morning-digest-storage.js';
 import { IconClose } from './components/icons.jsx';
 import { compareSemver } from './core/semver.js';
 import { VIEW_COMMANDS, ACTION_COMMANDS, buildMatchCommands } from './core/command-palette.js';
@@ -143,6 +152,8 @@ export default function App() {
   stopLossStatesRef.current = stopLossStates;
   const [stopLossContext, setStopLossContext] = useState(null);
   const [stopLossNotice, setStopLossNotice] = useState(null);
+  const [morningDigestOpen, setMorningDigestOpen] = useState(false);
+  const [morningDismissed, setMorningDismissed] = useState(() => loadMorningDigestDismissed());
   const commitStopLoss = useCallback((night, state) => {
     const next = { ...stopLossStatesRef.current, [night]: state };
     stopLossStatesRef.current = next;
@@ -739,6 +750,34 @@ export default function App() {
 
   // 今晚已完赛但未揭晓的场次：积分榜、近况、赛季统计和比赛详情共用同一集合。
   // 必须由 App 统一计算，不能每个面板各自判断（旧实现正是这样漏掉积分榜和球队页的）。
+  const morningDigestAuto = useMemo(
+    () => getMorningDigest(watchLater, getFixtures(), clockTs, prefs.sleepWakeTime),
+    [watchLater, dataRev, clockTs, prefs.sleepWakeTime]
+  );
+  const morningDigestAll = useMemo(
+    () => getMorningDigest(watchLater, getFixtures(), clockTs, prefs.sleepWakeTime, { force: true }),
+    [watchLater, dataRev, clockTs, prefs.sleepWakeTime]
+  );
+  useEffect(() => {
+    if (
+      !prefs.sleepEnabled || !morningDigestAuto.canShow || morningDigestOpen ||
+      morningDismissed.night === morningDigestAuto.night ||
+      settingsOpen || onboardingOpen || splashOpen || updateModalOpen || standingsState
+    ) {
+      return;
+    }
+    setMorningDigestOpen(true);
+  }, [
+    prefs.sleepEnabled, morningDigestAuto, morningDigestOpen, morningDismissed,
+    settingsOpen, onboardingOpen, splashOpen, updateModalOpen, standingsState
+  ]);
+  const closeMorningDigest = () => {
+    const night = morningDigestAll.night || morningDigestNight(clockTs);
+    setMorningDigestOpen(false);
+    setMorningDismissed({ night });
+    saveMorningDigestDismissed(night);
+  };
+
   const handleStopLossSleep = () => {
     if (!stopLossContext) return;
     const result = addWatchLater(stopLossContext.match);
@@ -1052,6 +1091,19 @@ export default function App() {
         />
       )}
 
+      <MorningDigest
+        open={morningDigestOpen}
+        items={morningDigestAll.items}
+        revealed={revealed}
+        onReveal={reveal}
+        onMarkRead={markWatchLaterWatched}
+        onOpenMatch={id => {
+          closeMorningDigest();
+          select(id);
+        }}
+        onClose={closeMorningDigest}
+      />
+
       {paletteOpen && (
         <CommandPalette
           items={paletteItems}
@@ -1074,6 +1126,7 @@ export default function App() {
           watchLater={watchLater}
           onRemoveWatchLater={removeWatchLater}
           onMarkWatchLaterWatched={markWatchLaterWatched}
+          onOpenMorningDigest={() => setMorningDigestOpen(true)}
           onOpenUpdateModal={() => {
             openUpdateModal();
             if (updateState.status === 'idle') {

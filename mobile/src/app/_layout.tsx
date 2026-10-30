@@ -1,8 +1,8 @@
 import 'react-native-gesture-handler';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, usePathname, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -10,6 +10,13 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as ScreenOrientation from 'expo-screen-orientation';
 
 import { useBootstrap } from '@/data/useBootstrap';
+import { getFixtures } from '@data/index.js';
+import { useMorningDigest } from '@/lib/useMorningDigest';
+import { useNow } from '@/lib/useNow';
+import { usePrefs } from '@/state/prefs';
+import { useAppStore, useDataRev } from '@/state/app';
+import { useWatchLaterStore } from '@/state/queue';
+import { MorningDigestSheet } from '@/components/MorningDigestSheet';
 import { useSyncOnLaunch } from '@/data/sync/useSync';
 import { usePrematchReminders } from '@/lib/usePrematchReminders';
 import { ErrorBoundary } from '@/ui/ErrorBoundary';
@@ -43,6 +50,23 @@ export default function RootLayout() {
 function AppShell() {
   useSyncOnLaunch();
   usePrematchReminders();
+  const router = useRouter();
+  const pathname = usePathname();
+  const prefs = usePrefs();
+  const now = useNow(30_000);
+  const rev = useDataRev();
+  const queueItems = useWatchLaterStore(state => state.items);
+  const revealedIds = useAppStore(state => state.revealedIds);
+  const revealMatch = useAppStore(state => state.revealMatch);
+  const markWatched = useWatchLaterStore(state => state.markWatched);
+  const fixtures = useMemo(() => getFixtures(), [rev]);
+  const digest = useMorningDigest(
+    queueItems,
+    fixtures,
+    now,
+    prefs,
+    !pathname.includes('onboarding')
+  );
 
   return (
     <GestureHandlerRootView style={styles.root}>
@@ -81,6 +105,18 @@ function AppShell() {
             options={{ presentation: 'fullScreenModal', animation: 'fade' }}
           />
         </Stack>
+        <MorningDigestSheet
+          visible={digest.visible}
+          items={digest.items}
+          revealedIds={revealedIds}
+          onReveal={revealMatch}
+          onMarkRead={markWatched}
+          onOpenMatch={id => {
+            digest.close();
+            router.push({ pathname: '/match/[id]', params: { id } });
+          }}
+          onClose={digest.close}
+        />
         </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>

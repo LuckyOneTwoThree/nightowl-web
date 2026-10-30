@@ -38,7 +38,8 @@ export default function SettingsDrawer({
   onOpenUpdateModal,
   watchLater = [],
   onRemoveWatchLater,
-  onMarkWatchLaterWatched
+  onMarkWatchLaterWatched,
+  onOpenMorningDigest
 }) {
   const leagueCount = prefs.followedLeagues.length;
   const bonusActive = leagueCount > 0 && leagueCount < 6;
@@ -349,9 +350,13 @@ export default function SettingsDrawer({
               }
               return (
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between px-0.5">
-                    <Meta>{entries.length} 场待看</Meta>
-                    <Meta>最早 {entries[0]?.match ? hm(entries[0].match.t) : '—'}</Meta>
+                  <div className="flex items-center justify-between gap-2 px-0.5">
+                    <Meta>{entries.length} 场待看 · 最早 {entries[0]?.match ? hm(entries[0].match.t) : '—'}</Meta>
+                    {onOpenMorningDigest && (
+                      <Button variant="ghost" size="xs" onClick={onOpenMorningDigest}>
+                        看摘要
+                      </Button>
+                    )}
                   </div>
                   {entries.map(({ item, match }) => (
                     <div
