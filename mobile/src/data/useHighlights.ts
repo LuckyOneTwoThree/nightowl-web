@@ -27,6 +27,7 @@ export function useHighlights(match: Match | null, enabled: boolean) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const matchId = match?.id;
+  const dataMatchRef = useRef<string | null>(null);
   // 同 useLiveSources：切场后旧集锦请求不得覆盖新比赛的数据。
   const requestIdRef = useRef(0);
 
@@ -58,19 +59,22 @@ export function useHighlights(match: Match | null, enabled: boolean) {
   useEffect(() => {
     if (!enabled || !match) {
       requestIdRef.current += 1;
+      dataMatchRef.current = null;
       setData(null);
       setError(null);
       setLoading(false);
       return;
     }
     requestIdRef.current += 1;
+    dataMatchRef.current = matchId ?? null;
     setData(null);
     setError(null);
     void load(false);
   }, [enabled, matchId, load]);
 
   return {
-    data,
+    // 切场后的首帧不把上一场的集锦交给新比赛。
+    data: dataMatchRef.current === matchId ? data : null,
     loading,
     error,
     reload: () => load(true),

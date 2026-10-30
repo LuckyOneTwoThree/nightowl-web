@@ -55,7 +55,7 @@ export default function MeScreen() {
   const rev = useDataRev();
   const now = useNow(60_000);
   const source = useAppStore(state => state.source);
-  const { syncing, quickSyncing, syncError, lastCheckedAt } = useSyncState();
+  const { syncing, syncError, lastCheckedAt } = useSyncState();
   const setPrefs = usePrefsStore(state => state.setPrefs);
   const toggleLeague = usePrefsStore(state => state.toggleLeague);
   const setBudget = usePrefsStore(state => state.setBudget);
@@ -64,6 +64,7 @@ export default function MeScreen() {
     'unknown' | 'granted' | 'denied'
   >('unknown');
   const [showMore, setShowMore] = useState(false);
+  const [quickPulling, setQuickPulling] = useState(false);
 
   useEffect(() => {
     if (!notificationsAvailable()) return undefined;
@@ -100,10 +101,13 @@ export default function MeScreen() {
 
   // 下拉只快检；完整同步仍然只由「立即同步」按钮触发。
   const quickRefresh = useCallback(async () => {
+    setQuickPulling(true);
     try {
       await syncNow({ quick: true });
     } catch {
       // 错误由 syncError 展示
+    } finally {
+      setQuickPulling(false);
     }
   }, []);
 
@@ -113,7 +117,7 @@ export default function MeScreen() {
   const hiddenTeamCount = Math.max(0, followedTeamNames.length - visibleTeamNames.length);
 
   return (
-    <Screen scroll onRefresh={quickRefresh} refreshing={syncing || quickSyncing}>
+    <Screen scroll onRefresh={quickRefresh} refreshing={syncing || quickPulling}>
       <View style={styles.header}>
         <Text style={styles.title}>我的</Text>
         <Text style={styles.subline}>个人观赛档案与数据服务</Text>

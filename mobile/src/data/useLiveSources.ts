@@ -30,6 +30,7 @@ export function useLiveSources(match: Match | null, enabled: boolean) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const matchId = match?.id;
+  const dataMatchRef = useRef<string | null>(null);
   // 请求序号：切场/关闭后旧请求仍可能返回，必须让它无法覆盖新比赛的结果。
   const requestIdRef = useRef(0);
 
@@ -66,19 +67,22 @@ export function useLiveSources(match: Match | null, enabled: boolean) {
     if (!enabled || !match) {
       // 关闭面板/切场时作废在途请求，并把旧线路从状态里摘掉。
       requestIdRef.current += 1;
+      dataMatchRef.current = null;
       setData(null);
       setError(null);
       setLoading(false);
       return;
     }
     requestIdRef.current += 1;
+    dataMatchRef.current = matchId ?? null;
     setData(null);
     setError(null);
     void load(false);
   }, [enabled, matchId, load]);
 
   return {
-    data,
+    // 切场后的首帧不把上一场的线路交给新比赛。
+    data: dataMatchRef.current === matchId ? data : null,
     loading,
     error,
     reload: () => load(true),

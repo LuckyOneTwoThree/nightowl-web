@@ -156,7 +156,9 @@ export function syncNow(options: SyncOptions = {}): Promise<SyncOutcome> {
         useAppStore.getState().setSyncError(message);
         useAppStore.getState().setMeta({ lastSyncErrorAt: checkedAt });
       }
-    } else if (!silent && (attempted || status === 'not_needed')) {
+    } else if (attempted || status === 'not_needed') {
+      // 成功（包括静默补扫）也要清掉之前留下的错误条，否则用户会一直看到
+      // 一次早已恢复的「比分同步失败」。
       useAppStore.getState().setSyncError(null);
       useAppStore.getState().setMeta({ lastSyncErrorAt: null });
     }

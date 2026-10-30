@@ -110,5 +110,11 @@ export function useLiveMatch(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId, kickoff, enabled, intervalMs]);
 
-  return { data, error, loading, lastSuccessAt };
+  return {
+    // 即使 effect 还没跑完，也不能把上一场的快照交给新比赛渲染。
+    data: data && match && data.matchId === match.id ? data : null,
+    error,
+    loading,
+    lastSuccessAt,
+  };
 }

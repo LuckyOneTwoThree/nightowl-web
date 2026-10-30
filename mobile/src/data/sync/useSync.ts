@@ -17,7 +17,7 @@ const CHECK_TICK_MS = 60 * 1000;
 const BACKFILL_COOLDOWN_MS = 30 * 60 * 1000;
 const BACKFILL_SAME_GAP_RETRY_MS = 6 * 60 * 60 * 1000;
 const BACKFILL_WINDOW_MS = 14 * 86400000;
-const BACKFILL_META_KEY = 'nightowl:sync:backfill:v2';
+const BACKFILL_META_KEY = 'nightowl:sync:backfill:v3';
 
 /**
  * 快检只覆盖 72h；更早但仍属于近期的待录比分需要一次完整补扫。
@@ -92,8 +92,9 @@ export function useSyncOnLaunch() {
     await backfillMetaPromiseRef.current?.catch(() => {});
 
     const gapIds = backfillGapIds();
-    // 单场长期缺分通常是上游确实没有；不要每次启动都花几十秒重扫，交给「立即同步」。
-    if (gapIds.length >= 2 && Date.now() >= backfillRetryAtRef.current) {
+    // 单场也会补：ESPN 单源完整同步已压到约 20–30 秒，且冷却持久化，
+    // 不会因为一场上游确实缺分而每次启动都重扫。
+    if (gapIds.length >= 1 && Date.now() >= backfillRetryAtRef.current) {
       const gapKey = gapIds.join(',');
       const meta = backfillMetaRef.current;
       const sameGap = gapKey === meta.gap;
