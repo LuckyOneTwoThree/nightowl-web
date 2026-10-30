@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>夜猫看台 · 下一阶段高价值需求 PRD</title>
+<style>
+  :root{
+    --bg:#0b0e15;
+    --panel:#11151f;
+    --card:#161b27;
+    --raised:#1c2333;
+    --border:rgba(255,255,255,.09);
+    --border-strong:rgba(255,255,255,.15);
+    --text:#e8edf6;
+    --muted:#94a0b2;
+    --faint:#7c8798;
+    --accent:#f5b942;
+    --accent-soft:rgba(245,185,66,.12);
+    --resource:#45bfae;
+    --resource-soft:rgba(69,191,174,.12);
+    --live:#e86a62;
+    --live-soft:rgba(232,106,98,.12);
+    --warn:#d99a4e;
+    --danger:#d05561;
+    --radius:14px;
+    --shadow:0 18px 50px rgba(0,0,0,.38);
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:
+      radial-gradient(1100px 520px at 80% -10%,rgba(245,185,66,.08),transparent 60%),
+      radial-gradient(900px 500px at 0% 8%,rgba(69,191,174,.06),transparent 60%),
+      var(--bg);
+    color:var(--text);font-family:var(--font);line-height:1.7;
+  }
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 24px}
+  .hero{padding:64px 0 36px}
+  .brand{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+  .brand-mark{
+    width:34px;height:34px;border-radius:10px;border:1px solid var(--border-strong);
+    background:linear-gradient(145deg,#202839,#11151f);display:flex;align-items:center;justify-content:center;
+  }
+  .brand-mark svg{width:20px;height:20px;color:var(--accent)}
+  .brand-name{font-weight:700;letter-spacing:.02em}
+  .brand-sub{color:var(--faint);font-size:12px;margin-left:6px}
+  .meta-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;
+    font-size:12px;border:1px solid var(--border);background:var(--card);color:var(--muted);
+  }
+  .chip.primary{border-color:rgba(245,185,66,.42);background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .chip.resource{border-color:rgba(69,191,174,.35);background:var(--resource-soft);color:var(--resource)}
+  .chip.live{border-color:rgba(232,106,98,.35);background:var(--live-soft);color:var(--live)}
+  h1{margin:0 0 14px;font-size:clamp(30px,4.6vw,48px);line-height:1.15;letter-spacing:-.02em}
+  h1 span{color:var(--accent)}
+  .lede{max-width:820px;color:var(--muted);font-size:16px}
+  .lede strong{color:var(--text);font-weight:600}
+  .hero-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:30px}
+  .hero-metric{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+  .hero-metric b{display:block;font-size:20px;color:var(--text)}
+  .hero-metric span{display:block;font-size:12px;color:var(--faint);margin-top:2px}
+  nav{
+    position:sticky;top:0;z-index:20;background:rgba(11,14,21,.82);
+    backdrop-filter:blur(14px);border-bottom:1px solid var(--border);margin-top:26px;
+  }
+  nav .wrap{display:flex;gap:4px;overflow-x:auto;padding-top:9px;padding-bottom:9px}
+  nav a{
+    flex:0 0 auto;font-size:12px;color:var(--muted);padding:5px 9px;border-radius:8px;white-space:nowrap;
+  }
+  nav a:hover{background:var(--raised);color:var(--text);text-decoration:none}
+  section{padding:44px 0;border-bottom:1px solid var(--border)}
+  section:last-of-type{border-bottom:0}
+  h2{font-size:22px;margin:0 0 8px;letter-spacing:-.01em}
+  h3{font-size:16px;margin:28px 0 10px}
+  h4{font-size:14px;margin:0 0 8px}
+  .section-note{color:var(--faint);font-size:13px;margin:0 0 22px}
+  p{margin:8px 0}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+  .card + .card{margin-top:14px}
+  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  table{width:100%;border-collapse:collapse;margin:10px 0 4px;font-size:13px}
+  th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--border)}
+  th{color:var(--faint);font-weight:600;font-size:12px;background:rgba(255,255,255,.02)}
+  tr:last-child td{border-bottom:0}
+  td strong{color:var(--text)}
+  .muted{color:var(--muted)}
+  .faint{color:var(--faint)}
+  .small{font-size:12px}
+  ul,ol{margin:8px 0;padding-left:20px}
+  li{margin:4px 0}
+  .tag{display:inline-block;padding:1px 7px;border-radius:5px;font-size:11px;font-weight:600;border:1px solid var(--border)}
+  .tag.p0{color:var(--accent);border-color:rgba(245,185,66,.4);background:var(--accent-soft)}
+  .tag.p1{color:var(--resource);border-color:rgba(69,191,174,.35);background:var(--resource-soft)}
+  .tag.p2{color:var(--muted);border-color:var(--border);background:var(--raised)}
+  .tag.assume{color:var(--warn);border-color:rgba(217,154,78,.35);background:rgba(217,154,78,.1)}
+  code{font-family:var(--mono);font-size:12px;background:var(--raised);padding:1px 6px;border-radius:5px;color:var(--text)}
+  .callout{border-left:3px solid var(--accent);background:linear-gradient(90deg,var(--accent-soft),transparent);padding:12px 16px;border-radius:0 10px 10px 0;color:var(--text);font-size:13px}
+  .callout.live{border-left-color:var(--live);background:linear-gradient(90deg,var(--live-soft),transparent)}
+  .callout.resource{border-left-color:var(--resource);background:linear-gradient(90deg,var(--resource-soft),transparent)}
+  .flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;margin-top:18px}
+  .flow-step{flex:1 1 150px;min-height:76px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+  .flow-step b{display:block;font-size:13px;color:var(--text);margin-bottom:2px}
+  .flow-step span{font-size:12px;color:var(--faint)}
+  .flow-arrow{display:flex;align-items:center;color:var(--faint);font-size:16px;padding:0 2px}
+  .fr{border:1px solid var(--border);background:var(--card);border-radius:var(--radius);padding:20px;margin-top:14px}
+  .fr-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:4px}
+  .fr-head h3{margin:0;font-size:17px}
+  .fr-purpose{color:var(--muted);font-size:13px;margin:2px 0 12px}
+  .fr dl{display:grid;grid-template-columns:88px minmax(0,1fr);gap:6px 12px;margin:0;font-size:13px}
+  .fr dt{color:var(--faint);font-size:12px;padding-top:1px}
+  .fr dd{margin:0;color:var(--text)}
+  .fr dd ul{margin:0;padding-left:18px}
+  .demo{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;margin-top:14px}
+  .demo-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+  .demo-title b{font-size:13px}
+  .demo-title span{font-size:11px;color:var(--faint)}
+  .controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-bottom:14px}
+  .control{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+  input[type="time"],select{
+    background:var(--raised);color:var(--text);border:1px solid var(--border-strong);
+    border-radius:8px;padding:6px 8px;font-family:var(--font);font-size:12px;
+  }
+  input[type="range"]{accent-color:var(--resource);width:130px}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .seg button,.btn{
+    background:var(--raised);color:var(--muted);border:1px solid var(--border);border-radius:8px;
+    padding:6px 10px;font-size:12px;cursor:pointer;font-family:var(--font);
+  }
+  .seg button.active{border-color:rgba(245,185,66,.45);background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .btn:hover,.seg button:hover{border-color:var(--border-strong);color:var(--text)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#1a1204;font-weight:700}
+  .btn.resource{background:var(--resource);border-color:var(--resource);color:#061412;font-weight:700}
+  .sleep-result{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .sleep-box{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px}
+  .sleep-box span{display:block;font-size:11px;color:var(--faint);margin-bottom:2px}
+  .sleep-box b{font-size:22px;font-family:var(--mono);letter-spacing:-.02em}
+  .sleep-box em{font-style:normal;font-size:12px;color:var(--muted)}
+  .advice{margin-top:10px;font-size:12px;border-radius:8px;padding:8px 10px;background:var(--raised);color:var(--muted)}
+  .advice.bad{background:var(--live-soft);color:var(--live);border:1px solid rgba(232,106,98,.25)}
+  .advice.warn{background:rgba(217,154,78,.1);color:var(--warn);border:1px solid rgba(217,154,78,.25)}
+  .advice.ok{background:var(--resource-soft);color:var(--resource);border:1px solid rgba(69,191,174,.25)}
+  .banner-demo{border:1px solid var(--border);background:var(--card);border-radius:12px;padding:14px}
+  .banner-demo .who{font-size:12px;color:var(--faint);margin-bottom:6px}
+  .banner-demo .msg{font-size:14px;font-weight:600;margin-bottom:4px}
+  .banner-demo .sub{font-size:12px;color:var(--muted);margin-bottom:12px}
+  .banner-actions{display:flex;flex-wrap:wrap;gap:8px}
+  .state{margin-top:10px;font-size:12px;color:var(--resource)}
+  .digest{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:12px}
+  .digest-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .digest-head b{font-size:13px}
+  .score{font-family:var(--mono);font-size:26px;font-weight:700;letter-spacing:-.03em;margin:8px 0}
+  .events{font-size:12px;color:var(--muted)}
+  .events.hidden{filter:blur(6px);user-select:none;pointer-events:none}
+  .compare{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+  .compare-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px}
+  .compare-card .team{font-size:14px;font-weight:600;margin:4px 0}
+  .compare-card .idx{font-family:var(--mono);color:var(--accent);font-size:18px;font-weight:700}
+  .footer{padding:36px 0 60px;color:var(--faint);font-size:12px}
+  .footer strong{color:var(--muted)}
+  @media (max-width:860px){
+    .hero-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .grid-2,.grid-3{grid-template-columns:1fr}
+    .sleep-result{grid-template-columns:1fr}
+    .compare{grid-template-columns:1fr}
+    .fr dl{grid-template-columns:1fr;gap:2px}
+    .fr dt{margin-top:6px}
+  }
+  @media print{
+    body{background:#fff;color:#111}
+    nav{display:none}
+    .card,.fr,.demo,.hero-metric{border-color:#ccc;background:#fff}
+    a{color:#111}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/>
+          <circle cx="17.5" cy="5.5" r="1.2" fill="currentColor" stroke="none"/>
+        </svg>
+      </div>
+      <div>
+        <span class="brand-name">夜猫看台</span>
+        <span class="brand-sub">下一阶段高价值需求 PRD</span>
+      </div>
+    </div>
+
+    <div class="meta-row">
+      <span class="chip primary">Draft · v1.1 · 修订</span>
+      <span class="chip">2026-10-30</span>
+      <span class="chip">桌面 Electron + Android</span>
+      <span class="chip resource">本地单机 · 无账号 · 无云端</span>
+    </div>
+
+    <h1>把「少熬几场」<span>从建议做成行为</span></h1>
+    <p class="lede">
+      现有版本已经能回答「看哪场、值不值得」，但还没回答<strong>「现在睡还能睡几小时、该停时怎么停、第二天怎么不剧透地补看、计划变了谁知道、点开能不能看」</strong>。
+      本 PRD 只做四类补强：<strong>个人睡眠后果、止损与补看闭环、计划可信、观看摩擦</strong>；不扩张内容，不做社交、赔率、预测与无数据源指标。
+    </p>
+
+    <div class="callout resource" style="margin:16px 0 0">
+      <strong>v1.1 修订：</strong>P0 收敛为 3 个应用内模块（睡眠账本 / 止损 / 补看队列），早晨摘要、日历、托盘与同开球对比移到 P1；改期、线路记忆与数据冲突详情降为 P2。同时明确「继续看 = 已看」「睡眠底线要影响推荐提示」「数据冲突首版只做健康状态」「通知统一预算」。
+    </div>
+
+    <div class="hero-grid">
+      <div class="hero-metric"><b>3</b><span>P0 模块 · 今晚决策与止损</span></div>
+      <div class="hero-metric"><b>4</b><span>P1 模块 · 次日承接与观看</span></div>
+      <div class="hero-metric"><b>3</b><span>P2 模块 · 信任与打磨</span></div>
+      <div class="hero-metric"><b>0</b><span>新增外部数据源与账号</span></div>
+    </div>
+  </div>
+</header>
+
+<nav aria-label="文档目录">
+  <div class="wrap">
+    <a href="#background">背景与契约</a>
+    <a href="#users">用户与任务</a>
+    <a href="#scope">范围与优先级</a>
+    <a href="#journey">核心旅程</a>
+    <a href="#fr">功能需求</a>
+    <a href="#rules">共享规则</a>
+    <a href="#acceptance">验收口径</a>
+    <a href="#not-doing">不做清单</a>
+    <a href="#open">待确认</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+<section id="background">
+  <h2>1. 背景与产品契约</h2>
+  <p class="section-note">把已观察到的用户问题，连到明确的产品响应与可观察结果。</p>
+
+  <div class="card">
+    <h3 style="margin-top:0">1.1 已观察到的问题</h3>
+    <p>欧洲五大联赛与欧战大量落在北京时间凌晨 0–4 点。现有产品已经把「睡不睡、看哪场」量化成夜猫指数与 S0–S4 睡眠档位，并提供周预算背包、同夜推荐、防剧透、直播代理与赛后补看。</p>
+    <p>但真实用户仍停在「知道该睡，却没有可执行动作」的状态：</p>
+    <ul>
+      <li><strong>代价不个人化</strong>：S3=3.5h 是抽象熬夜成本，不是「我 07:30 起床还能睡几小时」。</li>
+      <li><strong>决定后没有止损</strong>：预算滑杆只影响推荐，不会在深夜提醒「现在睡，明早看」。</li>
+      <li><strong>补看没有承接</strong>：最近 96h 补看是自动列表，不是用户主动存下的「明早看」；也没有早晨摘要。</li>
+      <li><strong>计划会静默失效</strong>：改期、开球时间变化、上游缺分不会主动通知，用户按旧时间安排睡眠。</li>
+      <li><strong>观看摩擦反复发生</strong>：线路按名称排序，没有本地成功率记忆；应用关掉后提醒链路断开。</li>
+    </ul>
+  </div>
+
+  <div class="callout" style="margin-top:14px">
+    <strong>产品判断：</strong>下一阶段不增加赛事、不增加技术统计、不做社区。只补「决策之后的执行」与「夜间链路的可信度」，因为这两段决定产品是“一个推荐面板”，还是“一个真的能少熬的观赛工作台”。
+  </div>
+
+  <h3>1.2 产品契约</h3>
+  <table>
+    <thead><tr><th style="width:120px">要素</th><th>定义</th></tr></thead>
+    <tbody>
+      <tr><td><strong>核心用户</strong></td><td>需要早起上班/上学，但仍想看欧洲足球的夜猫球迷；桌面端为主，手机端用于躺床决策与次日查看。</td></tr>
+      <tr><td><strong>触发时刻</strong></td><td>晚间打开应用做决定；比赛进行中接近个人止损点；次日早晨打开应用或收到提醒。</td></tr>
+      <tr><td><strong>核心任务</strong></td><td>判断今晚是否值得熬、熬到几点；若放弃，能在次日不剧透地高效补看；若计划变化，能及时知道并重排。</td></tr>
+      <tr><td><strong>完成条件</strong></td><td>用户完成一次「现在睡 / 明早看」的止损动作，并在次日通过摘要完成揭晓与集锦查看；或按新时间重排计划后继续执行。</td></tr>
+      <tr><td><strong>信任基础</strong></td><td>开球时间、比分状态、直播可用性必须可解释；不编造数据，不把不确定包装成确定。</td></tr>
+    </tbody>
+  </table>
+  <p class="small faint">核心用户不包含：只看集锦的泛体育用户、需要赔率/预测的竞猜用户、需要社区讨论的用户。后者不是本阶段服务对象。</p>
+</section>
+
+<section id="users">
+  <h2>2. 用户与核心任务</h2>
+  <p class="section-note">产品行为必须能回到一个具体夜晚与一个具体动作。</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <h4>核心用户：夜猫上班族 / 学生</h4>
+      <p class="muted">23:00–03:00 看球，07:00–08:30 起床。会为一场焦点战熬夜，但第二天有会议/考试。最怕“熬了不值得”和“知道该睡却停不下来”。</p>
+      <p class="small faint">需要的不是更多数据，而是：现在睡能睡几小时、这场值不值得、明早怎么看。</p>
+    </div>
+    <div class="card">
+      <h4>重度球迷：关注队跨联赛</h4>
+      <p class="muted">同时关注 2–4 支球队，周末同时开球多。会为改期、开球时间变化、直播源失效而烦躁。</p>
+      <p class="small faint">需要的是：计划可信、线路能看、同开球能取舍。</p>
+    </div>
+    <div class="card">
+      <h4>轻度/周末球迷</h4>
+      <p class="muted">只看焦点战，更多在第二天补看。不希望一直开着应用，也不愿被比分剧透。</p>
+      <p class="small faint">需要的是：系统日历提醒、明早摘要、默认隐藏比分。</p>
+    </div>
+    <div class="card">
+      <h4>手机端躺床用户</h4>
+      <p class="muted">在床上做“看不看”的决定，或通勤时看结果。不会在手机上长时间看直播。</p>
+      <p class="small faint">需要的是：3 秒决策、明确的“现在睡/明早看”、不剧透的结果卡。</p>
+    </div>
+  </div>
+
+  <h3>2.1 核心任务（JTBD）</h3>
+  <table>
+    <thead><tr><th style="width:56px">编号</th><th>任务</th><th>完成证据</th><th style="width:110px">现有覆盖</th></tr></thead>
+    <tbody>
+      <tr><td>J1</td><td>今晚看不看、看哪场</td><td>3 秒内看到唯一推荐与理由</td><td>已覆盖</td></tr>
+      <tr><td>J2</td><td>同开球两场怎么取舍</td><td>能对比并选一场，另一场有去处</td><td>部分覆盖</td></tr>
+      <tr><td>J3</td><td>看完这场我还剩几小时睡眠</td><td>看到按自己起床时间计算的剩余睡眠</td><td class="live">缺失</td></tr>
+      <tr><td>J4</td><td>该停时停下来，明早再看</td><td>一次止损动作 + 补看队列 + 次日摘要</td><td class="live">缺失</td></tr>
+      <tr><td>J5</td><td>计划变了要知道</td><td>改期/状态变化被提醒，计划可重排</td><td class="live">缺失</td></tr>
+      <tr><td>J6</td><td>点开就能看</td><td>首次起播成功率提升，失败线路不反复试</td><td>部分覆盖</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="scope">
+  <h2>3. 范围与优先级</h2>
+  <p class="section-note">每一档都必须能独立交付并完成一个小闭环；P0 不依赖 P1/P2。</p>
+
+  <table>
+    <thead>
+      <tr><th style="width:54px">优先级</th><th style="width:82px">编号</th><th>能力</th><th>用户价值</th><th>为什么现在做</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><span class="tag p0">P0</span></td><td>FR-01</td><td><strong>个人睡眠账本</strong></td><td>知道“看完还剩几小时睡眠”</td><td>最低成本补齐产品承诺的第一性</td></tr>
+      <tr><td><span class="tag p0">P0</span></td><td>FR-02</td><td><strong>止损提醒</strong></td><td>在正确时刻给出“现在睡”动作</td><td>把推荐变成行为，形成差异化</td></tr>
+      <tr><td><span class="tag p0">P0</span></td><td>FR-03</td><td><strong>明早补看队列</strong></td><td>放弃今晚但不丢比赛</td><td>止损必须有承接，否则用户仍会硬熬</td></tr>
+      <tr><td><span class="tag p1">P1</span></td><td>FR-04</td><td><strong>早晨摘要</strong></td><td>次日不剧透地完成补看</td><td>P0 已把比赛存入队列；摘要是 B 组承接</td></tr>
+      <tr><td><span class="tag p2">P2</span></td><td>FR-05</td><td><strong>赛程变动提醒</strong></td><td>改期/状态变化不再静默</td><td>依赖差异持久化；先让时间可信，再做提醒</td></tr>
+      <tr><td><span class="tag p2">P2</span></td><td>FR-06</td><td><strong>数据健康状态</strong></td><td>知道“没更新”还是“上游没有”</td><td>首版只做健康状态；逐源冲突详情后置</td></tr>
+      <tr><td><span class="tag p2">P2</span></td><td>FR-07</td><td><strong>线路成功率记忆</strong></td><td>优先显示上次能用的线路</td><td>价值高但不阻塞睡前决策，先打磨 P0/P1</td></tr>
+      <tr><td><span class="tag p1">P1</span></td><td>FR-08</td><td><strong>桌面托盘与自启</strong></td><td>应用不在前台也能提醒</td><td>当前关闭窗口即退出，提醒链路会断</td></tr>
+      <tr><td><span class="tag p1">P1</span></td><td>FR-09</td><td><strong>日历导出（ICS）</strong></td><td>用系统日历提醒，不必常开应用</td><td>低风险快赢，不依赖后端</td></tr>
+      <tr><td><span class="tag p1">P1</span></td><td>FR-10</td><td><strong>同开球对比</strong></td><td>同开球不再靠感觉取舍</td><td>直接服务取舍；可提前到 A 组尾部</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout resource" style="margin-top:16px">
+    <strong>交付切片：</strong><br>
+    <strong>A（P0，应用内）</strong> = FR-01 + FR-02 + FR-03（睡眠账本 → 止损 → 补看队列）；<br>
+    <strong>B（P1，次日与后台）</strong> = FR-04 + FR-08 + FR-09 + FR-10（早晨摘要、托盘、日历、同开球对比）；<br>
+    <strong>C（P2，信任与打磨）</strong> = FR-05 + FR-06 + FR-07（改期、数据健康、线路记忆）。<br>
+    每个切片单独可上线、可回滚；A 组不得依赖托盘、通知或日历，B 组才补后台承接。
+  </div>
+
+  <h3>3.1 术语与对象</h3>
+  <table>
+    <thead><tr><th style="width:120px">对象</th><th>定义</th><th style="width:180px">生命周期</th></tr></thead>
+    <tbody>
+      <tr><td><strong>比赛 Match</strong></td><td>联赛、双方球队、北京时间开球、状态（未开赛/进行中/已完赛/延期）、比分与揭晓状态。</td><td>随赛程同步更新；揭晓状态按设备本地保存</td></tr>
+      <tr><td><strong>睡眠档案</strong></td><td>用户起床时间、最低睡眠时长；用于计算“剩余睡眠”和止损点。设备本地保存，不跨端同步。</td><td>用户可随时修改；修改后所有展示立即重算</td></tr>
+      <tr><td><strong>补看条目</strong></td><td>用户主动加入“明早看”的比赛：比赛 ID、加入时间、所属夜晚、状态（待看/已看/已移除）。</td><td>最多 10 条，保留 7 天；已看或过期自动清理</td></tr>
+      <tr><td><strong>计划精选</strong></td><td>本周规划中入选的可执行场次集合（现有算法输出），用于改期提醒与止损判断。</td><td>预算/偏好/数据变化后重算</td></tr>
+      <tr><td><strong>数据冲突</strong></td><td>同一场比赛在两个比分源之间比分或开球时间不一致的记录。</td><td>源恢复一致后自动消失；只展示，不手工修改</td></tr>
+      <tr><td><strong>线路记录</strong></td><td>本机对某条线路（按域名/名称/类型）的尝试次数、成功次数、最近可用时间与最近失败原因。</td><td>保留 7 天后衰减；用户可清除</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="journey">
+  <h2>4. 核心旅程</h2>
+  <p class="section-note">P0 只承诺晚间决策 → 睡前止损 → 补看队列；早晨摘要属于 B 组。完整旅程如下。</p>
+
+  <div class="flow" aria-label="完整核心旅程">
+    <div class="flow-step"><b>1. 晚间决策</b><span>Hero / 周规划显示剩余睡眠；低于底线时给出替代与补看入口。</span></div>
+    <div class="flow-arrow" aria-hidden="true">→</div>
+    <div class="flow-step"><b>2. 止损</b><span>到达止损点或计划睡眠低于底线，出现一次非阻断提示。</span></div>
+    <div class="flow-arrow" aria-hidden="true">→</div>
+    <div class="flow-step"><b>3. 明早补看</b><span>一键加入队列；比分保持隐藏；P0 到此完成，摘要由 B 组承接。</span></div>
+    <div class="flow-arrow" aria-hidden="true">→</div>
+    <div class="flow-step"><b>4. 早晨摘要</b><span>逐场揭晓、看关键事件与集锦；完成即从队列移除。</span></div>
+  </div>
+
+  <h3>4.1 信任与观看循环</h3>
+  <div class="flow">
+    <div class="flow-step"><b>同步</b><span>比分/时间写回后检测差异。</span></div>
+    <div class="flow-arrow" aria-hidden="true">→</div>
+    <div class="flow-step"><b>计划变动</b><span>关注队/计划/队列变化 → 提醒 + 重排。</span></div>
+    <div class="flow-arrow" aria-hidden="true">→</div>
+    <div class="flow-step"><b>数据透明</b><span>缺分/最后检查时间可见；逐源冲突详情后置。</span></div>
+    <div class="flow-arrow" aria-hidden="true">→</div>
+    <div class="flow-step"><b>观看摩擦</b><span>线路按本地成功率排序，失败不反复试。</span></div>
+  </div>
+
+  <h3>4.2 关键失败与恢复</h3>
+  <ul>
+    <li><strong>止损后仍想看</strong>：允许继续看；同一晚不再重复提示；该场记录为「已看」，<strong>不再进入补看队列或次日「你错过了」摘要</strong>，赛果仍可在比赛详情查看。</li>
+    <li><strong>次日没有打开应用（B 组）</strong>：桌面端若在运行/托盘常驻，按起床时间发一次通知；手机端在获得通知权限时本地提醒。A 组只保证下次打开时仍能看到队列。</li>
+    <li><strong>比赛改期</strong>：摘要与队列按新时间更新；若已结束则标记“已完成，看结果”；若延期则保留并提示。</li>
+    <li><strong>线路全部失败</strong>：保留官方平台入口；提示失败原因，不伪造可用线路。</li>
+    <li><strong>通知权限被拒</strong>：应用内提示一次并保留状态提示；不反复弹系统授权。</li>
+  </ul>
+</section>
+
+<section id="fr">
+  <h2>5. 功能需求</h2>
+  <p class="section-note">每个模块只定义产品行为，不规定实现技术。共享规则在第 6 节统一定义。</p>
+
+  <!-- FR-01 -->
+  <article class="fr">
+    <div class="fr-head"><span class="tag p0">P0</span><h3>FR-01 个人睡眠账本</h3></div>
+    <p class="fr-purpose">让“熬夜代价”变成用户能理解的个人后果：看完这场比赛，按自己的起床时间还剩多少睡眠。</p>
+    <dl>
+      <dt>入口</dt>
+      <dd>设置/首次引导填写起床时间与最低睡眠；Hero、周规划、比赛详情、止损提示共用同一计算结果。</dd>
+      <dt>规则</dt>
+      <dd>
+        <ul>
+          <li>剩余睡眠 = 起床时间 − 比赛预计结束时间；比赛预计结束 = 开球 + 120 分钟 <span class="tag assume">假设，待确认</span>；UCL 淘汰赛加时/点球另加 30 分钟 <span class="tag assume">假设，待确认</span>。</li>
+          <li>结果按 0.1 小时向下取整，文案使用“约”；超过 12 小时显示“充足”，不显示夸大数字。</li>
+          <li>对比最低睡眠：0 缺口=在底线内；≤1.5h=略低于底线；&gt;1.5h=明显低于底线，并出现“明早补看”入口。</li>
+          <li><strong>推荐不得与底线冲突：</strong>如果今晚之选低于个人底线，必须在推荐旁显示“不推荐熬夜”或替代场次；不能只显示剩余睡眠后继续无提示推荐。</li>
+          <li>睡眠档案为显式启用：用户主动填写后才计算；未填写时不显示任何推算值，只显示“设置起床时间后查看剩余睡眠”。</li>
+        </ul>
+      </dd>
+      <dt>展示</dt>
+      <dd>Hero 一行结论、周规划聚合“本周有几晚低于底线”、比赛详情一条明细；同一屏不重复出现第三次。</dd>
+      <dt>异常</dt>
+      <dd>开球时间不可解析、比赛已结束/延期时不计算；比赛晚于起床时间时显示“看完直接到起床点”，不显示负数。</dd>
+      <dt>变更</dt>
+      <dd>用户修改起床时间或最低睡眠后，所有入口立即按新值重算；周规划不改写算法精选，但低于底线的场次必须显式标注并给出替代，是否把底线变成排序软约束留待 A 组验证后决定。</dd>
+    </dl>
+
+    <div class="demo" aria-label="睡眠账本交互示意">
+      <div class="demo-title"><b>交互示意：剩余睡眠计算</b><span>改参数即时重算</span></div>
+      <div class="controls">
+        <label class="control">起床时间
+          <input id="wakeTime" type="time" value="07:30" />
+        </label>
+        <label class="control">最低睡眠 <strong id="minSleepLabel" style="color:var(--text)">7.0h</strong>
+          <input id="minSleep" type="range" min="5" max="9" step="0.5" value="7" />
+        </label>
+        <div class="control">开球
+          <div class="seg" id="kickoffSeg">
+            <button type="button" data-start="1380">23:00</button>
+            <button type="button" data-start="1470">00:30</button>
+            <button type="button" data-start="1620" class="active">03:00</button>
+          </div>
+        </div>
+      </div>
+      <div class="sleep-result">
+        <div class="sleep-box"><span>预计结束</span><b id="endTime">05:00</b><em>北京时间</em></div>
+        <div class="sleep-box"><span>剩余睡眠</span><b id="sleepLeft">2.5h</b><em id="sleepHint">明显低于底线</em></div>
+        <div class="sleep-box"><span>最低睡眠</span><b id="minSleepValue">7.0h</b><em>个人底线</em></div>
+      </div>
+      <div class="advice bad" id="sleepAdvice">明显低于底线 4.5h：建议明早补看，而不是熬到 05:00。</div>
+      <p class="small faint" style="margin-top:8px">示意数据：03:00 开球、07:30 起床、最低 7h。实际值随设置与比赛时间变化。</p>
+    </div>
+  </article>
+
+  <!-- FR-02 -->
+  <article class="fr">
+    <div class="fr-head"><span class="tag p0">P0</span><h3>FR-02 止损提醒</h3></div>
+    <p class="fr-purpose">在用户最容易“再多看一场”的时刻，给一个明确的停止动作，而不是继续加推荐。</p>
+    <dl>
+      <dt>触发</dt>
+      <dd>
+        <ul>
+          <li>到达个人止损点：起床时间 − 最低睡眠 − 30 分钟入睡缓冲 <span class="tag assume">假设，待确认</span>。</li>
+          <li>用户准备开始一场“看完会低于底线”的比赛时，在赛前给出预警。</li>
+          <li>本周剩余预算不足以覆盖下一场时，作为辅助触发，不单独弹窗。</li>
+        </ul>
+      </dd>
+      <dt>行为</dt>
+      <dd>在 Tonight / 比赛舞台出现一次非阻断提示，三个动作：<code>现在睡</code>、<code>再看 15 分钟</code>、<code>继续看（今晚不再提醒）</code>。选择“现在睡”时，只把<strong>当前场次 + 用户已勾选的今晚剩余场次</strong>加入补看队列，不自动吞入整晚所有推荐。</dd>
+      <dt>规则</dt>
+      <dd>
+        <ul>
+          <li>同一晚最多提示一次；选择“再看 15 分钟”后 15 分钟再提示一次，之后当晚不再提示。</li>
+          <li>“继续看”= 当晚静默，并记录为<strong>已看</strong>；从补看队列/次日“你错过了”摘要移除，仍保留比赛赛果。</li>
+          <li>止损提醒默认关闭；完成睡眠档案后只出现一次开启说明，由用户显式打开后才提醒。</li>
+          <li>不影响播放器本身：不自动暂停、不关闭、不改变音量。</li>
+        </ul>
+      </dd>
+      <dt>状态</dt>
+      <dd>未触发 → 已提示 → 已入睡（加入队列） / 已推迟 → 已静默 / 已看（继续看）。状态按夜晚保存，跨夜重置；P0 只做应用内提示，后台通知由 B 组托盘/本地通知承接。</dd>
+      <dt>异常</dt>
+      <dd>比赛已结束、已揭晓或用户已离开该场次时不提示；通知权限被拒时仅应用内提示；应用在后台时不强行拉回前台。</dd>
+    </dl>
+
+    <div class="demo" aria-label="止损提醒交互示意">
+      <div class="demo-title"><b>交互示意：止损提示</b><span>点按钮查看状态变化</span></div>
+      <div class="banner-demo">
+        <div class="who">阿森纳 vs 曼城 · 英超第 10 轮 · 03:00 开球</div>
+        <div class="msg">已到你的止损点。现在睡，明早看结果？</div>
+        <div class="sub">按 07:30 起床、最低 7h 计算：看完只剩约 2.5h 睡眠。</div>
+        <div class="banner-actions">
+          <button type="button" class="btn primary" id="sleepNow">现在睡</button>
+          <button type="button" class="btn" id="snooze">再看 15 分钟</button>
+          <button type="button" class="btn" id="ignore">继续看（今晚不再提醒）</button>
+        </div>
+        <div class="state" id="stopState">当前状态：尚未选择</div>
+      </div>
+
+      <div class="digest" aria-label="早晨摘要交互示意">
+        <div class="digest-head">
+          <b>B 组示意：早晨摘要 · 昨晚补看</b>
+          <button type="button" class="btn" id="revealBtn">揭晓比分</button>
+        </div>
+        <div class="score" id="digestScore">•• - ••</div>
+        <div class="events hidden" id="digestEvents">63′ 阿森纳进球 · 78′ 曼城红牌 · 终场 2-1</div>
+        <p class="small faint" style="margin-top:8px">标题、通知与摘要默认不含比分；揭晓只作用于当前这场比赛。</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- FR-03 -->
+  <article class="fr">
+    <div class="fr-head"><span class="tag p0">P0</span><h3>FR-03 明早补看队列</h3></div>
+    <p class="fr-purpose">让“今晚不看了”不等于“这场比赛错过了”；把放弃动作转成明早的确定入口。</p>
+    <dl>
+      <dt>入口</dt>
+      <dd>止损提示的“现在睡”、比赛详情的“明早补看”、同开球对比的“另一场明早看”、赛后补看列表的“加入明早”。</dd>
+      <dt>规则</dt>
+      <dd>
+        <ul>
+          <li>同一比赛只保留一条；重复加入视为幂等，并更新加入时间。</li>
+          <li>队列最多 10 条，保留 7 天 <span class="tag assume">假设，待确认</span>；超过时提示用户先移除最旧条目，不静默丢弃。</li>
+          <li>队列中的比赛默认隐藏比分；摘要、通知、托盘均不显示比分。</li>
+          <li>比赛已结束、延期、改期时条目保留并更新状态；已看/移除/过期才清理。</li>
+        </ul>
+      </dd>
+      <dt>展示</dt>
+      <dd>“明早补看”入口显示数量与最早一场；设置中可查看全部并移除；次日摘要只展示当天所属夜晚的队列。</dd>
+      <dt>异常</dt>
+      <dd>队列为空时不显示空模块；跨设备不共享；卸载/清除数据后不恢复。</dd>
+    </dl>
+  </article>
+
+  <!-- FR-04 -->
+  <article class="fr">
+    <div class="fr-head"><span class="tag p1">P1</span><h3>FR-04 早晨摘要</h3></div>
+    <p class="fr-purpose">次日用最短路径完成“昨晚结果 + 关键事件 + 集锦”，且不剧透。</p>
+    <dl>
+      <dt>触发</dt>
+      <dd>用户在起床后首次打开应用时展示；桌面托盘/手机本地通知被点击也直接进入。首版只基于「明早补看」队列，不自动把昨晚所有关注队赛果塞进摘要。若当天未打开，摘要保留到下一个本地夜晚开始前。</dd>
+      <dt>规则</dt>
+      <dd>
+        <ul>
+          <li>摘要窗口：起床时间 → 当天 23:00（本地北京时间）；超过窗口后可在「补看队列」手动进入，不丢失。</li>
+          <li>默认按比赛卡片展示，比分与事件隐藏；逐场“揭晓”后才显示比分、进球/红牌与集锦入口。</li>
+          <li>通知标题只写“昨晚 N 场已结束，点击查看”，正文不写比分、不写胜负。</li>
+          <li>提供“全部揭晓”但需二次确认；揭晓状态按比赛保存，关闭摘要不自动揭晓。</li>
+        </ul>
+      </dd>
+      <dt>结果</dt>
+      <dd>用户看完摘要后可把条目标记为“已看”，从队列移除；或保留到 7 天到期。集锦/回顾复用现有官方入口。</dd>
+      <dt>异常</dt>
+      <dd>上游未提供比分时显示“比分待录”而不是“0-0”；比赛延期显示延期；无比赛时不生成空摘要。</dd>
+    </dl>
+  </article>
+
+  <!-- FR-05 -->
+  <article class="fr">
+    <div class="fr-head"><span class="tag p2">P2</span><h3>FR-05 赛程变动提醒</h3></div>
+    <p class="fr-purpose">计划建立在开球时间上；时间变了必须让用户知道，而不是静默替换。</p>
+    <dl>
+      <dt>触发</dt>
+      <dd>一次成功同步后，关注球队、计划精选、补看队列中的比赛出现以下变化：开球时间变化 ≥5 分钟、状态变为延期/已完赛 <span class="tag assume">假设，待确认</span>。当前数据模型不会删除比赛，不把「比赛被移除」作为本阶段需求。</dd>
+      <dt>行为</dt>
+      <dd>
+        <ul>
+          <li>应用内出现“计划有变”条目：`原 03:00 → 新 04:15`，并提供“查看并重排”。</li>
+          <li>桌面端在应用运行/托盘常驻时发一次系统通知；手机端在应用内提示，若本地通知可用则同时提醒。</li>
+          <li>计划精选自动重算，但不自动替用户改变已经加入队列的条目；队列条目只更新时间。</li>
+        </ul>
+      </dd>
+      <dt>规则</dt>
+      <dd>同一比赛同一新旧时间只提醒一次；变化小于 5 分钟不提醒；同一夜最多 3 条聚合提醒，其余进入“计划有变”列表。</dd>
+      <dt>异常</dt>
+      <dd>比赛被取消（数据模型暂只有延期）时标注“延期”并保留；源冲突导致时间不确定时提示“时间待核对”，不显示确定时间。</dd>
+    </dl>
+  </article>
+
+  <!-- FR-06 -->
+  <article class="fr">
+    <div class="fr-head"><span class="tag p2">P2</span><h3>FR-06 数据健康状态</h3></div>
+    <p class="fr-purpose">首版只回答“数据是否最新、是否有上游缺分”，不展开逐源冲突详情；让用户分清“还没同步”和“上游没有”。</p>
+    <dl>
+      <dt>入口</dt>
+      <dd>顶栏数据状态、设置“数据与服务”、单场比赛详情的数据说明。</dd>
+      <dt>展示</dt>
+      <dd>
+        <ul>
+          <li>数据健康面板：最后成功同步时间、待录场次、超过 24h 的上游缺分场次；不展示逐源冲突明细。</li>
+          <li>单场详情只显示“上游未提供 / 待同步”；逐源比分/时间冲突留到数据层持久化后再做，避免首版暴露不完整信息。</li>
+          <li>单场详情：本场最后检查时间与“上游未提供/待同步”之一。</li>
+        </ul>
+      </dd>
+      <dt>操作</dt>
+      <dd>“重查该场”调用现有同步能力，不新增外部数据源；无冲突时不显示空面板。</dd>
+      <dt>边界</dt>
+      <dd>不展示未经来源确认的比分；不把“冲突”自动解决成“正确”；不改变现有“上游未提供”阈值 24h <span class="tag assume">假设，待确认</span>。</dd>
+    </dl>
+  </article>
+
+  <!-- FR-07 -->
+  <article class="fr">
+    <div class="fr-head"><span class="tag p2">P2</span><h3>FR-07 线路成功率记忆</h3></div>
+    <p class="fr-purpose">把“点开哪条能看”从反复试错变成本地经验排序。</p>
+    <dl>
+      <dt>记录</dt>
+      <dd>按线路身份（域名/名称/类型）记录：尝试次数、首次成功起播次数、最近成功时间、最近失败原因；不记录码率、延迟等无法核实的指标。</dd>
+      <dt>规则</dt>
+      <dd>
+        <ul>
+          <li>排序：本地成功率优先 → 最近成功时间 → 原有顺序；新线路始终可见，不被隐藏。</li>
+          <li>“首次成功起播”以视频真正开始播放为准，不以“按钮已选中”为准。</li>
+          <li>失败线路当天在会话内降权并标注原因；不永久拉黑，7 天无数据后衰减回默认。</li>
+          <li>用户可清除本机线路记忆；清除后恢复默认顺序。</li>
+        </ul>
+      </dd>
+      <dt>展示</dt>
+      <dd>线路按钮上显示“上次可用/本次失败”轻量标记；失败时给出原因（超时/无源/需要授权），不显示虚构延迟。</dd>
+      <dt>异常</dt>
+      <dd>线路域名轮换导致无历史数据时按默认排序；记忆不得跨设备共享；官方平台直达不受影响。</dd>
+    </dl>
+  </article>
+
+  <!-- FR-08 -->
+  <article class="fr">
+    <div class="fr-head"><span class="tag p1">P1</span><h3>FR-08 桌面托盘与自启</h3></div>
+    <p class="fr-purpose">桌面用户会把应用切到后台；提醒只有在应用仍然存在时才可靠。</p>
+    <dl>
+      <dt>范围</dt>
+      <dd>仅桌面端；Android 不做托盘。</dd>
+      <dt>托盘</dt>
+      <dd>托盘/菜单栏显示下一场关注队或今晚之选的倒计时（分钟粒度）与直播状态；菜单提供“打开应用 / 今晚之选 / 本周规划 / 退出”。点击图标或通知回到对应比赛。</dd>
+      <dt>关窗行为</dt>
+      <dd>新增设置“关闭窗口时最小化到托盘”，默认关闭 <span class="tag assume">假设，待确认</span>；关闭时保持现有“关闭即退出”。开启后，托盘常驻并继续发出已授权通知。</dd>
+      <dt>自启</dt>
+      <dd>可选“开机自启”，默认关闭；开启时不自动打开主窗口，只常驻托盘；单实例逻辑保持。</dd>
+      <dt>通知权限</dt>
+      <dd>首次需要系统通知时说明用途并请求授权；被拒后在设置中显示“通知未授权”，提供重新打开系统设置的指引，不重复弹窗。</dd>
+      <dt>异常</dt>
+      <dd>托盘不可用（系统限制）时退回普通窗口并说明；退出应用必须真正释放本地服务与端口。</dd>
+    </dl>
+  </article>
+
+  <!-- FR-09 -->
+  <article class="fr">
+    <div class="fr-head"><span class="tag p1">P1</span><h3>FR-09 日历导出（ICS）</h3></div>
+    <p class="fr-purpose">让不使用应用时也能被系统日历提醒；不引入账号与云端订阅。</p>
+    <dl>
+      <dt>范围</dt>
+      <dd>导出“今晚”“本周精选”“关注球队未来 7 天”三种范围之一；仅未来、未开赛、时间确定的比赛。</dd>
+      <dt>内容</dt>
+      <dd>日历标题：联赛 + 双方球队；时间：北京时间并带 Asia/Shanghai 时区；描述：轮次与“来自夜猫看台”，不含比分与指数；提醒：开球前 15 或 30 分钟可选。</dd>
+      <dt>结果</dt>
+      <dd>桌面保存为 .ics 文件；手机调用系统分享。用户可重复导出覆盖旧文件；不提供 webcal 订阅、不托管用户赛程。</dd>
+      <dt>异常</dt>
+      <dd>tbd 场次不导出；已开赛/已结束不导出；导出为空时明确提示而不是生成空文件。</dd>
+    </dl>
+  </article>
+
+  <!-- FR-10 -->
+  <article class="fr">
+    <div class="fr-head"><span class="tag p1">P1</span><h3>FR-10 同开球对比</h3></div>
+    <p class="fr-purpose">同开球只能看一场时，把“选哪场、另一场怎么办”一次说清。</p>
+    <dl>
+      <dt>触发</dt>
+      <dd>今晚或本周规划中出现 ≥2 场相同开球时间；用户可主动打开对比，不在每个列表常驻对比按钮。</dd>
+      <dt>展示</dt>
+      <dd>并排卡片：双方、联赛轮次、夜猫指数、星级、睡眠档位、是否关注、故事线一句话、剩余睡眠；不展示比分。</dd>
+      <dt>操作</dt>
+      <dd>“看这场”切换右侧预览；“另一场明早看”加入补看队列；不改变算法精选，不提供手动改计划。</dd>
+      <dt>异常</dt>
+      <dd>对比中某场改期/延期时提示并退出对比；同开球只剩一场时关闭对比入口。</dd>
+    </dl>
+
+    <div class="compare" aria-label="同开球对比示意">
+      <div class="compare-card">
+        <div class="team">阿森纳 vs 曼城</div>
+        <div class="idx">27.2</div>
+        <div class="small muted">英超 · 3 星 · S3 3.5h · 主队出战</div>
+        <div class="small faint" style="margin-top:6px">看完约剩 2.5h 睡眠</div>
+      </div>
+      <div class="compare-card">
+        <div class="team">皇马 vs 巴萨</div>
+        <div class="idx">14.8</div>
+        <div class="small muted">西甲 · 3 星 · S3 3.5h · 德比</div>
+        <div class="small faint" style="margin-top:6px">看完约剩 2.5h 睡眠</div>
+      </div>
+    </div>
+  </article>
+</section>
+
+<section id="rules">
+  <h2>6. 共享规则</h2>
+  <p class="section-note">这些规则被多个模块引用，只在此定义一次。</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <h4>6.1 防剧透优先级最高</h4>
+      <p class="muted">所有摘要、通知、托盘、对比、日历描述默认不含比分与胜负。揭晓是用户显式动作，按比赛生效；关闭摘要不自动揭晓。</p>
+    </div>
+    <div class="card">
+      <h4>6.2 通知总预算</h4>
+      <p class="muted">同一比赛同一事件只通知一次；同一改期只通知一次；止损每夜最多两次（含 15 分钟推迟后的第二次）。进入「现在睡」后，当晚不再发送该场实时事件通知；同一夜最多一条止损 + 一条改期聚合 + 一条早晨摘要。通知权限被拒时不重复请求。</p>
+    </div>
+    <div class="card">
+      <h4>6.3 时间与比赛时长</h4>
+      <p class="muted">全部使用北京时间墙钟；比赛结束按开球 + 120 分钟估算；UCL 淘汰赛加时/点球另加 30 分钟 <span class="tag assume">假设，待确认</span>。不把估算写成精确值。</p>
+    </div>
+    <div class="card">
+      <h4>6.4 本地单机边界</h4>
+      <p class="muted">无账号、无云端、无跨端同步。桌面与手机各自保存睡眠档案、队列、揭晓状态与线路记忆；卸载/清除数据后不恢复。</p>
+    </div>
+    <div class="card">
+      <h4>6.5 数据边界</h4>
+      <p class="muted">不新增 xG、控球率、阵型、跑动等无可靠来源的字段；不手工编辑比分；冲突只展示与解释，不自动裁决成“正确”。</p>
+    </div>
+    <div class="card">
+      <h4>6.6 默认值与启用</h4>
+      <p class="muted">起床 07:30、最低睡眠 7h、入睡缓冲 30 分钟。睡眠档案默认不启用；用户主动填写后才计算。止损提醒默认关闭，完成档案后只提示一次开启入口，由用户显式打开。</p>
+    </div>
+    <div class="card">
+      <h4>6.7 推荐与睡眠底线</h4>
+      <p class="muted">推荐结果不得静默低于用户底线。低于底线时必须同时显示“不推荐熬夜”或替代场次；是否把底线作为排序软约束，在 A 组验证后决定，不直接硬过滤。</p>
+    </div>
+    <div class="card">
+      <h4>6.8 观看状态语义</h4>
+      <p class="muted">「现在睡」= 加入补看队列；「继续看」= 已看，移出补看与“你错过了”摘要，但保留赛果；「已看」由用户动作或摘要完成产生，不根据是否打开过详情自动推断。</p>
+    </div>
+    <div class="card">
+      <h4>6.9 P0 应用内边界</h4>
+      <p class="muted">A 组只承诺应用内提示与队列，不依赖托盘、后台通知或日历。B 组才补「应用关闭后仍能提醒」；不能把 A 组的验收建立在 FR-08/FR-09 上。</p>
+    </div>
+  </div>
+</section>
+
+<section id="acceptance">
+  <h2>7. 验收口径</h2>
+  <p class="section-note">验收只看用户可观察结果；不做技术实现验收。</p>
+
+  <table>
+    <thead><tr><th style="width:82px">ID</th><th>可观察结果</th><th style="width:260px">不算通过的反例</th></tr></thead>
+    <tbody>
+      <tr><td>FR-01</td><td>设置起床/最低睡眠后，Hero、周规划、比赛详情三处出现一致的“剩余睡眠”与“低于底线/在底线内”判断；修改设置后立即更新；低于底线的推荐同时出现替代或“不推荐熬夜”提示。</td><td>未设置时也显示推算值；三处数字不一致；推荐低于底线却无任何提示。</td></tr>
+      <tr><td>FR-02</td><td>到达止损点或计划睡眠低于底线时出现一次提示；三个动作各自改变状态；同一晚不重复；重开应用后“今晚不再提醒”仍生效；选择“继续看”后该场进入已看、不再出现在补看队列。</td><td>每小时重复弹窗；自动暂停播放；继续看后仍反复提醒；继续看后次日又被当作“错过”。</td></tr>
+      <tr><td>FR-03</td><td>“现在睡”后当前场次 + 用户已勾选的本晚场次出现在明早补看；重复点击不产生重复条目；队列满/过期/已看时有明确处理。</td><td>自动把整晚所有推荐塞入队列；静默丢弃第 11 条；同一比赛出现两条。</td></tr>
+      <tr><td>FR-04</td><td>首版只展示补看队列；起床后至当天 23:00 首次打开可见，超过窗口仍可从队列进入；比分与事件默认隐藏，逐场揭晓后才显示，通知标题不含比分。</td><td>自动塞入所有关注队赛果；12:00 后直接丢失摘要；摘要直接显示比分。</td></tr>
+      <tr><td>FR-05</td><td>改期/状态变化后，关注队/计划/队列出现新时间与“计划有变”；通知只发一次；计划可重排。</td><td>数据已变但界面仍显示旧时间；同一变化反复通知；把延期显示成未开赛。</td></tr>
+      <tr><td>FR-06</td><td>数据健康面板显示最后成功同步、待录、上游缺分；单场只显示“上游未提供/待同步”；无冲突时不显示空模块。</td><td>把缺分吞掉；展示未来源确认的比分；首版伪造逐源冲突详情。</td></tr>
+      <tr><td>FR-07</td><td>失败线路不隐藏但排序靠后；新线路始终出现；成功线路有“上次可用”标记；清除记录后恢复默认顺序。</td><td>永久隐藏失败线路；展示虚构延迟/码率；记忆跨设备共享。</td></tr>
+      <tr><td>FR-08</td><td>托盘显示下一场倒计时；关闭窗口行为符合设置；权限被拒有说明且不重复弹窗；单实例正常。</td><td>关闭即退出却承诺后台通知；重复启动打开两个实例；权限拒绝后无限请求。</td></tr>
+      <tr><td>FR-09</td><td>导出的 .ics 可被系统日历导入；时间与北京时间一致；含提醒；不含比分；tbd 不导出。</td><td>时间偏移；导出包含已结束比赛；空选择生成空文件。</td></tr>
+      <tr><td>FR-10</td><td>同开球 ≥2 场时出现对比入口；可选择一场并把另一场加入补看；算法精选不被手动改写。</td><td>对比常驻挤占版面；选择后直接改算法计划；对比中展示比分。</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="not-doing">
+  <h2>8. 不做清单</h2>
+  <p class="section-note">这些不是“以后再说”，而是当前阶段明确不做，避免产品发散。</p>
+  <div class="grid-2">
+    <div class="card">
+      <h4>内容与社区</h4>
+      <ul>
+        <li>社区、评论、弹幕、观赛房间：噪声与审核成本，偏离“少熬、少干扰”。</li>
+        <li>赔率、竞猜、预测、比分预测：合规与信任风险，把决策工具变成赌博入口。</li>
+        <li>xG、控球率、阵型、跑动、球员评分：无可靠数据源，违反现有数据边界。</li>
+        <li>AI 问答/生成式推荐：现有算法可解释，AI 只增加延迟与不可复核性。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>系统与商业化</h4>
+      <ul>
+        <li>账号、云同步、多端漫游：无后端，隐私与成本不划算；用 ICS/本地导出替代。</li>
+        <li>webcal 订阅托管：会把用户关注队公开托管；只做本地导出。</li>
+        <li>更多联赛、更多直播源聚合：产品价值是“少而准”，不是“更多”。</li>
+        <li>皮肤、主题、复杂动效：暗色单一主题已收口，继续加只会稀释重点。</li>
+        <li>自动录制、转码、代理版权视频：法律与带宽风险。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="open">
+  <h2>9. 待确认问题</h2>
+  <p class="section-note">只列会改变行为或范围的问题；普通细节按第 6 节默认值执行。</p>
+  <h3>v1.1 已决议</h3>
+  <ul>
+    <li>睡眠档案默认不启用，用户主动填写后才计算；止损提醒默认关闭，需显式打开。</li>
+    <li>「继续看」记录为已看，不再进入补看队列或次日“你错过了”摘要。</li>
+    <li>早晨摘要首版只基于补看队列，窗口延至当天 23:00，超过后仍可从队列进入。</li>
+    <li>A 组只做应用内能力，不依赖托盘、后台通知或日历；B 组再补承接。</li>
+  </ul>
+  <h3>仍需确认</h3>
+  <ol>
+    <li><strong>UCL 淘汰赛缓冲</strong>：加时/点球是否统一按 +30 分钟估算，还是只在淘汰赛阶段启用？未定前只在估算文案中显示区间，不写精确值。</li>
+    <li><strong>关闭窗口行为</strong>：托盘“关闭最小化到托盘”是否默认关闭；这与 B 组通知可靠性直接相关。</li>
+    <li><strong>手机端早晨通知</strong>：是否默认请求通知权限用于次日摘要，还是只在用户主动开启提醒时请求？</li>
+    <li><strong>睡眠底线是否进入排序</strong>：A 组先只做“低于底线必须预警 + 替代”，验证一周后再决定是否作为排序软约束。</li>
+    <li><strong>FR-10 位置</strong>：同开球对比已从 P2 提到 P1，若 A 组排期允许，可提前到 A 尾部，但不改变 A 组不依赖后台的边界。</li>
+  </ol>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p><strong>文档状态：</strong>Draft v1.1 for review · 未进入实现 · 2026-10-30</p>
+    <p>优先级变更、范围删减或默认值调整，需要同步修改第 3、6、7、9 节，避免验收口径与功能定义分叉。</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  // FR-01 demo
+  const wakeInput = document.getElementById('wakeTime');
+  const minSleepInput = document.getElementById('minSleep');
+  const minSleepLabel = document.getElementById('minSleepLabel');
+  const minSleepValue = document.getElementById('minSleepValue');
+  const kickoffSeg = document.getElementById('kickoffSeg');
+  const endTimeEl = document.getElementById('endTime');
+  const sleepLeftEl = document.getElementById('sleepLeft');
+  const sleepHintEl = document.getElementById('sleepHint');
+  const adviceEl = document.getElementById('sleepAdvice');
+  let kickoffStart = 1620; // minutes from 18:00 on match day -> 03:00
+
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function minutesToHHMM(total){
+    let rest = total % 1440;
+    if (rest < 0) rest += 1440;
+    const h = Math.floor(rest / 60);
+    const m = rest % 60;
+    return pad(h) + ':' + pad(m);
+  }
+  function parseWake(value){
+    const parts = String(value || '07:30').split(':');
+    const h = Number(parts[0]);
+    const m = Number(parts[1]);
+    return h * 60 + m;
+  }
+  function renderSleep(){
+    const wake = 1440 + parseWake(wakeInput.value); // next-day wake
+    const minSleep = Number(minSleepInput.value);
+    const end = kickoffStart + 120;
+    const sleep = Math.max(0, (wake - end) / 60);
+    const deficit = Math.max(0, minSleep - sleep);
+    let hint = '在底线内';
+    let cls = 'ok';
+    let advice = '按你的作息，这场在底线内，可以正常观看。';
+    if (sleep >= 12) {
+      hint = '充足';
+      advice = '看完仍有充足睡眠，可按推荐观看。';
+    } else if (deficit > 1.5) {
+      hint = '明显低于底线';
+      cls = 'bad';
+      advice = '明显低于底线 ' + deficit.toFixed(1) + 'h：建议明早补看，而不是熬到 ' + minutesToHHMM(end) + '。';
+    } else if (deficit > 0) {
+      hint = '略低于底线';
+      cls = 'warn';
+      advice = '略低于底线 ' + deficit.toFixed(1) + 'h：可看，但建议次日补觉。';
+    }
+    endTimeEl.textContent = minutesToHHMM(end);
+    sleepLeftEl.textContent = (sleep >= 12 ? '≥12' : sleep.toFixed(1)) + 'h';
+    sleepHintEl.textContent = hint;
+    minSleepValue.textContent = minSleep.toFixed(1) + 'h';
+    minSleepLabel.textContent = minSleep.toFixed(1) + 'h';
+    adviceEl.textContent = advice;
+    adviceEl.className = 'advice ' + cls;
+  }
+  kickoffSeg.addEventListener('click', function(e){
+    const btn = e.target.closest('button[data-start]');
+    if (!btn) return;
+    kickoffSeg.querySelectorAll('button').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    kickoffStart = Number(btn.dataset.start);
+    renderSleep();
+  });
+  wakeInput.addEventListener('change', renderSleep);
+  wakeInput.addEventListener('input', renderSleep);
+  minSleepInput.addEventListener('input', renderSleep);
+  renderSleep();
+
+  // FR-02 / FR-04 demo
+  const stopState = document.getElementById('stopState');
+  const revealBtn = document.getElementById('revealBtn');
+  const digestScore = document.getElementById('digestScore');
+  const digestEvents = document.getElementById('digestEvents');
+  let revealed = false;
+
+  document.getElementById('sleepNow').addEventListener('click', function(){
+    stopState.textContent = '当前状态：已选择“现在睡” · 已加入明早补看队列';
+  });
+  document.getElementById('snooze').addEventListener('click', function(){
+    stopState.textContent = '当前状态：已推迟 15 分钟 · 本轮不再重复；15 分钟后再次提示';
+  });
+  document.getElementById('ignore').addEventListener('click', function(){
+    stopState.textContent = '当前状态：今晚不再提醒 · 已记录为已看，不进入补看队列';
+  });
+  revealBtn.addEventListener('click', function(){
+    revealed = !revealed;
+    if (revealed) {
+      digestScore.textContent = '2 - 1';
+      digestEvents.classList.remove('hidden');
+      revealBtn.textContent = '重新隐藏';
+    } else {
+      digestScore.textContent = '•• - ••';
+      digestEvents.classList.add('hidden');
+      revealBtn.textContent = '揭晓比分';
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
