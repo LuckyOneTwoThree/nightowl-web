@@ -2,7 +2,7 @@
   "expo": {
     "name": "夜猫看台",
     "slug": "nightowl-terrace",
-    "version": "0.1.0",
+    "version": "0.1.42",
     "orientation": "default",
     "icon": "./assets/brand/icon.png",
     "scheme": "nightowl",
