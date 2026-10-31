@@ -14,18 +14,222 @@ const WEEKDAY_SHORT = ['一', '二', '三', '四', '五', '六', '日'];
 const PLAN_MAX_PICKS = PRODUCT_PLAN_OPTS.maxPicks;
 
 /**
- * 档位分布柱状图的色阶。
- * 复用 tier-0…tier-4 连续色阶，使「周历上的柱子」与「徽章上的 S0–S4」完全一致。
+ * 档位分布色阶。
+ * 复用 tier-0…tier-4 连续色阶，使「时间轴上的色块」与「徽章上的 S0–S4」完全一致。
  */
 const BUCKET_CLASS = ['bg-tier-0', 'bg-tier-1', 'bg-tier-2', 'bg-tier-3', 'bg-tier-4'];
 
-function bucketOf(cost) {
-  if (cost >= 4.5) return 4;
-  if (cost >= 3.5) return 3;
-  if (cost >= 2.5) return 2;
-  if (cost >= 1) return 1;
-  return 0;
+/* ------------------------------------------------------------------ */
+/* 一周熬夜时间轴                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 时间轴范围：20:00 → 次日 06:30。
+ * 20:00 是最早的 S0 场次；最晚的 04:00 开球 + 2h 正好收到 06:00，
+ * 右侧再留半小时给"看完到几点"的读数，不再画永远为空的 06–08 区。
+ */
+const TL_START = 20 * 60;
+const TL_END = 30 * 60 + 30;
+const TL_SPAN = TL_END - TL_START;
+/** 单场占用宽度：2 小时完赛近似，与 engine 的 MATCH_DURATION_MS 同一口径 */
+const TL_MATCH_MIN = 120;
+
+/** 墙钟时刻 → 时间轴分钟（凌晨归入次日，避免跨零点断轴） */
+function tlMinute(t) {
+  const clock = String(t || '').split('T')[1];
+  if (!clock) return NaN;
+  const h = Number(clock.slice(0, 2));
+  const m = Number(clock.slice(3, 5));
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return NaN;
+  const min = h * 60 + m;
+  return min < 12 * 60 ? min + 24 * 60 : min;
 }
+
+const tlPct = min => ((min - TL_START) / TL_SPAN) * 100;
+
+/** 刻度：每 2 小时一个，标签用 24 小时制（次日凌晨仍写 00–06，不写 24+） */
+const TL_TICKS = [20, 22, 24, 26, 28, 30];
+const tickLabel = h => `${String(h % 24).padStart(2, '0')}`;
+
+/**
+ * 一周熬夜时间轴（替代原来的 7 根柱子）
+ *
+ * 为什么换：柱状图只回答「哪晚最重」，回答不了「要熬到几点」。而后者才是用户的
+ * 决策问题 —— 睡眠成本是「开球时刻」的函数，把它画回时间轴上，同一晚的场次密度、
+ * 同开球重叠、以及是否越过「最低睡眠线」三个事实不用解释就能看出来。
+ *
+ * 行 = 周一到周日（夜猫日口径），列 = 20:00–08:00；每个色块按开球时刻定位，
+ * 宽度按 2 小时完赛近似；亮色 = 本周精选入选，暗色 = 未入选。
+ */
+function WeekTimeline({ days, bestIds, selectedDay, onToggleDay, sleepEnabled, wakeTime, minSleep }) {
+  const wakeMin = (() => {
+    const h = Number(String(wakeTime || '').slice(0, 2));
+    const m = Number(String(wakeTime || '').slice(3, 5));
+    return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
+  })();
+  // 最低睡眠线 = 起床时间 − 最低睡眠；凌晨时刻归一到次日
+  const cutoff = sleepEnabled && wakeMin != null && Number.isFinite(minSleep)
+    ? wakeMin - minSleep * 60 + 24 * 60
+    : null;
+  const cutoffInRange = cutoff != null && cutoff > TL_START && cutoff < TL_END;
+
+  return (
+    <div className="border-t border-line-hairline px-2.5 pt-2 pb-2">
+      <div className="mb-1 flex items-center justify-between px-0.5">
+        <span className="text-2xs font-medium text-text-muted">7 晚时间轴（点击单晚筛选）</span>
+        {selectedDay ? (
+          <button
+            type="button"
+            onClick={() => onToggleDay(selectedDay)}
+            className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-2xs font-medium text-accent transition-colors hover:bg-surface-accent focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
+          >
+            <span>清除 {selectedDay.slice(5).replace('-', '/')}</span>
+            <IconClose size={10} />
+          </button>
+        ) : (
+          <Hint
+            content="每行一晚，横向是 20:00–次日 08:00。色块按开球时刻定位、宽度约 2 小时，颜色对应 S0–S4；亮色是本周精选入选场次。虚线是「起床时间 − 最低睡眠」，越线即低于个人底线。"
+            align="end"
+          />
+        )}
+      </div>
+
+      {/* 刻度行：与下方时间轴列对齐（左侧留出周标签宽度、右侧留出场次数宽度） */}
+      <div className="flex items-center gap-1.5 pl-0.5">
+        <span className="w-6 shrink-0" aria-hidden="true" />
+        <span className="relative flex-1 font-num text-[10px] leading-none tabular-nums text-text-faint">
+          {TL_TICKS.map(h => (
+            <span
+              key={h}
+              className="absolute -translate-x-1/2"
+              style={{ left: `${tlPct(h * 60)}%` }}
+              aria-hidden="true"
+            >
+              {tickLabel(h)}
+            </span>
+          ))}
+        </span>
+        <span className="w-4 shrink-0" aria-hidden="true" />
+      </div>
+
+      <div className="mt-1 space-y-1">
+        {days.map((d, i) => {
+          const items = (d.matches || [])
+            .map(m => {
+              const start = tlMinute(m.t);
+              if (!Number.isFinite(start)) return null;
+              const s = Math.max(TL_START, start);
+              const e = Math.min(TL_END, start + TL_MATCH_MIN);
+              if (e <= s) return null;
+              return { m, s, e, tier: sleepTier(m.t) };
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.s - b.s || a.e - b.e);
+
+          // 贪心分道：同一条轨道内不重叠；超过 3 道后回到第 0 道叠画——
+          // 「一晚上挤了十几场」这件事本身就该看起来是糊的。
+          const laneEnds = [];
+          for (const it of items) {
+            let lane = laneEnds.findIndex(end => end <= it.s);
+            if (lane < 0) {
+              if (laneEnds.length < 3) {
+                lane = laneEnds.length;
+                laneEnds.push(it.e);
+              } else {
+                lane = 0;
+              }
+            } else {
+              laneEnds[lane] = it.e;
+            }
+            it.lane = lane;
+          }
+          const lanes = Math.max(1, laneEnds.length || 1);
+          // 没有待安排场次的夜晚只占一条细线：整周应有 7 行（周口径不能缺），
+          // 但「周一已经过去了」不该和「周六有四场」占同样高度。
+          const rowHeight = items.length ? lanes * 8 + 2 : 4;
+          const latest = items.length ? items.reduce((mx, it) => Math.max(mx, it.e), 0) : 0;
+          const isSelected = selectedDay === d.date;
+          const hasBest = items.some(it => bestIds.has(it.m.id));
+
+          return (
+            <button
+              key={d.date}
+              type="button"
+              onClick={() => onToggleDay(d.date)}
+              aria-pressed={isSelected}
+              aria-label={`${zhDate(d.date)} 周${WEEKDAY_SHORT[i]}，${items.length} 场${
+                items.length ? `，最晚 ${String(Math.floor(latest / 60) % 24).padStart(2, '0')}:${String(latest % 60).padStart(2, '0')} 结束` : ''
+              }${hasBest ? '，含本周精选' : ''}`}
+              title={`${zhDate(d.date)} · ${items.length} 场 · 最晚 ${hmCost(d.cost)} 档`}
+              className={`flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
+                isSelected ? 'bg-surface-raised ring-1 ring-accent/50' : 'hover:bg-surface-raised/60'
+              }`}
+            >
+              <span
+                className={`w-6 shrink-0 text-2xs leading-none ${
+                  isSelected ? 'font-semibold text-accent' : 'text-text-secondary'
+                }`}
+              >
+                周{WEEKDAY_SHORT[i]}
+              </span>
+
+              <span className="relative flex-1" style={{ height: rowHeight }} aria-hidden="true">
+                {TL_TICKS.map(h => (
+                  <span
+                    key={h}
+                    className="absolute inset-y-0 w-px bg-line-hairline/60"
+                    style={{ left: `${tlPct(h * 60)}%` }}
+                  />
+                ))}
+                {cutoffInRange && (
+                  <span
+                    className="absolute inset-y-0 w-px border-l border-dashed border-accent/60"
+                    style={{ left: `${tlPct(cutoff)}%` }}
+                  />
+                )}
+                {items.length === 0 && (
+                  <span className="absolute inset-x-0 top-1/2 h-px bg-line-hairline/70" />
+                )}
+                {items.length === 0 && (
+                  <span className="absolute inset-x-0 top-1/2 h-px bg-line-hairline/70" />
+                )}
+                {items.map(it => {
+                  const best = bestIds.has(it.m.id);
+                  return (
+                    <span
+                      key={it.m.id}
+                      className={`absolute rounded-[2px] ${BUCKET_CLASS[it.tier.tier] || 'bg-tier-1'}`}
+                      style={{
+                        left: `${tlPct(it.s)}%`,
+                        width: `${Math.max(1.5, tlPct(it.e) - tlPct(it.s))}%`,
+                        top: it.lane * 8,
+                        height: 7,
+                        opacity: best ? 1 : 0.5
+                      }}
+                      title={`${teamName(it.m.h)} vs ${teamName(it.m.a)} · ${hm(it.m.t)} · ${it.tier.label} ${hmCost(it.tier.cost)}${best ? ' · 本周精选' : ''}`}
+                    />
+                  );
+                })}
+              </span>
+
+              <span className="w-4 shrink-0 text-right font-num text-[10px] leading-none tabular-nums text-text-faint">
+                {items.length || ''}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="mt-1 px-0.5 text-[10px] leading-relaxed text-text-faint">
+        亮色 = 本周精选 · 虚线 = 最低睡眠线
+        {cutoffInRange
+          ? ` ${tickLabel(Math.floor(cutoff / 60) * 60)}:${String(cutoff % 60).padStart(2, '0')}`
+          : ''}
+      </p>
+    </div>
+  );
+}
+
 
 /** 背包规划要解释口径，但不该占版面 */
 const PLAN_HINT =
@@ -76,13 +280,8 @@ export default function WeekView({
     };
   }, [plan.best, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepMinHours]);
 
-  const bestDaySet = useMemo(() => {
-    const s = new Set();
-    for (const e of plan.best) {
-      s.add(owlDay(e.m.t));
-    }
-    return s;
-  }, [plan.best]);
+  // 时间轴要高亮「入选的那几场」而不是「入选的夜晚」：同一晚可能既有精选也有落选。
+  const bestIds = useMemo(() => new Set(plan.best.map(e => e.m.id)), [plan.best]);
 
   const kickoffGroupByMatch = useMemo(() => {
     const map = new Map();
@@ -227,82 +426,22 @@ export default function WeekView({
           </div>
         )}
 
-        {/* 内嵌 7 晚熬夜负荷柱 */}
-        <div className="border-t border-line-hairline px-2.5 pt-2 pb-2">
-          <div className="mb-1 flex items-center justify-between px-0.5">
-            <span className="text-2xs font-medium text-text-muted">7 晚熬夜负荷（点击单晚筛选）</span>
-            {selectedDay ? (
-              <button
-                type="button"
-                onClick={() => setSelectedDay(null)}
-                className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-2xs font-medium text-accent transition-colors hover:bg-surface-accent focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
-              >
-                <span>清除 {selectedDay.slice(5).replace('-', '/')}</span>
-                <IconClose size={10} />
-              </button>
-            ) : (
-              <Hint
-                content="柱子高度代表当晚最晚场次的睡眠成本，颜色对应 S0–S4 档位，圆点代表含本周精选场次。点击任意一晚可过滤下方列表。"
-                align="end"
-              />
-            )}
+        {/* 7 晚时间轴：把「熬到几点」画回时间上 */}
+        {!hasScheduledMatches ? (
+          <div className="border-t border-line-hairline px-2.5 py-3">
+            <p className="text-center text-2xs text-text-faint">本周暂无未开赛场次</p>
           </div>
-
-          {!hasScheduledMatches ? (
-            <p className="py-2 text-center text-2xs text-text-faint">本周暂无未开赛场次</p>
-          ) : (
-            <div className="flex items-end justify-between gap-1">
-              {days.map((d, i) => {
-                const h = d.count === 0 ? 3 : Math.max(6, (d.cost / 4.5) * 38);
-                const hasBest = bestDaySet.has(d.date);
-                const isSelected = selectedDay === d.date;
-                return (
-                  <button
-                    key={d.date}
-                    type="button"
-                    onClick={() => setSelectedDay(cur => (cur === d.date ? null : d.date))}
-                    aria-pressed={isSelected}
-                    aria-label={`${zhDate(d.date)} 周${WEEKDAY_SHORT[i]}，${d.count} 场，最高 ${hmCost(d.cost)}`}
-                    className={`flex flex-1 flex-col items-center gap-0.5 rounded-md py-1 transition-colors focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
-                      isSelected ? 'bg-surface-raised ring-1 ring-accent/50' : 'hover:bg-surface-raised/60'
-                    }`}
-                  >
-                    <span className="flex h-1.5 items-center justify-center">
-                      {hasBest && (
-                        <span
-                          className="h-1 w-1 rounded-full bg-accent"
-                          title="包含本周精选场次"
-                          aria-hidden="true"
-                        />
-                      )}
-                    </span>
-                    <div className="flex w-full flex-col items-center justify-end gap-0.5 px-1" style={{ height: 42 }}>
-                      {d.count > 0 && (
-                        <span className="font-num text-2xs leading-none tabular-nums text-text-faint">
-                          {hmCost(d.cost)}
-                        </span>
-                      )}
-                      <div
-                        className={`w-full rounded-sm transition-all ${
-                          d.count === 0 ? 'bg-line-hairline' : `${BUCKET_CLASS[bucketOf(d.cost)]} opacity-90`
-                        }`}
-                        style={{ height: h }}
-                        title={`${zhDate(d.date)} · ${d.count} 场 · 最高 ${hmCost(d.cost)}`}
-                      />
-                    </div>
-                    <span
-                      className={`font-num text-2xs leading-tight tabular-nums ${
-                        isSelected ? 'font-semibold text-accent' : 'text-text-secondary'
-                      }`}
-                    >
-                      周{WEEKDAY_SHORT[i]}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        ) : (
+          <WeekTimeline
+            days={days}
+            bestIds={bestIds}
+            selectedDay={selectedDay}
+            onToggleDay={date => setSelectedDay(cur => (cur === date ? null : date))}
+            sleepEnabled={prefs.sleepEnabled}
+            wakeTime={prefs.sleepWakeTime}
+            minSleep={prefs.sleepMinHours}
+          />
+        )}
       </section>
 
       {/* ---- 三段式列表切换 Tab ---- */}
