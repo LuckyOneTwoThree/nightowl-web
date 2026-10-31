@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { crestUrl, teamColor, leagueColor, leagueName } from '../data/index.js';
 import { sleepTier } from '../core/engine.js';
 import { TIER_MAP } from '../core/narrative.js';
@@ -52,6 +52,17 @@ export function BrandLogo({ size = 26, rounded = 'md', className = '', withGlow 
 export function Crest({ id, size = 28, className = '' }) {
   const [failed, setFailed] = useState(false);
   const url = crestUrl(id);
+
+  /**
+   * 换队时必须清掉失败标记。
+   *
+   * 此前 failed 只在挂载时初始化一次，而 React 会按位置复用同一个 Crest 实例
+   * （例：切换比赛后右栏队徽位置不变）—— 于是一张加载失败的队徽会让后续
+   * 所有球队都退化成纯色圆标，直到组件被卸载。
+   */
+  useEffect(() => {
+    setFailed(false);
+  }, [id]);
 
   if (!url || failed) {
     return (

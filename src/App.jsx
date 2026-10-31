@@ -54,6 +54,7 @@ import {
 } from './components/morning-digest-storage.js';
 import { IconClose } from './components/icons.jsx';
 import { compareSemver } from './core/semver.js';
+import { requestScoreSync, SYNC_STATUS_BUSY } from './api/score-sync.js';
 import { VIEW_COMMANDS, ACTION_COMMANDS, buildMatchCommands } from './core/command-palette.js';
 
 /**
@@ -499,49 +500,47 @@ export default function App() {
     // 防抖：10 秒内不重复发起同步，避免短时间频繁触发
     if (now - lastSyncTriggerRef.current < 10000) return;
     lastSyncTriggerRef.current = now;
-    try {
-      const r = await fetch('/api/scores/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apply: true })
-      });
-      if (r.ok) {
-        const j = await r.json();
-        // 写盘失败时服务端不再回传 fixtures；这里再守一道，避免旧响应让内存假装成功
-        const writtenOk = j?.summary?.written?.ok !== false;
-        // 若后端直接在同步响应中回传了新 fixtures，即刻替换并触发重绘
-        if (writtenOk && j?.fixtures?.length && setFixtures(j.fixtures)) {
-          setDataRev(v => v + 1);
-        } else if (writtenOk && j?.summary?.written?.changed > 0) {
-          refreshData();
-        }
-      } else if (r.status === 409) {
-        // 后台完整保鲜可能持续几十秒（openfootball 兜底慢）。
-        // 旧实现只等 2 秒就放弃，用户要等下一次 120 秒健康轮询才看到比分。
-        const startedAt = Date.now();
-        const pollCompletion = async () => {
-          if (Date.now() - startedAt > 120000) return;
-          try {
-            const sr = await fetch('/api/scores/status');
-            if (sr.ok) {
-              const sj = await sr.json();
-              if (sj?.syncing) {
-                setTimeout(pollCompletion, 3000);
-                return;
-              }
-              await refreshData();
-              await refreshHealth();
+
+    const outcome = await requestScoreSync({ apply: true });
+
+    // 409 = 后台已有一轮在跑。等它结束后再刷新，而不是立刻再打一次。
+    // 旧实现只等 2 秒就放弃，用户要等下一次 120 秒健康轮询才看到比分。
+    if (outcome.status === SYNC_STATUS_BUSY) {
+      const startedAt = Date.now();
+      const pollCompletion = async () => {
+        if (Date.now() - startedAt > 120000) return;
+        try {
+          const sr = await fetch('/api/scores/status');
+          if (sr.ok) {
+            const sj = await sr.json();
+            if (sj?.syncing) {
+              setTimeout(pollCompletion, 3000);
               return;
             }
-          } catch {}
-          setTimeout(pollCompletion, 3000);
-        };
-        setTimeout(pollCompletion, 1500);
-      }
-    } catch {
-      // 网络失败不占住 10s 防抖：否则本次启动/切视图的自动同步失败后，
-      // 用户在 10 秒内的手动“立即同步”会被静默忽略。
-      lastSyncTriggerRef.current = 0;
+            await refreshData();
+            await refreshHealth();
+            return;
+          }
+        } catch {}
+        setTimeout(pollCompletion, 3000);
+      };
+      setTimeout(pollCompletion, 1500);
+      return;
+    }
+
+    // 网络失败不占住 10s 防抖：否则本次启动/切视图的自动同步失败后，
+    // 用户在 10 秒内的手动「立即同步」会被静默忽略。
+    if (!outcome.ok) {
+      if (outcome.httpStatus === 0) lastSyncTriggerRef.current = 0;
+      return;
+    }
+
+    // 写盘失败已被判据函数归为 failed（HTTP 200 不等于写盘成功）；
+    // 走到这里说明响应可采信，服务端回传了新 fixtures 就立刻热替换。
+    if (outcome.payload?.fixtures?.length && setFixtures(outcome.payload.fixtures)) {
+      setDataRev(v => v + 1);
+    } else if (outcome.status === 'updated' || outcome.status === 'partial_failure') {
+      refreshData();
     }
   }, [refreshData, refreshHealth]);
 
@@ -771,12 +770,22 @@ export default function App() {
     prefs.sleepEnabled, morningDigestAuto, morningDigestOpen, morningDismissed,
     settingsOpen, onboardingOpen, splashOpen, updateModalOpen, standingsState
   ]);
-  const closeMorningDigest = () => {
+  const closeMorningDigest = useCallback(() => {
     const night = morningDigestAll.night || morningDigestNight(clockTs);
     setMorningDigestOpen(false);
     setMorningDismissed({ night });
     saveMorningDigestDismissed(night);
-  };
+  }, [morningDigestAll.night, clockTs]);
+
+  // 「N 场已看」：已看条目会被 pendingQueue 过滤掉，摘要列表里看不到，
+  // 因此要按「同一夜晚 + watched」单独统计后传进去（否则那个文案恒为 0）。
+  const morningWatchedCount = useMemo(() => {
+    const night = morningDigestAll.night;
+    if (!night) return 0;
+    return normalizeQueue(watchLater).filter(
+      item => item.night === night && item.status === 'watched'
+    ).length;
+  }, [watchLater, morningDigestAll.night]);
 
   const handleStopLossSleep = () => {
     if (!stopLossContext) return;
@@ -910,16 +919,26 @@ export default function App() {
 
   // 任一全屏浮层打开时，背景内容必须同时退出键盘焦点与点击（inert）。
   // 只靠遮罩挡鼠标，Tab 仍会跑进后面的列表，这是真实的无障碍缺陷。
+  // 早晨补看摘要声明了 aria-modal，同样属于此列 —— 此前漏收，弹窗开着还能 Tab 到背景。
   const overlayOpen =
-    settingsOpen || onboardingVisible || updateModalOpen || splashOpen || paletteOpen || !!standingsState;
+    settingsOpen ||
+    onboardingVisible ||
+    updateModalOpen ||
+    splashOpen ||
+    paletteOpen ||
+    morningDigestOpen ||
+    !!standingsState;
 
   /**
    * Escape 浮层栈：一次 Esc 只关最上层浮层。
    *
    * 此前各浮层在 window 上无条件监听 Escape，设置抽屉 + 更新弹窗叠加时
    * （设置里点「检查更新」不关抽屉）一次 Esc 会连关两层，丢失上下文。
-   * 各组件的监听已移除，由这里按「后开者在上」派发；SplashScreen 不入栈——
-   * 它永远在最顶层且自带 Space/Enter/Escape 跳过键。
+   * 由这里按「后开者在上」派发。
+   *
+   * SplashScreen **不入栈**：它自己监听 Space/Enter/Escape 并播 450ms 退出动画，
+   * 若同时入栈，一次 Esc 会「栈立即关闭（无动画）+ 组件启动退出动画」双路派发 ——
+   * 表现为开屏一闪而过。首启时引导也不会与开屏同屏（`onboardingVisible` 已排除）。
    */
   const overlayCloseStack = useMemo(() => {
     const stack = [];
@@ -928,11 +947,9 @@ export default function App() {
     if (updateModalOpen) stack.push(closeUpdateModal);
     if (standingsState) stack.push(closeStandings);
     if (paletteOpen) stack.push(closePalette);
-    // 开屏永远在最顶层（z 最高），也入栈：它自带 Esc 跳过键，与栈派发对同一动作
-    // 重复触发是无害幂等；不入栈则首次启动「开屏 + 引导」同屏时一次 Esc 会连关两层
-    if (splashOpen) stack.push(handleCloseSplash);
+    if (morningDigestOpen) stack.push(closeMorningDigest);
     return stack;
-  }, [settingsOpen, onboardingVisible, updateModalOpen, standingsState, paletteOpen, splashOpen, closeStandings, closeSettings, closeUpdateModal, closePalette, closeOnboarding, handleCloseSplash]);
+  }, [settingsOpen, onboardingVisible, updateModalOpen, standingsState, paletteOpen, morningDigestOpen, closeStandings, closeSettings, closeUpdateModal, closePalette, closeOnboarding, closeMorningDigest]);
 
   useEffect(() => {
     if (overlayCloseStack.length === 0) return undefined;
@@ -1081,7 +1098,8 @@ export default function App() {
         </main>
       </div>
 
-      {!settingsOpen && !onboardingOpen && !splashOpen && !updateModalOpen && !standingsState && (
+      {/* 止损条是非阻断提示，但摘要模态打开时它不能仍可 Tab 到（模态语义优先） */}
+      {!settingsOpen && !onboardingOpen && !splashOpen && !updateModalOpen && !standingsState && !morningDigestOpen && (
         <StopLossBanner
           context={stopLossContext}
           notice={stopLossNotice}
@@ -1094,6 +1112,7 @@ export default function App() {
       <MorningDigest
         open={morningDigestOpen}
         items={morningDigestAll.items}
+        watchedCount={morningWatchedCount}
         revealed={revealed}
         onReveal={reveal}
         onMarkRead={markWatchLaterWatched}

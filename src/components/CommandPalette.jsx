@@ -62,6 +62,9 @@ export default function CommandPalette({ items = [], onClose, onRun }) {
   const onKeyDown = e => {
     if (e.key === 'Escape') {
       e.preventDefault();
+      // 面板自己处理完必须掐断冒泡：App 的浮层栈同样监听 window 上的 Escape，
+      // 不阻止的话一次 Esc 会派发两次（面板 onClose + 栈顶 onClose）。
+      e.stopPropagation();
       onClose?.();
       return;
     }

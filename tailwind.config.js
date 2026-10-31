@@ -96,16 +96,10 @@ export default {
         'result-win': alpha('result-win'),
         'result-draw': alpha('result-draw'),
         'result-loss': alpha('result-loss'),
-        'result-ink': alpha('result-ink'),
+        'result-ink': alpha('result-ink')
 
-        /* 联赛识别色（仅列表左色条） */
-        'league-pl': '#A8559F',
-        'league-pd': '#E07A45',
-        'league-sa': '#4FA97F',
-        'league-bl': '#D05561',
-        'league-fl': '#5B8AD0',
-        'league-ucl': '#7C8FE8',
-        'league-scg': '#6B7686'
+        /* 联赛识别色不在这里：列表左色条用 src/data/index.js 的 LEAGUE_COLORS
+           （经 leagueColor() 内联 style）。此前的 league-* 类无人使用，已删除。 */
       },
       boxShadow: {
         card: 'var(--shadow-card)',

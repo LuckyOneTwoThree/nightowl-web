@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getFixtures, FOLLOWABLE_LEAGUES, LEAGUE_NAMES, leagueColor, leagueName, teamName } from '../data/index.js';
 import { defaultPrefs } from '../core/prefs.js';
 import { queueWithMatches } from '../core/queue.js';
-import { summarizeSyncResponse } from '../core/sync-outcome.js';
+import { requestScoreSync, SYNC_STATUS_BUSY } from '../api/score-sync.js';
 import { BrandLogo, Button, Chip, Fieldset, Hint, Meta, Switch, TogglePill } from './atoms.jsx';
 import { hm } from '../core/format.js';
 import { IconClose, IconReset } from './icons.jsx';
@@ -90,20 +90,20 @@ export default function SettingsDrawer({
     setSyncing(true);
     setSyncMsg(null);
     try {
-      const r = await fetch('/api/scores/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apply: true })
-      });
-      const j = await r.json();
-      if (!r.ok) {
-        setSyncMsg({ ok: false, text: j?.error || '同步失败' });
+      const outcome = await requestScoreSync({ apply: true });
+
+      // 409 此前在这里被报成「同步失败」，而同一动作在 App 里会耐心等待 ——
+      // 同一个「同步」在两处给出相反结论。现在统一语义：忙不是错。
+      if (outcome.status === SYNC_STATUS_BUSY) {
+        setSyncMsg({ ok: true, text: '已有同步任务在进行中，稍后自动更新' });
+        await loadFreshness();
+        refresh();
         return;
       }
-      const outcome = summarizeSyncResponse(j);
-      setSyncMsg(outcome);
+
+      setSyncMsg({ ok: outcome.ok, text: outcome.text });
       // 只有真正写盘成功才替换内存快照；失败时仍刷新状态，让用户看到失败原因
-      if (outcome.status === 'updated' || outcome.status === 'partial_failure') {
+      if (outcome.ok && (outcome.status === 'updated' || outcome.status === 'partial_failure')) {
         await onDataRefresh?.();
       }
       await loadFreshness();

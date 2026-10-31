@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { leagueName, teamName } from '../data/index.js';
 import { hm } from '../core/format.js';
 import { Button, Chip, Crest, Meta } from './atoms.jsx';
@@ -9,6 +9,10 @@ import { IconClose } from './icons.jsx';
  *
  * 数据只来自「明早补看」队列；比分与事件默认隐藏，必须逐场揭晓。
  * 关闭/稍后再看不会自动揭晓，也不会丢掉队列。
+ *
+ * 无障碍：模态对话框（`aria-modal`）必须同时满足三件事 —— 背景 inert（由 App 的
+ * `overlayOpen` 负责）、Esc 由 App 的浮层栈统一派发、焦点进场与归还。
+ * 此前只有 `aria-modal` 属性，Tab 仍能走进背景列表；本组件补上后两项。
  */
 export default function MorningDigest({
   open,
@@ -17,17 +21,44 @@ export default function MorningDigest({
   onReveal,
   onMarkRead,
   onOpenMatch,
-  onClose
+  onClose,
+  watchedCount = 0
 }) {
   const [confirmAll, setConfirmAll] = useState(false);
+  const closeBtnRef = useRef(null);
+  const returnFocusRef = useRef(null);
+
   useEffect(() => {
     if (!open) setConfirmAll(false);
   }, [open]);
+
+  /**
+   * 焦点进场与归还。
+   *
+   * 摘要多为自动弹出（起床后首次打开），此时 `document.activeElement` 往往是 body；
+   * 归还时 body 不可聚焦，`focus()` 自然无副作用，不需要特判。
+   * 若原元素已被遮挡（处于 inert 子树内），则不归还 —— 与 App 的 restoreFocus 同口径。
+   */
+  useEffect(() => {
+    if (!open) return undefined;
+    returnFocusRef.current = typeof document !== 'undefined' ? document.activeElement : null;
+    closeBtnRef.current?.focus();
+    return () => {
+      const el = returnFocusRef.current;
+      returnFocusRef.current = null;
+      if (!el?.isConnected) return;
+      if (el.closest?.('[inert]')) return;
+      el.focus?.();
+    };
+  }, [open]);
+
   if (!open) return null;
 
   const total = items.length;
   const allRevealed = total > 0 && items.every(({ match }) => match && revealed?.has(match.id));
-  const done = items.filter(({ item }) => item.status === 'watched').length;
+  // 「已看」条目会被 pendingQueue 过滤掉，不会出现在 items 里，
+  // 因此这个数字必须由调用方按夜晚统计后传入（此前在本地对 items 计数，恒为 0）。
+  const done = Math.max(0, Number(watchedCount) || 0);
 
   return (
     <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -51,6 +82,7 @@ export default function MorningDigest({
           </div>
           <button
             type="button"
+            ref={closeBtnRef}
             onClick={onClose}
             aria-label="关闭补看摘要"
             className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"

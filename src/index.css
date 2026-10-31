@@ -157,14 +157,9 @@
   --result-ink: #000000;
   --result-ink-rgb: 0 0 0;
 
-  /* ---- 联赛识别色：仅用于列表左色条，饱和度刻意压低 ---- */
-  --league-pl: #a8559f;
-  --league-pd: #e07a45;
-  --league-sa: #4fa97f;
-  --league-bl: #d05561;
-  --league-fl: #5b8ad0;
-  --league-ucl: #7c8fe8;
-  --league-scg: #6b7686;
+  /* 联赛识别色不在这里：列表左色条走 src/data/index.js 的 LEAGUE_COLORS（内联 style）。
+     此前这里与 tailwind.config.js 各保留了一份 --league-* / league-*，两处都无人引用，
+     属于「同一语义三份定义、两份是死的」，已删除。 */
 
   /* ---- 阴影：两档。此前带金色发光的 shadow-gold-glow 已删除 ---- */
   --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
@@ -361,14 +356,7 @@
   }
 }
 
-/* 无障碍动效降级：用户系统开启减弱动态效果时，禁用过度动画与高频跳动 */
-@media (prefers-reduced-motion: reduce) {
-  *, ::before, ::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
+/* 无障碍动效降级已在 @layer base 统一声明一次（`prefers-reduced-motion`）。
+   此处原有一份逐字重复的副本，两份同时存在时后来者无任何附加效果，已删除。 */
 
 
