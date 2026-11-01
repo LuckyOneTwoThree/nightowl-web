@@ -4,7 +4,9 @@ import { defaultPrefs } from '../core/prefs.js';
 import { queueWithMatches } from '../core/queue.js';
 import { requestScoreSync, SYNC_STATUS_BUSY } from '../api/score-sync.js';
 import { clearLineMemory, loadLineMemory } from './line-memory-storage.js';
-import { BrandLogo, Button, Chip, Fieldset, Hint, Meta, Switch, TogglePill } from './atoms.jsx';
+import { buildIcs, selectIcsMatches, ICS_RANGES } from '../core/ics.js';
+import { weekStartBJ } from '../core/engine.js';
+import { BrandLogo, Button, Chip, Fieldset, Hint, Meta, Segmented, Switch, TogglePill } from './atoms.jsx';
 import { hm } from '../core/format.js';
 import { IconClose, IconReset } from './icons.jsx';
 import TeamPicker from './TeamPicker.jsx';
@@ -40,7 +42,8 @@ export default function SettingsDrawer({
   watchLater = [],
   onRemoveWatchLater,
   onMarkWatchLaterWatched,
-  onOpenMorningDigest
+  onOpenMorningDigest,
+  weekIds = null
 }) {
   const leagueCount = prefs.followedLeagues.length;
   const bonusActive = leagueCount > 0 && leagueCount < 6;
@@ -90,6 +93,44 @@ export default function SettingsDrawer({
     if (!open) return;
     setLineMemCount(Object.keys(loadLineMemory()).length);
   }, [open]);
+
+  /* ---- 日历导出（FR-09）---- */
+  const [icsRange, setIcsRange] = useState('tonight');
+  const [icsRemind, setIcsRemind] = useState(30);
+  const [icsMsg, setIcsMsg] = useState(null);
+  useEffect(() => {
+    if (!open) setIcsMsg(null);
+  }, [open]);
+
+  const exportIcs = () => {
+    setIcsMsg(null);
+    const now = Date.now();
+    try {
+      const matches = selectIcsMatches(getFixtures(), {
+        range: icsRange,
+        nowTs: now,
+        weekStartStr: icsRange === 'week' ? weekStartBJ(now).str : null,
+        followedTeams: prefs.followedTeams,
+        weekIds: icsRange === 'week' ? weekIds : null
+      });
+      const ics = buildIcs({ matches, reminderMinutes: icsRemind, now });
+      const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const label = ICS_RANGES.find(r => r.id === icsRange)?.label || '导出';
+      const stamp = new Date(now).toISOString().slice(0, 10);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `夜猫看台-${label}-${stamp}.ics`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // 立刻 revoke 会让部分浏览器拿不到内容，延迟释放
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+      setIcsMsg({ ok: true, text: `已导出 ${matches.length} 场` });
+    } catch (err) {
+      setIcsMsg({ ok: false, text: err?.message || '导出失败' });
+    }
+  };
 
   // Escape 关闭已上收到 App 的浮层栈统一派发（一次 Esc 只关最上层，
   // 修复「设置 + 更新弹窗叠加时一次 Esc 连关两层」）；这里不再各自监听。
@@ -413,6 +454,40 @@ export default function SettingsDrawer({
                 on={prefs.notifyLiveEvents}
                 onChange={v => patch({ notifyLiveEvents: v })}
               />
+            </div>
+          </Fieldset>
+
+          {/* 日历导出（FR-09）：不常开应用也能被系统日历提醒；不引入账号与云端订阅 */}
+          <Fieldset
+            title="日历导出"
+            hint="导出为 .ics 文件，双击可导入系统日历。只导出未开赛且开球时间已确定的场次；标题与说明不含比分。"
+          >
+            <div className="space-y-2">
+              <Segmented
+                items={ICS_RANGES.map(r => ({ id: r.id, label: r.label }))}
+                value={icsRange}
+                onChange={setIcsRange}
+                className="w-full [&>button]:flex-1 [&>button]:justify-center"
+              />
+              <Segmented
+                items={[
+                  { id: 0, label: '不提醒' },
+                  { id: 15, label: '提前 15 分钟' },
+                  { id: 30, label: '提前 30 分钟' }
+                ]}
+                value={icsRemind}
+                onChange={setIcsRemind}
+                className="w-full [&>button]:flex-1 [&>button]:justify-center"
+              />
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="xs" onClick={exportIcs}>
+                  导出 .ics
+                </Button>
+                {icsMsg && (
+                  <span className={`text-2xs ${icsMsg.ok ? 'text-resource' : 'text-warn'}`}>{icsMsg.text}</span>
+                )}
+              </div>
+              <Meta>文件会保存到系统下载目录；重复导出会生成新文件，覆盖与否由你决定。</Meta>
             </div>
           </Fieldset>
 

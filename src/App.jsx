@@ -639,6 +639,18 @@ export default function App() {
     [view, minuteKey, prefs, dataRev]
   );
 
+  /**
+   * 「本周精选」的场次 ID（供设置里的日历导出使用）。
+   * 只在设置抽屉打开时才算：用户不导出就不该为它多跑一次背包规划。
+   * 已经在「本周规划」视图时直接复用，避免同一份数据算两遍。
+   */
+  const weekBestIds = useMemo(() => {
+    if (!settingsOpen) return null;
+    const w = view === 'week' && week ? week : computeWeek(Date.now(), prefs);
+    return new Set(w.plan.best.map(e => e.m.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsOpen, view, week, prefs, dataRev, minuteKey]);
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const scheduleRows = useMemo(
     () => (view === 'schedule' ? computeScheduleRows(Date.now(), prefs, filters) : []),
@@ -1145,6 +1157,7 @@ export default function App() {
           onRemoveWatchLater={removeWatchLater}
           onMarkWatchLaterWatched={markWatchLaterWatched}
           onOpenMorningDigest={() => setMorningDigestOpen(true)}
+          weekIds={weekBestIds}
           onOpenUpdateModal={() => {
             openUpdateModal();
             if (updateState.status === 'idle') {
