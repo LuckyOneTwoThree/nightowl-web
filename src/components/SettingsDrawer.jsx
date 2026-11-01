@@ -3,6 +3,7 @@ import { getFixtures, FOLLOWABLE_LEAGUES, LEAGUE_NAMES, leagueColor, leagueName,
 import { defaultPrefs } from '../core/prefs.js';
 import { queueWithMatches } from '../core/queue.js';
 import { requestScoreSync, SYNC_STATUS_BUSY } from '../api/score-sync.js';
+import { clearLineMemory, loadLineMemory } from './line-memory-storage.js';
 import { BrandLogo, Button, Chip, Fieldset, Hint, Meta, Switch, TogglePill } from './atoms.jsx';
 import { hm } from '../core/format.js';
 import { IconClose, IconReset } from './icons.jsx';
@@ -82,6 +83,13 @@ export default function SettingsDrawer({
   useEffect(() => {
     if (open) loadFreshness();
   }, [open, loadFreshness]);
+
+  // 线路成功率记忆：只在打开抽屉时统计条数（真正的排序在播放舞台里）
+  const [lineMemCount, setLineMemCount] = useState(0);
+  useEffect(() => {
+    if (!open) return;
+    setLineMemCount(Object.keys(loadLineMemory()).length);
+  }, [open]);
 
   // Escape 关闭已上收到 App 的浮层栈统一派发（一次 Esc 只关最上层，
   // 修复「设置 + 更新弹窗叠加时一次 Esc 连关两层」）；这里不再各自监听。
@@ -483,6 +491,31 @@ export default function SettingsDrawer({
                         <span className={syncMsg.ok ? 'text-resource' : 'text-warn'}>{syncMsg.text}</span>
                       )}
                     </div>
+                  </div>
+
+                  {/* 线路成功率记忆（FR-07）：本机按域名记录起播结果，只影响线路排序 */}
+                  <div className="mt-1.5 border-t border-line-hairline pt-1.5">
+                    <p>
+                      线路记忆{' '}
+                      <span className="text-text-primary">
+                        {lineMemCount > 0 ? `${lineMemCount} 条本机经验` : '暂无记录'}
+                      </span>
+                    </p>
+                    <p className="mt-0.5">
+                      按域名记录起播成功与失败，用于把能用的线路排到前面；失败的当天沉底但不隐藏，7 天无数据自动衰减。
+                    </p>
+                    {lineMemCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          clearLineMemory();
+                          setLineMemCount(0);
+                        }}
+                        className="mt-1 rounded border border-line-control bg-surface-raised px-2 py-0.5 text-2xs text-text-secondary transition-colors hover:border-line-control hover:text-accent"
+                      >
+                        清除线路记忆
+                      </button>
+                    )}
                   </div>
                 </>
               ) : (

@@ -70,7 +70,8 @@ export default function Player({
   onLoadStart,
   theme = null,
   onAspectRatio = null,
-  onReady = null
+  onReady = null,
+  onFirstPlay = null
 }) {
   const boxRef = useRef(null);
   const artRef = useRef(null);
@@ -165,6 +166,16 @@ export default function Player({
           }
         }
       });
+      // 「真正开始播放」的唯一判据：video 进入 playing。
+      // 不能用「按钮已选中」或「ready」代替 —— 选中一条死链时 ready 也可能触发过，
+      // 线路成功率记忆（FR-07）会把失败记成成功，越用越偏。
+      let firstPlayFired = false;
+      art.on('video:playing', () => {
+        if (firstPlayFired) return;
+        firstPlayFired = true;
+        onFirstPlay?.();
+      });
+
       art.on('error', err => onError?.(String(err?.message || err)));
     } catch (err) {
       onError?.(`播放器初始化失败：${err?.message || err}`);
@@ -198,7 +209,7 @@ export default function Player({
     // ⚠️ 回调必须进依赖数组：effect 内部读了 onError / onLoadStart / onAspectRatio。
     //    当前 PlayerStage 传入的是稳定的 setState 引用，故不会引发重建；
     //    但一旦传入内联函数，缺依赖会让回调读到首次渲染的过期闭包。
-  }, [src, kind, onError, onLoadStart, onAspectRatio, onReady]);
+  }, [src, kind, onError, onLoadStart, onAspectRatio, onReady, onFirstPlay]);
 
   /** 中央「开启声音」：解除静音并持久化，让下次起播沿用 */
   const enableSound = () => {

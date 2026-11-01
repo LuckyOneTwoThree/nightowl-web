@@ -12,6 +12,8 @@ import { sourceUrlFor } from '../core/watch-sources.js';
 import { eventKey, shouldNotifyEvent } from '../core/live-events.js';
 import { liveEventNotification, fullTimeNotification } from '../core/notifications.js';
 import { autoSwitchDecision } from '../core/line-switch.js';
+import { orderLinesByMemory, lineMemoryFor, recordLineAttempt } from '../core/line-memory.js';
+import { loadLineMemory, saveLineMemory, LINE_MEMORY_CLEARED_EVENT } from './line-memory-storage.js';
 import {
   IconCalendar,
   IconCheck,
@@ -108,12 +110,25 @@ function Notice({ n }) {
   );
 }
 
-const LineButton = memo(function LineButton({ l, compact = false, active, onSelect }) {
+const LineButton = memo(function LineButton({ l, compact = false, active, onSelect, suffix = null, memory = null }) {
+  const failed = !!memory?.failedRecently;
+  const lastOk = !!memory && memory.lastOkAt > 0 && !failed;
+  const title = [
+    l.name,
+    suffix ? `(${suffix})` : '',
+    failed ? `· 本次失败：${memory.failReason || '起播失败'}` : '',
+    lastOk ? '· 上次可用' : '',
+    memory ? `· 本机 ${memory.successes}/${memory.attempts} 次成功` : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
     <button
       type="button"
       onClick={() => onSelect(l)}
       aria-pressed={active}
+      title={title}
       className={`inline-flex items-center justify-between gap-1.5 rounded-lg px-2.5 py-1.5 text-2xs transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none ${
         compact ? 'shrink-0 whitespace-nowrap' : 'w-full'
       } ${
@@ -125,8 +140,21 @@ const LineButton = memo(function LineButton({ l, compact = false, active, onSele
       <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
         {active && <IconSignal size={11} className="shrink-0" />}
         <span className="truncate">{l.name}</span>
+        {suffix && <span className="shrink-0 text-text-faint">· {suffix}</span>}
       </span>
-      {!compact && <Meta className="shrink-0">{l.isDirect ? '直链' : '内嵌'}</Meta>}
+      {compact ? (
+        failed ? (
+          <span className="h-1 w-1 shrink-0 rounded-full bg-danger" title="本次失败" />
+        ) : lastOk ? (
+          <span className="h-1 w-1 shrink-0 rounded-full bg-resource" title="上次可用" />
+        ) : null
+      ) : (
+        <span className="flex shrink-0 items-center gap-1">
+          {failed && <span className="text-danger">本次失败</span>}
+          {lastOk && <span className="text-resource">上次可用</span>}
+          <Meta>{l.isDirect ? '直链' : '内嵌'}</Meta>
+        </span>
+      )}
     </button>
   );
 });
@@ -339,6 +367,11 @@ export default function PlayerStage({
   }, [theaterMode, state, streamUrl, match?.id]);
 
   const [lines, setLines] = useState([]);
+  /**
+   * 本机线路经验（PRD FR-07）：按域名 + 类型记录尝试/成功，用于排序。
+   * 只在组件挂载时读一次 —— 它属于"上一次运行留下的经验"，本会话内的更新走 state。
+   */
+  const [lineMemory, setLineMemory] = useState(() => loadLineMemory());
   const [loadingLines, setLoadingLines] = useState(false);
   const [activeLineId, setActiveLineId] = useState(null);
   const [liveInfo, setLiveInfo] = useState(null);
@@ -348,13 +381,63 @@ export default function PlayerStage({
   const [liveRefreshing, setLiveRefreshing] = useState(false);
   const [lineNotice, setLineNotice] = useState(null);
 
+  /**
+   * 展示顺序 = 本地成功率优先（失败当天降权），无经验的线路保持服务端原顺序且始终可见。
+   * 排序只在展示层做：服务端返回的线路列表本身不改，便于排查「为什么这条在前」。
+   */
+  const orderedLines = useMemo(() => orderLinesByMemory(lines, lineMemory), [lines, lineMemory]);
+
+  /** 记录一次起播结果；只有真正开始播放才算成功（见 Player 的 onFirstPlay） */
+  const rememberLine = useCallback((line, ok, reason) => {
+    if (!line) return;
+    setLineMemory(prev => {
+      const next = recordLineAttempt(prev, line, { ok, reason });
+      saveLineMemory(next);
+      return next;
+    });
+  }, []);
+
+  /** 真正开始播放才算这条线路成功（由 Player 的 video:playing 回调触发） */
+  const handleFirstPlay = useCallback(() => {
+    rememberLine(linesRef.current.find(l => l.id === activeLineIdRef.current), true);
+  }, [rememberLine]);
+
+  // 用户在设置里清除线路记忆后，本组件（常驻挂载）要立刻按默认顺序重排
+  useEffect(() => {
+    const onCleared = () => setLineMemory({});
+    window.addEventListener(LINE_MEMORY_CLEARED_EVENT, onCleared);
+    return () => window.removeEventListener(LINE_MEMORY_CLEARED_EVENT, onCleared);
+  }, []);
+
+  // 同名线路加域名尾缀做区分：聚合站会给不同房间起同样的名字
+  // （实测 25 条线路里「超清 · 中文解说 (线C6)」出现多次），只靠名字用户无法分辨。
+  const lineLabels = useMemo(() => {
+    const counts = new Map();
+    for (const l of orderedLines) counts.set(l.name, (counts.get(l.name) || 0) + 1);
+    const map = new Map();
+    for (const l of orderedLines) {
+      let suffix = null;
+      if ((counts.get(l.name) || 0) > 1) {
+        try {
+          const host = new URL(l.url || '').hostname.replace(/^www\./, '');
+          const parts = host.split('.');
+          suffix = parts.length >= 3 ? parts[parts.length - 2] : parts[0];
+        } catch {
+          suffix = null;
+        }
+      }
+      map.set(l.id, { suffix, memory: lineMemoryFor(lineMemory, l) });
+    }
+    return map;
+  }, [orderedLines, lineMemory]);
+
   // 宽屏模式下紧凑单行精选线路（激活线路必在视野内，最多 3 条以确保严格单行不换行）
   const visibleTheaterLines = useMemo(() => {
-    if (theaterLinesExpanded || lines.length <= 3) return lines;
-    const activeIdx = lines.findIndex(l => l.id === activeLineId);
-    if (activeIdx < 0 || activeIdx < 3) return lines.slice(0, 3);
-    return [...lines.slice(0, 2), lines[activeIdx]];
-  }, [lines, theaterLinesExpanded, activeLineId]);
+    if (theaterLinesExpanded || orderedLines.length <= 3) return orderedLines;
+    const activeIdx = orderedLines.findIndex(l => l.id === activeLineId);
+    if (activeIdx < 0 || activeIdx < 3) return orderedLines.slice(0, 3);
+    return [...orderedLines.slice(0, 2), orderedLines[activeIdx]];
+  }, [orderedLines, theaterLinesExpanded, activeLineId]);
 
   const stopPlayback = useCallback(() => {
     setStreamUrl(null);
@@ -404,8 +487,8 @@ export default function PlayerStage({
   const activeLineIdRef = useRef(activeLineId);
   activeLineIdRef.current = activeLineId;
 
-  const linesRef = useRef(lines);
-  linesRef.current = lines;
+  const linesRef = useRef(orderedLines);
+  linesRef.current = orderedLines;
 
   const autoSwitchRef = useRef({ matchId: null, count: 0 });
 
@@ -435,6 +518,8 @@ export default function PlayerStage({
       const msg = String(message || '播放失败');
       const currentMatch = matchRef.current;
       const expectedLineId = activeLineIdRef.current;
+      // 记下这条线路失败过：当天它会沉到列表后面（不禁用、不隐藏）
+      rememberLine(linesRef.current.find(l => l.id === expectedLineId), false, msg);
       const decision = autoSwitchDecision({
         lines: linesRef.current,
         activeId: expectedLineId,
@@ -459,7 +544,7 @@ export default function PlayerStage({
         selectLine(decision.line);
       }, 600);
     },
-    [selectLine]
+    [selectLine, rememberLine]
   );
 
   // 切场时重置自动换线计数与提示
@@ -780,7 +865,7 @@ export default function PlayerStage({
 
   /** 快速切到下一个可用直链 */
   const nextLine = () => {
-    const directLines = lines.filter(l => l.isDirect && l.url);
+    const directLines = orderedLines.filter(l => l.isDirect && l.url);
     if (!directLines.length) return;
     const currIdx = directLines.findIndex(l => l.id === activeLineId);
     manualSelectLine(directLines[(currIdx + 1) % directLines.length]);
@@ -788,7 +873,7 @@ export default function PlayerStage({
 
   /** Match Center 的“播放”动作：优先直链，没有直链但有内嵌线路就打开，否则重新检测 */
   const playFirstLine = () => {
-    const line = lines.find(l => l.isDirect && l.url) || lines.find(l => l.url);
+    const line = orderedLines.find(l => l.isDirect && l.url) || orderedLines.find(l => l.url);
     if (line) {
       manualSelectLine(line);
       return;
@@ -823,7 +908,7 @@ export default function PlayerStage({
   const postponed = state === 'pp';
   const diffMs = kickTs - now;
   const isNearKickoff = state === 'sched' && diffMs <= 30 * 60 * 1000 && diffMs >= 0;
-  const directLines = lines.filter(l => l.isDirect && l.url);
+  const directLines = orderedLines.filter(l => l.isDirect && l.url);
   // 有长回顾/直播面板时，把情报放进主列，填满画面下方的空间；
   // 赛前短侧栏仍保持「视频 + 侧栏」的广播台布局。
   const stackIntel = finished || (live && !streamUrl);
@@ -879,6 +964,7 @@ export default function PlayerStage({
             onError={handlePlayerError}
             onAspectRatio={setAspectRatio}
             onReady={handlePlayerReady}
+            onFirstPlay={handleFirstPlay}
           />
         </Suspense>
       ) : (
@@ -888,7 +974,7 @@ export default function PlayerStage({
           stageCountdown={stageCountdown}
           isNearKickoff={isNearKickoff}
           liveData={liveSnapshot}
-          lines={lines}
+          lines={orderedLines}
           loadingLines={loadingLines}
           spoilerFree={spoilerFree}
           revealed={revealed}
@@ -983,8 +1069,8 @@ export default function PlayerStage({
               <IconLive className={live ? 'text-live' : 'text-text-faint'} />
               <span className="text-xs font-medium text-text-primary">直播线路</span>
               <Meta num>
-                {lines.length > 0
-                  ? `${lines.length} 条`
+                {orderedLines.length > 0
+                  ? `${orderedLines.length} 条`
                   : live
                     ? '无可用'
                     : postponed
@@ -1010,15 +1096,25 @@ export default function PlayerStage({
             </div>
           </div>
 
-          {lines.length > 0 ? (
+          {orderedLines.length > 0 ? (
             // 1120 宽度下用两列压缩高度；xl 协同模式再回到单列。
             // 只有一条线路时不要切成两列 —— 否则单按钮只占半行，右半边整块留白。
             <div className={`scrollbar-thin -mr-1 mt-2.5 grid min-h-[48px] max-h-[220px] content-start gap-1.5 overflow-y-auto pr-1 ${
-              lines.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'
+              orderedLines.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'
             } xl:min-h-[56px] xl:grid-cols-1`}>
-              {lines.map(l => (
-                <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={manualSelectLine} />
-              ))}
+              {orderedLines.map(l => {
+                const meta = lineLabels.get(l.id);
+                return (
+                  <LineButton
+                    key={l.id}
+                    l={l}
+                    active={activeLineId === l.id}
+                    onSelect={manualSelectLine}
+                    suffix={meta?.suffix}
+                    memory={meta?.memory}
+                  />
+                );
+              })}
             </div>
           ) : (
             <LineEmptyState
@@ -1133,14 +1229,14 @@ export default function PlayerStage({
                   <IconLive className={live ? 'text-live' : 'text-text-faint'} />
                   <span className="text-xs font-medium text-text-primary">线路</span>
                 </span>
-                {lines.length > 0 ? (
+                {orderedLines.length > 0 ? (
                   <>
                     {visibleTheaterLines.map(l => (
                       <LineButton key={l.id} l={l} compact active={activeLineId === l.id} onSelect={manualSelectLine} />
                     ))}
                     {lines.length > 3 && (
                       <Button variant="ghost" icon={<IconChevronDown />} onClick={() => setTheaterLinesExpanded(true)}>
-                        全部 {lines.length}
+                        全部 {orderedLines.length}
                       </Button>
                     )}
                     {directLines.length > 1 && (
@@ -1199,7 +1295,7 @@ export default function PlayerStage({
               <div className="flex items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-2">
                   <span className="text-xs font-medium text-text-primary">全部线路</span>
-                  <Meta num>{lines.length} 条</Meta>
+                  <Meta num>{orderedLines.length} 条</Meta>
                   {directLines.length > 1 && (
                     <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
                       换线
@@ -1219,9 +1315,19 @@ export default function PlayerStage({
                 </span>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                {lines.map(l => (
-                  <LineButton key={l.id} l={l} active={activeLineId === l.id} onSelect={manualSelectLine} />
-                ))}
+                {orderedLines.map(l => {
+                  const meta = lineLabels.get(l.id);
+                  return (
+                    <LineButton
+                      key={l.id}
+                      l={l}
+                      active={activeLineId === l.id}
+                      onSelect={manualSelectLine}
+                      suffix={meta?.suffix}
+                      memory={meta?.memory}
+                    />
+                  );
+                })}
               </div>
             </div>
           )}
