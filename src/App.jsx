@@ -507,10 +507,11 @@ export default function App() {
       } else {
         state = 'unknown';
       }
-      setDataHealth({ state, label });
+      // checks：待录场次的「最后检查时间」，供单场数据说明使用
+      setDataHealth({ state, label, checks: j?.checks || {} });
       return { syncing: !!j?.syncing };
     } catch {
-      setDataHealth({ state: 'error', label: '本地服务未连接' });
+      setDataHealth({ state: 'error', label: '本地服务未连接', checks: {} });
       return { syncing: false };
     }
   }, [refreshData]);
@@ -531,6 +532,53 @@ export default function App() {
       if (timer) clearTimeout(timer);
     };
   }, [refreshHealth]);
+
+  /**
+   * 单场重查（FR-06）
+   *
+   * 只查这一场所在的联赛与日期，不惊动整轮保鲜 —— 用户在「数据说明」里点一下，
+   * 几秒内就能知道是「上游没给」还是「刚才没同步到」。
+   */
+  const [recheckingMatchId, setRecheckingMatchId] = useState(null);
+  const [recheckMsg, setRecheckMsg] = useState(null);
+  const recheckMatch = useCallback(
+    async matchId => {
+      if (!matchId || recheckingMatchId) return null;
+      setRecheckingMatchId(matchId);
+      try {
+        const outcome = await requestScoreSync({ apply: true, matchId });
+        if (outcome.ok && outcome.payload?.fixtures?.length) {
+          if (setFixtures(outcome.payload.fixtures)) setDataRev(v => v + 1);
+          else await refreshData();
+        } else if (outcome.ok && (outcome.status === 'updated' || outcome.status === 'partial_failure')) {
+          await refreshData();
+        }
+        await refreshHealth();
+
+        // 单场重查的结果必须说清楚：用户点了按钮，不能只有"转一圈又回到原样"。
+        // 语义按"这一场查过没有"来写，不用整轮同步的口径（openfootball 未响应
+        // 不该被读成"同步失败"，ESPN 那一路可能已经查全了）。
+        const changed = Number(outcome.payload?.summary?.written?.changed || 0);
+        const text =
+          outcome.status === SYNC_STATUS_BUSY
+            ? '已有同步在进行中，稍后自动更新'
+            : outcome.status === 'updated'
+              ? `已更新 ${changed} 场比分`
+              : outcome.status === 'partial_failure'
+                ? `已更新 ${changed} 场（部分来源未响应）`
+                : outcome.status === 'up_to_date'
+                  ? '本场已查，暂无新比分'
+                  : outcome.payload?.summary?.written?.ok === false
+                    ? outcome.payload.summary.written.reason || '写盘失败'
+                    : '本场已查，来源暂未响应';
+        setRecheckMsg({ matchId, ok: outcome.ok, text });
+        return outcome;
+      } finally {
+        setRecheckingMatchId(null);
+      }
+    },
+    [recheckingMatchId, refreshData, refreshHealth]
+  );
 
   const triggerSync = useCallback(async () => {
     const now = Date.now();
@@ -1152,6 +1200,10 @@ export default function App() {
                     match={activeMatch}
                     prefs={prefs}
                     intel={activeIntel}
+                    matchChecks={dataHealth?.checks || {}}
+                    onRecheckMatch={recheckMatch}
+                    recheckingId={recheckingMatchId}
+                    recheckMsg={recheckMsg}
                     excludedIds={spoilerExcludedIds}
                     indexHint={INDEX_HINT}
                     isHeroMatch={!!tonight.hero && activeMatch?.id === tonight.hero.m.id}

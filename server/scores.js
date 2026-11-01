@@ -366,7 +366,7 @@ export function planPatches(merged, fixtures, conflicts = []) {
  * @param {string[]} [opts.months] 限定月份（仅对按月分块的源生效）
  * @param {string[]} [opts.sources] 指定启用的源，默认全部
  */
-export async function syncScores({ fixtures, rules, months, allMonths = false, sources, backfillDays = 0, log = console }) {
+export async function syncScores({ fixtures, rules, months, allMonths = false, sources, backfillDays = 0, onlyMatchIds = null, log = console }) {
   const cfg = rules.scores || {};
   const season = cfg.season || '2026-27';
   const leagues = Object.keys(cfg.leagues || {});
@@ -376,7 +376,29 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
   let list = null;
   let targets = null;
 
-  if (months && months.length && months !== 'all') {
+  if (Array.isArray(onlyMatchIds) && onlyMatchIds.length) {
+    /**
+     * 单场重查：只查这一场所属联赛的那几天（±1 天）。
+     *
+     * ±1 天的理由与 activeSyncTargets 对「已开球缺分」的处理一致：上游对同一场比赛
+     * 的日期口径可能差一天（实测 PSG–OL：本地 10-26、ESPN 记 10-27），
+     * 只查本地日期会永远查不到。匹配仍走 planPatches 的 4 天窗口，不会误配。
+     */
+    const set = new Set(onlyMatchIds);
+    targets = new Map();
+    for (const m of fixtures) {
+      if (!set.has(m.id)) continue;
+      const t = ts(m.t);
+      if (!Number.isFinite(t)) continue;
+      for (const offset of [-86400000, 0, 86400000]) {
+        const d = new Date(t + offset);
+        const ymd = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
+        if (!targets.has(m.l)) targets.set(m.l, new Set());
+        targets.get(m.l).add(ymd);
+      }
+    }
+    list = activeSyncMonths(fixtures);
+  } else if (months && months.length && months !== 'all') {
     list = Array.isArray(months) ? months : [months];
     // 指定月份模式：提取指定月份内涉及的比赛日期
     targets = new Map();

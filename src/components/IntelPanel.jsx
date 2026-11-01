@@ -13,6 +13,7 @@ import {
 } from '../core/narrative.js';
 import { evalOne } from '../core/owl.js';
 import { computeMatchStats } from '../core/stats.js';
+import { canRecheck, dataStateHint, dataStateLabel, dataStateTone, matchDataState } from '../core/data-health.js';
 import { Button, Chip, Crest, Hint, Meta, SectionLabel } from './atoms.jsx';
 import UpcomingFixtures from './UpcomingFixtures.jsx';
 import SleepNote, { sleepLedgerFor } from './SleepNote.jsx';
@@ -25,6 +26,7 @@ import {
   IconForm,
   IconH2H,
   IconIdentity,
+  IconInfo,
   IconTier
 } from './icons.jsx';
 
@@ -55,7 +57,11 @@ export default function IntelPanel({
   onOpenStandings,
   now,
   watchLater = false,
-  onWatchLater
+  onWatchLater,
+  matchChecks = {},
+  onRecheckMatch,
+  recheckingId = null,
+  recheckMsg = null
 }) {
   const [tab, setTab] = useState('decision');
 
@@ -139,6 +145,13 @@ export default function IntelPanel({
             <NarrativeSection narrative={narrative} stories={stories} ev={ev} hideHeadline={isHeroMatch} />
           </div>
           <div className="space-y-4 pt-4 lg:pl-6 lg:pt-0">
+            <DataNoteSection
+              match={match}
+              checkedAt={matchChecks?.[match.id] || 0}
+              onRecheck={onRecheckMatch}
+              rechecking={recheckingId === match.id}
+              result={recheckMsg && recheckMsg.matchId === match.id ? recheckMsg : null}
+            />
             <IdentitySection match={match} identity={identity} />
             <AttributionSection
               ev={ev}
@@ -478,6 +491,43 @@ function AttributionSection({ ev, tier, index, storyB, followedB, leagueB, tbd =
           </dd>
         </div>
       </dl>
+    </Block>
+  );
+}
+
+/**
+ * 数据说明（FR-06）
+ *
+ * 只回答一个问题：这场的数据为什么是这样 —— 是「还没同步」还是「上游就没有」。
+ * 这两句话对用户的含义完全不同：前者值得再等等，后者应该直接去官方平台。
+ * 因此这里不展示逐源冲突明细，也不对冲突做裁决（首版边界，见 PRD FR-06）。
+ */
+function DataNoteSection({ match, checkedAt = 0, onRecheck, rechecking = false, result = null }) {
+  const state = matchDataState(match, Date.now());
+  const tone = dataStateTone(state);
+  const toneCls = tone === 'warn' ? 'text-warn' : tone === 'danger' ? 'text-danger' : 'text-text-muted';
+  const showAction = canRecheck(state) && typeof onRecheck === 'function';
+  // 一切正常（已同步 / 还没开赛）时这块不出现：单场详情只在「说不清为什么没比分」时才需要解释
+  if (!showAction) return null;
+
+  return (
+    <Block
+      icon={<IconInfo />}
+      title="数据说明"
+      right={<Meta className={toneCls}>{dataStateLabel(state)}</Meta>}
+    >
+      <p className="text-xs leading-relaxed text-text-secondary">{dataStateHint(state, checkedAt)}</p>
+      {showAction && (
+        <div className="mt-2 flex items-center gap-2">
+          <Button variant="ghost" size="xs" onClick={() => onRecheck(match.id)} disabled={rechecking}>
+            {rechecking ? '重查中…' : '重查该场'}
+          </Button>
+          <Meta>只查这一场所在的联赛与日期</Meta>
+        </div>
+      )}
+      {result && (
+        <p className={`mt-1.5 text-2xs ${result.ok ? 'text-resource' : 'text-warn'}`}>{result.text}</p>
+      )}
     </Block>
   );
 }

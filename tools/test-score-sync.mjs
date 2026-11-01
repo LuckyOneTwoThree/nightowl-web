@@ -59,6 +59,16 @@ console.log('一、请求形态');
   await requestScoreSync({ fetchImpl: f, apply: false });
   ok('apply 可关闭（预览模式）', JSON.parse(f.calls[0].init.body).apply === false);
 }
+{
+  const f = fakeFetch({ body: {} });
+  await requestScoreSync({ fetchImpl: f, matchId: 'PL-9-ARS-MCI' });
+  ok('★ 单场重查把 matchId 带给服务端', JSON.parse(f.calls[0].init.body).matchId === 'PL-9-ARS-MCI');
+}
+{
+  const f = fakeFetch({ body: {} });
+  await requestScoreSync({ fetchImpl: f });
+  ok('整轮同步不携带 matchId', !('matchId' in JSON.parse(f.calls[0].init.body)));
+}
 
 console.log('');
 console.log('二、409 = 忙，不是失败');

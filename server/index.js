@@ -17,6 +17,8 @@ import { getLiveSourcesForMatch } from './scraper.js';
 import { loadFixtures, saveFixtures, freshness } from './data-store.js';
 import { resolveHighlights } from './highlights.js';
 import { resolveLive } from './live.js';
+import { recordChecks, checksFor } from './check-log.js';
+import { ts, MATCH_DURATION_MS } from '../src/core/engine.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -133,6 +135,30 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
   const proxy = createProxy(rules, log);
   let syncing = false;
   let lastSync = null;
+
+  /**
+   * 「这场已经查过了」的判定：过了完赛时间且仍无比分的场次，本轮一定被查过
+   * （同步按联赛+日期拉取，这些日期都进了查询目标）。
+   * 记录它，是为了让单场详情能说出「最后一次检查在几点」。
+   */
+  const pendingMatchIds = (list, now = Date.now()) => {
+    const ids = [];
+    for (const m of list || []) {
+      if (!m || m.st !== 'sched' || m.tbd) continue;
+      const kick = ts(m.t);
+      if (!Number.isFinite(kick)) continue;
+      if (now > kick + MATCH_DURATION_MS) ids.push(m.id);
+    }
+    return ids;
+  };
+  const recordPendingChecks = (list, now = Date.now()) => {
+    try {
+      const ids = pendingMatchIds(list, now);
+      if (ids.length) recordChecks(ids, now);
+    } catch (err) {
+      log.warn?.(`[checks] 记录失败（不影响同步）: ${err?.message || err}`);
+    }
+  };
 
   /**
    * 来源校验：浏览器跨域请求不认「只绑 127.0.0.1」这个限制，
@@ -270,6 +296,8 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
             syncing,
             freshness: fresh,
             lastSync,
+            // 单场「最后检查时间」：只回待录场次的，数量通常个位数到几十条
+            checks: checksFor(pendingMatchIds(fixtures)),
             note: fresh.writable
               ? '可写数据目录已就绪，支持在应用内同步比分'
               : '当前没有可写的数据目录（纯预览模式），同步结果不会保存'
@@ -391,8 +419,24 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
           const allMonths = body?.allMonths === true || searchParams.get('all') === '1';
           const months = body?.months || (searchParams.get('months') ? searchParams.get('months').split(',') : null);
           const backfillDays = Number(body?.backfillDays ?? searchParams.get('backfill') ?? 0) || 0;
+          const matchId =
+            typeof body?.matchId === 'string' ? body.matchId : searchParams.get('matchId') || '';
           const fixtures = await loadFixturesImpl();
-          const result = await syncScoresImpl({ fixtures, rules, months, allMonths, backfillDays, log });
+          if (matchId && !fixtures.some(m => m.id === matchId)) {
+            sendJSON(res, 404, { error: '比赛不存在', matchId });
+            return;
+          }
+          const result = await syncScoresImpl({
+            fixtures,
+            rules,
+            months,
+            allMonths,
+            backfillDays,
+            // 单场重查：只查该场所在联赛的那几天，不惊动整轮保鲜
+            onlyMatchIds: matchId ? [matchId] : null,
+            log
+          });
+          recordPendingChecks(fixtures);
 
           let written = null;
           let nextFixtures = null;
@@ -554,6 +598,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
     let written = { ok: true, changed: 0, note: '没有需要写入的补丁' };
     let applied = false;
     let nextFixtures = fixtures;
+    recordPendingChecks(fixtures);
     if (result.patches.size > 0) {
       const { fixtures: next, changed } = applyPatches(fixtures, result.patches);
       const issues = validateFixtures(next);

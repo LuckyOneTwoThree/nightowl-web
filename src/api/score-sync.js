@@ -24,20 +24,24 @@ export const SYNC_STATUS_BUSY = 'busy';
  * @param {object} [opts]
  * @param {Function} [opts.fetchImpl] 注入的 fetch（默认全局 fetch），离线测试用
  * @param {boolean} [opts.apply] 是否写盘（false = 预览）
+ * @param {string} [opts.matchId] 只重查这一场（服务端据此收窄到该联赛的那几天）
  * @returns {Promise<{ok:boolean, status:string, text:string, payload:object|null, httpStatus:number}>}
  *   status ∈ updated / partial_failure / up_to_date / not_needed / failed / busy
  */
-export async function requestScoreSync({ fetchImpl = globalThis.fetch, apply = true } = {}) {
+export async function requestScoreSync({ fetchImpl = globalThis.fetch, apply = true, matchId = '' } = {}) {
   if (typeof fetchImpl !== 'function') {
     return { ok: false, status: 'failed', text: '当前环境没有可用的网络请求能力', payload: null, httpStatus: 0 };
   }
 
   let res;
   try {
+    const body = { apply };
+    // 单场重查：只发 matchId，服务端负责把查询范围收窄
+    if (matchId) body.matchId = String(matchId);
     res = await fetchImpl('/api/scores/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apply })
+      body: JSON.stringify(body)
     });
   } catch (err) {
     // 网络层失败：与「服务端回了失败」区分开，但都归入 failed 语义
