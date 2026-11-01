@@ -126,6 +126,10 @@ export default function MatchRow({
                   <LiveDot />
                   <span className="font-num text-xs font-semibold tabular-nums text-live">{minute}′</span>
                 </span>
+              ) : m.tbd ? (
+                /* tbd 的开球时间是整轮占位值，据此算出的指数不是这场比赛的指数。
+                   行内已经有「待定」标记，这里不再给一个看起来确定的分数。 */
+                null
               ) : state === 'sched' && index != null ? (
                 <span
                   className="inline-flex items-baseline gap-1 font-num text-xs font-semibold tabular-nums"

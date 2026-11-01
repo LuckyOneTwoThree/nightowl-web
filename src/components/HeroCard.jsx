@@ -193,7 +193,11 @@ export default function HeroCard({
         <div className="flex shrink-0 flex-col items-end">
           <div className="flex items-baseline gap-1">
             <span className="text-2xs text-text-faint">指数</span>
-            <span className={`font-num text-2xl font-bold leading-none tracking-tight tabular-nums ${isWeak ? 'text-text-secondary' : 'text-accent'}`}>
+            <span
+              // 供「同屏去重」回归脚本定位决策卡上的唯一指数，不参与样式与布局
+              data-hero-index
+              className={`font-num text-2xl font-bold leading-none tracking-tight tabular-nums ${isWeak ? 'text-text-secondary' : 'text-accent'}`}
+            >
               {hero.index.toFixed(1)}
             </span>
             <Hint title="夜猫指数说明" content={indexHint} side="bottom" align="end" />

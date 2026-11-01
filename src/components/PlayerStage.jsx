@@ -282,7 +282,6 @@ function LineEmptyState({ loading, state, isNearKickoff, scrapeError, onRefresh 
 export default function PlayerStage({
   match,
   state,
-  intel,
   isOverlayOpen = false,
   spoilerFree = true,
   revealed = false,
@@ -886,7 +885,6 @@ export default function PlayerStage({
         <MatchCanvas
           match={match}
           state={state}
-          intel={intel}
           stageCountdown={stageCountdown}
           isNearKickoff={isNearKickoff}
           liveData={liveSnapshot}

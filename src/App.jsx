@@ -1070,7 +1070,6 @@ export default function App() {
               <PlayerStage
                 match={activeMatch}
                 state={activeMatch ? stateOf(activeMatch, clockTs) : 'sched'}
-                intel={activeIntel}
                 isOverlayOpen={overlayOpen}
                 spoilerFree={prefs.spoilerFree}
                 revealed={activeMatch ? revealed.has(activeMatch.id) : false}

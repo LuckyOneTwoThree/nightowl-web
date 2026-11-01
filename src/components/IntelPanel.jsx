@@ -110,13 +110,19 @@ export default function IntelPanel({
             关联赛程
           </PanelTab>
         </div>
-        <div className="flex shrink-0 items-baseline gap-1.5">
-          <Meta>夜猫指数</Meta>
-          <span className="font-num text-lg font-semibold tracking-tight tabular-nums text-text-primary">
-            {index.toFixed(1)}
-          </span>
-          <Hint content={indexHint} side="bottom" align="end" />
-        </div>
+        {/* 同屏去重：当前展示的就是左栏 Hero 那场时，27.2 已经在决策卡上以大号出现，
+            这里再来一个同值大字，一屏就有四个 27.2（Hero / 舞台胶囊 / 面板头 / 归因合计）。
+            指数仍然可查：本面板的「指数归因」表末行就是它，带完整分解。 */}
+        {!isHeroMatch && match.tbd && <Meta className="shrink-0">开球时间待定</Meta>}
+        {!isHeroMatch && !match.tbd && (
+          <div className="flex shrink-0 items-baseline gap-1.5">
+            <Meta>夜猫指数</Meta>
+            <span className="font-num text-lg font-semibold tracking-tight tabular-nums text-text-primary">
+              {index.toFixed(1)}
+            </span>
+            <Hint content={indexHint} side="bottom" align="end" />
+          </div>
+        )}
       </div>
 
       {tab === 'decision' ? (
@@ -128,6 +134,7 @@ export default function IntelPanel({
               prefs={prefs}
               watchLater={watchLater}
               onWatchLater={onWatchLater}
+              hidePersonal={isHeroMatch}
             />
             <NarrativeSection narrative={narrative} stories={stories} ev={ev} hideHeadline={isHeroMatch} />
           </div>
@@ -140,6 +147,7 @@ export default function IntelPanel({
               storyB={storyB}
               followedB={followedB}
               leagueB={leagueB}
+              tbd={!!match.tbd}
             />
           </div>
         </div>
@@ -228,24 +236,37 @@ function Block({ icon, title, right, children }) {
 /* 决策视图                                                            */
 /* ------------------------------------------------------------------ */
 
-function SleepCostSection({ tier, match, prefs, watchLater = false, onWatchLater }) {
+function SleepCostSection({ tier, match, prefs, watchLater = false, onWatchLater, hidePersonal = false }) {
   const [queueMsg, setQueueMsg] = useState(null);
   useEffect(() => setQueueMsg(null), [match?.id]);
   const style = TIER_MAP[tier.label] || TIER_MAP.S0;
   return (
     <Block icon={<IconTier />} title="睡眠代价" right={<Meta num>{match.tbd ? '时间待定' : `${hm(match.t)} 开球`}</Meta>}>
-      <div className="flex items-baseline gap-2.5">
-        <span className={`font-num text-2xl font-bold tabular-nums ${style.text}`}>{tier.cost}h</span>
-        <div className="flex flex-col">
-          <span className="text-sm font-medium text-text-primary">
-            <span className={`font-num ${style.text}`}>{tier.label}</span> {tier.zh}档
-          </span>
-          <Meta num className="mt-0.5">睡眠成本</Meta>
+      {match.tbd ? (
+        /* tbd 场次的时间是整轮占位值（多数联赛占位 02:00 / 04:00）。
+           用占位时间算档位 = 把「不确定」包装成「S4 极限档」，与产品信任基础相悖；
+           这里如实说「时间待定」，不显示档位与成本。 */
+        <div className="flex items-baseline gap-2.5">
+          <span className="font-num text-2xl font-bold tabular-nums text-text-faint">—</span>
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-text-primary">开球时间待定</span>
+            <Meta className="mt-0.5">时间确定后才计算熬夜代价</Meta>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex items-baseline gap-2.5">
+          <span className={`font-num text-2xl font-bold tabular-nums ${style.text}`}>{tier.cost}h</span>
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-text-primary">
+              <span className={`font-num ${style.text}`}>{tier.label}</span> {tier.zh}档
+            </span>
+            <Meta num className="mt-0.5">睡眠成本</Meta>
+          </div>
+        </div>
+      )}
 
       {/* 五档连续色阶：当前档实心，其余压暗。取代此前 emerald/teal/amber/orange/purple 五色并置 */}
-      <div className="mt-2.5 flex gap-1" role="img" aria-label={`睡眠档位 ${tier.label}`}>
+      <div className={`mt-2.5 flex gap-1 ${match.tbd ? 'opacity-40' : ''}`} role="img" aria-label={match.tbd ? '睡眠档位待定' : `睡眠档位 ${tier.label}`}>
         {TIERS.map(t => {
           const on = t.label === tier.label;
           const passed = TIERS.findIndex(x => x.label === t.label) < TIERS.findIndex(x => x.label === tier.label);
@@ -263,8 +284,12 @@ function SleepCostSection({ tier, match, prefs, watchLater = false, onWatchLater
         <Meta>S4 极限</Meta>
       </div>
 
-      <p className="mt-2 text-xs leading-relaxed text-text-secondary">{tierAdviceOf(match)}</p>
-      {sleepLedgerFor(match, prefs) && (
+      <p className="mt-2 text-xs leading-relaxed text-text-secondary">
+        {match.tbd ? '联赛尚未公布具体开球时间；时间确定后档位与成本会自动更新。' : tierAdviceOf(match)}
+      </p>
+      {/* 同一场时 Hero 卡已经写了「07:30 起床 · 看完约剩 6h · 低于 7h 底线」，
+          面板再放一句逐字相同的话只是噪声。换成非 Hero 场次（用户在看别的比赛）时才需要。 */}
+      {!hidePersonal && !match.tbd && sleepLedgerFor(match, prefs) && (
         <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-line-hairline bg-surface-raised/40 px-2.5 py-1.5">
           <span className="text-2xs text-text-muted">个人睡眠</span>
           <SleepNote match={match} prefs={prefs} size="md" />
@@ -406,14 +431,16 @@ function IdentitySection({ match, identity }) {
   );
 }
 
-function AttributionSection({ ev, tier, index, storyB, followedB, leagueB }) {
+function AttributionSection({ ev, tier, index, storyB, followedB, leagueB, tbd = false }) {
   const tierStyle = TIER_MAP[tier.label] || TIER_MAP.S0;
   const rows = [
     ['看点星级', `${ev.star} 星`, (ev.star / 3) * 100, 'bg-text-secondary'],
     ['故事线加成', storyB, Math.min(100, (storyB / 16) * 100), 'bg-text-secondary'],
     ['主队加成', followedB, Math.min(100, (followedB / 16) * 100), 'bg-text-secondary'],
     ['联赛加成', leagueB, Math.min(100, (leagueB / 16) * 100), 'bg-text-secondary'],
-    ['睡眠代价', `${tier.cost}h (${tier.label} ${tier.zh})`, Math.min(100, (tier.cost / 4.5) * 100), tierStyle.solid],
+    tbd
+      ? ['睡眠代价', '时间待定', 0, 'bg-line-control']
+      : ['睡眠代价', `${tier.cost}h (${tier.label} ${tier.zh})`, Math.min(100, (tier.cost / 4.5) * 100), tierStyle.solid],
     ['观看占用', `${WATCH_COST}h`, Math.min(100, (WATCH_COST / 2) * 100), 'bg-line-control']
   ];
   return (
@@ -447,7 +474,7 @@ function AttributionSection({ ev, tier, index, storyB, followedB, leagueB }) {
           {/* 与面板头部的「夜猫指数」是同一个数：金色只给头部那一个，
               这里的合计行留在表内闭合分解，不再重复强调 */}
           <dd className="font-num text-xs font-semibold tabular-nums text-text-primary">
-            {index.toFixed(1)}
+            {tbd ? '—' : index.toFixed(1)}
           </dd>
         </div>
       </dl>

@@ -3,7 +3,7 @@ import { hm, zhDate, weekdayOf, datePart } from '../core/format.js';
 import { MATCH_DURATION_MS, ts } from '../core/engine.js';
 import { teamName, teamColor, leagueName } from '../data/index.js';
 import { eventSummary } from '../core/live-events.js';
-import { Button, Chip, Crest, LiveDot, Meta, SleepBadge, Stars } from './atoms.jsx';
+import { Button, Chip, Crest, LiveDot, Meta } from './atoms.jsx';
 import { IconPlay, IconReset, IconSignal } from './icons.jsx';
 
 /**
@@ -18,7 +18,6 @@ import { IconPlay, IconReset, IconSignal } from './icons.jsx';
 export default function MatchCanvas({
   match,
   state,
-  intel = null,
   stageCountdown,
   isNearKickoff = false,
   liveData,
@@ -207,7 +206,7 @@ export default function MatchCanvas({
                   ))}
                 </div>
                 <span className="mt-1.5 font-num text-xs text-text-muted">
-                  距开球 · {hm(match.t)} 开球
+                  距开球
                 </span>
               </>
             ) : (
@@ -215,21 +214,9 @@ export default function MatchCanvas({
                 <span className="font-num text-display font-bold leading-none tracking-tight text-text-primary">
                   {hm(match.t)}
                 </span>
-                {intel && (
-                  <span className="mt-2 inline-flex flex-wrap items-center justify-center gap-1.5 rounded-full border border-line-hairline bg-surface-panel/80 px-2.5 py-1 text-2xs">
-                    <span className="font-num font-semibold tabular-nums text-accent">
-                      指数 {intel.index.toFixed(1)}
-                    </span>
-                    <span className="text-text-faint" aria-hidden="true">·</span>
-                    <SleepBadge match={match} />
-                    {intel.ev?.star > 0 && (
-                      <>
-                        <span className="text-text-faint" aria-hidden="true">·</span>
-                        <Stars star={intel.ev.star} />
-                      </>
-                    )}
-                  </span>
-                )}
+                {/* 同屏去重：指数、睡眠档位、星级是「决定层」结论，左栏 Hero 卡已完整给出。
+                    舞台只负责「这场什么时候踢、现在能不能看」，重复一遍大号数字只会让
+                    首屏出现四个 27.2 —— 需要解释指数时，右栏情报面板的分解表才是该去的地方。 */}
                 <span
                   aria-live="polite"
                   className="mt-1.5 font-num text-xs tabular-nums text-text-muted"
