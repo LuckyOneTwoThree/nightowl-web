@@ -44,6 +44,7 @@ import SplashScreen from './components/SplashScreen.jsx';
 import UpdateModal from './components/UpdateModal.jsx';
 import StopLossBanner from './components/StopLossBanner.jsx';
 import MorningDigest from './components/MorningDigest.jsx';
+import ScheduleChanges from './components/ScheduleChanges.jsx';
 import {
   getMorningDigest,
   morningDigestNight
@@ -509,6 +510,7 @@ export default function App() {
       }
       // checks：待录场次的「最后检查时间」，供单场数据说明使用
       setDataHealth({ state, label, checks: j?.checks || {} });
+      setScheduleChanges(j?.changes?.items?.length ? j.changes : null);
       return { syncing: !!j?.syncing };
     } catch {
       setDataHealth({ state: 'error', label: '本地服务未连接', checks: {} });
@@ -541,6 +543,30 @@ export default function App() {
    */
   const [recheckingMatchId, setRecheckingMatchId] = useState(null);
   const [recheckMsg, setRecheckMsg] = useState(null);
+
+  /**
+   * 计划有变（FR-05）：由 /api/scores/status 带回，关闭状态按「本轮同步时间」记在
+   * sessionStorage —— 同一轮变动只提示一次，下一轮新的变动会重新出现。
+   */
+  const [scheduleChanges, setScheduleChanges] = useState(null);
+  const [dismissedChangesAt, setDismissedChangesAt] = useState(() => {
+    try {
+      const v = Number(sessionStorage.getItem('nightowl:changes_dismissed'));
+      return Number.isFinite(v) ? v : 0;
+    } catch {
+      return 0;
+    }
+  });
+  const dismissScheduleChanges = useCallback(() => {
+    const at = scheduleChanges?.at || 0;
+    setDismissedChangesAt(at);
+    try {
+      sessionStorage.setItem('nightowl:changes_dismissed', String(at));
+    } catch {
+      /* 忽略 */
+    }
+  }, [scheduleChanges]);
+
   const recheckMatch = useCallback(
     async matchId => {
       if (!matchId || recheckingMatchId) return null;
@@ -1104,6 +1130,16 @@ export default function App() {
         <main className="flex min-h-0 flex-1 overflow-hidden">
           {/* 左栏：决策与列表 */}
           <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] 2xl:w-[390px] shrink-0 flex-col overflow-hidden border-r border-line-hairline bg-surface-panel p-4">
+          {/* 计划有变（FR-05）：一次同步检测到的改期/延期，关闭后本轮不再出现 */}
+          {scheduleChanges && dismissedChangesAt !== scheduleChanges.at && (
+            <div className="mb-2 shrink-0">
+              <ScheduleChanges
+                changes={scheduleChanges}
+                onDismiss={dismissScheduleChanges}
+                onSelect={select}
+              />
+            </div>
+          )}
           <div key={view} className="animate-view-enter flex min-h-0 flex-1 flex-col">
             {view === 'tonight' && (
               <TonightView

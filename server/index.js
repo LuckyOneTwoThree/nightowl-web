@@ -18,6 +18,7 @@ import { loadFixtures, saveFixtures, freshness } from './data-store.js';
 import { resolveHighlights } from './highlights.js';
 import { resolveLive } from './live.js';
 import { recordChecks, checksFor } from './check-log.js';
+import { diffFixtures } from './schedule-diff.js';
 import { ts, MATCH_DURATION_MS } from '../src/core/engine.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -135,6 +136,23 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
   const proxy = createProxy(rules, log);
   let syncing = false;
   let lastSync = null;
+  /**
+   * 本轮同步检测到的赛程变动（PRD FR-05）
+   *
+   * 只在服务端算得出：只有这里同时握有「同步前」与「同步后」两份 fixtures。
+   * 渲染层读取它并提示「计划有变」，关掉提示由渲染层自己记状态，服务端不做已读。
+   */
+  let lastChanges = null;
+  const recordChanges = (before, after, label) => {
+    try {
+      const items = diffFixtures(before, after);
+      if (!items.length) return;
+      lastChanges = { at: Date.now(), label, items: items.slice(0, 20), count: items.length };
+      log.log?.(`[changes] ${label}检测到 ${items.length} 场赛程变动`);
+    } catch (err) {
+      log.warn?.(`[changes] 差异计算失败（不影响同步）: ${err?.message || err}`);
+    }
+  };
 
   /**
    * 「这场已经查过了」的判定：过了完赛时间且仍无比分的场次，本轮一定被查过
@@ -298,6 +316,8 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
             lastSync,
             // 单场「最后检查时间」：只回待录场次的，数量通常个位数到几十条
             checks: checksFor(pendingMatchIds(fixtures)),
+            // 本轮同步检测到的赛程变动（开球时间 ≥5 分钟变化 / 延期 / 恢复）
+            changes: lastChanges,
             note: fresh.writable
               ? '可写数据目录已就绪，支持在应用内同步比分'
               : '当前没有可写的数据目录（纯预览模式），同步结果不会保存'
@@ -449,6 +469,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
             } else {
               const saved = saveFixturesImpl(next) || { ok: false, reason: '写盘结果缺失' };
               written = { ...saved, changed };
+              if (saved.ok === true) recordChanges(fixtures, next, '手动同步');
               // 只有真正写盘成功才把新数据回传前端。
               // 否则前端会拿未落盘的比分替换内存数据 —— 界面显示已更新，重启后却回滚。
               if (saved.ok === true) nextFixtures = next;
@@ -606,6 +627,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
         written = { ok: false, reason: '校验未通过，已放弃写盘', issues: issues.slice(0, 5) };
       } else {
         const saved = saveFixturesImpl(next) || { ok: false, reason: '写盘结果缺失' };
+        if (saved.ok === true) recordChanges(fixtures, next, label);
         // ⚠️ 不能不看 saved.ok 就报「完成」：数据目录不可写时 saveFixtures 返回
         //    {ok:false, reason}，此时日志在撒谎、lastSync.applied 也错报为 true。
         written = { ...saved, changed };
