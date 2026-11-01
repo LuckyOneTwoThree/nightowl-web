@@ -43,7 +43,9 @@ export default function SettingsDrawer({
   onRemoveWatchLater,
   onMarkWatchLaterWatched,
   onOpenMorningDigest,
-  weekIds = null
+  weekIds = null,
+  desktopSettings = null,
+  onDesktopSettingsChange
 }) {
   const leagueCount = prefs.followedLeagues.length;
   const bonusActive = leagueCount > 0 && leagueCount < 6;
@@ -456,6 +458,37 @@ export default function SettingsDrawer({
               />
             </div>
           </Fieldset>
+
+          {/* 桌面外壳（FR-08）：只在 Electron 里出现，Web 预览不显示这两项 */}
+          {desktopSettings && (
+            <Fieldset
+              title="桌面"
+              hint="仅桌面端。托盘常驻后，即使窗口被关到托盘，已授权的提醒仍会发出。"
+            >
+              <div className="space-y-1.5">
+                <SwitchRow
+                  label="关闭窗口时最小化到托盘"
+                  hint="默认关闭。开启后点 × 只是隐藏窗口，可从托盘图标唤回；只有托盘菜单的「退出」才真正结束进程。"
+                  on={desktopSettings.closeToTray === true}
+                  onChange={v => onDesktopSettingsChange?.({ closeToTray: v })}
+                />
+                <SwitchRow
+                  label="开机自启"
+                  hint="默认关闭。开启后登录时静默启动并常驻托盘，不自动弹出主窗口。"
+                  on={desktopSettings.launchAtLogin === true}
+                  onChange={v => onDesktopSettingsChange?.({ launchAtLogin: v })}
+                />
+                {!desktopSettings.closeToTray && (
+                  <Meta className="text-text-faint">当前关闭窗口 = 直接退出，提醒链路会中断。</Meta>
+                )}
+                {typeof Notification !== 'undefined' && Notification.permission === 'denied' && (
+                  <Meta className="text-warn">
+                    系统通知已被拒绝：请到「系统设置 → 通知」允许夜猫看台，否则提醒不会出现。
+                  </Meta>
+                )}
+              </div>
+            </Fieldset>
+          )}
 
           {/* 日历导出（FR-09）：不常开应用也能被系统日历提醒；不引入账号与云端订阅 */}
           <Fieldset

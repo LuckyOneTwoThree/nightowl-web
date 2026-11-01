@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getFixtures, setFixtures, storylines, teamName } from './data/index.js';
 import { countdown as engineCountdown, ts, MATCH_DURATION_MS, sleepTier } from './core/engine.js';
-import { bjClock, humanCountdownShort } from './core/format.js';
+import { bjClock, hm, humanCountdownShort } from './core/format.js';
 import { STANDINGS_LEAGUES } from './core/standings.js';
 import { loadPrefs, savePrefs } from './core/prefs.js';
 import { addToQueue, markQueueWatched, normalizeQueue, pendingQueue, removeFromQueue } from './core/queue.js';
@@ -160,6 +160,43 @@ export default function App() {
     stopLossStatesRef.current = next;
     setStopLossStates(next);
     saveStopLossStates(next);
+  }, []);
+
+  // ---- 桌面外壳设置（关闭到托盘 / 开机自启）----
+  // 存在主进程：这两项要在窗口创建前生效，不能只放 localStorage
+  const [desktopSettings, setDesktopSettings] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    window.desktop
+      ?.getDesktopSettings?.()
+      .then(s => {
+        if (alive && s) setDesktopSettings(s);
+      })
+      .catch(() => {
+        /* 主进程不可用：按非桌面环境处理（设置区不显示这两项） */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const updateDesktopSettings = useCallback(async patch => {
+    const api = window.desktop;
+    if (!api?.setDesktopSettings) return;
+    try {
+      const next = await api.setDesktopSettings(patch);
+      if (next) setDesktopSettings(next);
+    } catch {
+      /* 写入失败时保持旧值，界面不会假装成功 */
+    }
+  }, []);
+
+  // 托盘菜单的导航动作（今晚之选 / 本周规划）
+  useEffect(() => {
+    const unsub = window.desktop?.onNavigate?.(payload => {
+      if (payload?.view && VALID_VIEWS.includes(payload.view)) setView(payload.view);
+    });
+    return unsub;
   }, []);
 
   // ---- 视图与选中 ----
@@ -595,6 +632,27 @@ export default function App() {
   // 最近值得补看：只扫描最近 96h（REPLAY_WINDOW_MS），排除今晚已在赛程里的场次；不新增数据源
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const replayPicks = useMemo(() => computeReplayPicks(Date.now(), prefs, 3), [minuteKey, prefs, dataRev]);
+
+  /**
+   * 托盘倒计时（分钟粒度）
+   *
+   * 只在桌面端生效；文本由渲染层算好推给主进程 —— 算法与数据都在这一侧，
+   * 主进程不重复一份赛程逻辑（否则两条口径迟早打架）。
+   * 跟随 30 秒时钟刷新，与顶栏时钟同一时间基准。
+   */
+  useEffect(() => {
+    const api = window.desktop;
+    if (!api?.setTrayTitle) return;
+    const m = tonight?.hero?.m || tonight?.focal?.m || null;
+    if (!m) {
+      api.setTrayTitle('今晚无推荐');
+      return;
+    }
+    const cd = engineCountdown(ts(m.t), clockTs);
+    api.setTrayTitle(
+      cd.over ? `${teamName(m.h)} vs ${teamName(m.a)} · 已开球` : `${hm(m.t)} · 还有 ${humanCountdownShort(cd)}`
+    );
+  }, [tonight, clockTs]);
 
   // 赛前 15 分钟提醒：关注球队 + 今晚之选；同一场只提醒一次
   const notifiedPrematchRef = useRef(new Set());
@@ -1158,6 +1216,8 @@ export default function App() {
           onMarkWatchLaterWatched={markWatchLaterWatched}
           onOpenMorningDigest={() => setMorningDigestOpen(true)}
           weekIds={weekBestIds}
+          desktopSettings={desktopSettings}
+          onDesktopSettingsChange={updateDesktopSettings}
           onOpenUpdateModal={() => {
             openUpdateModal();
             if (updateState.status === 'idle') {

@@ -19,6 +19,20 @@ try {
     openExternal: url => ipcRenderer.send('win:open-external', url),
     /** 系统通知：赛前提醒 / 进球红牌 / 终场；主进程负责前台抑制与点击聚焦 */
     notify: payload => ipcRenderer.send('app:notify', payload),
+    /**
+     * 桌面外壳设置：关闭窗口是否最小化到托盘、是否开机自启。
+     * 存在主进程（userData/desktop-settings.json），因为这两项要在窗口创建前生效。
+     */
+    getDesktopSettings: () => ipcRenderer.invoke('desktop:settings:get'),
+    setDesktopSettings: patch => ipcRenderer.invoke('desktop:settings:set', patch),
+    /** 托盘倒计时文本（分钟粒度）：算法在渲染层，主进程不重复一份赛程逻辑 */
+    setTrayTitle: text => ipcRenderer.send('desktop:tray:title', text),
+    /** 订阅托盘菜单的导航动作（今晚之选 / 本周规划），返回取消订阅函数 */
+    onNavigate: cb => {
+      const handler = (_e, payload) => cb(payload);
+      ipcRenderer.on('app:navigate', handler);
+      return () => ipcRenderer.removeListener('app:navigate', handler);
+    },
     /** 订阅通知点击要聚焦的比赛，返回取消订阅函数 */
     onNotificationFocus: cb => {
       const handler = (_e, payload) => cb(payload);

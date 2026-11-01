@@ -15,8 +15,9 @@
  *   注意 .cjs 后缀是必须的 —— 否则会被 "type":"module" 当成 ESM。
  */
 
-const { app, BrowserWindow, dialog, ipcMain, shell, Notification } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell, Notification, Tray, Menu, nativeImage } = require('electron');
 const path = require('node:path');
+const fs = require('node:fs');
 
 const PORT_CANDIDATES = [3100, 3101, 3102, 3103, 3104];
 const HOST = '127.0.0.1';
@@ -24,6 +25,99 @@ const HOST = '127.0.0.1';
 let httpServer = null;
 let appPort = PORT_CANDIDATES[0];
 let mainWindow = null;
+let tray = null;
+/** 真正退出（托盘菜单「退出」/ 系统关机）时为 true，用于放行 close 事件 */
+let isQuitting = false;
+
+/**
+ * 桌面外壳自身的设置（与渲染层 localStorage 里的偏好分开）
+ *
+ * 为什么要单独存一份：
+ *   这些开关必须在**窗口还没创建、渲染层还没加载**时就能生效 ——
+ *   开机自启要不要静默启动、点关闭按钮要不要只是隐藏，都是主进程在窗口生命周期
+ *   事件里当场判断的，等不到一次 IPC 往返。
+ *
+ * 落点：userData/desktop-settings.json（与保鲜数据同目录，卸载时一并清理）
+ */
+const DESKTOP_DEFAULTS = { closeToTray: false, launchAtLogin: false };
+let desktopSettings = { ...DESKTOP_DEFAULTS };
+
+function desktopSettingsPath() {
+  try {
+    return path.join(app.getPath('userData'), 'desktop-settings.json');
+  } catch {
+    return null;
+  }
+}
+
+function loadDesktopSettings() {
+  const file = desktopSettingsPath();
+  if (!file) return;
+  try {
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    desktopSettings = {
+      closeToTray: raw?.closeToTray === true,
+      launchAtLogin: raw?.launchAtLogin === true
+    };
+  } catch {
+    // 首次运行没有文件、或文件损坏 → 用默认值，不阻断启动
+    desktopSettings = { ...DESKTOP_DEFAULTS };
+  }
+}
+
+function saveDesktopSettings(next) {
+  desktopSettings = { ...desktopSettings, ...next };
+  const file = desktopSettingsPath();
+  if (!file) return desktopSettings;
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    // 原子写：写一半崩溃不会留下半截 JSON
+    const tmp = `${file}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(desktopSettings, null, 2), 'utf8');
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    console.warn('[main] 桌面设置写入失败:', err?.message || err);
+  }
+  return desktopSettings;
+}
+
+/**
+ * 开机自启
+ *
+ * macOS 用 openAsHidden（登录时不弹窗口）；Windows 用 --hidden 参数，
+ * 由启动参数决定是否显示主窗口 —— 两个平台没有统一 API，必须分开处理。
+ * 失败不回滚设置：系统可能拒绝（沙箱 / 企业策略），下次打开设置页会看到真实状态。
+ */
+function applyLaunchAtLogin(enabled) {
+  try {
+    if (process.platform === 'darwin') {
+      app.setLoginItemSettings({ openAtLogin: !!enabled, openAsHidden: true });
+    } else if (process.platform === 'win32') {
+      app.setLoginItemSettings({ openAtLogin: !!enabled, args: ['--hidden'] });
+    }
+  } catch (err) {
+    console.warn('[main] 开机自启设置失败:', err?.message || err);
+  }
+}
+
+/** 本次启动是否应该静默（自启时不抢焦点，只常驻托盘） */
+function isHiddenStart() {
+  if (process.argv.includes('--hidden')) return true;
+  try {
+    if (process.platform === 'darwin' && app.getLoginItemSettings?.().wasOpenedAtLogin) return true;
+  } catch {
+    /* 忽略：拿不到就按正常启动 */
+  }
+  return false;
+}
+
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
 
 /**
  * 启动本地服务。端口被占（多半是已有实例）时 reject，由调用方提示
@@ -71,7 +165,7 @@ async function startAppServer() {
   throw new Error(`以下端口全部无法监听：${errors.join('；')}`);
 }
 
-function createWindow() {
+function createWindow({ hidden = false } = {}) {
   const isMac = process.platform === 'darwin';
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -79,6 +173,8 @@ function createWindow() {
     minWidth: 1120,
     minHeight: 700,
     backgroundColor: '#0b0e13', // 与 UI 底色一致，避免启动白闪
+    // 先不显示，loadURL 完成后再 show：首帧即完整界面，不会看到白底空窗
+    show: false,
     // 无边框窗口：外圈系统边框与标题栏去掉，由渲染层自绘（VS Code / Discord 同款做法）
     // macOS 用 hiddenInset 保留交通灯（红黄绿），Windows/Linux 完全自绘
     ...(isMac ? { titleBarStyle: 'hiddenInset' } : { frame: false }),
@@ -86,7 +182,7 @@ function createWindow() {
     icon: path.join(__dirname, '../build/icon.png'),
     webPreferences: {
       // 渲染层是纯 Web（React + ArtPlayer），不需要任何 Node 能力
-      preload: path.join(__dirname, 'preload.cjs'), // 只暴露三个窗口动作
+      preload: path.join(__dirname, 'preload.cjs'), // 只暴露固定的窗口/托盘/通知动作
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
@@ -94,6 +190,28 @@ function createWindow() {
   });
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+
+  /**
+   * 关闭按钮的两种语义
+   *
+   *   closeToTray = false（默认）：直接关窗 → window-all-closed → 释放端口并退出
+   *   closeToTray = true        ：只隐藏窗口，托盘常驻，已授权的通知继续发出
+   *
+   * 真正退出（托盘菜单 / before-quit）时 isQuitting 为 true，必须放行，
+   * 否则「退出」按钮也会变成「隐藏」，用户只能去活动监视器杀进程。
+   */
+  mainWindow.on('close', event => {
+    if (isQuitting) return;
+    if (desktopSettings.closeToTray && tray) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
+
+  // 隐藏态启动（自启）时不抢焦点，等用户从托盘唤出
+  mainWindow.once('ready-to-show', () => {
+    if (!hidden) showMainWindow();
   });
   // 最大化状态变化 → 通知渲染层切换按钮图标
   const pushMaximized = () => {
@@ -170,6 +288,95 @@ function createWindow() {
 
   return mainWindow;
 }
+
+/* ---------------- 托盘 ---------------- */
+
+/**
+ * 托盘图标
+ *
+ * 复用 build/icon.png（打包产物里已包含）。macOS 菜单栏按 18px 渲染，
+ * 其余平台给 16–18px 也就够了；取不到图标时**不阻断启动**，只是没有托盘。
+ */
+function trayImage() {
+  try {
+    const iconPath = path.join(__dirname, '../build/icon.png');
+    const image = nativeImage.createFromPath(iconPath);
+    if (image.isEmpty()) return null;
+    return image.resize({ width: 18, height: 18 });
+  } catch {
+    return null;
+  }
+}
+
+function createTray() {
+  if (tray) return tray;
+  const image = trayImage();
+  if (!image) {
+    console.warn('[main] 托盘图标不可用，跳过托盘创建');
+    return null;
+  }
+  try {
+    tray = new Tray(image);
+    tray.setToolTip('夜猫看台');
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: '打开应用', click: showMainWindow },
+        { label: '今晚之选', click: () => navigateTo('tonight') },
+        { label: '本周规划', click: () => navigateTo('week') },
+        { type: 'separator' },
+        {
+          label: '退出夜猫看台',
+          click: () => {
+            isQuitting = true;
+            app.quit();
+          }
+        }
+      ])
+    );
+    // Windows / Linux 习惯：单击图标直接打开；macOS 单击弹菜单，保持系统一致
+    if (process.platform !== 'darwin') tray.on('click', showMainWindow);
+    return tray;
+  } catch (err) {
+    console.warn('[main] 托盘创建失败（系统限制），退回普通窗口:', err?.message || err);
+    tray = null;
+    return null;
+  }
+}
+
+/** 托盘菜单里的导航：先亮窗口，再让渲染层切视图 */
+function navigateTo(view) {
+  showMainWindow();
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('app:navigate', { view });
+}
+
+/**
+ * 托盘上的倒计时文本（分钟粒度）
+ *
+ * 由渲染层算好传上来 —— 算法与数据都在渲染层，主进程不重复一份赛程逻辑。
+ * macOS 菜单栏可以带一行文字，Windows 只有 tooltip，两个都设上。
+ */
+function setTrayTitle(text) {
+  if (!tray) return;
+  const t = String(text || '').trim().slice(0, 48);
+  try {
+    tray.setToolTip(t || '夜猫看台');
+    if (process.platform === 'darwin') tray.setTitle(t ? ` ${t}` : '');
+  } catch {
+    /* 托盘已被销毁：忽略 */
+  }
+}
+
+ipcMain.handle('desktop:settings:get', () => ({ ...desktopSettings, platform: process.platform }));
+ipcMain.handle('desktop:settings:set', (_event, patch) => {
+  const next = {};
+  if (typeof patch?.closeToTray === 'boolean') next.closeToTray = patch.closeToTray;
+  if (typeof patch?.launchAtLogin === 'boolean') next.launchAtLogin = patch.launchAtLogin;
+  const saved = saveDesktopSettings(next);
+  if (typeof next.launchAtLogin === 'boolean') applyLaunchAtLogin(next.launchAtLogin);
+  return { ...saved, platform: process.platform };
+});
+ipcMain.on('desktop:tray:title', (_event, text) => setTrayTitle(text));
 
 /* 自绘标题栏的窗口动作（渲染层 → 主进程） */
 ipcMain.on('win:minimize', () => mainWindow?.minimize());
@@ -421,11 +628,17 @@ if (!gotLock) {
   // 已有实例在跑：直接退出（second-instance 事件在既有实例里聚焦窗口）
   app.quit();
 } else {
+  // 桌面设置必须在窗口创建前读出来：关闭行为与自启都在生命周期事件里当场判断
+  loadDesktopSettings();
+
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
+    // 从托盘隐藏后再次启动，也要把窗口叫回来
+    showMainWindow();
+  });
+
+  app.on('before-quit', () => {
+    // 放行 close 事件：否则 closeToTray 会把「退出」变成「隐藏」
+    isQuitting = true;
   });
 
   app.whenReady().then(async () => {
@@ -444,9 +657,15 @@ if (!gotLock) {
       return;
     }
 
-    const win = createWindow();
+    const hiddenStart = isHiddenStart();
+    const win = createWindow({ hidden: hiddenStart });
     setupAutoUpdater(win);
     await win.loadURL(`http://${HOST}:${appPort}/`);
+
+    // 托盘常驻：即使窗口隐藏，通知与菜单仍然可达（FR-08 的核心）
+    createTray();
+    // 隐藏启动时不要抢焦点，直接把窗口留在后台
+    if (!hiddenStart) win.show();
 
     // 启动 2 秒后静默检测一次更新（首屏渲染完毕即检，告别长时间盲区）
     setTimeout(() => {
@@ -467,6 +686,9 @@ if (!gotLock) {
   });
 
   app.on('window-all-closed', () => {
+    // 托盘常驻模式下窗口只是被隐藏，走到这里说明用户真的关掉了窗口
+    // （closeToTray 关闭，或托盘不可用时的降级），按原逻辑退出并释放端口。
+    if (desktopSettings.closeToTray && tray && !isQuitting) return;
     if (httpServer) {
       try {
         httpServer.close();
@@ -474,6 +696,14 @@ if (!gotLock) {
         /* 已关闭则忽略 */
       }
       httpServer = null;
+    }
+    if (tray) {
+      try {
+        tray.destroy();
+      } catch {
+        /* 忽略 */
+      }
+      tray = null;
     }
     app.quit();
   });
