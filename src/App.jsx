@@ -1068,6 +1068,7 @@ export default function App() {
                 onReveal={reveal}
                 countdownText={countdownText}
                 replayPicks={replayPicks}
+                onWatchLater={addWatchLater}
               />
             )}
 
