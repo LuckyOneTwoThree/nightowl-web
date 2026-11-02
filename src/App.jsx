@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getFixtures, setFixtures, storylines, teamName } from './data/index.js';
 import { countdown as engineCountdown, ts, MATCH_DURATION_MS, sleepTier } from './core/engine.js';
-import { bjClock, hm, humanCountdownShort } from './core/format.js';
+import { hm, humanCountdownShort } from './core/format.js';
 import { STANDINGS_LEAGUES } from './core/standings.js';
 import { loadPrefs, savePrefs } from './core/prefs.js';
 import { addToQueue, markQueueWatched, normalizeQueue, pendingQueue, removeFromQueue } from './core/queue.js';
@@ -56,6 +56,7 @@ import {
 import { IconClose } from './components/icons.jsx';
 import { compareSemver } from './core/semver.js';
 import { requestScoreSync, SYNC_STATUS_BUSY } from './api/score-sync.js';
+import { useDataHealth } from './hooks/useDataHealth.js';
 import { VIEW_COMMANDS, ACTION_COMMANDS, buildMatchCommands } from './core/command-palette.js';
 
 /**
@@ -423,9 +424,7 @@ export default function App() {
   // 启动时（以及点「立即同步」后）从 /api/fixtures 拉最新数据替换掉它，
   // dataRev 变化会让下面所有派生数据重算 —— 否则「刚结束的比赛」会一直显示待录比分。
   const [dataRev, setDataRev] = useState(0);
-  const [dataHealth, setDataHealth] = useState(null);
   const lastSyncTriggerRef = useRef(0);
-  const lastHealthAtRef = useRef(null);
 
   // 竞态保护：refreshData 有 4 个并发来源（挂载 effect / focus 监听 /
   // triggerSync 的 409 延迟分支 / 设置抽屉按钮）。旧实现无任何保护，
@@ -463,148 +462,17 @@ export default function App() {
     }
   }, []);
 
-  /** 低频数据状态：发现后台写入新赛果时只重载 fixtures；失败/陈旧则显示提示 */
-  const refreshHealth = useCallback(async () => {
-    try {
-      const r = await fetch('/api/scores/status');
-      if (!r.ok) throw new Error(String(r.status));
-      const j = await r.json();
-      const at = j?.lastSync?.at || null;
-      if (at && at !== lastHealthAtRef.current) {
-        lastHealthAtRef.current = at;
-        // 无补丁的自检只更新时间，不重载整份 fixtures。
-        if (Number(j?.lastSync?.patches || 0) > 0) refreshData();
-      }
-      const errors = Number(j?.lastSync?.errors || 0);
-      const writtenOk = j?.lastSync?.written?.ok !== false;
-      const pending = Number(j?.freshness?.pendingCount || 0);
-      const stalePending = Number(j?.freshness?.stalePendingCount || 0);
-      const recentPending = Math.max(0, pending - stalePending);
-      const stale = Number(j?.freshness?.staleHours || 0);
-      let state = 'ok';
-      let label = '数据未检查';
-      if (j?.syncing) {
-        // 后台保鲜会持续几十秒（openfootball 兜底较慢）；期间明确告知用户，
-        // 完成后下一次短轮询会检测到 lastSync 变化并热更新 fixtures。
-        state = 'ok';
-        label = '正在更新比分…';
-      } else if (j?.lastSync && (errors > 0 || !writtenOk)) {
-        state = 'error';
-        label = errors > 0 ? `同步失败 · ${errors} 个来源` : '同步写盘失败';
-      } else if (recentPending > 0) {
-        state = 'warn';
-        label = `待录 ${recentPending} 场`;
-      } else if (stalePending > 0) {
-        // 超过 24h 仍无比分：上游没有该场或改期未被识别。
-        // 继续显示「待录」会让用户以为应用一直在等一个永远不会来的结果。
-        state = 'warn';
-        label = `上游缺分 ${stalePending} 场`;
-      } else if (stale >= 24) {
-        state = 'warn';
-        label = `数据落后 ${Math.floor(stale / 24)} 天`;
-      } else if (at) {
-        const t = Date.parse(at);
-        label = `数据 ${Number.isFinite(t) ? bjClock(t, false) : '已更新'}`;
-      } else {
-        state = 'unknown';
-      }
-      // checks：待录场次的「最后检查时间」，供单场数据说明使用
-      setDataHealth({ state, label, checks: j?.checks || {} });
-      setScheduleChanges(j?.changes?.items?.length ? j.changes : null);
-      return { syncing: !!j?.syncing };
-    } catch {
-      setDataHealth({ state: 'error', label: '本地服务未连接', checks: {} });
-      return { syncing: false };
-    }
-  }, [refreshData]);
-
-  useEffect(() => {
-    let alive = true;
-    let timer = null;
-    const tick = async () => {
-      const info = await refreshHealth();
-      if (!alive) return;
-      // 后台同步期间缩短到 3 秒；完成后 status 的 lastSync.at 会变化，
-      // refreshHealth 内部触发热更新，不必等 120 秒的常规轮询。
-      timer = setTimeout(tick, info?.syncing ? 3000 : 120000);
-    };
-    timer = setTimeout(tick, 4000);
-    return () => {
-      alive = false;
-      if (timer) clearTimeout(timer);
-    };
-  }, [refreshHealth]);
-
-  /**
-   * 单场重查（FR-06）
-   *
-   * 只查这一场所在的联赛与日期，不惊动整轮保鲜 —— 用户在「数据说明」里点一下，
-   * 几秒内就能知道是「上游没给」还是「刚才没同步到」。
-   */
-  const [recheckingMatchId, setRecheckingMatchId] = useState(null);
-  const [recheckMsg, setRecheckMsg] = useState(null);
-
-  /**
-   * 计划有变（FR-05）：由 /api/scores/status 带回，关闭状态按「本轮同步时间」记在
-   * sessionStorage —— 同一轮变动只提示一次，下一轮新的变动会重新出现。
-   */
-  const [scheduleChanges, setScheduleChanges] = useState(null);
-  const [dismissedChangesAt, setDismissedChangesAt] = useState(() => {
-    try {
-      const v = Number(sessionStorage.getItem('nightowl:changes_dismissed'));
-      return Number.isFinite(v) ? v : 0;
-    } catch {
-      return 0;
-    }
-  });
-  const dismissScheduleChanges = useCallback(() => {
-    const at = scheduleChanges?.at || 0;
-    setDismissedChangesAt(at);
-    try {
-      sessionStorage.setItem('nightowl:changes_dismissed', String(at));
-    } catch {
-      /* 忽略 */
-    }
-  }, [scheduleChanges]);
-
-  const recheckMatch = useCallback(
-    async matchId => {
-      if (!matchId || recheckingMatchId) return null;
-      setRecheckingMatchId(matchId);
-      try {
-        const outcome = await requestScoreSync({ apply: true, matchId });
-        if (outcome.ok && outcome.payload?.fixtures?.length) {
-          if (setFixtures(outcome.payload.fixtures)) setDataRev(v => v + 1);
-          else await refreshData();
-        } else if (outcome.ok && (outcome.status === 'updated' || outcome.status === 'partial_failure')) {
-          await refreshData();
-        }
-        await refreshHealth();
-
-        // 单场重查的结果必须说清楚：用户点了按钮，不能只有"转一圈又回到原样"。
-        // 语义按"这一场查过没有"来写，不用整轮同步的口径（openfootball 未响应
-        // 不该被读成"同步失败"，ESPN 那一路可能已经查全了）。
-        const changed = Number(outcome.payload?.summary?.written?.changed || 0);
-        const text =
-          outcome.status === SYNC_STATUS_BUSY
-            ? '已有同步在进行中，稍后自动更新'
-            : outcome.status === 'updated'
-              ? `已更新 ${changed} 场比分`
-              : outcome.status === 'partial_failure'
-                ? `已更新 ${changed} 场（部分来源未响应）`
-                : outcome.status === 'up_to_date'
-                  ? '本场已查，暂无新比分'
-                  : outcome.payload?.summary?.written?.ok === false
-                    ? outcome.payload.summary.written.reason || '写盘失败'
-                    : '本场已查，来源暂未响应';
-        setRecheckMsg({ matchId, ok: outcome.ok, text });
-        return outcome;
-      } finally {
-        setRecheckingMatchId(null);
-      }
-    },
-    [recheckingMatchId, refreshData, refreshHealth]
-  );
+  // 数据健康 / 计划有变 / 单场重查：一套状态与轮询收在 hook 里
+  const {
+    dataHealth,
+    scheduleChanges,
+    dismissedChangesAt,
+    dismissScheduleChanges,
+    refreshHealth,
+    recheckMatch,
+    recheckingMatchId,
+    recheckMsg
+  } = useDataHealth({ refreshData });
 
   const triggerSync = useCallback(async () => {
     const now = Date.now();
