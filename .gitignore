@@ -38,3 +38,7 @@ release/
 
 # 验证用截图（可再生）
 .shots/
+
+# 编辑器 / 协作工具的工作产物（不属于代码，且含大体积压缩包）
+.trae-html-share-packages/
+.zcode/
