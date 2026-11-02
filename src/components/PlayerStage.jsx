@@ -14,6 +14,7 @@ import { eventKey, shouldNotifyEvent } from '../core/live-events.js';
 import { liveEventNotification, fullTimeNotification } from '../core/notifications.js';
 import { autoSwitchDecision } from '../core/line-switch.js';
 import { orderLinesByMemory, lineMemoryFor, recordLineAttempt } from '../core/line-memory.js';
+import { useLiveSnapshot } from '../hooks/useLiveSnapshot.js';
 import { loadLineMemory, saveLineMemory, LINE_MEMORY_CLEARED_EVENT } from './line-memory-storage.js';
 import {
   IconCalendar,
@@ -377,9 +378,13 @@ export default function PlayerStage({
   const [activeLineId, setActiveLineId] = useState(null);
   const [liveInfo, setLiveInfo] = useState(null);
 
-  const [liveData, setLiveData] = useState(null);
-  const [liveLoading, setLiveLoading] = useState(false);
-  const [liveRefreshing, setLiveRefreshing] = useState(false);
+  // 实时快照（比分 / 分钟 / 事件）连轮询与竞态保护一起收进 hook
+  const {
+    snapshot: liveSnapshot,
+    loading: liveLoading,
+    refreshing: liveRefreshing,
+    refresh: refreshLive
+  } = useLiveSnapshot({ matchId: match?.id || null, state });
   const [lineNotice, setLineNotice] = useState(null);
 
   /**
@@ -495,9 +500,7 @@ export default function PlayerStage({
 
   // 切场后的第一帧 state 里可能还留着上一场的快照：按 matchId 过滤后再对外暴露，
   // 避免用上一场比分渲染新队名，也避免通知基线把旧事件当成新比赛的历史。
-  const liveSnapshot = liveData && liveData.matchId === match?.id ? liveData : null;
-  const liveDataRef = useRef(liveSnapshot);
-  liveDataRef.current = liveSnapshot;
+  // liveSnapshot 由 useLiveSnapshot 提供（内部已按 matchId 过滤）
 
   /** 用户主动换线：重置自动换线计数，避免手动操作后仍被“已尝试 2 次”卡住 */
   const manualSelectLine = useCallback(
@@ -622,40 +625,6 @@ export default function PlayerStage({
   });
 
   /**
-   * 拉取实时比分/事件
-   *
-   * 只在进行中调用；失败不弹错、不阻塞播放——本地分钟数仍是兜底。
-   * 服务端 20 秒缓存，前端 30 秒轮询，不会把 ESPN 打爆。
-   */
-  const loadLive = useCallback(async ({ manual = false } = {}) => {
-    const current = matchRef.current;
-    if (!current || stateRef.current !== 'live') return;
-
-    if (!liveDataRef.current) setLiveLoading(true);
-    if (manual) setLiveRefreshing(true);
-
-    try {
-      const refresh = manual ? '&refresh=1' : '';
-      const res = await fetch(
-        `/api/live?matchId=${encodeURIComponent(current.id)}${refresh}`
-      );
-      if (!res.ok) throw new Error(String(res.status));
-      const j = await res.json();
-      if (matchRef.current?.id !== current.id || stateRef.current !== 'live') return;
-      setLiveData(j?.ok ? j : null);
-    } catch {
-      if (matchRef.current?.id === current.id && stateRef.current === 'live') {
-        setLiveData(null);
-      }
-    } finally {
-      if (matchRef.current?.id === current.id) {
-        setLiveLoading(false);
-        setLiveRefreshing(false);
-      }
-    }
-  }, []);
-
-  /**
    * 拉取/刷新直播线路
    * @param {{ reset?: boolean, autoPlay?: boolean }} opts
    *   reset: 是否在请求前重置现有线路（切场时为 true；手动刷新/自动轮询为 false，避免列表和画面闪烁）
@@ -718,9 +687,7 @@ export default function PlayerStage({
     // 切场必须同时清空上一场的实时快照与通知基线：
     //   · 否则新场次接口返回前，画布/实时面板会用上一场比分渲染新队名；
     //   · 通知基线若保留旧场次事件，新场次首个快照里的历史进球会被误判成“新事件”补发。
-    setLiveData(null);
-    setLiveLoading(false);
-    setLiveRefreshing(false);
+    // 实时快照由 useLiveSnapshot 按 matchId 自行清空；这里只重置通知基线
     liveNotifyRef.current = { matchId: null, initialized: false, keys: new Set(), state: null };
     if (match.st === 'done') {
       stopPlayback();
@@ -740,19 +707,6 @@ export default function PlayerStage({
     }
     prevStateRef.current = state;
   }, [state, fetchLines]);
-
-  // 进行中：每 30 秒拉一次比分/关键事件；切场或终场立即停
-  useEffect(() => {
-    if (!match?.id || state !== 'live') {
-      setLiveData(null);
-      setLiveLoading(false);
-      setLiveRefreshing(false);
-      return undefined;
-    }
-    loadLive();
-    const timer = setInterval(() => loadLive(), 30000);
-    return () => clearInterval(timer);
-  }, [match?.id, state, loadLive]);
 
   /**
    * 进球/红牌/终场系统通知
@@ -1051,7 +1005,7 @@ export default function PlayerStage({
           data={liveSnapshot}
           loading={liveLoading}
           refreshing={liveRefreshing}
-          onRefresh={() => loadLive({ manual: true })}
+          onRefresh={refreshLive}
           spoilerFree={spoilerFree}
           revealed={revealed}
           onReveal={() => onReveal?.(match.id)}
