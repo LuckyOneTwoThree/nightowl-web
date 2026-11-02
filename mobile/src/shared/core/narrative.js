@@ -53,6 +53,25 @@ export const TIER_STYLE = Object.fromEntries(
   TIERS.map(t => [t.label, `${t.text} ${t.soft}`])
 );
 
+/**
+ * 档位文字色：S0–S4 → text-tier-N
+ *
+ * 此前 NextUpRail / SameNightPicks / UpcomingFixtures 各自用
+ * `Object.fromEntries(Object.entries(TIER_MAP).map(...))` 生成同一张表 ——
+ * 三份副本，改一处忘两处就是同一徽章三种颜色。查不到标签时回落中性色，
+ * 不抛错（数据里出现未知档位时界面仍要能渲染）。
+ */
+export const TIER_TEXT = Object.freeze(
+  TIERS.reduce((acc, t) => {
+    acc[t.label] = t.text;
+    return acc;
+  }, {})
+);
+
+export function tierTextClass(label) {
+  return TIER_TEXT[label] || 'text-text-secondary';
+}
+
 export function tierAdviceOf(match) {
   return TIER_ADVICE[sleepTier(match.t).label] || '';
 }

@@ -9,13 +9,8 @@ import { useMemo } from 'react';
 import { sameNightPicks } from '../core/owl.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { hm } from '../core/format.js';
-import { TIER_MAP } from '../core/narrative.js';
+import { tierTextClass } from '../core/narrative.js';
 import { Crest, EmptyState, Meta } from './atoms.jsx';
-
-// 档位文字色复用 narrative 的 tier 色阶（与 SleepBadge / WeekView 同一口径）
-const TIER_TONE = Object.fromEntries(
-  Object.entries(TIER_MAP).map(([label, t]) => [label, t.text])
-);
 
 export default function SameNightPicks({ match, prefs, now = Date.now(), onSelect, compact = false, embedded = false }) {
   // ⚠️ hooks 必须在 early-return 之前调用（同 UpcomingFixtures：match null→非 null
@@ -66,7 +61,7 @@ export default function SameNightPicks({ match, prefs, now = Date.now(), onSelec
                   <span className="shrink-0 font-num text-2xs font-semibold tabular-nums text-text-primary">
                     {index.toFixed(1)}
                   </span>
-                  <span className={`shrink-0 font-num text-2xs font-semibold ${TIER_TONE[tier.label] || ''}`}>
+                  <span className={`shrink-0 font-num text-2xs font-semibold ${tierTextClass(tier.label) || ''}`}>
                     {tier.label}
                   </span>
                 </button>
@@ -118,7 +113,7 @@ export default function SameNightPicks({ match, prefs, now = Date.now(), onSelec
                 <span className="font-num text-2xs font-semibold tabular-nums text-text-primary">
                   指数 {index.toFixed(1)}
                 </span>
-                <span className={`font-num text-2xs font-semibold ${TIER_TONE[tier.label] || ''}`}>
+                <span className={`font-num text-2xs font-semibold ${tierTextClass(tier.label) || ''}`}>
                   {tier.label}
                 </span>
               </button>

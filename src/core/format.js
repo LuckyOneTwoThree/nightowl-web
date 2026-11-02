@@ -67,6 +67,17 @@ export function hmCost(cost) {
   return `${Number(cost).toFixed(1).replace(/\.0$/, '')}h`;
 }
 
+/**
+ * 净胜球 / 净胜分：正数带 + 号（`+3` / `0` / `-2`）
+ *
+ * 情报面板（对方数据）与积分榜（净胜球列）此前各写了一份逐字相同的实现，
+ * 两处口径必须一致 —— 同一个数字在两块界面显示成不同格式，用户会以为是两个指标。
+ */
+export function formatGoalDiff(value) {
+  const v = Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : 0;
+  return v > 0 ? `+${v}` : `${v}`;
+}
+
 /** 秒数 → "00:14:32" */
 export function hmsFromSeconds(total) {
   const s = Math.max(0, Math.floor(total));

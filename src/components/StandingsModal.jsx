@@ -3,7 +3,7 @@ import { getFixtures, leagueName, teamName } from '../data/index.js';
 import { STANDINGS_LEAGUES, computeStandings, standingsCutoff } from '../core/standings.js';
 import { isFinished } from '../core/engine.js';
 import { unrevealedTonightIds } from '../core/reveal.js';
-import { bjDate } from '../core/format.js';
+import { bjDate, formatGoalDiff } from '../core/format.js';
 import { Chip, Crest, Hint, Meta } from './atoms.jsx';
 import { IconClose } from './icons.jsx';
 
@@ -26,11 +26,6 @@ function displayRows(rows, league) {
     out.push({ type: 'row', key: row.teamId, row });
   });
   return out;
-}
-
-function fmtGd(n) {
-  const v = n || 0;
-  return v > 0 ? `+${v}` : `${v}`;
 }
 
 /**
@@ -268,7 +263,7 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
                         <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.lost}</td>
                         <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.gf}</td>
                         <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.ga}</td>
-                        <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{fmtGd(row.gd)}</td>
+                        <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{formatGoalDiff(row.gd)}</td>
                         <td className="px-2 py-1.5 text-right font-num text-xs font-semibold tabular-nums text-text-primary">{row.points}</td>
                         <td className="truncate px-2 py-1.5 text-2xs text-text-muted" title={row.context?.secondary || ''}>
                           {row.context?.primary || '—'}

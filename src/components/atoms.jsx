@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { crestUrl, teamColor, leagueColor, leagueName } from '../data/index.js';
+import { shouldHideScore } from '../core/reveal.js';
 import { sleepTier } from '../core/engine.js';
 import { TIER_MAP } from '../core/narrative.js';
 import { IconClose, IconEmpty, IconInfo, IconReveal, IconStars } from './icons.jsx';
@@ -168,7 +169,7 @@ export function LiveDot({ className = '' }) {
 /** 比分 / 状态文本（受防剧透控制） */
 export function ScoreText({ match, state, revealed, onReveal, spoilerFree, stalePending = false }) {
   if (match.st === 'done') {
-    if (spoilerFree && !revealed) {
+    if (shouldHideScore(spoilerFree, revealed)) {
       return (
         <button
           type="button"

@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { teamName } from '../data/index.js';
+import { shouldHideScore } from '../core/reveal.js';
 import { EVENT_LABEL, EVENT_TONE, eventSummary } from '../core/live-events.js';
 import { Button, Chip, Crest, IconButton, Meta, SectionLabel } from './atoms.jsx';
 import { IconReset, IconWarn } from './icons.jsx';
+import { useRemoteJson } from '../hooks/useRemoteJson.js';
 
 /**
  * 赛后关键事件回顾
@@ -12,49 +14,15 @@ import { IconReset, IconWarn } from './icons.jsx';
  */
 export default function RecapTimeline({ match, spoilerFree = true, revealed = false }) {
   const finished = match?.st === 'done';
-  const hidden = finished && spoilerFree && !revealed;
-  const [status, setStatus] = useState('idle');
-  const [data, setData] = useState(null);
+  const hidden = finished && shouldHideScore(spoilerFree, revealed);
   const [nonce, setNonce] = useState(0);
-
-  useEffect(() => {
-    if (!finished || hidden) {
-      setStatus(hidden ? 'hidden' : 'idle');
-      setData(null);
-      return undefined;
-    }
-
-    const ac = new AbortController();
-    let alive = true;
-    setStatus('loading');
-    setData(null);
-
-    (async () => {
-      try {
-        const refresh = nonce > 0 ? '&refresh=1' : '';
-        const res = await fetch(
-          `/api/recap?matchId=${encodeURIComponent(match.id)}${refresh}`,
-          { signal: ac.signal }
-        );
-        if (!res.ok) throw new Error(String(res.status));
-        const j = await res.json();
-        if (!alive) return;
-        if (j?.ok) {
-          setData(j);
-          setStatus(j.events?.length ? 'ready' : 'empty');
-        } else {
-          setStatus('error');
-        }
-      } catch (err) {
-        if (alive && err?.name !== 'AbortError') setStatus('error');
-      }
-    })();
-
-    return () => {
-      alive = false;
-      ac.abort();
-    };
-  }, [finished, hidden, match?.id, nonce]);
+  // 取数统一走 useRemoteJson（状态机 / Abort 取消 / 空态判定只有一份实现）
+  const { status, data } = useRemoteJson({
+    url: finished && !hidden
+      ? `/api/recap?matchId=${encodeURIComponent(match.id)}${nonce > 0 ? '&refresh=1' : ''}`
+      : null,
+    listKey: 'events'
+  });
 
   if (!finished || hidden) return null;
 

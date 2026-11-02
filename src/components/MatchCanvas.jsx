@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { shouldHideScore } from '../core/reveal.js';
 import { hm, zhDate, weekdayOf, datePart } from '../core/format.js';
 import { MATCH_DURATION_MS, ts } from '../core/engine.js';
 import { teamName, teamColor, leagueName } from '../data/index.js';
@@ -37,7 +38,7 @@ export default function MatchCanvas({
   const hasFinal = match.st === 'done';
   const live = state === 'live';
   const postponed = state === 'pp';
-  const hidden = spoilerFree && !revealed;
+  const hidden = shouldHideScore(spoilerFree, revealed);
   // 已过完赛窗口但上游还没给比分：此时没有比分可揭晓。
   // 旧实现仍然渲染「揭晓比分」，点下去只是把 — 露出来，看起来像按钮坏了。
   const endedPending = finished && !hasFinal;

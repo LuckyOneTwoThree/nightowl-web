@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { teamName } from '../data/index.js';
+import { shouldHideScore } from '../core/reveal.js';
 import { highlightSources, sourceUrlFor } from '../core/watch-sources.js';
 import { Button, IconButton, Meta, SectionLabel } from './atoms.jsx';
 import { IconExternal, IconPlay, IconReset, IconReveal, IconWarn } from './icons.jsx';
+import { useRemoteJson } from '../hooks/useRemoteJson.js';
 
 /**
  * 赛后官方集锦
@@ -30,52 +32,17 @@ export default function HighlightsPanel({
   onReveal
 }) {
   const finished = match?.st === 'done';
-  const hidden = finished && spoilerFree && !revealed;
-  const [status, setStatus] = useState('idle');
-  const [data, setData] = useState(null);
+  const hidden = finished && shouldHideScore(spoilerFree, revealed);
   const [nonce, setNonce] = useState(0);
+  // 集锦比回顾多 350ms 防抖（连续点选完赛场次时合并请求），其余取数逻辑完全一致
+  const { status, data } = useRemoteJson({
+    url: finished && !hidden
+      ? `/api/highlights?matchId=${encodeURIComponent(match.id)}${nonce > 0 ? '&refresh=1' : ''}`
+      : null,
+    listKey: 'videos',
+    debounceMs: 350
+  });
   const domestic = finished ? highlightSources(sources, match?.l) : [];
-
-  useEffect(() => {
-    if (!finished || hidden) {
-      setStatus(hidden ? 'hidden' : 'idle');
-      setData(null);
-      return undefined;
-    }
-
-    const ac = new AbortController();
-    let alive = true;
-    setStatus('loading');
-    setData(null);
-
-    // 连续点选完赛场次时合并请求；服务端也有 7 天缓存
-    const timer = setTimeout(async () => {
-      try {
-        const refresh = nonce > 0 ? '&refresh=1' : '';
-        const res = await fetch(
-          `/api/highlights?matchId=${encodeURIComponent(match.id)}${refresh}`,
-          { signal: ac.signal }
-        );
-        if (!res.ok) throw new Error(String(res.status));
-        const j = await res.json();
-        if (!alive) return;
-        if (j?.ok) {
-          setData(j);
-          setStatus(j.videos?.length ? 'ready' : 'empty');
-        } else {
-          setStatus('error');
-        }
-      } catch (err) {
-        if (alive && err?.name !== 'AbortError') setStatus('error');
-      }
-    }, 350);
-
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-      ac.abort();
-    };
-  }, [finished, hidden, match?.id, nonce]);
 
   if (!finished) return null;
 

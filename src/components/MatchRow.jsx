@@ -1,3 +1,4 @@
+import { shouldHideScore } from '../core/reveal.js';
 import { hm, liveMinute } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { ts, MATCH_DURATION_MS } from '../core/engine.js';
@@ -189,7 +190,7 @@ export default function MatchRow({
               >
                 {m.sc || '—'}
               </span>
-            ) : m.st === 'done' && spoilerFree && !revealed ? (
+            ) : m.st === 'done' && shouldHideScore(spoilerFree, revealed) ? (
               <span className="shrink-0 font-num text-xs text-text-faint" title="比分已隐藏">
                 • : •
               </span>

@@ -14,6 +14,7 @@ import {
 import { evalOne } from '../core/owl.js';
 import { computeMatchStats } from '../core/stats.js';
 import { canRecheck, dataStateHint, dataStateLabel, dataStateTone, matchDataState } from '../core/data-health.js';
+import { formatGoalDiff } from '../core/format.js';
 import { Button, Chip, Crest, Hint, Meta, SectionLabel } from './atoms.jsx';
 import UpcomingFixtures from './UpcomingFixtures.jsx';
 import SleepNote, { sleepLedgerFor } from './SleepNote.jsx';
@@ -673,7 +674,7 @@ function StandingsSection({ standings, match, onOpenStandings }) {
                     <span className="text-text-faint">·</span>
                     <span>{row.points} 分</span>
                     <span className="text-text-faint">·</span>
-                    <span>净胜球 {fmtDiff(row.gd)}</span>
+                    <span>净胜球 {formatGoalDiff(row.gd)}</span>
                   </span>
                 ) : (
                   <span className="ml-auto text-2xs text-text-faint">暂无排名</span>
@@ -714,7 +715,7 @@ function SeasonSection({ match, stats }) {
       parseFloat(stats?.home?.season?.avgGoalsAgainst || 0), parseFloat(stats?.away?.season?.avgGoalsAgainst || 0), true],
     ['零封场次', `${stats?.home?.season?.cleanSheets || 0}`, `${stats?.away?.season?.cleanSheets || 0}`,
       stats?.home?.season?.cleanSheets || 0, stats?.away?.season?.cleanSheets || 0, false],
-    ['净胜球', fmtDiff(stats?.home?.season?.goalDiff), fmtDiff(stats?.away?.season?.goalDiff),
+    ['净胜球', formatGoalDiff(stats?.home?.season?.goalDiff), formatGoalDiff(stats?.away?.season?.goalDiff),
       stats?.home?.season?.goalDiff || 0, stats?.away?.season?.goalDiff || 0, false]
   ];
 
@@ -789,11 +790,6 @@ function SeasonSection({ match, stats }) {
       </div>
     </Block>
   );
-}
-
-function fmtDiff(n) {
-  const v = n || 0;
-  return v > 0 ? `+${v}` : `${v}`;
 }
 
 /**

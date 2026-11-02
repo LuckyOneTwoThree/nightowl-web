@@ -11,13 +11,8 @@ import { upcomingForTeams } from '../core/owl.js';
 import { hm, zhDate, weekdayOf } from '../core/format.js';
 import { teamName } from '../data/index.js';
 import { tierOf } from '../core/engine.js';
-import { TIER_MAP } from '../core/narrative.js';
+import { tierTextClass } from '../core/narrative.js';
 import { Crest, EmptyState, Meta } from './atoms.jsx';
-
-// 档位文字色复用 narrative 的 tier 色阶（与 SleepBadge / WeekView 同一口径）
-const TIER_TONE = Object.fromEntries(
-  Object.entries(TIER_MAP).map(([label, t]) => [label, t.text])
-);
 
 function TeamColumn({ teamId, list, side, onSelect }) {
   const name = teamName(teamId);
@@ -48,7 +43,7 @@ function TeamColumn({ teamId, list, side, onSelect }) {
                     {/* weekdayOf / zhDate 只吃纯日期（YYYY-MM-DD），传带 T 的 t 会得到 NaN */}
                     {zhDate(m.t.slice(0, 10))} {weekdayOf(m.t.slice(0, 10)).slice(0, 1)} {hm(m.t)} {opp}
                   </span>
-                  <span className={`font-num text-2xs font-semibold tabular-nums ${TIER_TONE[tier.label] || ''}`}>
+                  <span className={`font-num text-2xs font-semibold tabular-nums ${tierTextClass(tier.label) || ''}`}>
                     {tier.label}
                   </span>
                 </button>

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, memo, useRef, useState } from 'react';
+import { shouldHideScore } from '../core/reveal.js';
 import { datePart, liveMinute, humanCountdown } from '../core/format.js';
 import { teamName, leagueName } from '../data/index.js';
 import { ts, countdown as engineCountdown } from '../core/engine.js';
@@ -782,7 +783,7 @@ export default function PlayerStage({
 
     const canNotify =
       notifyLiveEvents &&
-      !(spoilerFree && !revealed) &&
+      !shouldHideScore(spoilerFree, revealed) &&
       Boolean(window.desktop?.notify);
 
     if (canNotify) {
@@ -1011,7 +1012,7 @@ export default function PlayerStage({
               </span>
               {liveSnapshot?.ok &&
                 liveSnapshot.state !== 'postponed' &&
-                !(spoilerFree && !revealed) && (
+                !shouldHideScore(spoilerFree, revealed) && (
                   <span className="font-num text-2xs font-semibold tabular-nums text-text-primary">
                     {liveSnapshot.score?.h ?? '—'}-{liveSnapshot.score?.a ?? '—'}
                   </span>

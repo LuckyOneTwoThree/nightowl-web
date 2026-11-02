@@ -1,4 +1,5 @@
 import { teamName } from '../data/index.js';
+import { shouldHideScore } from '../core/reveal.js';
 import { EVENT_LABEL, EVENT_TONE, eventSummary } from '../core/live-events.js';
 import { Button, Chip, Crest, IconButton, LiveDot, Meta } from './atoms.jsx';
 import { IconReset, IconReveal, IconWarn } from './icons.jsx';
@@ -39,7 +40,7 @@ export default function LiveMatchPanel({
   if (!match) return null;
 
   const ok = data?.ok === true;
-  const hidden = spoilerFree && !revealed;
+  const hidden = shouldHideScore(spoilerFree, revealed);
   const events = ok ? [...(data.events || [])].reverse().slice(0, 4) : [];
   const finished = ok && data.state === 'finished';
   const postponed = ok && data.state === 'postponed';

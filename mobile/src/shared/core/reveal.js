@@ -26,6 +26,18 @@ export function isScoreVisible(spoilerFree, revealed) {
   return !spoilerFree || !!revealed;
 }
 
+/**
+ * 这场现在是否要藏比分（防剧透开、且尚未揭晓）
+ *
+ * 存在的理由：这条判断此前在 8 个组件里各写一遍（MatchRow / MatchCanvas /
+ * LiveMatchPanel / RecapTimeline / HighlightsPanel / PlayerStage ×2 / ScoreText），
+ * 每处都写成 `spoilerFree && !revealed`。规则一旦要改（比如「进行中且未揭晓也藏」），
+ * 漏改一处就是一条能从比分反推出赛果的缝。名字也统一成正向问题，读起来不用二次取反。
+ */
+export function shouldHideScore(spoilerFree, revealed) {
+  return !isScoreVisible(spoilerFree, revealed);
+}
+
 /** 直播比分只在允许显示时返回，供 WatchSheet 等入口复用；不改变调用方状态。 */
 export function liveScoreForDisplay(score, spoilerFree, revealed) {
   return isScoreVisible(spoilerFree, revealed) ? score : null;

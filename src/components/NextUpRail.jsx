@@ -3,13 +3,9 @@ import { upcomingForTeams } from '../core/owl.js';
 import { hm, weekdayOf, zhDate } from '../core/format.js';
 import { teamName } from '../data/index.js';
 import { tierOf } from '../core/engine.js';
-import { TIER_MAP } from '../core/narrative.js';
+import { tierTextClass } from '../core/narrative.js';
 import { Crest } from './atoms.jsx';
 import { IconChevronDown, IconChevronUp } from './icons.jsx';
-
-const TIER_TONE = Object.fromEntries(
-  Object.entries(TIER_MAP).map(([label, tier]) => [label, tier.text])
-);
 
 /**
  * 左栏底部的“接下来”：列表内容不足时，用真实后续赛程补足纵向空间，
@@ -96,7 +92,7 @@ export default function NextUpRail({ match, now = Date.now(), onSelect, onOpenWe
                   <span className="min-w-0 flex-1 truncate text-xs font-medium text-text-primary">
                     {teamName(item.h)} <span className="text-text-faint">vs</span> {teamName(item.a)}
                   </span>
-                  <span className={`shrink-0 font-num text-2xs font-semibold tabular-nums ${TIER_TONE[tier.label] || ''}`}>
+                  <span className={`shrink-0 font-num text-2xs font-semibold tabular-nums ${tierTextClass(tier.label) || ''}`}>
                     {tier.label}
                   </span>
                 </button>
