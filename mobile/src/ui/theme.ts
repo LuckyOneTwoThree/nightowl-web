@@ -50,14 +50,36 @@ export const spacing = {
   xxxl: 32,
 } as const;
 
+/**
+ * 圆角只有三档 + 胶囊。
+ *
+ * 原来的 sm/md/lg/xl/xxl/xxxl 六档在实际使用里几乎退化成了随机数：同类控件
+ * （按钮）分别出现过 12 和 8，同一种卡片出现过 20 和 16。档位多不等于精细，
+ * 只等于每次新写一个组件都要重新猜一次。
+ *
+ *   control 8  控件：按钮、输入框、分段、行内小元素
+ *   card   16  卡片：列表容器、Hero、面板
+ *   overlay 20 浮层：Sheet、弹层
+ *   pill      胶囊：状态 chip、圆点、细条（只用于状态，不用于容器）
+ */
 export const radius = {
-  sm: 4,
-  md: 8,
-  lg: 12,
-  xl: 16,
-  xxl: 20,
-  xxxl: 24,
-  full: 999,
+  control: 8,
+  card: 16,
+  overlay: 20,
+  pill: 999,
+} as const;
+
+/**
+ * 字重角色制。
+ *
+ * 此前 700 / 800 一共出现 105 次，几乎等于「所有想强调的地方都加粗」——
+ * 结果是没有任何东西真的突出。层级改由字号与等宽数字承担：
+ * 正文 400、标签与队名 500、标题与比分 600，不再有更粗的档。
+ */
+export const weight = {
+  body: '400',
+  label: '500',
+  title: '600',
 } as const;
 
 export const fontSize = {
@@ -70,6 +92,18 @@ export const fontSize = {
   xl: 20,
   xxl: 28,
   display: 44,
+} as const;
+
+/**
+ * 系统字号放大。
+ *
+ * 正文、队名、比分不设上限，跟着系统走；它们的容器一律用 minHeight 而不是 height，
+ * 字大了盒子跟着长。只有一类文字必须封顶：尺寸被数据或几何锁死的微文字
+ * （坐标轴刻度、徽章里的数字）—— 它们旁边那些色块、圆点不会跟着变大，
+ * 文字放大只会糊到邻居身上。封顶放在 1.3 倍，是「还能塞进去」与「尽量跟手」的折中。
+ */
+export const fontScale = {
+  micro: 1.3,
 } as const;
 
 export const shadows: Record<'card' | 'pop', ViewStyle> = {

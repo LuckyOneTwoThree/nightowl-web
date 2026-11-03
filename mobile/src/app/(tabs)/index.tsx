@@ -59,7 +59,7 @@ import { DecisionStrip } from '@/ui/DecisionStrip';
 import { Screen } from '@/ui/Screen';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { SleepBadge } from '@/ui/SleepBadge';
-import { colors, fontSize, radius, spacing, withAlpha } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, withAlpha, weight } from '@/ui/theme';
 import type { Entry, Match, Narrative, Tier } from '@/types';
 
 type ReplayPick = Entry & { reason: string };
@@ -280,7 +280,7 @@ export default function TonightScreen() {
           <Text style={styles.errorText} numberOfLines={2}>
             比分同步失败，沿用本地数据
           </Text>
-          <Pressable onPress={refresh} hitSlop={8}>
+          <Pressable onPress={refresh} hitSlop={16}>
             <Text style={styles.errorAction}>重试</Text>
           </Pressable>
         </View>
@@ -791,14 +791,14 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
   },
   brandBlock: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  brandLogo: { width: 36, height: 36, borderRadius: radius.lg },
+  brandLogo: { width: 36, height: 36, borderRadius: radius.control },
   headerText: { gap: 2 },
-  brand: { color: colors.text, fontSize: fontSize.xl, fontWeight: '800', letterSpacing: 0.6 },
+  brand: { color: colors.text, fontSize: fontSize.xl, fontWeight: weight.title, letterSpacing: 0.6 },
   subline: { color: colors.textFaint, fontSize: fontSize.xs, letterSpacing: 0.3 },
   iconButton: {
     width: 38,
     height: 38,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.panel,
@@ -806,13 +806,13 @@ const styles = StyleSheet.create({
     borderColor: colors.hairline,
   },
   contextRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  contextDot: { width: 5, height: 5, borderRadius: radius.full, backgroundColor: colors.accent },
+  contextDot: { width: 5, height: 5, borderRadius: radius.pill, backgroundColor: colors.accent },
   contextText: { color: colors.textMuted, fontSize: fontSize.sm },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: 'rgba(224,168,46,0.35)',
     backgroundColor: 'rgba(224,168,46,0.08)',
@@ -820,9 +820,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   errorText: { flex: 1, color: colors.textSecondary, fontSize: fontSize.xs },
-  errorAction: { color: colors.accent, fontSize: fontSize.xs, fontWeight: '700' },
+  errorAction: { color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
   hero: {
-    borderRadius: radius.xxxl,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: withAlpha(colors.text, 0.08),
     padding: spacing.lg,
@@ -842,7 +842,7 @@ const styles = StyleSheet.create({
   heroEyebrow: {
     color: colors.textFaint,
     fontSize: fontSize.xs,
-    fontWeight: '700',
+    fontWeight: weight.title,
     letterSpacing: 1,
   },
   heroEyebrowHighlight: {
@@ -851,17 +851,17 @@ const styles = StyleSheet.create({
   heroLeague: {
     color: colors.textSecondary,
     fontSize: fontSize.sm,
-    fontWeight: '600',
+    fontWeight: weight.title,
     letterSpacing: 0.3,
   },
   tierPill: {
     borderWidth: 1,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
     backgroundColor: colors.panel,
   },
-  tierText: { fontSize: fontSize.xs, fontWeight: '700' },
+  tierText: { fontSize: fontSize.xs, fontWeight: weight.title },
   teams: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -872,39 +872,39 @@ const styles = StyleSheet.create({
   teamName: {
     color: colors.text,
     fontSize: fontSize.base,
-    fontWeight: '700',
+    fontWeight: weight.title,
     maxWidth: 112,
     textAlign: 'center',
   },
   center: { width: 96, alignItems: 'center', gap: 1 },
-  vs: { color: colors.textFaint, fontSize: fontSize.xs, fontWeight: '700', letterSpacing: 1.4 },
+  vs: { color: colors.textFaint, fontSize: fontSize.xs, fontWeight: weight.title, letterSpacing: 1.4 },
   time: {
     color: colors.text,
     fontSize: fontSize.xxl,
-    fontWeight: '800',
+    fontWeight: weight.title,
     letterSpacing: -0.5,
     fontVariant: ['tabular-nums'],
   },
   heroLivePill: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  heroLiveDot: { width: 6, height: 6, borderRadius: radius.full, backgroundColor: colors.live },
-  heroLiveLabel: { color: colors.live, fontSize: fontSize.xs, fontWeight: '700' },
+  heroLiveDot: { width: 6, height: 6, borderRadius: radius.pill, backgroundColor: colors.live },
+  heroLiveLabel: { color: colors.live, fontSize: fontSize.xs, fontWeight: weight.title },
   heroLiveScore: {
     color: colors.text,
     fontSize: fontSize.xxl,
-    fontWeight: '800',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   heroLiveMinute: {
     color: colors.text,
     fontSize: fontSize.xxl,
-    fontWeight: '800',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
-  heroLiveNote: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' },
+  heroLiveNote: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: weight.title },
   countdown: {
     color: colors.textSecondary,
     fontSize: fontSize.sm,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   metrics: {
@@ -921,7 +921,7 @@ const styles = StyleSheet.create({
   metricAccent: {
     color: colors.accent,
     fontSize: fontSize.base,
-    fontWeight: '800',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   energyBarRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
@@ -931,7 +931,7 @@ const styles = StyleSheet.create({
   metricValue: {
     color: colors.textSecondary,
     fontSize: fontSize.md,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   metricDivider: { width: StyleSheet.hairlineWidth, height: 22, backgroundColor: withAlpha(colors.text, 0.1) },
@@ -941,13 +941,13 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     gap: spacing.xs,
   },
-  headline: { color: colors.text, fontSize: fontSize.base, fontWeight: '600', lineHeight: 21 },
+  headline: { color: colors.text, fontSize: fontSize.base, fontWeight: weight.title, lineHeight: 21 },
   line: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },
   weakNotice: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   weakText: { color: colors.textMuted, fontSize: fontSize.xs },
   cta: {
     height: 44,
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     backgroundColor: colors.accent,
     flexDirection: 'row',
     alignItems: 'center',
@@ -959,24 +959,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.control,
   },
-  ctaText: { color: colors.accentInk, fontSize: fontSize.md, fontWeight: '800' },
-  ctaTextSecondary: { color: colors.textSecondary, fontWeight: '700' },
+  ctaText: { color: colors.accentInk, fontSize: fontSize.md, fontWeight: weight.title },
+  ctaTextSecondary: { color: colors.textSecondary, fontWeight: weight.title },
   focal: { gap: spacing.xs },
-  focalTitle: { color: colors.text, fontSize: fontSize.xl, fontWeight: '700' },
+  focalTitle: { color: colors.text, fontSize: fontSize.xl, fontWeight: weight.title },
   focalMeta: {
     color: colors.textMuted,
     fontSize: fontSize.md,
     fontVariant: ['tabular-nums'],
   },
   emptyHero: { gap: spacing.sm },
-  emptyTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: '700' },
+  emptyTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: weight.title },
   emptyText: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 19 },
   emptyAction: { marginTop: spacing.sm, alignSelf: 'flex-start' },
   prompt: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    borderRadius: radius.xl,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.panel,
@@ -985,25 +985,25 @@ const styles = StyleSheet.create({
   promptIcon: {
     width: 34,
     height: 34,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.goldSoft,
   },
   promptText: { flex: 1, gap: 2 },
-  promptTitle: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
+  promptTitle: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.title },
   promptSub: { color: colors.textFaint, fontSize: fontSize.xs },
   sleepCard: { gap: spacing.sm },
   sleepHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   sleepIcon: {
     width: 28,
     height: 28,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.goldSoft,
   },
-  sleepTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: '700' },
+  sleepTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title },
   sleepBody: {
     color: colors.textSecondary,
     fontSize: fontSize.sm,
@@ -1011,13 +1011,13 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   sleepHint: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 16 },
-  sleepWarn: { color: colors.warn, fontSize: fontSize.xs, lineHeight: 16, fontWeight: '600' },
+  sleepWarn: { color: colors.warn, fontSize: fontSize.xs, lineHeight: 16, fontWeight: weight.title },
   sleepActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
   sleepPrimary: { flex: 1, height: 40 },
   sleepGhost: { height: 40, paddingHorizontal: spacing.md },
   section: { gap: spacing.sm },
   list: {
-    borderRadius: radius.xl,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.card,
@@ -1027,7 +1027,7 @@ const styles = StyleSheet.create({
   replayRow: { gap: spacing.md, paddingRight: spacing.lg },
   replayCard: {
     width: 232,
-    borderRadius: radius.xl,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.card,
@@ -1038,12 +1038,12 @@ const styles = StyleSheet.create({
   replayIndex: {
     color: colors.textSecondary,
     fontSize: fontSize.md,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   replayTeams: { gap: 5 },
   replayTeam: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  replayTeamName: { color: colors.text, fontSize: fontSize.md, fontWeight: '600', flex: 1 },
+  replayTeamName: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title, flex: 1 },
   replayMeta: { color: colors.textFaint, fontSize: fontSize.xs },
   footer: { gap: 3, paddingTop: spacing.sm },
   footerText: { color: colors.textFaint, fontSize: fontSize.xs, textAlign: 'center' },

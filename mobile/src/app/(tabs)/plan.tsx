@@ -22,7 +22,7 @@ import { SectionHeader } from '@/ui/SectionHeader';
 import { SleepBadge } from '@/ui/SleepBadge';
 import { WeekRiskBand } from '@/ui/WeekRiskBand';
 import type { WeekRisk } from '@/ui/WeekRiskBand';
-import { colors, fontSize, leagueColor, radius, spacing, tierColor, withAlpha } from '@/ui/theme';
+import { colors, fontSize, leagueColor, radius, spacing, tierColor, withAlpha, weight } from '@/ui/theme';
 import type { Entry, Ev, Match } from '@/types';
 
 type WeekData = {
@@ -272,7 +272,7 @@ export default function PlanScreen() {
                 animateLayout();
                 setSelectedDay(null);
               }}
-              hitSlop={10}
+              hitSlop={13}
               accessibilityRole="button"
               accessibilityLabel="清除夜晚筛选"
               style={({ pressed }) => [styles.filterClear, pressed && styles.pressed]}
@@ -539,13 +539,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: spacing.xs,
   },
-  title: { color: colors.text, fontSize: fontSize.xxl, fontWeight: '800', letterSpacing: 0.3 },
+  title: { color: colors.text, fontSize: fontSize.xxl, fontWeight: weight.title, letterSpacing: 0.3 },
   subline: { color: colors.textFaint, fontSize: fontSize.xs, marginTop: 2 },
   weekNav: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   navButton: {
     width: 34,
     height: 34,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.panel,
@@ -553,32 +553,32 @@ const styles = StyleSheet.create({
     borderColor: colors.hairline,
   },
   todayButton: {
-    height: 30,
+    minHeight: 30,
     paddingHorizontal: spacing.md,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.hairline,
     alignItems: 'center',
     justifyContent: 'center',
   },
   todayButtonActive: { borderColor: colors.accent, backgroundColor: colors.goldSoft },
-  todayText: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' },
+  todayText: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: weight.title },
   todayTextActive: { color: colors.accent },
   budgetCard: { gap: spacing.sm },
   budgetTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  eyebrow: { color: colors.textFaint, fontSize: fontSize.xs, fontWeight: '600' },
+  eyebrow: { color: colors.textFaint, fontSize: fontSize.xs, fontWeight: weight.title },
   budgetValue: {
     color: colors.resource,
     fontSize: fontSize.xxl,
-    fontWeight: '800',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
-  budgetUnit: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: '500' },
+  budgetUnit: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: weight.label },
   budgetStats: { alignItems: 'flex-end', gap: 3 },
-  budgetStat: { color: colors.textMuted, fontSize: fontSize.xs },
+  budgetStat: { color: colors.textMuted, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   budgetBarTrack: {
     height: 7,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.hairline,
@@ -588,12 +588,10 @@ const styles = StyleSheet.create({
   },
   budgetBarSegment: {
     height: '100%',
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
   },
   budgetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingTop: spacing.xs },
   hint: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 17 },
-  sleepSummary: { color: colors.textMuted, fontSize: fontSize.xs, paddingHorizontal: spacing.xs },
-  sleepSummaryWarn: { color: colors.warn, fontWeight: '600' },
   section: { gap: spacing.sm },
   ratio: { color: colors.textFaint, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   filterBar: {
@@ -603,16 +601,16 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     minHeight: 34,
     paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
+    borderRadius: radius.control,
     borderWidth: 1,
     borderColor: withAlpha(colors.accent, 0.28),
     backgroundColor: withAlpha(colors.accent, 0.06),
   },
-  filterText: { flex: 1, color: colors.accent, fontSize: fontSize.xs, fontWeight: '600' },
+  filterText: { flex: 1, color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
   filterClear: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 4 },
   filterClearText: { color: colors.textMuted, fontSize: fontSize.xs },
   list: {
-    borderRadius: radius.xl,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.card,
@@ -632,7 +630,7 @@ const styles = StyleSheet.create({
   pickTimeText: {
     color: colors.text,
     fontSize: fontSize.md,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   pickDate: { color: colors.textFaint, fontSize: fontSize.xs },
@@ -643,14 +641,14 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
     color: colors.textSecondary,
     fontSize: fontSize.sm,
-    fontWeight: '600',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   pickTeams: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  pickTeamName: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600', maxWidth: '34%' },
+  pickTeamName: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.label, maxWidth: '34%' },
   pickVs: { color: colors.textFaint, fontSize: fontSize.xs },
   pickReason: { color: colors.textFaint, fontSize: fontSize.xs },
-  pickConflict: { color: colors.warn, fontSize: fontSize.xs, fontWeight: '600' },
+  pickConflict: { color: colors.warn, fontSize: fontSize.xs, fontWeight: weight.title },
   pickConflictNames: { color: colors.textFaint, fontSize: fontSize.xs },
   zeroRow: {
     flexDirection: 'row',
@@ -679,19 +677,9 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.hairline,
   },
   mineText: { flex: 1, gap: 2 },
-  mineTeams: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
+  mineTeams: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.title },
   mineReason: { color: colors.textFaint, fontSize: fontSize.xs },
   mineTime: { color: colors.textMuted, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
-  chart: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs, paddingTop: spacing.xs },
-  chartDotSlot: { height: 6, justifyContent: 'center', alignItems: 'center' },
-  chartBarWrap: { height: 60, width: '100%', justifyContent: 'flex-end', alignItems: 'center' },
-  chartBar: { width: '62%', borderRadius: radius.sm, minHeight: 3 },
-  chartLabel: { color: colors.textFaint, fontSize: fontSize.xs },
-  chartCount: { color: colors.textMuted, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
-  dayPreviewTitle: { color: colors.text, fontSize: fontSize.xs, fontWeight: '700' },
-  dayPreviewCost: { color: colors.textMuted, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
-  dayPreviewMore: { color: colors.textFaint, fontSize: fontSize.xs, paddingTop: 2 },
-  dayPreviewTeams: { flex: 1, color: colors.textSecondary, fontSize: fontSize.xs },
   advice: { color: colors.textMuted, fontSize: fontSize.xs, lineHeight: 18, marginTop: spacing.sm },
   otherRow: {
     flexDirection: 'row',
@@ -709,7 +697,6 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   otherTeams: { flex: 1, color: colors.textSecondary, fontSize: fontSize.xs },
-  emptyText: { color: colors.textMuted, fontSize: fontSize.sm },
   altRow: {
     flexDirection: 'row',
     alignItems: 'center',

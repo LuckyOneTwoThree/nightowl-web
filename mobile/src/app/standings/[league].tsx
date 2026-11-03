@@ -5,7 +5,7 @@ import { ChevronLeft } from 'lucide-react-native';
 
 import StandingsPanel from '@/components/StandingsPanel';
 import { STANDINGS_LEAGUES } from '@core/standings.js';
-import { colors, fontSize, radius, spacing } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 
 /**
  * 比赛详情进入的独立积分榜页。
@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   headerButton: {
     width: 38,
     height: 38,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.panel,
@@ -69,6 +69,6 @@ const styles = StyleSheet.create({
   },
   headerSpacer: { width: 38, height: 38 },
   headerText: { flex: 1, gap: 2 },
-  title: { color: colors.text, fontSize: fontSize.lg, fontWeight: '700' },
+  title: { color: colors.text, fontSize: fontSize.lg, fontWeight: weight.title },
   subline: { color: colors.textMuted, fontSize: fontSize.xs },
 });

@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { teamName } from '@data/index.js';
 import { hm } from '@core/format.js';
 import { formatSleepHours } from '@core/sleep.js';
-import { colors, fontSize, radius, spacing } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 
 type Props = {
   context: any;
@@ -77,30 +77,30 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 560,
-    borderRadius: radius.xxl,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: 'rgba(224,168,46,0.38)',
     backgroundColor: 'rgba(20,25,36,0.97)',
     padding: spacing.lg,
     gap: spacing.xs,
   },
-  eyebrow: { color: colors.warn, fontSize: fontSize.xs, fontWeight: '700' },
-  title: { color: colors.text, fontSize: fontSize.base, fontWeight: '700' },
+  eyebrow: { color: colors.warn, fontSize: fontSize.xs, fontWeight: weight.title },
+  title: { color: colors.text, fontSize: fontSize.base, fontWeight: weight.title },
   body: { color: colors.textSecondary, fontSize: fontSize.sm, lineHeight: 19 },
   notice: { color: colors.warn, fontSize: fontSize.xs, marginTop: 2 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.sm },
   primary: {
-    minHeight: 40,
-    borderRadius: radius.lg,
+    minHeight: 44,
+    borderRadius: radius.control,
     backgroundColor: colors.accent,
     paddingHorizontal: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryText: { color: colors.accentInk, fontSize: fontSize.sm, fontWeight: '800' },
+  primaryText: { color: colors.accentInk, fontSize: fontSize.sm, fontWeight: weight.title },
   secondary: {
-    minHeight: 40,
-    borderRadius: radius.lg,
+    minHeight: 44,
+    borderRadius: radius.control,
     borderWidth: 1,
     borderColor: colors.control,
     backgroundColor: colors.panel,
@@ -108,8 +108,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  secondaryText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '600' },
-  ghost: { minHeight: 40, borderRadius: radius.lg, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' },
+  secondaryText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: weight.title },
+  ghost: { minHeight: 44, borderRadius: radius.control, paddingHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' },
   ghostText: { color: colors.textMuted, fontSize: fontSize.xs },
   pressed: { opacity: 0.78 },
 });

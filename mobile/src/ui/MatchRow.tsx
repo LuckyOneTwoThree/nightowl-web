@@ -9,7 +9,7 @@ import { leagueColor, leagueName, teamName } from '@data/index.js';
 import { selectionFeedback } from '@/lib/feedback';
 import { useAppStore, useMatchRevealed } from '@/state/app';
 import { Crest } from '@/ui/Crest';
-import { colors, fontSize, radius, spacing, tierColor, withAlpha } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, tierColor, withAlpha, weight } from '@/ui/theme';
 import type { Prefs } from '@/state/prefs';
 import type { Match } from '@/types';
 
@@ -156,7 +156,7 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
                 selectionFeedback();
                 revealMatch(match.id);
               }}
-              hitSlop={8}
+              hitSlop={13}
               accessibilityRole="button"
               accessibilityLabel="揭晓比分"
               style={({ pressed }) => [styles.revealPill, pressed && styles.pressed]}
@@ -205,37 +205,37 @@ const styles = StyleSheet.create({
   time: {
     color: colors.text,
     fontSize: fontSize.md,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   league: { color: colors.textFaint, fontSize: fontSize.xs },
-  tierInline: { fontWeight: '700', fontSize: fontSize.xs },
+  tierInline: { fontWeight: weight.title, fontSize: fontSize.xs },
   teams: { flex: 1, gap: 5, paddingVertical: spacing.sm, paddingRight: spacing.xs },
   teamLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  teamName: { color: colors.textSecondary, fontSize: fontSize.md, flex: 1 },
-  teamNameFollowed: { color: colors.text, fontWeight: '600' },
-  teamNameWinner: { color: colors.text, fontWeight: '700' },
+  teamName: { color: colors.textSecondary, fontSize: fontSize.md, fontWeight: weight.label, flex: 1 },
+  teamNameFollowed: { color: colors.text, fontWeight: weight.title },
+  teamNameWinner: { color: colors.text, fontWeight: weight.title },
   teamNameLoser: { color: colors.textMuted },
   rowScore: {
     color: colors.textSecondary,
     fontSize: fontSize.base,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
     minWidth: 14,
     textAlign: 'right',
   },
-  rowScoreWinner: { color: colors.text, fontWeight: '800' },
+  rowScoreWinner: { color: colors.text, fontWeight: weight.title },
   followDot: {
     width: 5,
     height: 5,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     backgroundColor: colors.accent,
   },
   right: { minWidth: 44, alignItems: 'flex-end', gap: 3 },
   index: {
     color: colors.textMuted,
     fontSize: fontSize.sm,
-    fontWeight: '600',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   doneSub: { color: colors.textFaint, fontSize: fontSize.xs },
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: withAlpha(colors.accent, 0.35),
     backgroundColor: colors.goldSoft,
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
   revealPillText: {
     color: colors.accent,
     fontSize: fontSize.xs,
-    fontWeight: '700',
+    fontWeight: weight.title,
   },
   livePill: {
     flexDirection: 'row',
@@ -262,16 +262,16 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 7,
     paddingVertical: 3,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     backgroundColor: withAlpha(colors.live, 0.12),
     borderWidth: 1,
     borderColor: withAlpha(colors.live, 0.32),
   },
-  liveDot: { width: 6, height: 6, borderRadius: radius.full, backgroundColor: colors.live },
+  liveDot: { width: 6, height: 6, borderRadius: radius.pill, backgroundColor: colors.live },
   liveText: {
     color: colors.live,
     fontSize: fontSize.xs,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   warnRow: { flexDirection: 'row', alignItems: 'center' },

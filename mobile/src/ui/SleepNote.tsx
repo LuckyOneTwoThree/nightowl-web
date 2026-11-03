@@ -4,7 +4,7 @@ import type { Match } from '@/types';
 import { formatSleepHours, sleepLedger } from '@core/sleep.js';
 import type { Prefs } from '@/state/prefs';
 
-import { colors, fontSize } from './theme';
+import { colors, fontSize, weight } from './theme';
 
 type SleepPrefs = Pick<Prefs, 'sleepEnabled' | 'sleepWakeTime' | 'sleepMinHours'>;
 
@@ -47,5 +47,5 @@ export function SleepNote({
 
 const styles = StyleSheet.create({
   note: { color: colors.textMuted, fontSize: fontSize.xs, lineHeight: 16 },
-  warn: { color: colors.warn, fontWeight: '600' },
+  warn: { color: colors.warn, fontWeight: weight.title },
 });

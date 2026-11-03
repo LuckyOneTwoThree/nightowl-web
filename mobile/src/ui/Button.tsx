@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
-import { colors, fontSize, radius, spacing } from './theme';
+import { colors, fontSize, radius, spacing, weight } from './theme';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
@@ -82,7 +82,7 @@ export function Button({
 const styles = StyleSheet.create({
   base: {
     height: 46,
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
   danger: { backgroundColor: colors.dangerSoft, borderWidth: 1, borderColor: colors.danger },
   pressed: { opacity: 0.82 },
   disabled: { opacity: 0.45 },
-  label: { fontSize: fontSize.md, fontWeight: '700' },
+  label: { fontSize: fontSize.md, fontWeight: weight.title },
   primaryLabel: { color: colors.accentInk },
   secondaryLabel: { color: colors.textSecondary },
   ghostLabel: { color: colors.accent },

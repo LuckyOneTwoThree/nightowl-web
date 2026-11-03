@@ -8,7 +8,7 @@ import { liveCountAt } from '@core/owl.js';
 import { useNow } from '@/lib/useNow';
 import { useDataRev } from '@/state/app';
 
-import { colors, fontSize, radius, spacing } from './theme';
+import { colors, fontSize, radius, spacing, weight } from './theme';
 
 type TabMeta = {
   label: string;
@@ -97,18 +97,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
   },
   pressed: { opacity: 0.7 },
-  label: { fontSize: fontSize.xs, fontWeight: '600' },
-  labelActive: { fontWeight: '700' },
+  label: { fontSize: fontSize.xs, fontWeight: weight.title },
+  labelActive: { fontWeight: weight.title },
   iconWrap: {
     position: 'relative',
     width: 34,
     height: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
   },
   iconWrapActive: {
     backgroundColor: colors.goldSoft,
@@ -118,7 +118,8 @@ const styles = StyleSheet.create({
     top: -5,
     right: -7,
     minWidth: 18,
-    height: 18,
+    minHeight: 18,
+    paddingVertical: 1,
     borderRadius: 9,
     backgroundColor: colors.live,
     alignItems: 'center',
@@ -127,5 +128,5 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.panel,
   },
-  badgeText: { color: '#FFFFFF', fontSize: fontSize.xs, fontWeight: '800' },
+  badgeText: { color: '#FFFFFF', fontSize: fontSize.xs, fontWeight: weight.title },
 });

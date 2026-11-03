@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { fontSize, radius, spacing, tierColor, withAlpha } from './theme';
+import { fontSize, radius, spacing, tierColor, withAlpha, weight } from './theme';
 import type { Tier } from '@/types';
 
 type Props = {
@@ -56,29 +56,29 @@ const styles = StyleSheet.create({
   base: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     borderWidth: 1,
     gap: 4,
   },
   sm: {
-    height: 22,
+    minHeight: 22,
     paddingHorizontal: spacing.sm,
   },
   md: {
-    height: 26,
+    minHeight: 26,
     paddingHorizontal: spacing.sm + 2,
   },
   dot: {
     width: 5,
     height: 5,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
   },
   label: {
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   cost: {
-    fontWeight: '600',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   labelSm: {

@@ -26,7 +26,7 @@ export function Card({ children, style, tone = 'default' }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: radius.xxl,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: withAlpha(colors.text, 0.06),
     backgroundColor: colors.card,

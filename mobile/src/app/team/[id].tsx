@@ -20,7 +20,7 @@ import { Crest } from '@/ui/Crest';
 import { FormDots } from '@/ui/FormDots';
 import { MatchRow } from '@/ui/MatchRow';
 import { SectionHeader } from '@/ui/SectionHeader';
-import { colors, fontSize, radius, spacing } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 import type { Match } from '@/types';
 
 type TeamInfo = {
@@ -318,28 +318,28 @@ const styles = StyleSheet.create({
   back: {
     width: 38,
     height: 38,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.panel,
     borderWidth: 1,
     borderColor: colors.hairline,
   },
-  headerTitle: { color: colors.text, fontSize: fontSize.base, fontWeight: '700' },
+  headerTitle: { color: colors.text, fontSize: fontSize.base, fontWeight: weight.title },
   scroll: { flex: 1 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
   hero: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    borderRadius: radius.xxl,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.card,
     padding: spacing.lg,
   },
   heroText: { flex: 1, gap: 2 },
-  name: { color: colors.text, fontSize: fontSize.xl, fontWeight: '800' },
+  name: { color: colors.text, fontSize: fontSize.xl, fontWeight: weight.title },
   en: { color: colors.textFaint, fontSize: fontSize.xs },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
   follow: {
@@ -348,23 +348,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: spacing.md,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.control,
     backgroundColor: colors.panel,
   },
   followActive: { borderColor: colors.accent, backgroundColor: colors.goldSoft },
-  followText: { color: colors.textSecondary, fontSize: fontSize.xs, fontWeight: '600' },
+  followText: { color: colors.textSecondary, fontSize: fontSize.xs, fontWeight: weight.title },
   nextCard: { gap: spacing.sm },
   nextTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   nextRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   nextText: { flex: 1, gap: 2 },
-  nextTeams: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
+  nextTeams: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title },
   nextMeta: { color: colors.textFaint, fontSize: fontSize.xs },
   eyebrow: {
     color: colors.textMuted,
     fontSize: fontSize.xs,
-    fontWeight: '700',
+    fontWeight: weight.title,
     letterSpacing: 0.4,
   },
   card: { gap: spacing.sm },
@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingTop: spacing.xs },
   stat: {
     width: '48%',
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     backgroundColor: colors.panel,
     padding: spacing.md,
     gap: 2,
@@ -381,13 +381,13 @@ const styles = StyleSheet.create({
   statValue: {
     color: colors.text,
     fontSize: fontSize.lg,
-    fontWeight: '800',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   statLabel: { color: colors.textFaint, fontSize: fontSize.xs },
   section: { gap: spacing.sm },
   list: {
-    borderRadius: radius.xl,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.card,
@@ -402,14 +402,14 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.xl,
   },
-  emptyTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: '700' },
+  emptyTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: weight.title },
   emptyButton: {
     height: 44,
     paddingHorizontal: spacing.xl,
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyButtonText: { color: colors.accentInk, fontSize: fontSize.md, fontWeight: '700' },
+  emptyButtonText: { color: colors.accentInk, fontSize: fontSize.md, fontWeight: weight.title },
 });

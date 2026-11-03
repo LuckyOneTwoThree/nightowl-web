@@ -1,7 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, fontSize, radius, spacing } from './theme';
+import { colors, fontSize, radius, spacing, weight } from './theme';
 
 type Props = { children: ReactNode };
 type State = { error: Error | null };
@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.xl,
   },
-  title: { color: colors.text, fontSize: fontSize.lg, fontWeight: '700' },
+  title: { color: colors.text, fontSize: fontSize.lg, fontWeight: weight.title },
   text: {
     color: colors.textMuted,
     fontSize: fontSize.sm,
@@ -57,10 +57,10 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     height: 44,
     paddingHorizontal: spacing.xl,
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonText: { color: colors.accentInk, fontSize: fontSize.md, fontWeight: '700' },
+  buttonText: { color: colors.accentInk, fontSize: fontSize.md, fontWeight: weight.title },
 });

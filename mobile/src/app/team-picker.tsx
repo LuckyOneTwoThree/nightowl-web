@@ -13,7 +13,7 @@ import { X } from 'lucide-react-native';
 import { TeamPicker } from '@/components/TeamPicker';
 import { Button } from '@/ui/Button';
 import { usePrefsStore } from '@/state/prefs';
-import { colors, fontSize, spacing } from '@/ui/theme';
+import { colors, fontSize, spacing, weight } from '@/ui/theme';
 
 export default function TeamPickerScreen() {
   const router = useRouter();
@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
   },
-  title: { color: colors.text, fontSize: fontSize.lg, fontWeight: '700' },
+  title: { color: colors.text, fontSize: fontSize.lg, fontWeight: weight.title },
   close: {
     width: 34,
     height: 34,

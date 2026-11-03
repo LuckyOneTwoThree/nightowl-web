@@ -11,7 +11,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 
-import { colors, fontSize, radius, spacing } from './theme';
+import { durations } from './motion';
+
+import { colors, fontSize, radius, spacing, weight } from './theme';
 
 type Props = {
   visible: boolean;
@@ -33,7 +35,7 @@ export function Sheet({ visible, onClose, title, children, scroll = false }: Pro
       Animated.parallel([
         Animated.timing(backdropOpacity, {
           toValue: 1,
-          duration: 180,
+          duration: durations.base,
           useNativeDriver: true,
         }),
         Animated.spring(translateY, {
@@ -107,8 +109,8 @@ const styles = StyleSheet.create({
   },
   panel: {
     backgroundColor: colors.panel,
-    borderTopLeftRadius: radius.xxl,
-    borderTopRightRadius: radius.xxl,
+    borderTopLeftRadius: radius.overlay,
+    borderTopRightRadius: radius.overlay,
     borderWidth: 1,
     borderBottomWidth: 0,
     borderColor: colors.hairline,
@@ -120,7 +122,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: 36,
     height: 4,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     backgroundColor: colors.control,
     marginBottom: spacing.md,
   },
@@ -130,7 +132,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.md,
   },
-  title: { color: colors.text, fontSize: fontSize.lg, fontWeight: '700' },
+  title: { color: colors.text, fontSize: fontSize.lg, fontWeight: weight.title },
   scroll: { maxHeight: '100%' },
   scrollContent: { paddingBottom: spacing.md },
 });

@@ -1,9 +1,9 @@
 # 夜猫看台 · 「今晚决策台」双端体验升级计划
 
-- **状态**：P0 全部完成；P1-1 ~ P1-6 全部落地（P1-5 仅桌面端，理由见该段）；P2-1 移动端风险带已落地
+- **状态**：P0 全部完成；P1-1 ~ P1-6 全部落地（P1-5 仅桌面端，理由见该段）；P2-1 移动端风险带、P2-2 Token 与排版收敛已落地
 - **基线**：`v0.1.44`，HEAD `b02206a`，桌面测试 31 脚本 / 891 断言全绿
-- **当前实测**：36 脚本 / 1044 断言全绿；`build` 成功；`check:render` 73 项全过；`measure-layout` 三档无横向溢出；移动端 `verify:shared`（0 漂移）+ `typecheck` + `export:android` 通过
-- **下一批**：P2-2 Token 收敛 / P2-3 反馈与失败恢复 / 移动端详情三级披露 / 真机验收（播放器静音与自动换线、通知权限、托盘与自启、风险带视觉）
+- **当前实测**：36 脚本 / 1044 断言全绿；`build` 成功；`check:render` 73 项全过；`measure-layout` 三档无横向溢出；移动端 `npm run check`（`verify:shared` 0 漂移 + `audit:touch` 97 个控件全达标 + `typecheck`）+ `export:android` 通过
+- **下一批**：P2-3 反馈与失败恢复 / 移动端详情三级披露 / 真机验收（播放器静音与自动换线、通知权限、托盘与自启、风险带视觉、系统字号 1.3× 与 1.6×）
 - **范围**：桌面端 `src/`、移动端 `mobile/src/`、共享 `src/core/`
 - **目标**：把「信息丰富的转播仪表盘」收敛为「在正确时机只回答一个问题的今晚决策台」
 
@@ -384,13 +384,57 @@ npm run export:android
   `test:all` 36 脚本 / 1044 断言；移动 `typecheck` + `export:android` 通过
 - ⚠️ 视觉未走查：本机起不了模拟器，颜色/密度只能真机看（色块重叠、竖线粗细、11px 刻度可读性）
 
-#### P2-2 Token 与排版收敛
+#### P2-2 Token 与排版收敛 · ✅ 已完成（移动端）
 
-- 保留现有 `theme.ts` 色板，不借「收敛」改暗色值。
-- 圆角改为三档：控件 8、卡片 16、浮层 20；胶囊只用于状态。
-- 字重改为角色制：正文 400、标签/队名 500、标题/胜方 600；比分与倒计时使用等宽数字。
-- 动效 160–220ms，只用于浮层进退、比分变化、列表重排。
-- 所有交互控件至少 44×44dp；支持系统字体放大 1.3× / 1.6×。
+色板没有动。这一项只做三件事：把「每次写新组件都要重新猜一次」的档位砍掉、
+把「所有想强调的地方都加粗」的字重收敛、把「看起来能点但其实只有 13dp 高」的地方补够。
+
+**圆角三档 + 胶囊**（52 处样式、110 个 token）
+
+- 旧档 `sm/md/lg/xl/xxl/xxxl` 六档在实际使用里已经退化成随机数：同为按钮出现过 12 和 8，
+  同为卡片出现过 20 和 16。**档位多不等于精细，只等于每次新写一个组件都要重新猜一次。**
+- 新档：`control 8`（按钮 / 输入框 / 分段 / 行内元素）、`card 16`（列表容器 / Hero / 面板）、
+  `overlay 20`（Sheet / 弹层）、`pill 999`（只用于状态，不用于容器）。
+
+**字重角色制**（173 处）
+
+- 700 / 800 此前一共出现 105 次，几乎等于「所有想强调的地方都加粗」——结果是没有任何东西真的突出。
+- 新档：`body 400` / `label 500`（标签、队名） / `title 600`（标题、比分）；层级改由字号与等宽数字承担，
+  不再有更粗的档。现在分布：`title 169` / `label 4` / `body 1`。
+
+**动效与数字**
+
+- `durations` 收敛为 160 / 200 / 220；`Sheet.tsx` 与 `player.tsx` 里硬编码的 180、200 改用 `durations.base`。
+- 五处「会跳动的数字」（赛程日期计数、实时时间轴计数、决策条数值、预算统计）补 `tabular-nums`。
+
+**44×44 触控目标 · 新增门禁 `npm run audit:touch`**
+
+- 肉眼过 90 多个 `Pressable` 必然漏，而且改一次样式就可能把某个按钮打回 28dp，所以做成脚本：
+  读同文件 `StyleSheet.create`、叠加样式数组、解析 `fontSize.xs` / `spacing.sm + 2` 这类 token 与算式、
+  加上 `hitSlop` 三种写法的外扩，最后判 44dp。
+- 修掉 15 处：行内文字链（「重试」「去设置」「已看」「移除」「关闭」「清除」）只有 13dp 高，
+  外扩补到 16；`revealButton` / `revealPill` / `watchLaterButton` / 风险带行补齐到 45dp 上下；
+  止损横幅三个按钮 `minHeight 40 → 44`；决策条「同夜替代」格子靠 `hitSlop` 补到 51dp
+  （相邻格子都不接手势，重叠不抢点击）。
+- 算不出高度的情况不静默放过：脚本里 9 条豁免，每条写清为什么够 44dp（卡片整块可点、遮罩全屏可点、
+  高度写在内容 View 上）。**新出现算不出高度的控件而不进表，一样失败**——否则这个门禁会慢慢变假绿。
+- 负向验证过：把「移除」的 `hitSlop` 从 16 改回 4，脚本报 `21.2dp` 并退出 1。
+
+**系统字号 1.3× / 1.6×**
+
+- 正文、队名、比分的容器一律 `height → minHeight`（`Chip`、`SleepBadge`、`SegmentedControl`、
+  Tab 徽章、`todayButton`、睡眠步进器、赛程日期卡），字大了盒子跟着长。
+- 只有一类文字封顶 `fontScale.micro = 1.3`：**尺寸被数据或几何锁死的微文字**——风险带坐标轴刻度。
+  它旁边那些色块不会跟着字变大，字再大只会糊到邻居身上。
+
+**有意不做**
+
+- `dateScroll` 仍固定 `height: 78`：横向滚动容器需要确定高度，改成 `minHeight` 会让它在测量前塌掉；
+  日期卡本身已改 `minHeight`，1.6× 时卡片长到 69 仍在容器内。
+- Tab 徽章数字不封顶：它已改 `minHeight` + `paddingVertical`，向下长即可，不必牺牲可读性。
+- 色板与暗色值不动（这一项本来就不是换皮）。
+
+- ⚠️ 未真机走查：本机起不了模拟器，系统字号 1.3× / 1.6× 的实际溢出、徽章增长后的对齐只能真机看。
 
 #### P2-3 反馈与失败恢复
 
@@ -431,7 +475,9 @@ mobile/src/app/team/[id].tsx        P0-6 球队直播
 mobile/src/app/match/[id].tsx       P0-5/P1-6 详情与滚动
 mobile/src/app/onboarding.tsx       P0-7 权限与价值启用
 mobile/src/app/player.tsx           P0-8 夜间静音
-mobile/src/ui/theme.ts              P2-2 Token
+mobile/src/ui/theme.ts              P2-2 圆角三档 / 字重角色制 / fontScale.micro
+mobile/src/ui/motion.ts             P2-2 动效 160 / 200 / 220
+mobile/scripts/audit-touch.mjs      P2-2 44dp 触控门禁（npm run audit:touch）
 ```
 
 ---
@@ -446,9 +492,10 @@ mobile/src/ui/theme.ts              P2-2 Token
 | 桌面布局  | `npx electron tools/measure-layout.mjs`            | 1120 / 1366 / 1440 无溢出、无滚动陷阱 |
 | 对比度   | `node tools/check-contrast.mjs`                    | 现有 token 对比度不降级              |
 | 移动共享层 | `cd mobile && npm run verify:shared`               | 0 漂移                         |
+| 移动触控  | `cd mobile && npm run audit:touch`                 | 97 个 Pressable 全部 ≥ 44dp     |
 | 移动类型  | `cd mobile && npm run typecheck`                   | 0 error                      |
 | 移动构建  | `cd mobile && npm run export:android`              | 成功产出                         |
-| 真机    | iOS / Android 各一台                                  | 播放/音量/通知/安全区/返回路径            |
+| 真机    | iOS / Android 各一台                                  | 播放/音量/通知/安全区/返回路径/系统字号        |
 | 视觉走查  | 桌面 3 档窗口 + 移动 320/375/414                          | 六种比赛状态都可见且无遮挡                |
 
 ### 六种状态验收清单

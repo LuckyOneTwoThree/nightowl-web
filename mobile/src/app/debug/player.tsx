@@ -8,7 +8,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { ChevronLeft, SlidersHorizontal } from 'lucide-react-native';
 
-import { colors, fontSize, radius, spacing } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 
 const TEST_URL =
   'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8';
@@ -58,6 +58,7 @@ export default function PlayerScreen() {
       <Pressable
         onPress={() => router.back()}
         style={[styles.back, { top: insets.top + spacing.sm, left: insets.left + spacing.md }]}
+        hitSlop={4}
         accessibilityLabel="返回"
       >
         <ChevronLeft size={20} color={colors.text} />
@@ -74,7 +75,7 @@ export default function PlayerScreen() {
         <Text style={styles.bannerText}>
           Apple 官方测试流 · 自定义请求头 {withHeaders ? '已开启' : '已关闭'}
         </Text>
-        <Pressable onPress={() => setWithHeaders(value => !value)} style={styles.headerToggle}>
+        <Pressable onPress={() => setWithHeaders(value => !value)} style={styles.headerToggle} hitSlop={15}>
           <SlidersHorizontal size={14} color={colors.accent} />
           <Text style={styles.headerToggleText}>切换请求头</Text>
         </Pressable>
@@ -90,7 +91,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     height: 40,
     paddingHorizontal: spacing.md,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     backgroundColor: 'rgba(11, 14, 21, 0.72)',
     borderWidth: 1,
     borderColor: colors.hairline,
@@ -98,18 +99,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xxs,
   },
-  backText: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
+  backText: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.title },
   banner: {
     position: 'absolute',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     backgroundColor: 'rgba(11, 14, 21, 0.78)',
     borderWidth: 1,
     borderColor: colors.hairline,
     gap: 2,
   },
-  bannerTitle: { color: colors.accent, fontSize: fontSize.xs, fontWeight: '700', letterSpacing: 0.8 },
+  bannerTitle: { color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title, letterSpacing: 0.8 },
   bannerText: { color: colors.textSecondary, fontSize: fontSize.xs },
   headerToggle: {
     marginTop: spacing.xs,
@@ -117,5 +118,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
   },
-  headerToggleText: { color: colors.accent, fontSize: fontSize.xs, fontWeight: '600' },
+  headerToggleText: { color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
 });

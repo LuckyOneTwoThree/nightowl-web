@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, fontSize, spacing } from './theme';
+import { colors, fontSize, spacing, weight } from './theme';
 
 type Props = {
   title: string;
@@ -40,13 +40,13 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  title: { color: colors.text, fontSize: fontSize.base, fontWeight: '700', letterSpacing: 0.1 },
+  title: { color: colors.text, fontSize: fontSize.base, fontWeight: weight.title, letterSpacing: 0.1 },
   count: {
     color: colors.textFaint,
     fontSize: fontSize.xs,
     fontVariant: ['tabular-nums'],
   },
-  action: { color: colors.textSecondary, fontSize: fontSize.xs, fontWeight: '600' },
+  action: { color: colors.textSecondary, fontSize: fontSize.xs, fontWeight: weight.title },
   actionHit: { minHeight: 32, justifyContent: 'center' },
   liveDot: { width: 6, height: 6, borderRadius: 999, backgroundColor: colors.live },
 });

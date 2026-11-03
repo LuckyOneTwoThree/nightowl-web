@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { bjClock } from '@core/format.js';
 import type { Match } from '@/types';
 
-import { colors, fontSize, radius, spacing } from './theme';
+import { colors, fontSize, spacing, weight } from './theme';
 
 export type DecisionStripData = {
   verdict: 'recommended' | 'neutral' | 'defer' | 'unknown';
@@ -55,6 +55,9 @@ function Cell({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      // 单元格本体只有两行字（约 24dp），靠外扩补到 44dp；相邻格子都是不接手势的 View，
+      // 重叠不会抢走别的动作。
+      hitSlop={{ top: 12, bottom: 12, left: 4, right: 4 }}
       style={({ pressed }) => [styles.cell, pressed && styles.pressed]}
     >
       {body}
@@ -124,6 +127,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: spacing.md },
   cell: { flex: 1, minWidth: 0, gap: 1 },
   label: { color: colors.textFaint, fontSize: fontSize.xs },
-  value: { fontSize: fontSize.sm, fontWeight: '700' },
+  value: { fontSize: fontSize.sm, fontWeight: weight.title, fontVariant: ['tabular-nums'] },
   pressed: { opacity: 0.7 }
 });

@@ -13,6 +13,8 @@
     "pretypecheck": "npm run sync:shared && npm run sync:crests",
     "export:android": "expo export --platform android",
     "typecheck": "tsc --noEmit",
+    "audit:touch": "node scripts/audit-touch.mjs",
+    "check": "npm run verify:shared && npm run audit:touch && npm run typecheck",
     "doctor": "expo-doctor",
     "eas:dev": "npx eas-cli@latest build --platform android --profile development",
     "eas:preview": "npx eas-cli@latest build --platform android --profile preview",

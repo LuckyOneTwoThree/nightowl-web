@@ -25,7 +25,7 @@ import { Crest } from '@/ui/Crest';
 import { EmptyState } from '@/ui/EmptyState';
 import { MatchRow } from '@/ui/MatchRow';
 import { SectionHeader } from '@/ui/SectionHeader';
-import { colors, fontSize, radius, spacing } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 import type { Match } from '@/types';
 
 const SUGGESTED_TEAMS = ['ARS', 'MCI', 'LIV', 'FCB', 'PSG', 'RMA'];
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   inputWrap: {
     flex: 1,
     height: 42,
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.panel,
@@ -231,13 +231,13 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, color: colors.text, fontSize: fontSize.md, paddingVertical: 0 },
   cancelHit: { minHeight: 32, justifyContent: 'center' },
-  cancel: { color: colors.accent, fontSize: fontSize.sm, fontWeight: '600' },
+  cancel: { color: colors.accent, fontSize: fontSize.sm, fontWeight: weight.title },
   body: { flex: 1 },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxxl, gap: spacing.lg },
   sectionLabel: {
     color: colors.text,
     fontSize: fontSize.md,
-    fontWeight: '700',
+    fontWeight: weight.title,
     paddingTop: spacing.sm,
   },
   teamChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
@@ -246,30 +246,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.panel,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
   },
-  teamChipText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '600' },
+  teamChipText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: weight.title },
   leagueChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   leagueChip: {
     minHeight: 44,
     justifyContent: 'center',
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.panel,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
   },
-  leagueText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '600' },
+  leagueText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: weight.title },
   hint: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 18 },
   section: { gap: spacing.sm },
   list: {
-    borderRadius: radius.xl,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.card,
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.hairline,
   },
   teamRowText: { flex: 1, gap: 1 },
-  teamRowName: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
+  teamRowName: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title },
   teamRowMeta: { color: colors.textFaint, fontSize: fontSize.xs },
   pressed: { opacity: 0.8 },
 });

@@ -13,7 +13,7 @@ import { Check, Search, X } from 'lucide-react-native';
 import { LEAGUE_ORDER, leagueColor, leagueName, teams } from '@data/index.js';
 
 import { Crest } from '@/ui/Crest';
-import { colors, fontSize, radius, spacing } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 
 type Props = {
   selected: string[];
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, gap: spacing.sm },
   searchWrap: {
     height: 42,
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.panel,
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
   tab: {
     height: 30,
     paddingHorizontal: spacing.md,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.panel,
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   activeTab: { borderColor: colors.accent, backgroundColor: colors.goldSoft },
-  tabText: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' },
+  tabText: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: weight.title },
   activeTabText: { color: colors.accent },
   summaryRow: {
     flexDirection: 'row',
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.control,
     backgroundColor: colors.raised,
@@ -251,14 +251,14 @@ const styles = StyleSheet.create({
   },
   selectedName: { color: colors.textSecondary, fontSize: fontSize.xs, maxWidth: 90 },
   clearHit: { minHeight: 32, justifyContent: 'center' },
-  clear: { color: colors.accent, fontSize: fontSize.xs, fontWeight: '600' },
+  clear: { color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
   list: { flex: 1, minHeight: 0 },
   grid: { paddingBottom: spacing.xxl, gap: spacing.sm },
   row: { gap: spacing.sm },
   team: {
     flex: 1,
     minHeight: 106,
-    borderRadius: radius.xl,
+    borderRadius: radius.control,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.card,
@@ -277,16 +277,16 @@ const styles = StyleSheet.create({
     bottom: -2,
     width: 16,
     height: 16,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: colors.card,
   },
-  teamName: { color: colors.text, fontSize: fontSize.xs, fontWeight: '600', maxWidth: '96%' },
+  teamName: { color: colors.text, fontSize: fontSize.xs, fontWeight: weight.title, maxWidth: '96%' },
   teamMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  leagueDot: { width: 5, height: 5, borderRadius: radius.full },
+  leagueDot: { width: 5, height: 5, borderRadius: radius.pill },
   teamId: { color: colors.textFaint, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   empty: { paddingVertical: spacing.xxxl, alignItems: 'center' },
   emptyText: { color: colors.textMuted, fontSize: fontSize.sm },

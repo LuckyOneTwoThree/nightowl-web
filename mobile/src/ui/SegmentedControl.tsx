@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { selectionFeedback } from '@/lib/feedback';
-import { colors, fontSize, radius, spacing } from './theme';
+import { colors, fontSize, radius, weight } from './theme';
 
 type Option = { key: string; label: string };
 
@@ -45,15 +45,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 3,
     gap: 3,
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.panel,
   },
   item: {
     flex: 1,
-    height: 32,
-    borderRadius: radius.md,
+    minHeight: 32,
+    borderRadius: radius.control,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -63,6 +63,6 @@ const styles = StyleSheet.create({
     borderColor: colors.control,
   },
   pressed: { opacity: 0.8 },
-  label: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: '600' },
+  label: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: weight.title },
   activeLabel: { color: colors.accent },
 });

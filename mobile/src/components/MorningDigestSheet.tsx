@@ -8,7 +8,7 @@ import type { Match } from '@/types';
 import { Button } from '@/ui/Button';
 import { Chip } from '@/ui/Chip';
 import { Crest } from '@/ui/Crest';
-import { colors, fontSize, radius, spacing } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 
 type DigestItem = {
   item: { id: string; status: string };
@@ -58,7 +58,7 @@ export function MorningDigestSheet({
               </View>
               <Text style={styles.subtitle}>比分默认隐藏；逐场揭晓后查看。</Text>
             </View>
-            <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="关闭补看摘要">
+            <Pressable onPress={onClose} hitSlop={15} accessibilityRole="button" accessibilityLabel="关闭补看摘要">
               <Text style={styles.close}>关闭</Text>
             </Pressable>
           </View>
@@ -140,8 +140,8 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.62)' },
   sheet: {
     maxHeight: '88%',
-    borderTopLeftRadius: radius.xxxl,
-    borderTopRightRadius: radius.xxxl,
+    borderTopLeftRadius: radius.overlay,
+    borderTopRightRadius: radius.overlay,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.panel,
@@ -157,20 +157,20 @@ const styles = StyleSheet.create({
   },
   headerText: { flex: 1, gap: 2 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  title: { color: colors.text, fontSize: fontSize.lg, fontWeight: '800' },
+  title: { color: colors.text, fontSize: fontSize.lg, fontWeight: weight.title },
   subtitle: { color: colors.textMuted, fontSize: fontSize.xs, lineHeight: 17 },
   close: { color: colors.textMuted, fontSize: fontSize.sm, paddingTop: 2 },
   scroll: { flexGrow: 0 },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md, gap: spacing.sm },
   empty: { alignItems: 'center', paddingVertical: spacing.xxxl, gap: spacing.xs },
-  emptyTitle: { color: colors.text, fontSize: fontSize.base, fontWeight: '700' },
-  card: { borderRadius: radius.xl, borderWidth: 1, borderColor: colors.hairline, backgroundColor: colors.card, padding: spacing.md, gap: spacing.sm },
+  emptyTitle: { color: colors.text, fontSize: fontSize.base, fontWeight: weight.title },
+  card: { borderRadius: radius.card, borderWidth: 1, borderColor: colors.hairline, backgroundColor: colors.card, padding: spacing.md, gap: spacing.sm },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between' },
   meta: { color: colors.textFaint, fontSize: fontSize.xs },
   cardMain: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   cardText: { flex: 1, gap: 2 },
-  matchTitle: { color: colors.text, fontSize: fontSize.sm, fontWeight: '700' },
-  score: { color: colors.text, fontSize: fontSize.md, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  matchTitle: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.title },
+  score: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title, fontVariant: ['tabular-nums'] },
   scoreHidden: { color: colors.textFaint, letterSpacing: 1 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
   footer: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.hairline, paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },

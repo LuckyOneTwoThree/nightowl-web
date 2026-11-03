@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
-import { colors, fontSize, radius, spacing, withAlpha } from './theme';
+import { colors, fontSize, radius, spacing, withAlpha, weight } from './theme';
 
 type Tone = 'default' | 'accent' | 'warn' | 'live' | 'muted';
 
@@ -72,14 +72,14 @@ export function Chip({
 
 const styles = StyleSheet.create({
   base: {
-    height: 32,
-    borderRadius: radius.full,
+    minHeight: 32,
+    borderRadius: radius.pill,
     borderWidth: 1,
     paddingHorizontal: spacing.sm + 2,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
   },
-  label: { fontSize: fontSize.xs, fontWeight: '600' },
+  label: { fontSize: fontSize.xs, fontWeight: weight.label },
   pressed: { opacity: 0.75 },
 });

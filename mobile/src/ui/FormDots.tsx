@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, fontSize, radius } from './theme';
+import { colors, fontSize, radius, weight } from './theme';
 
 type Item = { result: 'W' | 'D' | 'L' };
 
@@ -35,9 +35,9 @@ export function FormDots({ form, size = 24 }: { form: Item[]; size?: number }) {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 6 },
   dot: {
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  text: { color: colors.resultInk, fontSize: fontSize.xs, fontWeight: '700' },
+  text: { color: colors.resultInk, fontSize: fontSize.xs, fontWeight: weight.title },
 });

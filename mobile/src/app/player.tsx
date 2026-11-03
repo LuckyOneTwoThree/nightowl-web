@@ -21,7 +21,8 @@ import { autoSwitchDecision } from '@core/line-switch.js';
 import { teamName } from '@data/index.js';
 
 import { usePlayerStore } from '@/state/player';
-import { colors, fontSize, radius, spacing } from '@/ui/theme';
+import { durations } from '@/ui/motion';
+import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 import type { Match } from '@/types';
 import type { StreamLine } from '@/data/useLiveSources';
 
@@ -91,7 +92,7 @@ function PlayerView({
   useEffect(() => {
     Animated.timing(hudOpacity, {
       toValue: hudVisible || panelOpen ? 1 : 0,
-      duration: 200,
+      duration: durations.base,
       useNativeDriver: true,
     }).start();
   }, [hudVisible, panelOpen, hudOpacity]);
@@ -335,7 +336,7 @@ const styles = StyleSheet.create({
   topButton: {
     width: 40,
     height: 40,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     backgroundColor: 'rgba(11,14,21,0.72)',
     borderWidth: 1,
     borderColor: colors.hairline,
@@ -346,7 +347,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 34,
     maxWidth: 340,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     backgroundColor: 'rgba(11,14,21,0.78)',
     borderWidth: 1,
     borderColor: colors.hairline,
@@ -359,10 +360,10 @@ const styles = StyleSheet.create({
   liveDot: {
     width: 6,
     height: 6,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     backgroundColor: colors.live,
   },
-  title: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600', flexShrink: 1 },
+  title: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.title, flexShrink: 1 },
   notice: {
     position: 'absolute',
     alignSelf: 'center',
@@ -371,7 +372,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     backgroundColor: 'rgba(11,14,21,0.9)',
     borderWidth: 1,
     borderColor: colors.control,
@@ -385,12 +386,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     backgroundColor: 'rgba(11,14,21,0.9)',
     borderWidth: 1,
     borderColor: colors.control,
   },
-  mutePromptText: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
+  mutePromptText: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.title },
   panel: {
     position: 'absolute',
     left: 0,
@@ -408,7 +409,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
   },
-  panelTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: '700' },
+  panelTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title },
   panelHint: { color: colors.textFaint, fontSize: fontSize.xs },
   lineRow: {
     minHeight: 52,
@@ -418,13 +419,13 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.hairline,
     paddingHorizontal: spacing.sm,
-    borderRadius: radius.md,
+    borderRadius: radius.control,
   },
   lineRowActive: { backgroundColor: colors.goldSoft },
   lineText: { flex: 1, gap: 2 },
-  lineName: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
+  lineName: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.title },
   lineMeta: { color: colors.textFaint, fontSize: fontSize.xs },
-  current: { color: colors.accent, fontSize: fontSize.xs, fontWeight: '700' },
+  current: { color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
   pressed: { opacity: 0.75 },
   emptyRoot: {
     flex: 1,
@@ -438,11 +439,11 @@ const styles = StyleSheet.create({
   emptyButton: {
     height: 44,
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     backgroundColor: colors.accent,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
   },
-  emptyButtonText: { color: colors.accentInk, fontSize: fontSize.md, fontWeight: '700' },
+  emptyButtonText: { color: colors.accentInk, fontSize: fontSize.md, fontWeight: weight.title },
 });

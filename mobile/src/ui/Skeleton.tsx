@@ -42,7 +42,7 @@ export function Skeleton({
 const styles = StyleSheet.create({
   base: {
     width: '100%',
-    borderRadius: radius.sm,
+    borderRadius: radius.control,
     backgroundColor: colors.raised,
   },
 });

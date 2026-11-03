@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { EVENT_TONE, eventSummary } from '@core/live-events.js';
 
-import { colors, fontSize, radius, spacing } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 import type { Match } from '@/types';
 import type { LiveEvent } from '@/data/useLiveMatch';
 
@@ -64,9 +64,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingBottom: spacing.sm,
   },
-  liveDot: { width: 6, height: 6, borderRadius: radius.full, backgroundColor: colors.live },
-  title: { color: colors.text, fontSize: fontSize.md, fontWeight: '700' },
-  count: { marginLeft: 'auto', color: colors.textFaint, fontSize: fontSize.xs },
+  liveDot: { width: 6, height: 6, borderRadius: radius.pill, backgroundColor: colors.live },
+  title: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title },
+  count: { marginLeft: 'auto', color: colors.textFaint, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   empty: { color: colors.textMuted, fontSize: fontSize.sm, paddingVertical: spacing.sm },
   row: {
     flexDirection: 'row',
@@ -80,10 +80,10 @@ const styles = StyleSheet.create({
     width: 42,
     color: colors.textSecondary,
     fontSize: fontSize.xs,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
-  marker: { width: 3, borderRadius: radius.full, opacity: 0.9 },
+  marker: { width: 3, borderRadius: radius.pill, opacity: 0.9 },
   body: { flex: 1, gap: 2 },
-  summary: { fontSize: fontSize.sm, fontWeight: '700' },
+  summary: { fontSize: fontSize.sm, fontWeight: weight.title },
 });

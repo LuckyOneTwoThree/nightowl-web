@@ -13,7 +13,7 @@ import { unrevealedTonightIds } from '@core/reveal.js';
 import { useNow } from '@/lib/useNow';
 import { Chip } from '@/ui/Chip';
 import { Crest } from '@/ui/Crest';
-import { colors, fontSize, radius, spacing } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 import type { Match, StandingsRow } from '@/types';
 
 type LeagueTable = {
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     borderColor: colors.hairline,
     backgroundColor: colors.panel,
   },
-  headText: { color: colors.textFaint, fontSize: fontSize.xs, fontWeight: '600' },
+  headText: { color: colors.textFaint, fontSize: fontSize.xs, fontWeight: weight.title },
   rows: { flex: 1 },
   rowsContent: { paddingBottom: spacing.xxl },
   row: {
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.text,
     fontSize: fontSize.md,
-    fontWeight: '600',
+    fontWeight: weight.title,
   },
   matchBadge: {
     color: colors.textSecondary,
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.raised,
     borderWidth: 1,
     borderColor: colors.hairline,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     paddingHorizontal: 5,
     paddingVertical: 1,
     overflow: 'hidden',
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
   ptsText: {
     color: colors.text,
     fontSize: fontSize.sm,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   groupRow: {
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
   groupLabel: {
     color: colors.textFaint,
     fontSize: fontSize.xs,
-    fontWeight: '600',
+    fontWeight: weight.title,
     letterSpacing: 0.6,
   },
   empty: {

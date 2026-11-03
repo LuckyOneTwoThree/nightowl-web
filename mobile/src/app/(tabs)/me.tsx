@@ -49,7 +49,7 @@ import { Chip } from '@/ui/Chip';
 import { Crest } from '@/ui/Crest';
 import { Screen } from '@/ui/Screen';
 import { SectionHeader } from '@/ui/SectionHeader';
-import { colors, fontSize, radius, spacing } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 import { getFixtures } from '@data/index.js';
 
 const BUDGETS = [0, 1, 2, 3, 4, 5, 6, 8];
@@ -287,7 +287,7 @@ export default function MeScreen() {
           {notificationPermission === 'denied' ? (
             <View style={styles.permissionRow}>
               <Text style={styles.permissionWarning}>通知权限被拒绝，赛前提醒不会触发。</Text>
-              <Pressable onPress={() => void Linking.openSettings()} hitSlop={8}>
+              <Pressable onPress={() => void Linking.openSettings()} hitSlop={16}>
                 <Text style={styles.permissionLink}>去设置</Text>
               </Pressable>
             </View>
@@ -383,7 +383,7 @@ export default function MeScreen() {
                 {match ? (
                   <Pressable
                     onPress={() => markWatchLaterWatched(item.id)}
-                    hitSlop={8}
+                    hitSlop={16}
                     accessibilityRole="button"
                     accessibilityLabel="标记已看"
                   >
@@ -392,7 +392,7 @@ export default function MeScreen() {
                 ) : null}
                 <Pressable
                   onPress={() => removeWatchLater(item.id)}
-                  hitSlop={8}
+                  hitSlop={16}
                   accessibilityRole="button"
                   accessibilityLabel="移除补看"
                 >
@@ -642,19 +642,19 @@ function SettingSwitch({
 
 const styles = StyleSheet.create({
   header: { paddingTop: spacing.xs },
-  title: { color: colors.text, fontSize: fontSize.xxl, fontWeight: '800', letterSpacing: 0.3 },
+  title: { color: colors.text, fontSize: fontSize.xxl, fontWeight: weight.title, letterSpacing: 0.3 },
   subline: { color: colors.textFaint, fontSize: fontSize.xs, marginTop: 2 },
   profile: { gap: spacing.md },
   profileTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   logo: {
     width: 48,
     height: 48,
-    borderRadius: radius.xl,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: 'rgba(245,185,66,0.25)',
   },
   profileText: { flex: 1, gap: 2 },
-  profileName: { color: colors.text, fontSize: fontSize.lg, fontWeight: '800' },
+  profileName: { color: colors.text, fontSize: fontSize.lg, fontWeight: weight.title },
   profileSub: { color: colors.textMuted, fontSize: fontSize.sm },
   statsRow: {
     flexDirection: 'row',
@@ -666,7 +666,7 @@ const styles = StyleSheet.create({
   statValue: {
     color: colors.text,
     fontSize: fontSize.xl,
-    fontWeight: '800',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   statLabel: { color: colors.textFaint, fontSize: fontSize.xs },
@@ -674,7 +674,7 @@ const styles = StyleSheet.create({
   cardGap: { gap: spacing.md },
   block: { gap: spacing.sm },
   blockTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  blockTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
+  blockTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title },
   blockHint: { marginLeft: 'auto', color: colors.textFaint, fontSize: fontSize.xs },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   hint: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 17 },
@@ -685,23 +685,23 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   queueText: { flex: 1, gap: 2 },
-  queueTitle: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
+  queueTitle: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.title },
   queueMeta: { color: colors.textFaint, fontSize: fontSize.xs },
-  queueAction: { color: colors.accent, fontSize: fontSize.xs, fontWeight: '600' },
-  queueRemove: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' },
+  queueAction: { color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
+  queueRemove: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: weight.title },
   emptyText: { color: colors.textMuted, fontSize: fontSize.sm },
   divider: { height: 1, backgroundColor: colors.hairline },
   settingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   settingIcon: {
     width: 32,
     height: 32,
-    borderRadius: radius.md,
+    borderRadius: radius.control,
     backgroundColor: colors.panel,
     alignItems: 'center',
     justifyContent: 'center',
   },
   settingText: { flex: 1, gap: 2 },
-  settingLabel: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
+  settingLabel: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title },
   settingHint: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 16 },
   sleepRow: {
     flexDirection: 'row',
@@ -714,21 +714,21 @@ const styles = StyleSheet.create({
   sleepStepper: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   sleepStepButton: {
     width: 32,
-    height: 32,
-    borderRadius: radius.full,
+    minHeight: 32,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.raised,
     borderWidth: 1,
     borderColor: colors.hairline,
   },
-  sleepStepText: { color: colors.textSecondary, fontSize: fontSize.lg, fontWeight: '600', lineHeight: 20 },
+  sleepStepText: { color: colors.textSecondary, fontSize: fontSize.lg, fontWeight: weight.title, lineHeight: 20 },
   sleepStepValue: {
     minWidth: 48,
     textAlign: 'center',
     color: colors.text,
     fontSize: fontSize.sm,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -756,7 +756,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   permissionButton: { minHeight: 32, justifyContent: 'center' },
-  permissionLink: { color: colors.accent, fontSize: fontSize.xs, fontWeight: '700' },
+  permissionLink: { color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
   linkRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -767,12 +767,12 @@ const styles = StyleSheet.create({
   },
   linkText: { flex: 1, gap: 1 },
   linkInline: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  linkName: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
+  linkName: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title },
   linkNote: { color: colors.textFaint, fontSize: fontSize.xs },
   aboutNote: {
     flexDirection: 'row',
     gap: spacing.sm,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     backgroundColor: colors.panel,
     padding: spacing.md,
   },

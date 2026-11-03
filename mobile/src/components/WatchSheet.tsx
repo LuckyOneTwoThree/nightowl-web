@@ -21,7 +21,7 @@ import { usePlayerStore } from '@/state/player';
 import { Crest } from '@/ui/Crest';
 import { Skeleton } from '@/ui/Skeleton';
 import { Sheet } from '@/ui/Sheet';
-import { colors, fontSize, radius, spacing, withAlpha } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, withAlpha, weight } from '@/ui/theme';
 import type { LiveData } from '@/data/useLiveMatch';
 import type { Match } from '@/types';
 
@@ -231,7 +231,7 @@ export function WatchSheet({
               <Text style={styles.emptyDirectText}>
                 {sourceError ? '直链抓取暂时不可用' : '暂未匹配到直链'}
               </Text>
-              <Pressable onPress={() => void reloadSources()} hitSlop={12}>
+              <Pressable onPress={() => void reloadSources()} hitSlop={16}>
                 <Text style={styles.playText}>重试</Text>
               </Pressable>
             </View>
@@ -369,14 +369,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.xs,
   },
-  teamName: { color: colors.text, fontSize: fontSize.md, fontWeight: '700', flexShrink: 1 },
+  teamName: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title, flexShrink: 1 },
   vs: { color: colors.textFaint, fontSize: fontSize.xs },
   matchMeta: { color: colors.textFaint, fontSize: fontSize.xs, marginBottom: spacing.md },
   status: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.panel,
@@ -389,10 +389,10 @@ const styles = StyleSheet.create({
     backgroundColor: withAlpha(colors.live, 0.10),
   },
   liveLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  liveDot: { width: 6, height: 6, borderRadius: radius.full, backgroundColor: colors.live },
-  liveText: { color: colors.live, fontSize: fontSize.sm, fontWeight: '700' },
-  liveBadge: { color: colors.live, fontSize: fontSize.xs, fontWeight: '700' },
-  statusText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '600' },
+  liveDot: { width: 6, height: 6, borderRadius: radius.pill, backgroundColor: colors.live },
+  liveText: { color: colors.live, fontSize: fontSize.sm, fontWeight: weight.title },
+  liveBadge: { color: colors.live, fontSize: fontSize.xs, fontWeight: weight.title },
+  statusText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: weight.title },
   statusHint: { color: colors.textFaint, fontSize: fontSize.xs },
   section: { gap: spacing.xs, marginBottom: spacing.md },
   sectionHeaderRow: {
@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: colors.textMuted,
     fontSize: fontSize.xs,
-    fontWeight: '700',
+    fontWeight: weight.title,
     letterSpacing: 0.4,
     marginBottom: spacing.xs,
   },
@@ -417,10 +417,10 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.hairline,
   },
   linkText: { flex: 1, gap: 2 },
-  linkName: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
+  linkName: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title },
   linkNote: { color: colors.textFaint, fontSize: fontSize.xs },
   emptyText: { color: colors.textMuted, fontSize: fontSize.sm, paddingVertical: spacing.sm },
-  playText: { color: colors.accent, fontSize: fontSize.xs, fontWeight: '700' },
+  playText: { color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
   skeletonList: { gap: spacing.sm },
   emptyDirect: {
     flexDirection: 'row',
@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
   },
   emptyDirectText: { flex: 1, color: colors.textMuted, fontSize: fontSize.sm },
   spoilerCard: {
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.panel,
@@ -438,7 +438,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
-  spoilerTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: '700' },
+  spoilerTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title },
   spoilerText: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 19 },
   spoilerButton: {
     alignSelf: 'flex-start',
@@ -447,10 +447,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     backgroundColor: colors.accent,
   },
-  spoilerButtonText: { color: colors.accentInk, fontSize: fontSize.sm, fontWeight: '700' },
+  spoilerButtonText: { color: colors.accentInk, fontSize: fontSize.sm, fontWeight: weight.title },
   note: {
     color: colors.textFaint,
     fontSize: fontSize.xs,

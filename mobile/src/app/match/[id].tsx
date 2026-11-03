@@ -73,7 +73,7 @@ import { FormDots } from '@/ui/FormDots';
 import { SegmentedControl } from '@/ui/SegmentedControl';
 import { SleepBadge } from '@/ui/SleepBadge';
 import { SleepNote } from '@/ui/SleepNote';
-import { colors, fontSize, radius, spacing, tierColor, withAlpha } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, tierColor, withAlpha, weight } from '@/ui/theme';
 import type { Entry, Ev, Match, MatchStandings, Narrative, Tier } from '@/types';
 
 type Tab = 'intel' | 'stats';
@@ -412,7 +412,7 @@ export default function MatchScreen() {
                 <Text style={styles.score}>{finalScore}</Text>
               ) : finishedNow && finalScore ? (
                 <>
-                  <Pressable onPress={handleRevealScore} style={styles.revealButton} hitSlop={10}>
+                  <Pressable onPress={handleRevealScore} style={styles.revealButton} hitSlop={11}>
                     <Eye size={13} color={colors.accent} />
                     <Text style={styles.revealText}>揭晓比分</Text>
                   </Pressable>
@@ -431,7 +431,7 @@ export default function MatchScreen() {
                 </>
               ) : liveNow && liveScoreText ? (
                 <>
-                  <Pressable onPress={handleRevealScore} style={styles.revealButton} hitSlop={10}>
+                  <Pressable onPress={handleRevealScore} style={styles.revealButton} hitSlop={11}>
                     <Eye size={13} color={colors.accent} />
                     <Text style={styles.revealText}>揭晓实时比分</Text>
                   </Pressable>
@@ -548,7 +548,7 @@ export default function MatchScreen() {
               }
             }}
             disabled={queuedForMorning}
-            hitSlop={8}
+            hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel={queuedForMorning ? '已加入明早补看' : '加入明早补看'}
             style={({ pressed }) => [
@@ -696,7 +696,7 @@ function IntelTab({
           </Card>
         ) : (
           <Card style={styles.cardGap}>
-            <Pressable onPress={onReveal} style={styles.revealButton}>
+            <Pressable onPress={onReveal} style={styles.revealButton} hitSlop={11}>
               <Eye size={13} color={colors.accent} />
               <Text style={styles.revealText}>
                 {isLive ? '实时事件已隐藏 · 揭晓' : '比赛事件已隐藏 · 揭晓'}
@@ -1213,7 +1213,7 @@ const styles = StyleSheet.create({
   headerButton: {
     width: 38,
     height: 38,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.panel,
@@ -1221,7 +1221,7 @@ const styles = StyleSheet.create({
     borderColor: colors.hairline,
   },
   headerTitleWrap: { flex: 1, minWidth: 0, marginHorizontal: spacing.sm, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { color: colors.text, fontSize: fontSize.base, fontWeight: '700', textAlign: 'center' },
+  headerTitle: { color: colors.text, fontSize: fontSize.base, fontWeight: weight.title, textAlign: 'center' },
   headerTitleCompact: {
     position: 'absolute',
     left: 0,
@@ -1229,12 +1229,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: colors.textSecondary,
     fontSize: fontSize.sm,
-    fontWeight: '600',
+    fontWeight: weight.title,
   },
   scroll: { flex: 1 },
   content: { paddingHorizontal: spacing.lg, gap: spacing.md },
   hero: {
-    borderRadius: radius.xxl,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: withAlpha(colors.text, 0.08),
     padding: spacing.lg,
@@ -1243,16 +1243,16 @@ const styles = StyleSheet.create({
   },
   heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   leagueRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  leagueDot: { width: 7, height: 7, borderRadius: radius.full },
-  leagueText: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: '600' },
+  leagueDot: { width: 7, height: 7, borderRadius: radius.pill },
+  leagueText: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: weight.title },
   tierPill: {
     borderWidth: 1,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
     backgroundColor: colors.panel,
   },
-  tierText: { fontSize: fontSize.xs, fontWeight: '700' },
+  tierText: { fontSize: fontSize.xs, fontWeight: weight.title },
   teams: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1263,28 +1263,28 @@ const styles = StyleSheet.create({
   teamName: {
     color: colors.text,
     fontSize: fontSize.base,
-    fontWeight: '700',
+    fontWeight: weight.title,
     maxWidth: 112,
     textAlign: 'center',
   },
   center: { width: 108, alignItems: 'center', gap: 3 },
-  vs: { color: colors.textFaint, fontSize: fontSize.xs, fontWeight: '700', letterSpacing: 1.4 },
+  vs: { color: colors.textFaint, fontSize: fontSize.xs, fontWeight: weight.title, letterSpacing: 1.4 },
   time: {
     color: colors.text,
     fontSize: fontSize.xxl,
-    fontWeight: '800',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   countdown: {
     color: colors.accent,
     fontSize: fontSize.sm,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   score: {
     color: colors.text,
     fontSize: fontSize.display,
-    fontWeight: '800',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   revealButton: {
@@ -1293,12 +1293,12 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: spacing.md,
     paddingVertical: 5,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.control,
     backgroundColor: colors.panel,
   },
-  revealText: { color: colors.accent, fontSize: fontSize.xs, fontWeight: '600' },
+  revealText: { color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
   hideScore: {
     flexDirection: 'row',
     alignSelf: 'center',
@@ -1308,19 +1308,19 @@ const styles = StyleSheet.create({
   },
   hideScoreText: { color: colors.textFaint, fontSize: fontSize.xs },
   liveRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  liveDot: { width: 6, height: 6, borderRadius: radius.full, backgroundColor: colors.live },
-  liveLabel: { color: colors.live, fontSize: fontSize.sm, fontWeight: '700' },
+  liveDot: { width: 6, height: 6, borderRadius: radius.pill, backgroundColor: colors.live },
+  liveLabel: { color: colors.live, fontSize: fontSize.sm, fontWeight: weight.title },
   liveMinute: {
     color: colors.text,
     fontSize: fontSize.xxl,
-    fontWeight: '800',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   stateStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.panel,
@@ -1339,19 +1339,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: spacing.sm + 2,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.control,
     backgroundColor: colors.panel,
   },
-  stateReminderText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '600' },
+  stateReminderText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: weight.title },
   stateReminded: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   stateRemindedText: { color: colors.textSecondary, fontSize: fontSize.xs },
-  stateSecondary: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: '600' },
+  stateSecondary: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: weight.title },
   liveStale: { color: colors.warn, fontSize: fontSize.xs, marginTop: spacing.xs },
-  stateText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '600', flexShrink: 1 },
-  stateLiveText: { color: colors.live, fontSize: fontSize.sm, fontWeight: '700' },
-  stateAction: { color: colors.accent, fontSize: fontSize.sm, fontWeight: '700' },
+  stateText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: weight.title, flexShrink: 1 },
+  stateLiveText: { color: colors.live, fontSize: fontSize.sm, fontWeight: weight.title },
+  stateAction: { color: colors.accent, fontSize: fontSize.sm, fontWeight: weight.title },
   segmentWrap: {
     backgroundColor: colors.bg,
     paddingVertical: spacing.sm,
@@ -1369,7 +1369,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.panel,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.xs + 1,
   },
@@ -1377,7 +1377,7 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
     backgroundColor: colors.goldSoft,
   },
-  watchLaterText: { color: colors.textSecondary, fontSize: fontSize.xs, fontWeight: '600' },
+  watchLaterText: { color: colors.textSecondary, fontSize: fontSize.xs, fontWeight: weight.title },
   watchLaterTextOn: { color: colors.accent },
   metrics: {
     flexDirection: 'row',
@@ -1391,7 +1391,7 @@ const styles = StyleSheet.create({
   metricAccent: {
     color: colors.accent,
     fontSize: fontSize.md,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   metricMuted: { color: colors.textMuted, fontSize: fontSize.sm },
@@ -1401,7 +1401,7 @@ const styles = StyleSheet.create({
   cardEyebrow: {
     color: colors.textMuted,
     fontSize: fontSize.xs,
-    fontWeight: '700',
+    fontWeight: weight.title,
     letterSpacing: 0.6,
   },
   attributionHeader: {
@@ -1414,15 +1414,15 @@ const styles = StyleSheet.create({
   attributionIndex: {
     color: colors.accent,
     fontSize: fontSize.lg,
-    fontWeight: '800',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
-  cardTitle: { color: colors.text, fontSize: fontSize.base, fontWeight: '700' },
+  cardTitle: { color: colors.text, fontSize: fontSize.base, fontWeight: weight.title },
   cardLine: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 19 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   divider: { height: 1, backgroundColor: colors.hairline },
   meter: { flexDirection: 'row', gap: 5, marginTop: spacing.sm },
-  meterBar: { flex: 1, height: 6, borderRadius: radius.full },
+  meterBar: { flex: 1, height: 6, borderRadius: radius.pill },
   meterLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
   meterLabel: { color: colors.textFaint, fontSize: fontSize.xs },
   attrRowWrap: {
@@ -1436,19 +1436,19 @@ const styles = StyleSheet.create({
   },
   attrTrack: {
     height: 4,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     backgroundColor: colors.hairline,
     overflow: 'hidden',
   },
   attrFill: {
     height: '100%',
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
   },
   attrLabel: { color: colors.textMuted, fontSize: fontSize.sm },
   attrValue: {
     color: colors.textSecondary,
     fontSize: fontSize.sm,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   formula: {
@@ -1462,11 +1462,11 @@ const styles = StyleSheet.create({
   formulaResult: {
     color: colors.textSecondary,
     fontSize: fontSize.xs,
-    fontWeight: '600',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   upcomingBlock: { gap: spacing.sm },
-  upcomingTeam: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: '600' },
+  upcomingTeam: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: weight.title },
   upcomingRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 },
   upcomingTeams: { flex: 1, color: colors.textMuted, fontSize: fontSize.xs },
   upcomingTime: {
@@ -1497,7 +1497,7 @@ const styles = StyleSheet.create({
   },
   formRow: { gap: spacing.sm },
   formTeam: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  formTeamName: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
+  formTeamName: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.title },
   formDots: { flexDirection: 'row', gap: 6 },
   formSummary: { color: colors.textMuted, fontSize: fontSize.xs },
   tableHead: { flexDirection: 'row', alignItems: 'center', paddingBottom: spacing.xs },
@@ -1506,7 +1506,7 @@ const styles = StyleSheet.create({
     width: 82,
     color: colors.text,
     fontSize: fontSize.xs,
-    fontWeight: '700',
+    fontWeight: weight.title,
     textAlign: 'right',
   },
   seasonRow: {
@@ -1521,7 +1521,7 @@ const styles = StyleSheet.create({
     width: 82,
     color: colors.textSecondary,
     fontSize: fontSize.sm,
-    fontWeight: '600',
+    fontWeight: weight.title,
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
   },
@@ -1537,7 +1537,7 @@ const styles = StyleSheet.create({
   h2hBig: {
     color: colors.text,
     fontSize: fontSize.xl,
-    fontWeight: '800',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   h2hLabel: { color: colors.textFaint, fontSize: fontSize.xs },
@@ -1573,12 +1573,12 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.text,
     fontSize: fontSize.md,
-    fontWeight: '600',
+    fontWeight: weight.title,
   },
   standingsRank: {
     color: colors.textSecondary,
     fontSize: fontSize.sm,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   standingsStats: {
@@ -1613,14 +1613,14 @@ const styles = StyleSheet.create({
   standingsLinkText: {
     color: colors.textSecondary,
     fontSize: fontSize.sm,
-    fontWeight: '600',
+    fontWeight: weight.title,
   },
   meetingDate: { width: 48, color: colors.textFaint, fontSize: fontSize.xs },
   meetingTeams: { flex: 1, color: colors.textSecondary, fontSize: fontSize.xs },
   meetingScore: {
     color: colors.text,
     fontSize: fontSize.sm,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   actions: {
@@ -1643,7 +1643,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     backgroundColor: 'rgba(11,14,21,0.94)',
     borderWidth: 1,
     borderColor: colors.control,

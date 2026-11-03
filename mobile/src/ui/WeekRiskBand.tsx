@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { TriangleAlert } from 'lucide-react-native';
 
 import { sleepTier } from '@core/engine.js';
-import { colors, fontSize, radius, spacing, tierColor, withAlpha } from '@/ui/theme';
+import { colors, fontScale, fontSize, radius, spacing, tierColor, withAlpha, weight } from '@/ui/theme';
 
 /**
  * 一周风险带
@@ -128,6 +128,8 @@ export function WeekRiskBand({
           {domain.ticks.map((tick, index) => (
             <Text
               key={tick.min}
+              // 刻度位置由数据算出来，下面的色块不会跟着字变大，所以这里封顶
+              maxFontSizeMultiplier={fontScale.micro}
               style={[
                 styles.tick,
                 { left: pct(tick.min) },
@@ -160,7 +162,7 @@ export function WeekRiskBand({
           <Pressable
             key={band.date}
             onPress={() => onSelectDate(selected ? null : band.date)}
-            hitSlop={{ top: 4, bottom: 4 }}
+            hitSlop={{ top: 5, bottom: 5 }}
             accessibilityRole="button"
             accessibilityState={{ selected }}
             accessibilityLabel={label}
@@ -252,7 +254,7 @@ const styles = StyleSheet.create({
   headline: {
     color: colors.textSecondary,
     fontSize: fontSize.sm,
-    fontWeight: '600',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   headlineWarn: { color: colors.warn },
@@ -264,11 +266,11 @@ const styles = StyleSheet.create({
     backgroundColor: withAlpha(colors.text, 0.42),
   },
   legendText: { color: colors.textFaint, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
-  axisRow: { flexDirection: 'row', alignItems: 'flex-end', height: 14 },
+  axisRow: { flexDirection: 'row', alignItems: 'flex-end', minHeight: 14 },
   dayCol: { width: 18, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  nowDot: { width: 3, height: 3, borderRadius: radius.full, backgroundColor: 'transparent' },
+  nowDot: { width: 3, height: 3, borderRadius: radius.pill, backgroundColor: 'transparent' },
   nowDotOn: { backgroundColor: colors.accent },
-  dayText: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' },
+  dayText: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: weight.title },
   dayTextNow: { color: colors.accent },
   trackCol: { flex: 1, alignSelf: 'stretch', justifyContent: 'center' },
   tick: {
@@ -288,17 +290,17 @@ const styles = StyleSheet.create({
   endTime: {
     color: colors.textSecondary,
     fontSize: fontSize.sm,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
   endTimeWarn: { color: colors.warn },
-  endTimeEmpty: { color: colors.textFaint, fontWeight: '400' },
+  endTimeEmpty: { color: colors.textFaint, fontWeight: weight.body },
   endCount: { color: colors.textFaint, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     height: ROW_HEIGHT,
-    borderRadius: radius.md,
+    borderRadius: radius.control,
     paddingHorizontal: 2,
   },
   rowSelected: {

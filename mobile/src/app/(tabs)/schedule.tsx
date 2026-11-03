@@ -30,7 +30,7 @@ import { EmptyState } from '@/ui/EmptyState';
 import { MatchRow } from '@/ui/MatchRow';
 import { SegmentedControl } from '@/ui/SegmentedControl';
 import { Sheet } from '@/ui/Sheet';
-import { colors, fontSize, radius, spacing } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 import type { Match } from '@/types';
 
 type Row =
@@ -359,7 +359,7 @@ export default function ScheduleScreen() {
               搜索：{filters.query}
             </Text>
             <Pressable
-              hitSlop={8}
+              hitSlop={15}
               onPress={() => setFilters(current => ({ ...current, query: '' }))}
               accessibilityLabel="清除搜索"
             >
@@ -485,7 +485,7 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 40,
     height: 40,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.panel,
@@ -496,8 +496,8 @@ const styles = StyleSheet.create({
   dateStrip: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.xs },
   dateCard: {
     width: 54,
-    height: 66,
-    borderRadius: radius.lg,
+    minHeight: 66,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.panel,
@@ -507,7 +507,7 @@ const styles = StyleSheet.create({
   },
   allCard: { width: 58 },
   resetHit: { minHeight: 32, justifyContent: 'center' },
-  reset: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' },
+  reset: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: weight.title },
   dateCardToday: { borderColor: colors.control },
   dateCardActive: { borderColor: colors.accent, backgroundColor: colors.raised },
   dateFollowDot: {
@@ -516,17 +516,17 @@ const styles = StyleSheet.create({
     right: 5,
     width: 5,
     height: 5,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     backgroundColor: colors.accent,
   },
   dateWeekday: { color: colors.textFaint, fontSize: fontSize.xs },
   dateDay: {
     color: colors.text,
     fontSize: fontSize.lg,
-    fontWeight: '700',
+    fontWeight: weight.title,
     fontVariant: ['tabular-nums'],
   },
-  dateCount: { color: colors.textFaint, fontSize: fontSize.xs },
+  dateCount: { color: colors.textFaint, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   dateActiveText: { color: colors.accent },
   dateActiveCount: { color: colors.textSecondary },
   filterBlock: { paddingTop: spacing.sm, gap: spacing.sm },
@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     backgroundColor: colors.panel,
     borderWidth: 1,
     borderColor: colors.hairline,
@@ -568,9 +568,9 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     backgroundColor: colors.bg,
   },
-  dateHeaderText: { color: colors.text, fontSize: fontSize.md, fontWeight: '700' },
+  dateHeaderText: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title },
   dateHeaderWeek: { color: colors.textFaint, fontSize: fontSize.xs },
-  dateHeaderCount: { marginLeft: 'auto', color: colors.textFaint, fontSize: fontSize.xs },
+  dateHeaderCount: { marginLeft: 'auto', color: colors.textFaint, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   matchWrap: {
     backgroundColor: colors.card,
     borderLeftWidth: 1,

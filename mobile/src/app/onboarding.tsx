@@ -26,7 +26,7 @@ import {
 import { usePrefs, usePrefsStore } from '@/state/prefs';
 import { Button } from '@/ui/Button';
 import { Chip } from '@/ui/Chip';
-import { colors, fontSize, radius, spacing } from '@/ui/theme';
+import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 
 const STEP_TITLES = ['选择关注联赛', '选择关注球队', '设定熬夜额度'];
 const BUDGETS = [0, 1, 2, 3, 4, 5, 6, 8];
@@ -263,14 +263,14 @@ const styles = StyleSheet.create({
   logo: {
     width: 38,
     height: 38,
-    borderRadius: radius.lg,
+    borderRadius: radius.control,
     borderWidth: 1,
     borderColor: 'rgba(245,185,66,0.25)',
   },
-  brand: { color: colors.text, fontSize: fontSize.lg, fontWeight: '800', letterSpacing: 0.4 },
+  brand: { color: colors.text, fontSize: fontSize.lg, fontWeight: weight.title, letterSpacing: 0.4 },
   brandSub: { color: colors.textFaint, fontSize: fontSize.xs, marginTop: 1 },
   skipHit: { minHeight: 32, justifyContent: 'center' },
-  skip: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: '600' },
+  skip: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: weight.title },
   progress: {
     flexDirection: 'row',
     gap: 6,
@@ -280,13 +280,13 @@ const styles = StyleSheet.create({
   progressBar: {
     flex: 1,
     height: 3,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     backgroundColor: colors.hairline,
   },
   progressBarActive: { backgroundColor: colors.accent },
   titleBlock: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: 4 },
-  step: { color: colors.accent, fontSize: fontSize.xs, fontWeight: '700', letterSpacing: 0.6 },
-  title: { color: colors.text, fontSize: fontSize.xxl, fontWeight: '800', letterSpacing: 0.2 },
+  step: { color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title, letterSpacing: 0.6 },
+  title: { color: colors.text, fontSize: fontSize.xxl, fontWeight: weight.title, letterSpacing: 0.2 },
   body: { flex: 1, minHeight: 0, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   bodyContent: { paddingBottom: spacing.xl, gap: spacing.md },
   bodyPadding: { paddingHorizontal: spacing.lg },
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
   leagueCard: {
     width: '48%',
     minHeight: 64,
-    borderRadius: radius.xl,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.card,
@@ -305,14 +305,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   leagueCardActive: { borderColor: colors.accent, backgroundColor: colors.goldSoft },
-  leagueDot: { width: 8, height: 8, borderRadius: radius.full },
+  leagueDot: { width: 8, height: 8, borderRadius: radius.pill },
   leagueText: { flex: 1, gap: 1 },
-  leagueName: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
+  leagueName: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title },
   leagueCode: { color: colors.textFaint, fontSize: fontSize.xs },
   check: {
     width: 18,
     height: 18,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
@@ -321,27 +321,27 @@ const styles = StyleSheet.create({
   picker: { flex: 1, minHeight: 0, paddingTop: spacing.sm },
   budgetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   summaryCard: {
-    borderRadius: radius.xl,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.card,
     padding: spacing.lg,
     gap: spacing.xs,
   },
-  summaryTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: '700' },
+  summaryTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title },
   summaryLine: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 19 },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    borderRadius: radius.xl,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.hairline,
     backgroundColor: colors.card,
     padding: spacing.lg,
   },
   switchText: { flex: 1, gap: 3 },
-  switchTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
+  switchTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title },
   switchHint: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 17 },
   footer: {
     flexDirection: 'row',

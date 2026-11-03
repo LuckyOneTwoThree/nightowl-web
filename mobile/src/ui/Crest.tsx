@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { teamColor } from '@data/index.js';
 
 import { crestSource } from '@/data/crests';
-import { radius } from './theme';
+import { radius, weight } from './theme';
 
 function withAlpha(hex: string, alpha: number): string {
   const value = hex.replace('#', '');
@@ -34,7 +34,7 @@ export function Crest({ id, size = 36 }: { id: string; size?: number }) {
       style={{
         width: size,
         height: size,
-        borderRadius: radius.full,
+        borderRadius: radius.pill,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: withAlpha(color, 0.16),
@@ -46,7 +46,7 @@ export function Crest({ id, size = 36 }: { id: string; size?: number }) {
         style={{
           color,
           fontSize: Math.max(9, Math.round(size * 0.28)),
-          fontWeight: '700',
+          fontWeight: weight.title,
           letterSpacing: 0.2,
         }}
       >
