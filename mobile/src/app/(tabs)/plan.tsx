@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, TriangleAlert, X } from 'lucide-react-native
 import { leagueName, teamName } from '@data/index.js';
 import { computeWeek } from '@core/owl.js';
 import { owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '@core/engine.js';
-import { weekRiskBands } from '@core/week-risk.js';
+import { weekRiskBands, weekBestEmptyState } from '@core/week-risk.js';
 import { hm, hmCost, zhDate } from '@core/format.js';
 import { animateLayout } from '@/lib/layoutAnimation';
 import { useNow } from '@/lib/useNow';
@@ -144,6 +144,31 @@ export default function PlanScreen() {
   const weekWord = weekOffset === 0 ? '本周' : '该周';
   /** 风险是前瞻语义：历史周只保留赛程事实，不显示风险带/风险建议。 */
   const showRisk = weekOffset >= 0;
+
+  /* 「精选为空」的语义由 core 纯函数判定（与桌面端同一份），界面只负责措辞。
+     此前手机端只看 plan.evs，零成本场次被静默排除，会出现
+     「精选 0 + 零成本顺带 N」却说「暂无可安排的未开赛场次」的矛盾。 */
+  const bestEmpty = useMemo(() => {
+    const state = weekBestEmptyState({
+      best: plan.best,
+      zeroCount: plan.zeroCount,
+      evs: plan.evs,
+      tbdCount: risk.tbdCount,
+      hasScheduled: hasAnyMatches,
+      past: !showRisk
+    });
+    const text =
+      state.kind === 'past'
+        ? '历史周没有可计划的未开赛场次'
+        : state.kind === 'tbd'
+          ? `${weekWord}暂无已定场次，${state.tbdCount} 场时间待定`
+          : state.kind === 'zero-only'
+            ? `${weekWord}没有需要熬夜预算的场次；另有 ${state.zeroCount} 场睡前开球，可在「零成本顺带」里安排`
+            : state.kind === 'no-match'
+              ? `${weekWord}暂无比赛`
+              : '当前预算下暂未选出场次';
+    return { ...state, text };
+  }, [plan.best, plan.zeroCount, plan.evs, risk.tbdCount, hasAnyMatches, showRisk, weekWord]);
 
   const openMatch = (id: string) =>
     router.push({ pathname: '/match/[id]', params: { id } });
@@ -317,15 +342,9 @@ export default function PlanScreen() {
         ) : (
           <Card tone="panel" style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>
-              {!hasAnyMatches
-                ? risk.tbdCount > 0
-                  ? `${weekWord}暂无已定场次，${risk.tbdCount} 场时间待定`
-                  : `${weekWord}暂无比赛`
-                : selectedDay
-                  ? `${zhDate(selectedDay)}没有排进精选的场次`
-                  : plan.evs.length === 0
-                    ? `${weekWord}暂无可安排的未开赛场次`
-                    : '当前预算下暂未选出场次'}
+              {selectedDay
+                ? `${zhDate(selectedDay)}没有排进精选的场次`
+                : bestEmpty.text}
             </Text>
             {!selectedDay && plan.evs.length > 0 && plan.budget < 8 ? (
               <Button

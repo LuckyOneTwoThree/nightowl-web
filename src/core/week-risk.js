@@ -201,3 +201,37 @@ export function weekRiskBands(week, profile, now) {
     tbdCount
   };
 }
+
+/**
+ * 「本周精选」为空时的空态语义（桌面 / 手机共用）
+ *
+ * 为什么需要单独判据：精选（plan.best）为空有四种完全不同的原因，
+ * 界面必须说清楚是哪一种，否则会自相矛盾 —— 实测 2027-04 起有 6 个周次
+ * 「精选 0/5、零成本顺带 1」，而正文写着「本周暂无可安排的未开赛场次」。
+ *
+ * 返回 kind ∈
+ *   · 'selected'  —— 有入选场次，不属空态
+ *   · 'past'      —— 历史周，没有可计划的场次
+ *   · 'tbd'       —— 有场次但开球时间未定（未来周常见，最容易被误读成故障）
+ *   · 'zero-only' —— 没有需要预算的场次，但有零成本场次可顺带看
+ *   · 'no-match'  —— 本周确实没有比赛
+ *   · 'budget'    —— 有候选但当前预算下选不出来（应引导加预算）
+ */
+export function weekBestEmptyState(input = {}) {
+  // 不写成解构默认值 `best = []`：那会让 TS 把参数推断成 never[]，
+  // 调用方传 Entry[] 时会直接报 TS2322。这里只按长度/计数判断，不依赖元素类型。
+  const bestCount = Array.isArray(input.best) ? input.best.length : 0;
+  const evCount = Array.isArray(input.evs) ? input.evs.length : 0;
+  const zeroCount = Number(input.zeroCount) || 0;
+  const tbdCount = Number(input.tbdCount) || 0;
+  const hasScheduled = input.hasScheduled === true;
+  const past = input.past === true;
+
+  if (bestCount > 0) return { kind: 'selected' };
+  if (past) return { kind: 'past' };
+  if (tbdCount > 0 && evCount === 0) return { kind: 'tbd', tbdCount };
+  if (!hasScheduled && zeroCount > 0) return { kind: 'zero-only', zeroCount };
+  if (!hasScheduled) return { kind: 'no-match' };
+  if (evCount === 0) return { kind: 'zero-only', zeroCount };
+  return { kind: 'budget' };
+}

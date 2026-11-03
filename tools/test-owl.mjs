@@ -508,6 +508,17 @@ console.log('八、周计划时间模型（P0：精选 = 可执行计划）');
       `${p.zeroCount} vs ${p.zeroList.length}`);
   }
 
+  // 9b) 只有零成本场次时，精选为空而零成本非空 —— 这是「空态文案」必须能区分的两种空。
+  //     文案判定本身在 view 层（见 tools/test-week-empty-state.mjs），这里只锁定数据前提。
+  {
+    const onlyZero = [
+      mk('Z3-ZERO', '2026-11-07T20:00', 'TOT', 'NEW') // 20:00 → S0 零成本
+    ];
+    const p = planOf(onlyZero, [], 4.0);
+    ok('★ 只有零成本场次时精选为空', p.best.length === 0, `${p.best.length}`);
+    ok('★ 只有零成本场次时零成本列表非空', p.zeroCount > 0, `${p.zeroCount}`);
+  }
+
   // 10) 不限数量（maxPicks 缺省）也遵守时间互斥；精选按开球时间排序
   {
     const four = [

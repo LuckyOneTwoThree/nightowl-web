@@ -3,7 +3,7 @@ import { zhDate, hmCost, hm } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { stateOf } from '../core/owl.js';
 import { owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '../core/engine.js';
-import { weekRiskBands } from '../core/week-risk.js';
+import { weekRiskBands, weekBestEmptyState } from '../core/week-risk.js';
 import { Chip, Crest, Hint, IndexTag, Meta, SectionLabel, SleepBadge, Stars } from './atoms.jsx';
 import { IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronUp, IconClose, IconWarn } from './icons.jsx';
 import MatchRow from './MatchRow.jsx';
@@ -263,6 +263,31 @@ export default function WeekView({
     [week, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepMinHours, now]
   );
   const hasScheduledMatches = risk.bands.some(b => !b.empty);
+
+  /* 「本周精选」为空时的语义：由 core 纯函数判定，界面只负责措辞。
+     此前这段是嵌套三元，只看 plan.evs，漏掉了零成本场次 —— 实测会出现
+     「精选 0/5 + 零成本顺带 1」却写「本周暂无可安排的未开赛场次」的同屏矛盾。 */
+  const bestEmpty = useMemo(() => {
+    const state = weekBestEmptyState({
+      best: plan.best,
+      zeroCount: plan.zeroCount,
+      evs: plan.evs,
+      tbdCount: risk.tbdCount,
+      hasScheduled: hasScheduledMatches,
+      past: !showRisk
+    });
+    const text =
+      state.kind === 'past'
+        ? '历史周没有可计划的未开赛场次'
+        : state.kind === 'tbd'
+          ? `本周 ${state.tbdCount} 场开球时间待定，公布开球时间后会自动进入规划`
+          : state.kind === 'zero-only'
+            ? `本周没有需要熬夜预算的场次；另有 ${state.zeroCount} 场睡前开球，可在「零成本顺带」里安排`
+            : state.kind === 'no-match'
+              ? '本周暂无比赛'
+              : '当前预算下暂未选出场次';
+    return { ...state, text };
+  }, [plan.best, plan.zeroCount, plan.evs, risk.tbdCount, hasScheduledMatches, showRisk]);
 
   // 时间轴要高亮「入选的那几场」而不是「入选的夜晚」：同一晚可能既有精选也有落选。
   const bestIds = useMemo(() => new Set(plan.best.map(e => e.m.id)), [plan.best]);
@@ -529,17 +554,7 @@ export default function WeekView({
             {filteredBest.length === 0 ? (
               <div className="rounded-lg border border-line-hairline bg-surface-raised/30 px-3 py-4 text-center">
                 <p className="text-xs font-medium text-text-secondary">
-                  {selectedDay
-                    ? '当晚没有入选本周精选的场次'
-                    : !showRisk
-                      ? '历史周没有可计划的未开赛场次'
-                      : risk.tbdCount > 0 && plan.evs.length === 0
-                        ? `本周 ${risk.tbdCount} 场开球时间待定，公布开球时间后会自动进入规划`
-                        : !hasScheduledMatches
-                          ? '本周暂无比赛'
-                          : plan.evs.length === 0
-                            ? '本周暂无可安排的未开赛场次'
-                            : '当前预算下暂未选出场次'}
+                  {selectedDay ? '当晚没有入选本周精选的场次' : bestEmpty.text}
                 </p>
                 {!selectedDay && plan.evs.length > 0 && (
                   <button
