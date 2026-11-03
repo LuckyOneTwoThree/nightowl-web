@@ -80,15 +80,19 @@ function ticksBetween(startMin, endMin) {
  *
  * 固定域在真实数据上会留下两小时空白（一场 04:00 的比赛收在 06:00，右边还空到 08:00）。
  * 域只保证三件事：左右各留 30 分钟、刻度落在整点、睡眠底线一定在域内（否则线会被画在框外）。
+ *
+ * 导出给桌面用：桌面时间轴画的是它自己那一套分道色块，但「轴怎么取」不该再写第二遍。
+ *
+ * @param {Array<{startMin: number, endMin: number}>} segments 参与绘制的场次段
+ * @param {ReturnType<typeof sleepFloorOf>} floor
  */
-function computeDomain(bands, floor) {
+export function nightDomain(segments, floor) {
   let min = Infinity;
   let max = -Infinity;
-  for (const band of bands) {
-    for (const seg of band.segments) {
-      if (seg.startMin < min) min = seg.startMin;
-      if (seg.endMin > max) max = seg.endMin;
-    }
+  for (const seg of segments || []) {
+    if (!seg || !Number.isFinite(seg.startMin) || !Number.isFinite(seg.endMin)) continue;
+    if (seg.startMin < min) min = seg.startMin;
+    if (seg.endMin > max) max = seg.endMin;
   }
   if (!Number.isFinite(min)) {
     // 一晚都没有已定场次：给一段标准夜，此时界面只显示结论行，不画轨道
@@ -173,7 +177,10 @@ export function weekRiskBands(week, profile, now) {
 
   return {
     floor,
-    domain: computeDomain(bands, floor),
+    domain: nightDomain(
+      bands.flatMap(b => b.segments),
+      floor
+    ),
     bands,
     worst: worst
       ? {

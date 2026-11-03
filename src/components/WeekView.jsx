@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { zhDate, hmCost, hm, formatMinuteOfDay } from '../core/format.js';
+import { zhDate, hmCost, hm } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { stateOf } from '../core/owl.js';
 import { owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '../core/engine.js';
-import { formatSleepHours, sleepLedger } from '../core/sleep.js';
+import { weekRiskBands } from '../core/week-risk.js';
 import { Chip, Crest, Hint, IndexTag, Meta, SectionLabel, SleepBadge, Stars } from './atoms.jsx';
 import { IconChevronDown, IconChevronUp, IconClose, IconWarn } from './icons.jsx';
 import MatchRow from './MatchRow.jsx';
@@ -25,54 +25,22 @@ const BUCKET_CLASS = ['bg-tier-0', 'bg-tier-1', 'bg-tier-2', 'bg-tier-3', 'bg-ti
 /* ------------------------------------------------------------------ */
 
 /**
- * 时间轴范围：20:00 → 次日 06:30。
- * 20:00 是最早的 S0 场次；最晚的 04:00 开球 + 2h 正好收到 06:00，
- * 右侧再留半小时给"看完到几点"的读数，不再画永远为空的 06–08 区。
- */
-const TL_START = 20 * 60;
-const TL_END = 30 * 60 + 30;
-const TL_SPAN = TL_END - TL_START;
-/** 单场占用宽度：2 小时完赛近似，与 engine 的 MATCH_DURATION_MS 同一口径 */
-const TL_MATCH_MIN = 120;
-
-/** 墙钟时刻 → 时间轴分钟（凌晨归入次日，避免跨零点断轴） */
-function tlMinute(t) {
-  const clock = String(t || '').split('T')[1];
-  if (!clock) return NaN;
-  const h = Number(clock.slice(0, 2));
-  const m = Number(clock.slice(3, 5));
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return NaN;
-  const min = h * 60 + m;
-  return min < 12 * 60 ? min + 24 * 60 : min;
-}
-
-const tlPct = min => ((min - TL_START) / TL_SPAN) * 100;
-
-/** 刻度：每 2 小时一个，标签用 24 小时制（次日凌晨仍写 00–06，不写 24+） */
-const TL_TICKS = [20, 22, 24, 26, 28, 30];
-const tickLabel = h => `${String(h % 24).padStart(2, '0')}`;
-
-/**
- * 一周熬夜时间轴（替代原来的 7 根柱子）
+ * 一周熬夜时间轴
  *
- * 为什么换：柱状图只回答「哪晚最重」，回答不了「要熬到几点」。而后者才是用户的
- * 决策问题 —— 睡眠成本是「开球时刻」的函数，把它画回时间轴上，同一晚的场次密度、
- * 同开球重叠、以及是否越过「最低睡眠线」三个事实不用解释就能看出来。
+ * 数学口径全部来自 `core/week-risk.js`（夜坐标 / 睡眠底线 / 自适应轴），桌面只负责「分道画色块」。
+ * 同一件事两端各算一遍，早晚会出现「手机说越线 3 小时、电脑说 2 小时」。
  *
- * 行 = 周一到周日（夜猫日口径），列 = 20:00–次日 06:30；每个色块按开球时刻定位，
- * 宽度按 2 小时完赛近似；亮色 = 本周精选入选，暗色 = 未入选。
+ * 行 = 周一到周日（夜猫日口径），列 = 本周实际覆盖的夜里时段；色块按开球时刻定位、
+ * 宽约 2 小时；亮色 = 本周精选入选，暗色 = 未入选。
+ *
+ * **只画「未开赛且开球时间已定」的场次** —— 与下方精选/零成本/备选列表、与移动风险带同口径。
+ * 已结束的场次不再画：这张表回答的是「还要熬到几点」，历史归赛程页。
+ * `tbd` 场次同样不画：占位时间（04:00 / 02:00）不是结论，画上去等于编一个时间出来。
  */
-function WeekTimeline({ days, bestIds, selectedDay, onToggleDay, sleepEnabled, wakeTime, minSleep }) {
-  const wakeMin = (() => {
-    const h = Number(String(wakeTime || '').slice(0, 2));
-    const m = Number(String(wakeTime || '').slice(3, 5));
-    return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
-  })();
-  // 最低睡眠线 = 起床时间 − 最低睡眠；凌晨时刻归一到次日
-  const cutoff = sleepEnabled && wakeMin != null && Number.isFinite(minSleep)
-    ? wakeMin - minSleep * 60 + 24 * 60
-    : null;
-  const cutoffInRange = cutoff != null && cutoff > TL_START && cutoff < TL_END;
+function WeekTimeline({ risk, matchById, bestIds, selectedDay, onToggleDay }) {
+  const { domain, floor, bands, tbdCount } = risk;
+  const pct = min => ((min - domain.startMin) / (domain.endMin - domain.startMin)) * 100;
+  const floorInRange = floor != null;
 
   return (
     <div className="border-t border-line-hairline px-2.5 pt-2 pb-2">
@@ -89,24 +57,24 @@ function WeekTimeline({ days, bestIds, selectedDay, onToggleDay, sleepEnabled, w
           </button>
         ) : (
           <Hint
-            content="每行一晚，横向是 20:00–次日 06:30。色块按开球时刻定位、宽度约 2 小时，颜色对应 S0–S4；亮色是本周精选入选场次。虚线是「起床时间 − 最低睡眠」，越线即低于个人底线。"
+            content="每行一晚，横向是这一夜的时间轴。色块按开球时刻定位、宽度约 2 小时，颜色对应 S0–S4；亮色是本周精选入选场次。虚线是「起床时间 − 最低睡眠」的底线，越线即低于个人底线。只画未开赛场次。"
             align="end"
           />
         )}
       </div>
 
-      {/* 刻度行：与下方时间轴列对齐（左侧留出周标签宽度、右侧留出场次数宽度） */}
+      {/* 刻度行：与下方轨道列对齐（左侧留出周标签宽度、右侧留出场次数宽度） */}
       <div className="flex items-center gap-1.5 pl-0.5">
         <span className="w-6 shrink-0" aria-hidden="true" />
         <span className="relative flex-1 font-num text-[10px] leading-none tabular-nums text-text-faint">
-          {TL_TICKS.map(h => (
+          {domain.ticks.map(tick => (
             <span
-              key={h}
+              key={tick.min}
               className="absolute -translate-x-1/2"
-              style={{ left: `${tlPct(h * 60)}%` }}
+              style={{ left: `${pct(tick.min)}%` }}
               aria-hidden="true"
             >
-              {tickLabel(h)}
+              {tick.label}
             </span>
           ))}
         </span>
@@ -114,18 +82,14 @@ function WeekTimeline({ days, bestIds, selectedDay, onToggleDay, sleepEnabled, w
       </div>
 
       <div className="mt-1 space-y-1">
-        {days.map((d, i) => {
-          const items = (d.matches || [])
-            .map(m => {
-              const start = tlMinute(m.t);
-              if (!Number.isFinite(start)) return null;
-              const s = Math.max(TL_START, start);
-              const e = Math.min(TL_END, start + TL_MATCH_MIN);
-              if (e <= s) return null;
-              return { m, s, e, tier: sleepTier(m.t) };
+        {bands.map((band, i) => {
+          const items = band.segments
+            .map(seg => {
+              const m = matchById.get(seg.id);
+              if (!m) return null;
+              return { m, s: seg.startMin, e: seg.endMin, tier: sleepTier(m.t) };
             })
-            .filter(Boolean)
-            .sort((a, b) => a.s - b.s || a.e - b.e);
+            .filter(Boolean);
 
           // 贪心分道：同一条轨道内不重叠；超过 3 道后回到第 0 道叠画——
           // 「一晚上挤了十几场」这件事本身就该看起来是糊的。
@@ -148,20 +112,23 @@ function WeekTimeline({ days, bestIds, selectedDay, onToggleDay, sleepEnabled, w
           // 没有待安排场次的夜晚只占一条细线：整周应有 7 行（周口径不能缺），
           // 但「周一已经过去了」不该和「周六有四场」占同样高度。
           const rowHeight = items.length ? lanes * 8 + 2 : 4;
-          const latest = items.length ? items.reduce((mx, it) => Math.max(mx, it.e), 0) : 0;
-          const isSelected = selectedDay === d.date;
+          const isSelected = selectedDay === band.date;
           const hasBest = items.some(it => bestIds.has(it.m.id));
 
           return (
             <button
-              key={d.date}
+              key={band.date}
               type="button"
-              onClick={() => onToggleDay(d.date)}
+              onClick={() => onToggleDay(band.date)}
               aria-pressed={isSelected}
-              aria-label={`${zhDate(d.date)} 周${WEEKDAY_SHORT[i]}，${items.length} 场${
-                items.length ? `，最晚 ${String(Math.floor(latest / 60) % 24).padStart(2, '0')}:${String(latest % 60).padStart(2, '0')} 结束` : ''
+              aria-label={`${zhDate(band.date)} 周${WEEKDAY_SHORT[i]}，${band.count} 场${
+                band.latestEndClock ? `，最晚到 ${band.latestEndClock}` : ''
+              }${band.belowFloor ? `，越过底线 ${band.overMinutes} 分钟` : '，未越线'}${
+                band.current ? '，今夜' : ''
               }${hasBest ? '，含本周精选' : ''}`}
-              title={`${zhDate(d.date)} · ${items.length} 场 · 最晚 ${hmCost(d.cost)} 档`}
+              title={`${zhDate(band.date)} · ${band.count} 场${
+                band.latestEndClock ? ` · 最晚到 ${band.latestEndClock}` : ''
+              }${band.belowFloor ? ` · 越过底线 ${band.overMinutes} 分钟` : ''}`}
               className={`flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
                 isSelected ? 'bg-surface-raised ring-1 ring-accent/50' : 'hover:bg-surface-raised/60'
               }`}
@@ -175,17 +142,19 @@ function WeekTimeline({ days, bestIds, selectedDay, onToggleDay, sleepEnabled, w
               </span>
 
               <span className="relative flex-1" style={{ height: rowHeight }} aria-hidden="true">
-                {TL_TICKS.map(h => (
+                {domain.ticks.map(tick => (
                   <span
-                    key={h}
+                    key={tick.min}
                     className="absolute inset-y-0 w-px bg-line-hairline/60"
-                    style={{ left: `${tlPct(h * 60)}%` }}
+                    style={{ left: `${pct(tick.min)}%` }}
                   />
                 ))}
-                {cutoffInRange && (
+                {floorInRange && (
                   <span
-                    className="absolute inset-y-0 w-px border-l border-dashed border-accent/60"
-                    style={{ left: `${tlPct(cutoff)}%` }}
+                    className={`absolute inset-y-0 w-px border-l border-dashed ${
+                      floor.assumed ? 'border-text-faint/60' : 'border-accent/60'
+                    }`}
+                    style={{ left: `${pct(floor.nightMin)}%` }}
                   />
                 )}
                 {items.length === 0 && (
@@ -198,8 +167,8 @@ function WeekTimeline({ days, bestIds, selectedDay, onToggleDay, sleepEnabled, w
                       key={it.m.id}
                       className={`absolute rounded-[2px] ${BUCKET_CLASS[it.tier.tier] || 'bg-tier-1'}`}
                       style={{
-                        left: `${tlPct(it.s)}%`,
-                        width: `${Math.max(1.5, tlPct(it.e) - tlPct(it.s))}%`,
+                        left: `${pct(it.s)}%`,
+                        width: `${Math.max(1.5, pct(it.e) - pct(it.s))}%`,
                         top: it.lane * 8,
                         height: 7,
                         opacity: best ? 1 : 0.5
@@ -210,8 +179,12 @@ function WeekTimeline({ days, bestIds, selectedDay, onToggleDay, sleepEnabled, w
                 })}
               </span>
 
-              <span className="w-4 shrink-0 text-right font-num text-[10px] leading-none tabular-nums text-text-faint">
-                {items.length || ''}
+              <span
+                className={`w-4 shrink-0 text-right font-num text-[10px] leading-none tabular-nums ${
+                  band.belowFloor ? 'text-warn' : 'text-text-faint'
+                }`}
+              >
+                {band.count || ''}
               </span>
             </button>
           );
@@ -219,8 +192,11 @@ function WeekTimeline({ days, bestIds, selectedDay, onToggleDay, sleepEnabled, w
       </div>
 
       <p className="mt-1 px-0.5 text-[10px] leading-relaxed text-text-faint">
-        亮色 = 本周精选 · 虚线 = 最低睡眠线
-        {cutoffInRange ? ` ${formatMinuteOfDay(cutoff)}` : ''}
+        亮色 = 本周精选 · 虚线 = {floor ? `${floor.clock} 底线` : '睡眠底线'}
+        {floor?.assumed ? '（未设作息，按默认起床 / 睡眠画的）' : ''} ·
+        {risk.riskNights > 0 ? ` ${risk.riskNights} 晚越过底线` : ' 没有越线'}
+        {risk.worst ? ` · 最晚到 ${risk.worst.latestEndClock}（周${WEEKDAY_SHORT[risk.worst.weekday]}）` : ''}
+        {tbdCount > 0 ? ` · 另有 ${tbdCount} 场开球时间待定，没有画进来` : ''}
       </p>
     </div>
   );
@@ -256,31 +232,34 @@ export default function WeekView({
   const listRef = useScrollMemory(`week:${activeTab}:${selectedDay || 'all'}`);
 
   const { plan, minefield, days, advice } = week;
-  const hasScheduledMatches = days.some(day => day.count > 0);
   const remaining = Math.max(0, plan.budget - plan.used);
-  const sleepSummary = useMemo(() => {
-    if (!prefs.sleepEnabled) return null;
-    const profile = {
-      enabled: true,
-      wakeTime: prefs.sleepWakeTime,
-      minSleep: prefs.sleepMinHours
-    };
-    const ledgers = plan.best
-      .map(e => sleepLedger(e.m.t, profile))
-      .filter(l => l.valid && l.ready);
-    if (!ledgers.length) return null;
-    const below = ledgers.filter(l => l.belowFloor);
-    const lowest = ledgers.reduce((a, b) => (a.remainingHours <= b.remainingHours ? a : b));
-    return {
-      wakeTime: ledgers[0].profile.wakeTime,
-      minSleep: ledgers[0].profile.minSleep,
-      below: below.length,
-      lowest: lowest.remainingHours
-    };
-  }, [plan.best, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepMinHours]);
+
+  /* 一周风险带：夜坐标 / 睡眠底线 / 自适应轴全部来自 core/week-risk.js。
+     结论行与时间轴共用同一份计算 —— 早先这里另有一套「精选有几晚低于底线」的摘要，
+     分母只算精选、而轴上画的是全周，同屏两个「低于底线」会让人不知道该信哪个。 */
+  const risk = useMemo(
+    () =>
+      weekRiskBands(
+        week,
+        {
+          enabled: prefs.sleepEnabled,
+          wakeTime: prefs.sleepWakeTime,
+          minSleep: prefs.sleepMinHours
+        },
+        now
+      ),
+    [week, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepMinHours, now]
+  );
+  const hasScheduledMatches = risk.bands.some(b => !b.empty);
 
   // 时间轴要高亮「入选的那几场」而不是「入选的夜晚」：同一晚可能既有精选也有落选。
   const bestIds = useMemo(() => new Set(plan.best.map(e => e.m.id)), [plan.best]);
+
+  const matchById = useMemo(() => {
+    const map = new Map();
+    for (const m of week.matches || []) map.set(m.id, m);
+    return map;
+  }, [week]);
 
   const kickoffGroupByMatch = useMemo(() => {
     const map = new Map();
@@ -290,9 +269,11 @@ export default function WeekView({
     return map;
   }, [plan.kickoffGroups]);
 
-  const activeDayObj = useMemo(
-    () => (selectedDay ? days.find(d => d.date === selectedDay) || null : null),
-    [selectedDay, days]
+  // 筛选横幅的场次数必须和时间轴同一口径（未开赛且开球已定），
+  // 不然会出现「横幅写 9 场、时间轴画 5 块」的分裂。
+  const activeBand = useMemo(
+    () => (selectedDay ? risk.bands.find(b => b.date === selectedDay) || null : null),
+    [selectedDay, risk]
   );
 
   const weekRange = days.length
@@ -339,12 +320,16 @@ export default function WeekView({
         </SectionLabel>
       </div>
 
-      {sleepSummary && (
-        <div className={`px-0.5 text-2xs ${sleepSummary.below > 0 ? 'text-warn' : 'text-text-muted'}`}>
-          按 <span className="font-num tabular-nums">{sleepSummary.wakeTime}</span> 起床 ·{' '}
-          {sleepSummary.below > 0
-            ? `精选有 ${sleepSummary.below} 晚低于 ${sleepSummary.minSleep}h 底线，最低约剩 ${formatSleepHours(sleepSummary.lowest)}`
-            : `精选均在 ${sleepSummary.minSleep}h 底线内`}
+      {/* 睡眠底线结论：口径 = 整周未开赛场次，与下方时间轴完全同源（core/week-risk.js） */}
+      {risk.floor && (
+        <div className={`px-0.5 text-2xs ${risk.riskNights > 0 ? 'text-warn' : 'text-text-muted'}`}>
+          按 <span className="font-num tabular-nums">{risk.floor.wakeTime}</span> 起床 · 底线{' '}
+          <span className="font-num tabular-nums">{risk.floor.clock}</span>
+          {risk.floor.assumed ? '（未设作息，按默认画）' : ''} ·
+          {risk.riskNights > 0
+            ? ` ${risk.riskNights} 晚越过底线${risk.worst ? `，最晚到 ${risk.worst.latestEndClock}` : ''}`
+            : ' 全周未越线'}
+          {risk.tbdCount > 0 ? ` · 另有 ${risk.tbdCount} 场开球待定未计入` : ''}
         </div>
       )}
 
@@ -432,13 +417,11 @@ export default function WeekView({
           </div>
         ) : (
           <WeekTimeline
-            days={days}
+            risk={risk}
+            matchById={matchById}
             bestIds={bestIds}
             selectedDay={selectedDay}
             onToggleDay={date => setSelectedDay(cur => (cur === date ? null : date))}
-            sleepEnabled={prefs.sleepEnabled}
-            wakeTime={prefs.sleepWakeTime}
-            minSleep={prefs.sleepMinHours}
           />
         )}
       </section>
@@ -483,10 +466,10 @@ export default function WeekView({
         key={`${activeTab}-${selectedDay || 'all'}`}
         className="scrollbar-thin -mr-1 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1"
       >
-        {selectedDay && activeDayObj && (
+        {selectedDay && activeBand && (
           <div className="rounded-lg border border-accent/30 bg-surface-accent px-2.5 py-1.5 text-2xs text-text-primary">
-            正在筛选：<span className="font-semibold text-accent">{zhDate(activeDayObj.date)} 夜</span>（共{' '}
-            {activeDayObj.count} 场） · 点上方「清除」取消
+            正在筛选：<span className="font-semibold text-accent">{zhDate(activeBand.date)} 夜</span>（共{' '}
+            {activeBand.count} 场） · 点上方「清除」取消
           </div>
         )}
 

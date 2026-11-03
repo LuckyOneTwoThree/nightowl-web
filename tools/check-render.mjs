@@ -893,6 +893,70 @@ app.whenReady().then(async () => {
     ok('★ 周视图日期无 NaN（owlDay 字符串口径）',
       !/NaN|aN\/NaN/.test(weekText), weekText.slice(0, 240));
 
+    /* ---------- 周时间轴（core/week-risk.js 接入） ----------
+       行数 / 底线结论 / 筛选开关都是结构常量，不依赖当天有没有比赛、几点。
+       早先这里 0 覆盖：WeekTimeline 换数据源时连「7 行还在不在」都没人守。 */
+    const weekTimeline = await win.webContents.executeJavaScript(`
+      (() => {
+        const rows = [...document.querySelectorAll('button')].filter(b =>
+          /周[一二三四五六日]，\\d+ 场/.test(b.getAttribute('aria-label') || '')
+        );
+        const text = document.body.innerText;
+        return {
+          rowCount: rows.length,
+          firstLabel: rows[0]?.getAttribute('aria-label') || '',
+          hasTitle: text.includes('7 晚时间轴'),
+          hasFloor: text.includes('底线'),
+          hasWake: text.includes('起床'),
+          hasVerdict: /越过底线|未越线|全周未越线/.test(text)
+        };
+      })()
+    `);
+    ok('★ 周时间轴渲染 7 行（周一~周日）', weekTimeline.rowCount === 7, JSON.stringify(weekTimeline));
+    ok('★ 周时间轴标题 / 底线 / 起床结论常驻',
+      weekTimeline.hasTitle && weekTimeline.hasFloor && weekTimeline.hasWake && weekTimeline.hasVerdict,
+      JSON.stringify(weekTimeline));
+
+    // 单晚筛选：点任一行出「正在筛选」，点日期旁的「清除」收起。
+    // 用「清除 M/D」精确匹配，避开设置抽屉里的线路记忆「清除」。
+    const dayRowClicked = await win.webContents.executeJavaScript(`
+      (() => {
+        const rows = [...document.querySelectorAll('button')].filter(b =>
+          /周[一二三四五六日]，\\d+ 场/.test(b.getAttribute('aria-label') || '')
+        );
+        if (rows.length < 4) return false;
+        rows[3].click();
+        return true;
+      })()
+    `);
+    await sleep(300);
+    const dayFilterOn = await win.webContents.executeJavaScript(`
+      (() => {
+        const text = document.body.innerText;
+        const clearBtn = [...document.querySelectorAll('button')].find(b =>
+          /^清除 \\d{1,2}\\/\\d{1,2}/.test((b.textContent || '').trim())
+        );
+        return { banner: text.includes('正在筛选'), hasClear: !!clearBtn };
+      })()
+    `);
+    ok('★ 点单晚出现筛选横幅与「清除 M/D」按钮',
+      dayRowClicked && dayFilterOn.banner && dayFilterOn.hasClear, JSON.stringify(dayFilterOn));
+
+    await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = [...document.querySelectorAll('button')].find(b =>
+          /^清除 \\d{1,2}\\/\\d{1,2}/.test((b.textContent || '').trim())
+        );
+        if (btn) btn.click();
+        return !!btn;
+      })()
+    `);
+    await sleep(300);
+    const dayFilterOff = await win.webContents.executeJavaScript(
+      `!document.body.innerText.includes('正在筛选')`
+    );
+    ok('★ 清除后筛选横幅消失', dayFilterOff);
+
     /* ---------- 1366×768 视口与赛程筛选抽屉验证 ---------- */
     win.setContentSize(1366, 768);
     await waitLoad(win, `${base}/?view=schedule`);

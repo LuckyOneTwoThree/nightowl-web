@@ -1,9 +1,9 @@
 # 夜猫看台 · 「今晚决策台」双端体验升级计划
 
-- **状态**：P0 全部完成；P1-1 ~ P1-6 全部落地（P1-5 仅桌面端，理由见该段）；P2-1 移动端风险带、P2-2 Token 与排版收敛、P2-3 反馈与失败恢复已落地
+- **状态**：P0 全部完成；P1-1 ~ P1-6 全部落地（P1-5 仅桌面端，理由见该段）；P2-1 移动端风险带、P2-2 Token 与排版收敛、P2-3 反馈与失败恢复、桌面周视图接 `core/week-risk.js` 已落地
 - **基线**：`v0.1.44`，HEAD `b02206a`，桌面测试 31 脚本 / 891 断言全绿
-- **当前实测**：37 脚本 / 1060 断言全绿；`build` 成功；`check:render` 73 项全过；`measure-layout` 三档无横向溢出；移动端 `npm run check`（`verify:shared` 0 漂移 + `audit:touch` 98 个控件全达标 + `typecheck`）+ `export:android` 通过
-- **下一批**：移动端详情三级披露 / 桌面周视图接 `core/week-risk.js` / 真机验收（播放器静音与自动换线、通知权限、托盘与自启、风险带视觉、系统字号 1.3× 与 1.6×、外链失败提示）
+- **当前实测**：37 脚本 / 1060 断言全绿；`build` 成功；`check:render` 77 项全过（含周时间轴 4 项）；`measure-layout` 三档无横向溢出；移动端 `npm run check`（`verify:shared` 0 漂移 + `audit:touch` 98 个控件全达标 + `typecheck`）+ `export:android` 通过
+- **下一批**：移动端详情三级披露 / 真机验收（播放器静音与自动换线、通知权限、托盘与自启、风险带视觉、系统字号 1.3× 与 1.6×、外链失败提示）
 - **范围**：桌面端 `src/`、移动端 `mobile/src/`、共享 `src/core/`
 - **目标**：把「信息丰富的转播仪表盘」收敛为「在正确时机只回答一个问题的今晚决策台」
 
@@ -358,7 +358,7 @@ npm run export:android
 原来那张柱状图只回答「哪晚消耗大」，回答不了「到几点、会不会越线」——而后者才是熬夜的人真正在算的事。
 现在换成 7 行共用一条横向坐标的风险带：
 
-- ✅ 新增共享纯函数 `src/core/week-risk.js`（桌面 / 手机共用，桌面暂未接）
+- ✅ 新增共享纯函数 `src/core/week-risk.js`（桌面 / 手机共用；桌面周视图已接入，见下）
   - 一条「夜」= 当日 18:00 → 次日 08:00，坐标是「距 18:00 的分钟数」，与 `owlDay` 同源
   - 横轴**按数据自适应**（左右各留 30 分钟、取整到整点），不用固定的 18:00–08:00：
     固定域在真实数据上会白白空出两小时（04:00 的场次收在 06:00，右边还空到 08:00）
@@ -489,6 +489,46 @@ npm run export:android
 
 ---
 
+#### 桌面周视图接 `core/week-risk.js` · ✅ 已完成
+
+桌面 `WeekView` 原来自己算时间轴（`TL_START/TL_END` 固定域、自算睡眠底线、自算越线量），
+与手机 `WeekRiskBand` 是两套数学。同一件事两端各算一遍，早晚会出现「手机说越线 3 小时、电脑说 2 小时」。
+现在两端共用 `core/week-risk.js` 的 `weekRiskBands` + `nightDomain`，桌面只负责「分道画色块」。
+
+**口径（与移动风险带完全同源）**
+
+- 一夜 = 当日 18:00 → 次日 08:00，坐标为距 18:00 的分钟数。
+- 只画「未开赛且开球时间已定」的场次 —— 与下方精选/零成本/备选列表同口径。
+  已结束的场次不画（这张表回答的是「还要熬到几点」，历史归赛程页）；
+  `tbd` 场次不画（占位时间 04:00 / 02:00 不是结论，画上去等于编一个时间出来），只在脚注报总数。
+- 睡眠底线 = 起床 − 最低睡眠；未启用作息时用默认值，虚线降为灰色并标注「按默认画」。
+- 横轴按数据自适应（`nightDomain`：左右留 30 分钟、取整到整点、底线必须在域内、最小跨度 4h），
+  不再固定 18:00–08:00 —— 固定域在真实数据上会留下两小时空白。
+
+**改动**
+
+- `src/core/week-risk.js`：`computeDomain` 改名并导出为 `nightDomain(segments, floor)`，
+  接受段数组而非 bands（桌面按自己那套分道后也要取轴）；`weekRiskBands` 内部改调用它。
+- `src/components/WeekView.jsx`：`WeekTimeline` 全量重写为吃 `risk` + `matchById`，
+  删掉本地 `TL_*` 常量、`tlMinute`/`tlPct`/`TL_TICKS`/`tickLabel` 与 `formatSleepHours` 依赖。
+  色块仍分道（≤3 道，第 4 个叠回第 0 道 —— 「一晚挤十几场」本身就该看起来是糊的）；
+  亮色 = 精选入选。
+- **删掉 `sleepSummary`**：它的分母只算精选、而轴上画的是全周，同屏两个「低于底线」会让人
+  不知道该信哪个。换成一行风险结论（底线时钟 / assumed / 越线夜数 / 最晚一场 / tbd 计数），
+  与时间轴脚注同源。
+- 筛选横幅的场次数改用 `risk.bands[].count`（与时间轴同口径），不再用 `days[].count`。
+
+**验收**
+
+- `check:render` 新增 4 项周时间轴断言（此前 0 覆盖）：7 行常驻（周一~周日）、
+  标题/底线/起床结论常驻、点单晚出「正在筛选 + 清除 M/D」、清除后横幅消失。
+  全部是结构常量，不依赖当天有没有比赛、几点 —— 否则门禁结果随日期漂移。
+- `test:week-risk` 55 项不变（`nightDomain` 的行为已由 `weekRiskBands` 的域断言覆盖）。
+- 全量门禁：37 脚本 / 1060 断言、`build`、`check:render` 77 项、`measure-layout` 三档、
+  移动 `check` + `export:android` 全绿。
+
+---
+
 ## 五、文件影响面
 
 ```text
@@ -496,11 +536,11 @@ src/core/format.js                  P0-1 时间格式化
 src/core/queue.js                   P0-2 队列三态
 src/core/decision-strip.js          P1-1 新增纯函数
 src/core/digest-session.js          P1-5 连续补看纯函数（会话只持 id + 游标）
-src/core/week-risk.js               P2-1 一周风险带纯函数（夜坐标 / 睡眠底线 / 越线量）
+src/core/week-risk.js               P2-1 一周风险带纯函数（夜坐标 / 睡眠底线 / 越线量）；桌面周视图复用 nightDomain
 src/hooks/useScrollMemory.js        P1-6 滚动位置记忆（模块级 Map）
 src/hooks/useReviewStatus.js        P1-5 回顾资源真实状态广播
 src/App.jsx                         P0-2/P0-3/P1-5/P1-6 状态与流程
-src/components/WeekView.jsx         P0-1 时间轴
+src/components/WeekView.jsx         P0-1 时间轴；桌面周视图接 week-risk（分道色块 + 风险结论行）
 src/components/TonightView.jsx      P0-2 同开球状态源
 src/components/IntelPanel.jsx       P0-2/P1-4 补看动作与披露
 src/components/PlayerStage.jsx      P0-3/P1-2 停止与侧轨
@@ -530,6 +570,7 @@ mobile/src/state/toast.ts           P2-3 移动全局提示
 mobile/src/ui/Toast.tsx             P2-3 移动提示条
 mobile/src/lib/openExternal.ts      P2-3 移动外链打开与复制
 electron/{main,preload}.cjs         P2-3 外链桥改为 invoke 并回报结果
+tools/check-render.mjs              桌面周视图接入 week-risk：新增 4 项时间轴断言
 ```
 
 ---
@@ -540,11 +581,11 @@ electron/{main,preload}.cjs         P2-3 外链桥改为 invoke 并回报结果
 | :---- | :------------------------------------------------- | :--------------------------- |
 | 共享算法  | `npm run test:all`                                 | 既有断言不回归，新纯函数测试通过             |
 | 桌面构建  | `npm run build`                                    | Vite 构建成功，无新 chunk 异常        |
-| 桌面渲染  | `env -u ELECTRON_RUN_AS_NODE npm run check:render` | 首屏、补看、核心视图无异常                |
+| 桌面渲染  | `env -u ELECTRON_RUN_AS_NODE npm run check:render` | 首屏、补看、核心视图、周时间轴无异常      |
 | 桌面布局  | `npx electron tools/measure-layout.mjs`            | 1120 / 1366 / 1440 无溢出、无滚动陷阱 |
 | 对比度   | `node tools/check-contrast.mjs`                    | 现有 token 对比度不降级              |
 | 移动共享层 | `cd mobile && npm run verify:shared`               | 0 漂移                         |
-| 移动触控  | `cd mobile && npm run audit:touch`                 | 97 个 Pressable 全部 ≥ 44dp     |
+| 移动触控  | `cd mobile && npm run audit:touch`                 | 98 个 Pressable 全部 ≥ 44dp     |
 | 移动类型  | `cd mobile && npm run typecheck`                   | 0 error                      |
 | 移动构建  | `cd mobile && npm run export:android`              | 成功产出                         |
 | 真机    | iOS / Android 各一台                                  | 播放/音量/通知/安全区/返回路径/系统字号        |
