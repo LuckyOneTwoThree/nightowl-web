@@ -28,7 +28,7 @@ export default function StopLossBanner({ context, notice = null, onSleep, onSnoo
           </p>
           <p className="mt-1 text-xs leading-relaxed text-text-secondary">
             按 {ledger.profile.wakeTime} 起床、最低 {ledger.profile.minSleep}h 计算，{remaining}。
-            现在睡，明早看结果？
+            停止应用内播放，加入补看，明早再看结果？
           </p>
           {notice && <p className="mt-1 text-2xs text-warn">{notice}</p>}
         </div>
@@ -36,7 +36,7 @@ export default function StopLossBanner({ context, notice = null, onSleep, onSnoo
       <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onSnooze}>再看 15 分钟</Button>
         <Button variant="default" size="sm" onClick={onIgnore}>继续看（今晚不再提醒）</Button>
-        <Button variant="primary" size="sm" onClick={onSleep}>现在睡</Button>
+        <Button variant="primary" size="sm" onClick={onSleep}>停止播放并明早看</Button>
       </div>
     </aside>
   );

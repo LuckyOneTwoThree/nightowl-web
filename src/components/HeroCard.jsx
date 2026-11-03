@@ -5,6 +5,7 @@ import { Button, Chip, Crest, Hint, LiveDot, Meta, SleepBadge, Stars } from './a
 import { IconCalendar, IconInfo, IconPlay, IconSignal, IconWarn } from './icons.jsx';
 import { locateSection } from './locate.js';
 import SleepNote from './SleepNote.jsx';
+import DecisionStrip from './DecisionStrip.jsx';
 
 /**
  * 三档措辞。指数 < 5 时不吹不硬推 —— 这是产品纪律，不是样式分支。
@@ -44,7 +45,13 @@ export default function HeroCard({
   now,
   onWatch,
   indexHint,
-  prefs
+  prefs,
+  decision = null,
+  alternative = null,
+  onSelectAlternative,
+  onOpenSettings,
+  watchLaterState = 'none',
+  onWatchLater
 }) {
   const m = hero.m;
   const ev = hero.ev;
@@ -60,6 +67,18 @@ export default function HeroCard({
   const tierCost = tierInfo.cost;
   const homeColor = teamColor(m.h);
   const awayColor = teamColor(m.a);
+
+  /**
+   * 赛前主动作只有两个：看这场，或者不熬夜、加入补看。
+   * 「开始观赛」在赛前其实是切右栏预览，说得过头了 —— 直播中才叫观赛。
+   * 文案与同开球面板、情报面板保持同一套三态口径。
+   */
+  const queueLabel =
+    watchLaterState === 'pending'
+      ? '已入补看 · 取消'
+      : watchLaterState === 'watched'
+        ? '已看过 · 重新补看'
+        : '加入补看';
 
   // 已选中时按钮不能继续只做「再选中一次」：那会让首屏主行动点了毫无变化。
   // 改为直达右侧对应区块（滚动 + 高亮 + 焦点），按钮文案随状态变化。
@@ -137,15 +156,37 @@ export default function HeroCard({
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" title="右侧展示中" aria-hidden="true" />
           )}
         </div>
-        <Button
-          variant="ghost"
-          size="md"
-          icon={active ? activeAction.icon : <IconPlay />}
-          onClick={() => (active ? locateSection(activeAction.target, { focus: true }) : onWatch(m.id))}
-          className="relative mt-2 w-full"
-        >
-          {active ? activeAction.label : copy.cta}
-        </Button>
+        <div className="relative mt-2">
+          <DecisionStrip
+            decision={decision}
+            match={m}
+            alternative={alternative}
+            onSelectAlternative={onSelectAlternative}
+            onOpenSettings={onOpenSettings}
+          />
+        </div>
+        <div className="relative mt-2 flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="md"
+            icon={active ? activeAction.icon : <IconPlay />}
+            onClick={() => (active ? locateSection(activeAction.target, { focus: true }) : onWatch(m.id))}
+            className="min-w-0 flex-1"
+          >
+            {active ? activeAction.label : copy.cta}
+          </Button>
+          {!live && onWatchLater && (
+            <Button
+              variant="ghost"
+              size="md"
+              onClick={() => onWatchLater(m)}
+              data-watch-later-action="toggle"
+              className="shrink-0"
+            >
+              {queueLabel}
+            </Button>
+          )}
+        </div>
       </article>
     );
   }
@@ -268,8 +309,15 @@ export default function HeroCard({
         </p>
       </div>
 
-      {/* 底部：睡眠代价 + 全宽主行动 */}
+      {/* 底部：结论条 + 睡眠代价 + 全宽主行动 */}
       <div className="relative mt-3 space-y-2">
+        <DecisionStrip
+          decision={decision}
+          match={m}
+          alternative={alternative}
+          onSelectAlternative={onSelectAlternative}
+          onOpenSettings={onOpenSettings}
+        />
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <SleepBadge match={m} />
           <SleepNote match={m} prefs={prefs} warn={tierCost >= 3.5} />
@@ -286,15 +334,34 @@ export default function HeroCard({
             </span>
           )}
         </div>
-        <Button
-          variant={copy.ctaVariant}
-          size="md"
-          icon={active ? activeAction.icon : <IconPlay />}
-          onClick={() => (active ? locateSection(activeAction.target, { focus: true }) : onWatch(m.id))}
-          className={`w-full ${copy.ctaVariant === 'primary' ? 'shadow-pop' : ''}`}
-        >
-          {active ? activeAction.label : live ? '进入直播间' : copy.cta}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={copy.ctaVariant}
+            size="md"
+            icon={active ? activeAction.icon : <IconPlay />}
+            onClick={() => (active ? locateSection(activeAction.target, { focus: true }) : onWatch(m.id))}
+            className={`min-w-0 flex-1 ${copy.ctaVariant === 'primary' ? 'shadow-pop' : ''}`}
+          >
+            {active
+              ? activeAction.label
+              : live
+                ? '进入直播间'
+                : finished
+                  ? '查看赛后回顾'
+                  : copy.cta}
+          </Button>
+          {!live && onWatchLater && (
+            <Button
+              variant="ghost"
+              size="md"
+              onClick={() => onWatchLater(m)}
+              data-watch-later-action="toggle"
+              className="shrink-0"
+            >
+              {queueLabel}
+            </Button>
+          )}
+        </div>
       </div>
     </article>
   );

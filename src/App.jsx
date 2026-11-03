@@ -4,7 +4,14 @@ import { countdown as engineCountdown, ts, MATCH_DURATION_MS, sleepTier } from '
 import { hm, humanCountdownShort } from './core/format.js';
 import { STANDINGS_LEAGUES } from './core/standings.js';
 import { loadPrefs, savePrefs } from './core/prefs.js';
-import { addToQueue, markQueueWatched, normalizeQueue, pendingQueue, removeFromQueue } from './core/queue.js';
+import {
+  addToQueue,
+  markQueueWatched,
+  normalizeQueue,
+  queueStatusOf,
+  removeFromQueue,
+  toggleQueue
+} from './core/queue.js';
 import { loadWatchLater, saveWatchLater } from './components/watch-later-storage.js';
 import { loadStopLossStates, saveStopLossStates } from './components/stop-loss-storage.js';
 import {
@@ -142,6 +149,15 @@ export default function App() {
     if (result.ok && result.added) commitWatchLater(result.queue);
     return result;
   }, [commitWatchLater]);
+  /**
+   * 补看按钮的唯一入口：未加入 -> 加入；待看 -> 移出；已看 -> 恢复待看。
+   * 组件不再各自保存 queued，避免同一场比赛在不同入口出现不同状态。
+   */
+  const toggleWatchLater = useCallback(match => {
+    const result = toggleQueue(watchLaterRef.current, match);
+    if (result.ok) commitWatchLater(result.queue);
+    return result;
+  }, [commitWatchLater]);
   const removeWatchLater = useCallback(id => {
     commitWatchLater(removeFromQueue(watchLaterRef.current, id));
   }, [commitWatchLater]);
@@ -155,6 +171,7 @@ export default function App() {
   stopLossStatesRef.current = stopLossStates;
   const [stopLossContext, setStopLossContext] = useState(null);
   const [stopLossNotice, setStopLossNotice] = useState(null);
+  const [stopPlaybackRequest, setStopPlaybackRequest] = useState(0);
   const [morningDigestOpen, setMorningDigestOpen] = useState(false);
   const [morningDismissed, setMorningDismissed] = useState(() => loadMorningDigestDismissed());
   const commitStopLoss = useCallback((night, state) => {
@@ -807,6 +824,8 @@ export default function App() {
       return;
     }
     commitStopLoss(stopLossContext.night, sleepStopLoss(stopLossStatesRef.current[stopLossContext.night]));
+    // 先落队列与止损状态，再通知 PlayerStage 停止；即便播放器已卸载，也只是多一次无效请求。
+    setStopPlaybackRequest(value => value + 1);
     setStopLossContext(null);
     setStopLossNotice(null);
   };
@@ -1020,7 +1039,9 @@ export default function App() {
                 onReveal={reveal}
                 countdownText={countdownText}
                 replayPicks={replayPicks}
-                onWatchLater={addWatchLater}
+                onWatchLater={toggleWatchLater}
+                watchLater={watchLater}
+                onOpenSettings={openSettings}
               />
             )}
 
@@ -1099,6 +1120,7 @@ export default function App() {
                 onReveal={reveal}
                 notifyLiveEvents={prefs.notifyLiveEvents}
                 excludedIds={spoilerExcludedIds}
+                stopRequest={stopPlaybackRequest}
                 underVideo={
                   <IntelPanel
                     match={activeMatch}
@@ -1114,8 +1136,8 @@ export default function App() {
                     onSelect={select}
                     onOpenStandings={openStandings}
                     now={clockTs}
-                    watchLater={pendingQueue(watchLater).some(item => item.id === activeMatch?.id)}
-                    onWatchLater={() => addWatchLater(activeMatch)}
+                    watchLaterState={activeMatch ? queueStatusOf(watchLater, activeMatch.id) : 'none'}
+                    onWatchLater={() => toggleWatchLater(activeMatch)}
                   />
                 }
               />

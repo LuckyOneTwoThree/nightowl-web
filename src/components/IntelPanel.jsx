@@ -57,7 +57,7 @@ export default function IntelPanel({
   onSelect,
   onOpenStandings,
   now,
-  watchLater = false,
+  watchLaterState = 'none',
   onWatchLater,
   matchChecks = {},
   onRecheckMatch,
@@ -139,7 +139,7 @@ export default function IntelPanel({
               tier={tier}
               match={match}
               prefs={prefs}
-              watchLater={watchLater}
+              watchLaterState={watchLaterState}
               onWatchLater={onWatchLater}
               hidePersonal={isHeroMatch}
             />
@@ -217,10 +217,12 @@ export default function IntelPanel({
 /* 决策视图                                                            */
 /* ------------------------------------------------------------------ */
 
-function SleepCostSection({ tier, match, prefs, watchLater = false, onWatchLater, hidePersonal = false }) {
+function SleepCostSection({ tier, match, prefs, watchLaterState = 'none', onWatchLater, hidePersonal = false }) {
   const [queueMsg, setQueueMsg] = useState(null);
   useEffect(() => setQueueMsg(null), [match?.id]);
   const style = TIER_MAP[tier.label] || TIER_MAP.S0;
+  const queued = watchLaterState === 'pending';
+  const watched = watchLaterState === 'watched';
   return (
     <Block icon={<IconTier />} title="睡眠代价" right={<Meta num>{match.tbd ? '时间待定' : `${hm(match.t)} 开球`}</Meta>}>
       {match.tbd ? (
@@ -284,14 +286,34 @@ function SleepCostSection({ tier, match, prefs, watchLater = false, onWatchLater
             size="xs"
             onClick={() => {
               const result = onWatchLater?.();
-              if (result?.ok) setQueueMsg(result.added ? '已加入明早补看' : '已在补看队列中');
-              else if (result?.reason === 'full') setQueueMsg('队列已满，请先在设置中移除旧条目');
-              else setQueueMsg('加入补看失败');
+              if (!result?.ok) {
+                setQueueMsg(
+                  result?.reason === 'full'
+                    ? '队列已满，请先在设置中移除旧条目'
+                    : '更新补看失败'
+                );
+                return;
+              }
+              setQueueMsg(
+                result.action === 'added'
+                  ? '已加入补看'
+                  : result.action === 'restored'
+                    ? '已恢复为待补看'
+                    : result.action === 'removed'
+                      ? '已移出补看'
+                      : null
+              );
             }}
-            disabled={watchLater}
-            title={watchLater ? '已加入明早补看，可在「偏好与数据 → 明早补看」移除' : '不熬夜，明早再看这场'}
+            data-watch-later-action="toggle"
+            title={
+              queued
+                ? '点击移出补看'
+                : watched
+                  ? '已看过，点击恢复为待补看'
+                  : '不熬夜，赛后补看这场'
+            }
           >
-            {watchLater ? '已加入明早补看' : '明早补看'}
+            {queued ? '已入补看 · 取消' : watched ? '已看过 · 重新补看' : '加入补看'}
           </Button>
         </div>
       )}

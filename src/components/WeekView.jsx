@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { zhDate, hmCost, hm } from '../core/format.js';
+import { zhDate, hmCost, hm, formatMinuteOfDay } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { stateOf } from '../core/owl.js';
 import { owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '../core/engine.js';
@@ -58,7 +58,7 @@ const tickLabel = h => `${String(h % 24).padStart(2, '0')}`;
  * 决策问题 —— 睡眠成本是「开球时刻」的函数，把它画回时间轴上，同一晚的场次密度、
  * 同开球重叠、以及是否越过「最低睡眠线」三个事实不用解释就能看出来。
  *
- * 行 = 周一到周日（夜猫日口径），列 = 20:00–08:00；每个色块按开球时刻定位，
+ * 行 = 周一到周日（夜猫日口径），列 = 20:00–次日 06:30；每个色块按开球时刻定位，
  * 宽度按 2 小时完赛近似；亮色 = 本周精选入选，暗色 = 未入选。
  */
 function WeekTimeline({ days, bestIds, selectedDay, onToggleDay, sleepEnabled, wakeTime, minSleep }) {
@@ -88,7 +88,7 @@ function WeekTimeline({ days, bestIds, selectedDay, onToggleDay, sleepEnabled, w
           </button>
         ) : (
           <Hint
-            content="每行一晚，横向是 20:00–次日 08:00。色块按开球时刻定位、宽度约 2 小时，颜色对应 S0–S4；亮色是本周精选入选场次。虚线是「起床时间 − 最低睡眠」，越线即低于个人底线。"
+            content="每行一晚，横向是 20:00–次日 06:30。色块按开球时刻定位、宽度约 2 小时，颜色对应 S0–S4；亮色是本周精选入选场次。虚线是「起床时间 − 最低睡眠」，越线即低于个人底线。"
             align="end"
           />
         )}
@@ -190,9 +190,6 @@ function WeekTimeline({ days, bestIds, selectedDay, onToggleDay, sleepEnabled, w
                 {items.length === 0 && (
                   <span className="absolute inset-x-0 top-1/2 h-px bg-line-hairline/70" />
                 )}
-                {items.length === 0 && (
-                  <span className="absolute inset-x-0 top-1/2 h-px bg-line-hairline/70" />
-                )}
                 {items.map(it => {
                   const best = bestIds.has(it.m.id);
                   return (
@@ -222,9 +219,7 @@ function WeekTimeline({ days, bestIds, selectedDay, onToggleDay, sleepEnabled, w
 
       <p className="mt-1 px-0.5 text-[10px] leading-relaxed text-text-faint">
         亮色 = 本周精选 · 虚线 = 最低睡眠线
-        {cutoffInRange
-          ? ` ${tickLabel(Math.floor(cutoff / 60) * 60)}:${String(cutoff % 60).padStart(2, '0')}`
-          : ''}
+        {cutoffInRange ? ` ${formatMinuteOfDay(cutoff)}` : ''}
       </p>
     </div>
   );

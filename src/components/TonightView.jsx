@@ -1,12 +1,14 @@
 import { useMemo, useRef, useState } from 'react';
 import { datePart, zhDate, weekdayOf } from '../core/format.js';
 import { narrativeOf } from '../core/narrative.js';
-import { evalOne, stateOf, heroTier, groupTonight } from '../core/owl.js';
+import { evalOne, stateOf, heroTier, groupTonight, sameNightPicks } from '../core/owl.js';
+import { decisionStrip } from '../core/decision-strip.js';
 import { storylines, teamName } from '../data/index.js';
 import HeroCard, { NoMatchCard } from './HeroCard.jsx';
 import MatchRow from './MatchRow.jsx';
 import { Button, Chip, LiveDot, Meta, SectionLabel, SleepBadge } from './atoms.jsx';
 import { formatSleepHours } from '../core/sleep.js';
+import { queueStatusOf } from '../core/queue.js';
 import { sleepLedgerFor } from './SleepNote.jsx';
 
 /** 夜猫指数口径说明 —— 从常驻版面收进 Hint（P2：界面不再解释自己） */
@@ -22,29 +24,43 @@ export const INDEX_HINT =
  * 每行只给取舍需要的四项：双方 / 指数 / 档位 / 剩余睡眠；
  * 动作只有两个：「看这场」（切右栏预览，不改算法计划）与「明早看」（进补看队列）。
  */
-function SameKickoffPanel({ group, activeMatchId, prefs, onSelect, onWatchLater }) {
-  const [queued, setQueued] = useState({});
+function SameKickoffPanel({ group, activeMatchId, prefs, onSelect, onWatchLater, watchLater = [] }) {
   const [hint, setHint] = useState(null);
+  // 同开球最多同时出现 7 场（欧冠整轮 04:00 一起开）。逐条铺开会吃掉近 500px，
+  // 把 Hero 和下面的赛程列表一起挤死 —— 默认只留一行摘要（场次 + 同组最高指数），
+  // 展开后才逐条对比。判断"要不要看别的"并不需要先看到七行。
+  const [expanded, setExpanded] = useState(false);
   if (group.length < 2) return null;
   const kickoff = String(group[0].t || '').split('T')[1] || '';
+  const indexed = group.map(m => ({ m, index: evalOne(m, prefs).index }));
+  const topIndex = indexed.reduce((max, x) => Math.max(max, x.index), 0);
+  const visible = expanded ? group : [];
 
   return (
     <section
       aria-label="同开球对比"
       className="shrink-0 rounded-xl border border-line-hairline bg-surface-card/70 p-2.5"
     >
-      <div className="mb-1.5 flex items-center justify-between px-0.5">
-        <span className="text-2xs font-medium text-text-muted">
-          {kickoff} 同开球 · 只能看一场
+      <div className="flex items-center justify-between gap-2 px-0.5">
+        <span className="min-w-0 truncate text-2xs font-medium text-text-muted">
+          {kickoff} 同开球 · {group.length} 场 · 最高 {topIndex.toFixed(1)}
         </span>
-        <Meta num>{group.length} 场</Meta>
+        <button
+          type="button"
+          onClick={() => setExpanded(v => !v)}
+          aria-expanded={expanded}
+          className="shrink-0 rounded px-1 py-0.5 text-2xs text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+        >
+          {expanded ? '收起' : `展开 ${group.length}`}
+        </button>
       </div>
-      <div className="space-y-1.5">
-        {group.map(m => {
+      {expanded && (
+        <div className="scrollbar-thin -mr-1 mt-1.5 max-h-[260px] space-y-1.5 overflow-y-auto overscroll-contain pr-1">
+          {visible.map(m => {
           const { index } = evalOne(m, prefs);
           const ledger = sleepLedgerFor(m, prefs);
           const active = m.id === activeMatchId;
-          const isQueued = !!queued[m.id];
+          const queueState = queueStatusOf(watchLater, m.id);
           return (
             <div
               key={m.id}
@@ -73,14 +89,28 @@ function SameKickoffPanel({ group, activeMatchId, prefs, onSelect, onWatchLater 
                     <Button
                       variant="ghost"
                       size="xs"
-                      disabled={isQueued}
                       onClick={() => {
                         const r = onWatchLater(m);
-                        if (r?.ok) setQueued(q => ({ ...q, [m.id]: true }));
-                        else setHint(r?.reason === 'full' ? '补看队列已满，请先在设置里移除旧条目' : '加入补看失败');
+                        if (!r?.ok) {
+                          setHint(r?.reason === 'full' ? '补看队列已满，请先在设置里移除旧条目' : '更新补看失败');
+                        } else {
+                          setHint(null);
+                        }
                       }}
+                      data-watch-later-action="toggle"
+                      title={
+                        queueState === 'pending'
+                          ? '点击移出补看'
+                          : queueState === 'watched'
+                            ? '已看过，点击重新加入待补看'
+                            : '不熬夜，赛后补看这场'
+                      }
                     >
-                      {isQueued ? '已加入' : '明早看'}
+                      {queueState === 'pending'
+                        ? '已入补看 · 取消'
+                        : queueState === 'watched'
+                          ? '已看过 · 重新补看'
+                          : '加入补看'}
                     </Button>
                   )}
                 </span>
@@ -88,7 +118,8 @@ function SameKickoffPanel({ group, activeMatchId, prefs, onSelect, onWatchLater 
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
       {hint && <p className="mt-1 px-0.5 text-2xs text-warn">{hint}</p>}
     </section>
   );
@@ -112,7 +143,9 @@ export default function TonightView({
   onReveal,
   countdownText,
   replayPicks = [],
-  onWatchLater
+  onWatchLater,
+  watchLater = [],
+  onOpenSettings
 }) {
   const { night, slice, hero, focal, minefieldIds } = tonight;
 
@@ -122,6 +155,34 @@ export default function TonightView({
   );
 
   const tier = heroTier(hero);
+
+  /**
+   * 决策条（P1-1）：同一屏只出现一次，只给结论，不重算算法。
+   * 替代场次复用 sameNightPicks 的候选口径（已排除 tbd / 已开球 / 本场），
+   * 再剔除已经标记看过的，避免让人「换」到一场已经看掉的比赛。
+   */
+  const decision = useMemo(() => {
+    if (!hero) return null;
+    const alternatives = sameNightPicks(hero.m, prefs, 4, now).filter(
+      alt => queueStatusOf(watchLater, alt.m.id) !== 'watched'
+    );
+    const strip = decisionStrip({
+      match: hero.m,
+      index: hero.index,
+      prefs,
+      now,
+      alternatives,
+      followed: hero.ev?.isFollowed === true,
+      spoilerFree: prefs.spoilerFree === true,
+      revealed: revealed?.has ? revealed.has(hero.m.id) : false
+    });
+    const picked = strip.alternativeId
+      ? alternatives.find(alt => alt.m.id === strip.alternativeId) || null
+      : null;
+    return { strip, alternative: picked };
+  }, [hero, prefs, now, watchLater, revealed]);
+
+  const heroQueueState = hero ? queueStatusOf(watchLater, hero.m.id) : 'none';
 
   // 按状态分区：进行中置顶（最该看）、未开赛按时间、已结束默认折叠不占屏。
   // 此前三类混在一个列表里 —— 用户分不清当前状态，刚终场还显示待录比分的
@@ -223,6 +284,12 @@ export default function TonightView({
           onWatch={onSelect}
           indexHint={INDEX_HINT}
           prefs={prefs}
+          decision={decision?.strip || null}
+          alternative={decision?.alternative || null}
+          onSelectAlternative={onSelect}
+          onOpenSettings={onOpenSettings}
+          watchLaterState={heroQueueState}
+          onWatchLater={onWatchLater}
         />
       ) : (
         <NoMatchCard focal={focal} countdown={countdownText} onSelect={onSelect} />
@@ -235,6 +302,7 @@ export default function TonightView({
           prefs={prefs}
           onSelect={onSelect}
           onWatchLater={onWatchLater}
+          watchLater={watchLater}
         />
       )}
 
@@ -274,7 +342,7 @@ export default function TonightView({
       <div
         ref={listRef}
         className={`scrollbar-thin -mr-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1 ${
-          listed > 0 || replayPicks.length > 0 ? 'min-h-[96px]' : ''
+          listed > 0 || replayPicks.length > 0 ? 'min-h-[180px]' : ''
         }`}
       >
         {listed === 0 && hero && (
