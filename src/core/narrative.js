@@ -13,7 +13,13 @@
  */
 
 import { REC_MAP, TEAM_MAP, leagueName } from '../data/index.js';
-import { sleepTier } from './engine.js';
+import {
+  PRODUCT_WEIGHTS,
+  followedBonus,
+  leagueBonus,
+  sleepTier,
+  storyBonus
+} from './engine.js';
 
 export const LEVEL = { L1: 'L1', L2: 'L2', L3: 'L3' };
 
@@ -99,6 +105,27 @@ export function storylinesOf(match, storylines) {
   return (storylines || [])
     .filter(s => s.status !== 'draft' && (s.nodes || []).includes(match.id))
     .slice(0, 2);
+}
+
+/**
+ * 「为什么看这场」——最多三条语义驱动因素，按贡献降序。
+ *
+ * 只出标签不出数字：第一层摆三个 `+5.9 / +0.0 / +0.0` 只是逼用户做他做不了的除法。
+ * 双端共用（桌面 IntelPanel 第一层、移动详情第一层），措辞与排序必须一致。
+ */
+export function driversOf(ev) {
+  if (!ev) return [];
+  const head = ev.rivalry || (ev.rec ? '人工精编推荐' : ev.star >= 3 ? '焦点战' : ev.star === 2 ? '有看点' : '常规场次');
+  const list = [{ key: 'star', label: head, value: ev.star * 10 }];
+  const storyB = storyBonus(ev, PRODUCT_WEIGHTS);
+  if (storyB > 0) {
+    list.push({ key: 'story', label: ev.keyNode ? '故事线关键节点' : '故事线在役', value: storyB });
+  }
+  const followedB = followedBonus(ev, PRODUCT_WEIGHTS);
+  if (followedB > 0) list.push({ key: 'followed', label: '关注球队出战', value: followedB });
+  const leagueB = leagueBonus(ev, PRODUCT_WEIGHTS);
+  if (leagueB > 0) list.push({ key: 'league', label: '关注联赛', value: leagueB });
+  return list.sort((a, b) => b.value - a.value).slice(0, 3);
 }
 
 /**

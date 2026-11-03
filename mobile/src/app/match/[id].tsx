@@ -28,6 +28,7 @@ import {
 } from 'lucide-react-native';
 
 import {
+  TEAM_MAP,
   getFixtures,
   leagueColor,
   leagueName,
@@ -47,7 +48,14 @@ import {
 } from '@core/engine.js';
 import { bjClock, bjDate, hm, humanCountdownShort, liveMinute as minuteOf, zhDate } from '@core/format.js';
 import { eventKey, eventSummary, shouldNotifyEvent } from '@core/live-events.js';
-import { narrativeOf } from '@core/narrative.js';
+import { driversOf, narrativeOf, seasonIdentityOf } from '@core/narrative.js';
+import { decisionStrip } from '@core/decision-strip.js';
+import {
+  dataStateHint,
+  dataStateTone,
+  dataStateTrustLabel,
+  matchDataState,
+} from '@core/data-health.js';
 import { computeMatchStandings } from '@core/standings.js';
 import { computeMatchStats } from '@core/stats.js';
 import { unrevealedTonightIds } from '@core/reveal.js';
@@ -60,7 +68,7 @@ import { useStopLossPrompt } from '@/lib/useStopLoss';
 import { useAppStore, useDataRev } from '@/state/app';
 import { useWatchLaterStore } from '@/state/queue';
 import { pendingQueue } from '@core/queue.js';
-import { usePrefs } from '@/state/prefs';
+import { usePrefs, type Prefs } from '@/state/prefs';
 import { toast } from '@/state/toast';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
@@ -70,7 +78,9 @@ import { LiveTimeline } from '@/components/LiveTimeline';
 import { WatchSheet } from '@/components/WatchSheet';
 import { StopLossBanner } from '@/components/StopLossBanner';
 import { EmptyState } from '@/ui/EmptyState';
+import { Fold } from '@/ui/Fold';
 import { FormDots } from '@/ui/FormDots';
+import { REASON_COPY, VERDICT_COPY } from '@/ui/DecisionStrip';
 import { SegmentedControl } from '@/ui/SegmentedControl';
 import { SleepBadge } from '@/ui/SleepBadge';
 import { SleepNote } from '@/ui/SleepNote';
@@ -594,6 +604,8 @@ export default function MatchScreen() {
             live={liveData}
             isLive={liveNow}
             scoreVisible={scoreVisible}
+            prefs={prefs}
+            now={now}
             onReveal={handleRevealScore}
             onOpenMatch={matchId =>
               router.push({ pathname: '/match/[id]', params: { id: matchId } })
@@ -660,12 +672,27 @@ export default function MatchScreen() {
   );
 }
 
+/**
+ * 情报页签 · 三级披露
+ *
+ * 与桌面 `IntelPanel` 同一口径（P1-4）：先结论、再证据、最后算法细节。
+ * 长滚动单页把 6 张卡一次铺开 = 六块等权 = 没有主次，首屏答不了「值不值得看」。
+ *
+ *   第一层  一眼判断（结论 / 为什么看这场 / 数据可信度）+ 熬夜代价
+ *   第二层  指数归因（唯一主图表，分子分母在一张表里闭合）
+ *   第三层  看点与故事线 / 赛季身份（折叠抽屉，收起时留一行摘要）
+ *
+ * 结论措辞与首页决策条共用 `VERDICT_COPY` / `REASON_COPY` ——
+ * 同一个语义两处措辞不一致，用户会以为是两个判断。
+ */
 function IntelTab({
   match,
   intel,
   live,
   isLive,
   scoreVisible,
+  prefs,
+  now,
   onReveal,
   onOpenMatch,
 }: {
@@ -681,6 +708,8 @@ function IntelTab({
   live: LiveData | null;
   isLive: boolean;
   scoreVisible: boolean;
+  prefs: Prefs;
+  now: number;
   onReveal: () => void;
   onOpenMatch: (id: string) => void;
 }) {
@@ -691,6 +720,26 @@ function IntelTab({
   const followPart = followedBonus(intel.ev, weights);
   const leaguePart = leagueBonus(intel.ev, weights);
   const denominator = 1 + intel.tier.cost + weights.watchCost;
+
+  const drivers = useMemo(() => driversOf(intel.ev), [intel.ev]);
+  const identity = useMemo(() => seasonIdentityOf(match), [match]);
+  const decision = useMemo(
+    () =>
+      decisionStrip({
+        match,
+        index: intel.index,
+        prefs,
+        now,
+        followed: !!intel.ev.isFollowed,
+        spoilerFree: prefs.spoilerFree,
+        revealed: scoreVisible,
+      }),
+    [match, intel.index, intel.ev, prefs, now, scoreVisible]
+  );
+  const dataState = matchDataState(match, now);
+  const trustTone = dataStateTone(dataState);
+  const verdict = VERDICT_COPY[decision.verdict] ?? VERDICT_COPY.unknown;
+  const reason = REASON_COPY[decision.reason] ?? '';
 
   return (
     <View style={styles.tabGap}>
@@ -711,6 +760,55 @@ function IntelTab({
         )
       ) : null}
 
+      {/* ---- 第一层 · 一眼判断：不滚动就答完「值不值得看 / 为什么 / 数据可信吗」 ---- */}
+      <Card style={styles.cardGap}>
+        <Text style={styles.cardEyebrow}>一眼判断</Text>
+        <View style={styles.verdictRow}>
+          <Text style={styles.l1Label}>结论</Text>
+          <View style={styles.verdictValueWrap}>
+            <Text style={[styles.verdictValue, { color: verdict.color }]}>{verdict.label}</Text>
+            {reason ? <Text style={styles.l1Reason}>{reason}</Text> : null}
+          </View>
+        </View>
+        <View style={styles.l1Row}>
+          <Text style={styles.l1Label}>为什么看这场</Text>
+          <Text style={styles.l1Value} numberOfLines={2}>
+            {drivers.length ? drivers.map(d => d.label).join(' · ') : '常规场次'}
+          </Text>
+        </View>
+        <View style={styles.l1Row}>
+          <Text style={styles.l1Label}>数据可信度</Text>
+          <View style={styles.trustRow}>
+            <View
+              style={[
+                styles.trustDot,
+                {
+                  backgroundColor:
+                    trustTone === 'warn'
+                      ? colors.warn
+                      : trustTone === 'danger'
+                        ? colors.danger
+                        : colors.textFaint,
+                },
+              ]}
+            />
+            <Text
+              style={[
+                styles.l1Value,
+                trustTone === 'warn' && styles.trustWarn,
+                trustTone === 'danger' && styles.trustDanger,
+              ]}
+            >
+              {dataStateTrustLabel(dataState)}
+            </Text>
+          </View>
+        </View>
+        {trustTone !== 'muted' ? (
+          <Text style={styles.l1Hint}>{dataStateHint(dataState, 0, now)}</Text>
+        ) : null}
+      </Card>
+
+      {/* ---- 第一层 · 睡眠代价（分母必须与分子同屏，否则结论无法自证） ---- */}
       <Card style={styles.cardGap}>
         <View style={styles.cardHeader}>
           <View style={{ gap: 2 }}>
@@ -728,25 +826,7 @@ function IntelTab({
         <Text style={styles.cardLine}>睡眠成本按开球时间实时计算，不读取静态字段。</Text>
       </Card>
 
-      <Card style={styles.cardGap}>
-        <Text style={styles.cardEyebrow}>看点与故事线</Text>
-        <Text style={styles.cardTitle} numberOfLines={3}>{intel.narrative.headline}</Text>
-        {intel.narrative.lines.map(line => (
-          <Text key={line} style={styles.cardLine}>
-            · {line}
-          </Text>
-        ))}
-        {intel.ev.bonuses.length > 0 ? (
-          <View style={styles.chips}>
-            {intel.ev.bonuses.map(bonus => (
-              <Chip key={bonus} tone="default">
-                {bonus}
-              </Chip>
-            ))}
-          </View>
-        ) : null}
-      </Card>
-
+      {/* ---- 第二层 · 指数归因（唯一主图表） ---- */}
       <Card style={styles.cardGap}>
         <Pressable
           onPress={() => {
@@ -812,6 +892,60 @@ function IntelTab({
           </>
         ) : null}
       </Card>
+
+      {/* ---- 第三层 · 折叠抽屉（收起时留一行摘要，没有摘要等于让用户猜里面有没有东西） ---- */}
+      <Fold
+        title="看点与故事线"
+        summary={intel.narrative.headline || '暂无故事线'}
+        style={styles.cardGap}
+      >
+        {intel.narrative.lines.map(line => (
+          <Text key={line} style={styles.cardLine}>
+            · {line}
+          </Text>
+        ))}
+        {intel.ev.bonuses.length > 0 ? (
+          <View style={styles.chips}>
+            {intel.ev.bonuses.map(bonus => (
+              <Chip key={bonus} tone="default">
+                {bonus}
+              </Chip>
+            ))}
+          </View>
+        ) : null}
+      </Fold>
+
+      <Fold
+        title="赛季身份"
+        summary={
+          [match.h, match.a]
+            .map(id => (TEAM_MAP as Record<string, { tag?: string }>)[id]?.tag)
+            .filter(Boolean)
+            .join(' · ') || '两队均为常规身份'
+        }
+        style={styles.cardGap}
+      >
+        {([match.h, match.a] as const).map((id, i) => {
+          const tag = (TEAM_MAP as Record<string, { tag?: string }>)[id]?.tag;
+          return (
+            <View key={id} style={styles.identityRow}>
+              <Crest id={id} size={18} />
+              <Text style={styles.identityTeam} numberOfLines={1}>
+                {teamName(id)}
+              </Text>
+              <Text style={styles.identitySide}>{i === 0 ? '主' : '客'}</Text>
+              {tag ? (
+                <Chip tone="default">{tag}</Chip>
+              ) : (
+                <Text style={styles.identityMuted}>常规</Text>
+              )}
+            </View>
+          );
+        })}
+        {identity.fallback ? (
+          <Text style={styles.cardLine}>{identity.lines.join(' · ')}</Text>
+        ) : null}
+      </Fold>
 
       <Card style={styles.cardGap}>
         <Text style={styles.cardEyebrow}>双方后续赛程</Text>
@@ -1424,6 +1558,39 @@ const styles = StyleSheet.create({
   },
   cardTitle: { color: colors.text, fontSize: fontSize.base, fontWeight: weight.title },
   cardLine: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 19 },
+  /* 第一层 · 一眼判断：标签列固定宽度，右侧值独占剩余空间 */
+  verdictRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  verdictValueWrap: { flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
+  verdictValue: { fontSize: fontSize.base, fontWeight: weight.title },
+  l1Row: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  l1Label: { width: 64, color: colors.textFaint, fontSize: fontSize.xs },
+  l1Value: { flex: 1, color: colors.textSecondary, fontSize: fontSize.sm, lineHeight: 18 },
+  l1Reason: { color: colors.textFaint, fontSize: fontSize.xs },
+  l1Hint: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    lineHeight: 16,
+    marginTop: spacing.sm,
+  },
+  trustRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  trustDot: { width: 6, height: 6, borderRadius: 3 },
+  trustWarn: { color: colors.warn, fontWeight: weight.title },
+  trustDanger: { color: colors.danger, fontWeight: weight.title },
+  /* 第三层 · 赛季身份抽屉 */
+  identityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  identityTeam: { flex: 1, color: colors.text, fontSize: fontSize.sm },
+  identitySide: { color: colors.textFaint, fontSize: fontSize.xs },
+  identityMuted: { color: colors.textFaint, fontSize: fontSize.xs },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   divider: { height: 1, backgroundColor: colors.hairline },
   meter: { flexDirection: 'row', gap: 5, marginTop: spacing.sm },

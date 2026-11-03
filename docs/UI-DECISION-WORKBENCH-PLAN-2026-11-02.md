@@ -1,9 +1,9 @@
 # 夜猫看台 · 「今晚决策台」双端体验升级计划
 
-- **状态**：P0 全部完成；P1-1 ~ P1-6 全部落地（P1-5 仅桌面端，理由见该段）；P2-1 移动端风险带、P2-2 Token 与排版收敛、P2-3 反馈与失败恢复、桌面周视图接 `core/week-risk.js` 已落地
+- **状态**：P0 全部完成；P1-1 ~ P1-6 全部落地（P1-5 仅桌面端，理由见该段）；P2-1 移动端风险带、P2-2 Token 与排版收敛、P2-3 反馈与失败恢复、桌面周视图接 `core/week-risk.js`、移动端详情三级披露 已落地
 - **基线**：`v0.1.44`，HEAD `b02206a`，桌面测试 31 脚本 / 891 断言全绿
-- **当前实测**：37 脚本 / 1060 断言全绿；`build` 成功；`check:render` 77 项全过（含周时间轴 4 项）；`measure-layout` 三档无横向溢出；移动端 `npm run check`（`verify:shared` 0 漂移 + `audit:touch` 98 个控件全达标 + `typecheck`）+ `export:android` 通过
-- **下一批**：移动端详情三级披露 / 真机验收（播放器静音与自动换线、通知权限、托盘与自启、风险带视觉、系统字号 1.3× 与 1.6×、外链失败提示）
+- **当前实测**：37 脚本 / 1060 断言全绿；`build` 成功；`check:render` 77 项全过（含周时间轴 4 项）；`measure-layout` 三档（1120/1366/1440）无横向溢出；移动端 `npm run check`（`verify:shared` 0 漂移 + `audit:touch` 99 个控件全达标 + `typecheck`）+ `export:android` 通过
+- **剩余**：真机验收（播放器静音与自动换线、通知权限、托盘与自启、风险带视觉、系统字号 1.3× 与 1.6×、外链失败提示）
 - **范围**：桌面端 `src/`、移动端 `mobile/src/`、共享 `src/core/`
 - **目标**：把「信息丰富的转播仪表盘」收敛为「在正确时机只回答一个问题的今晚决策台」
 
@@ -297,7 +297,7 @@ npm run export:android
   收起时留一行摘要（`3 条线索` / `卫冕冠军`）。没有摘要的抽屉等于让用户猜里面有没有东西
 - ✅ 首屏从 5 个等权分区收敛为「3 格 + 2 列（代价/归因）+ 2 个抽屉」，面板高度从 ~520px 降到 ~340px
 - ✅ 验收：`check-render` 新增 3 条断言（首屏只留结论级信息 / 抽屉默认收起 / 展开后才出现正文）→ 66 项全过
-- ⏸ 移动端比赛详情页仍是长滚动单页，未做同样的三级披露（与 P2-1 一并排期）
+- ✅ **移动端比赛详情三级披露**（同口径落地，见下一段）
 - ⏸ 「完整历史交锋收进抽屉」**未做**：快照里 91.5% 的场次交锋为 0 场、其余也只有 1 场，
   这块本来就只有一行（或一句「本赛季尚未交锋」），折叠后反而要多一次点击。
   真正的侵占来自「双方数据」整页的 4 张表，但那是用户主动进入的数据探索页，保留全量。
@@ -529,6 +529,32 @@ npm run export:android
 
 ---
 
+#### 移动端比赛详情三级披露 · ✅ 已完成
+
+对齐桌面 `IntelPanel` 的 P1-4 口径。原来 `IntelTab` 是 6 张卡一次铺开的长滚动单页 ——
+六块等权等于没有主次，首屏答不了「值不值得看」。现在：
+
+- ✅ **第一层**：`一眼判断` 卡（结论 / 为什么看这场 / 数据可信度）+ `熬夜代价` 卡
+  - 结论复用 `decisionStrip()` 与首页决策条同一份文案表（`VERDICT_COPY` / `REASON_COPY`）——
+    同一语义两处措辞不一致，用户会以为是两个判断
+  - 为什么看这场由共享层 `driversOf(ev)` 出最多三条语义标签，**只出标签不出数字**
+  - 数据可信度常驻（正常一行字，待同步 / 上游未提供才给说明）
+- ✅ **第二层**：指数归因仍是唯一主图表（分子分母一张表闭合，末行即综合指数）
+- ✅ **第三层**：看点与故事线、赛季身份改为折叠抽屉，收起时留一行摘要
+  （`headline` / 两队身份标签），新增 `ui/Fold.tsx` 与桌面 `Block({ fold })` 同职责。
+
+**共享层收口（双端同源，避免第三份副本）**
+
+- `driversOf` 从桌面 `IntelPanel.jsx` 上收到 `core/narrative.js`（此前只有桌面一份，移动要重写）
+- `dataStateTrustLabel` 上收到 `core/data-health.js`：可信度措辞里「赛前快照」与
+  `dataStateLabel` 的「未开赛」是两套问法，表必须唯一
+- 移动 `ui/DecisionStrip.tsx` 导出 `VERDICT_COPY` / `REASON_COPY`，与桌面 `DecisionStrip.jsx` 逐字一致
+
+**验收**：`typecheck` 0 error；`audit:touch` 99 个 Pressable 全达标（新增 `Fold` 头自带 minHeight 44）；
+`verify:shared` 0 漂移；`export:android` 通过。
+
+---
+
 ## 五、文件影响面
 
 ```text
@@ -537,6 +563,8 @@ src/core/queue.js                   P0-2 队列三态
 src/core/decision-strip.js          P1-1 新增纯函数
 src/core/digest-session.js          P1-5 连续补看纯函数（会话只持 id + 游标）
 src/core/week-risk.js               P2-1 一周风险带纯函数（夜坐标 / 睡眠底线 / 越线量）；桌面周视图复用 nightDomain
+src/core/narrative.js               driversOf 上收共享层（双端同源）；赛季身份 seasonIdentityOf
+src/core/data-health.js             dataStateTrustLabel 上收共享层（可信度措辞唯一）
 src/hooks/useScrollMemory.js        P1-6 滚动位置记忆（模块级 Map）
 src/hooks/useReviewStatus.js        P1-5 回顾资源真实状态广播
 src/App.jsx                         P0-2/P0-3/P1-5/P1-6 状态与流程
@@ -555,7 +583,9 @@ mobile/src/app/(tabs)/index.tsx     P0-5 直播 Hero
 mobile/src/app/(tabs)/plan.tsx      P2-1 周风险带与单晚筛选
 mobile/src/ui/WeekRiskBand.tsx      P2-1 风险带组件（7 行共用一条时间轴）
 mobile/src/app/team/[id].tsx        P0-6 球队直播
-mobile/src/app/match/[id].tsx       P0-5/P1-6 详情与滚动
+mobile/src/app/match/[id].tsx       P0-5/P1-6 详情与滚动；三级披露（一眼判断 + 折叠抽屉）
+mobile/src/ui/Fold.tsx              折叠抽屉（第三层，收起带一行摘要）
+mobile/src/ui/DecisionStrip.tsx     导出 VERDICT_COPY / REASON_COPY 供详情结论复用
 mobile/src/app/onboarding.tsx       P0-7 权限与价值启用
 mobile/src/app/player.tsx           P0-8 夜间静音
 mobile/src/ui/theme.ts              P2-2 圆角三档 / 字重角色制 / fontScale.micro
@@ -585,7 +615,7 @@ tools/check-render.mjs              桌面周视图接入 week-risk：新增 4 �
 | 桌面布局  | `npx electron tools/measure-layout.mjs`            | 1120 / 1366 / 1440 无溢出、无滚动陷阱 |
 | 对比度   | `node tools/check-contrast.mjs`                    | 现有 token 对比度不降级              |
 | 移动共享层 | `cd mobile && npm run verify:shared`               | 0 漂移                         |
-| 移动触控  | `cd mobile && npm run audit:touch`                 | 98 个 Pressable 全部 ≥ 44dp     |
+| 移动触控  | `cd mobile && npm run audit:touch`                 | 99 个 Pressable 全部 ≥ 44dp     |
 | 移动类型  | `cd mobile && npm run typecheck`                   | 0 error                      |
 | 移动构建  | `cd mobile && npm run export:android`              | 成功产出                         |
 | 真机    | iOS / Android 各一台                                  | 播放/音量/通知/安全区/返回路径/系统字号        |

@@ -4,6 +4,7 @@ import { storylines, teamName, TEAM_MAP } from '../data/index.js';
 import { sleepTier, storyBonus, followedBonus, leagueBonus, PRODUCT_WEIGHTS, WATCH_COST } from '../core/engine.js';
 import { computeMatchStandings } from '../core/standings.js';
 import {
+  driversOf,
   narrativeOf,
   tierAdviceOf,
   seasonIdentityOf,
@@ -14,7 +15,7 @@ import {
 import { evalOne } from '../core/owl.js';
 import { decisionStrip } from '../core/decision-strip.js';
 import { computeMatchStats } from '../core/stats.js';
-import { canRecheck, dataStateHint, dataStateLabel, dataStateTone, matchDataState } from '../core/data-health.js';
+import { canRecheck, dataStateHint, dataStateTone, dataStateTrustLabel, matchDataState } from '../core/data-health.js';
 import { Button, Chip, Crest, Hint, Meta } from './atoms.jsx';
 import { VERDICT_COPY, REASON_COPY } from './DecisionStrip.jsx';
 import { PanelTab, Block } from './intel/primitives.jsx';
@@ -251,29 +252,9 @@ export default function IntelPanel({
 /* ------------------------------------------------------------------ */
 
 /**
- * 「为什么是这个指数」的语义驱动因素（第一层只给最多三条）
- *
- * 指数 = (星级×10 + 故事线 + 主队 + 联赛) ÷ (1 + 睡眠代价 + 观看占用)。
- * 分子回答「值不值得看」，分母是代价 —— 代价有独立分区且是第一层成员，
- * 所以这里只列分子项，按贡献值降序取前三；其余细节留给第二层的归因表。
- *
- * 只出语义标签，不出数字：第一层给三个「+5.9 / +0.0 / +0.0」只会让用户
- * 去做他做不了的除法，真正的数值分解在归因表里。
+ * 「为什么是这个指数」的语义驱动因素在 `core/narrative.js: driversOf`（双端同源）。
+ * 第一层只给最多三条语义标签，不出数字 —— 真正的数值分解在第二层归因表里。
  */
-function driversOf(ev) {
-  if (!ev) return [];
-  const head = ev.rivalry || (ev.rec ? '人工精编推荐' : ev.star >= 3 ? '焦点战' : ev.star === 2 ? '有看点' : '常规场次');
-  const list = [{ key: 'star', label: head, value: ev.star * 10 }];
-  const storyB = storyBonus(ev, PRODUCT_WEIGHTS);
-  if (storyB > 0) {
-    list.push({ key: 'story', label: ev.keyNode ? '故事线关键节点' : '故事线在役', value: storyB });
-  }
-  const followedB = followedBonus(ev, PRODUCT_WEIGHTS);
-  if (followedB > 0) list.push({ key: 'followed', label: '关注球队出战', value: followedB });
-  const leagueB = leagueBonus(ev, PRODUCT_WEIGHTS);
-  if (leagueB > 0) list.push({ key: 'league', label: '关注联赛', value: leagueB });
-  return list.sort((a, b) => b.value - a.value).slice(0, 3);
-}
 
 /** 首屏单元格：小标签 + 主值，三格共用同一套版式，避免各写一份 */
 function Cell({ label, children }) {
@@ -325,16 +306,8 @@ function DriversCell({ drivers }) {
  * 这块永远在场 —— 用户需要知道手上这份情报有多可信，而不是只在出问题时才被告知。
  *
  * 正常状态只留一行字，不铺开解释；只有待同步 / 上游未提供才给出说明与重查入口。
+ * 问法是「这份快照有多可信」，措辞在 `dataStateTrustLabel`（双端同源）。
  */
-const TRUST_LABEL = {
-  ok: '已同步',
-  upcoming: '赛前快照',
-  pending: '待同步',
-  missing: '上游未提供',
-  tbd: '时间待定',
-  postponed: '已延期'
-};
-
 function DataTrustCell({ match, checkedAt = 0, onRecheck, rechecking = false, result = null }) {
   const state = matchDataState(match, Date.now());
   const tone = dataStateTone(state);
@@ -350,7 +323,7 @@ function DataTrustCell({ match, checkedAt = 0, onRecheck, rechecking = false, re
             }`}
             aria-hidden="true"
           />
-          {TRUST_LABEL[state] || dataStateLabel(state)}
+          {dataStateTrustLabel(state)}
         </span>
         {action && (
           <Button variant="ghost" size="xs" onClick={() => onRecheck(match.id)} disabled={rechecking}>

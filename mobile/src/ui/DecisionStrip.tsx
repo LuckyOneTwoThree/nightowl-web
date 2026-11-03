@@ -23,6 +23,24 @@ const VERDICT_COPY: Record<DecisionStripData['verdict'], { label: string; color:
   unknown: { label: '暂时无法判断', color: colors.textFaint }
 };
 
+/**
+ * 文案表对外导出：详情页第一层的「结论」单元格必须与首页决策条逐字一致 ——
+ * 同一个语义在两处用不同措辞，用户会以为是两个判断。
+ */
+export { VERDICT_COPY };
+
+const REASON_COPY: Record<string, string> = {
+  followed: '关注球队',
+  highlight: '今晚焦点',
+  'lighter-alternative': '有更轻的同夜场',
+  'low-index': '看点一般',
+  tbd: '时间未定',
+  invalid: '时间无效',
+  'missing-index': '缺少指数'
+};
+
+export { REASON_COPY };
+
 function hoursOf(minutes: number): string {
   const h = Math.round((minutes / 60) * 10) / 10;
   return `${Number.isInteger(h) ? h : h.toFixed(1)}h`;

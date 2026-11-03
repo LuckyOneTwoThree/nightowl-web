@@ -62,6 +62,24 @@ export function dataStateLabel(state) {
   return LABELS[state] || '—';
 }
 
+/**
+ * 「数据可信度」单元格的措辞 —— 与 `dataStateLabel` 的区别只在 `upcoming`：
+ * 那格回答的是「这份快照有多可信」，不是「比赛到哪一步」，所以叫「赛前快照」。
+ * 双端共用，勿在界面再写一份。
+ */
+const TRUST_LABELS = {
+  [DATA_STATE.OK]: '已同步',
+  [DATA_STATE.UPCOMING]: '赛前快照',
+  [DATA_STATE.PENDING]: '待同步',
+  [DATA_STATE.MISSING]: '上游未提供',
+  [DATA_STATE.TBD]: '时间待定',
+  [DATA_STATE.POSTPONED]: '已延期'
+};
+
+export function dataStateTrustLabel(state) {
+  return TRUST_LABELS[state] || dataStateLabel(state);
+}
+
 /** 只有这两种状态值得给「重查该场」入口：其余重查没有意义 */
 export function canRecheck(state) {
   return state === DATA_STATE.PENDING || state === DATA_STATE.MISSING;
