@@ -22,6 +22,7 @@ export default function MorningDigest({
   onMarkRead,
   onOpenMatch,
   onClose,
+  onStartSession,
   watchedCount = 0
 }) {
   const [confirmAll, setConfirmAll] = useState(false);
@@ -179,9 +180,16 @@ export default function MorningDigest({
                 {confirmAll ? '确认全部揭晓？' : '全部揭晓'}
               </Button>
             )}
-            <Button variant="primary" size="sm" onClick={onClose}>
+            {/* 主行动从「稍后再看」换成「开始依序补看」：
+                摘要里逐条点开、看完再退回来找下一条，是清单的做法，不是连看的做法。 */}
+            <Button variant="ghost" size="sm" onClick={onClose}>
               稍后再看
             </Button>
+            {total > 0 && (
+              <Button variant="primary" size="sm" onClick={onStartSession}>
+                开始依序补看
+              </Button>
+            )}
           </div>
         </footer>
       </section>

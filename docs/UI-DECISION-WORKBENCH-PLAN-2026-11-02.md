@@ -1,8 +1,9 @@
 # 夜猫看台 · 「今晚决策台」双端体验升级计划
 
-- **状态**：P0 全部完成；P1-1 / P1-2 / P1-3 / P1-4 / P1-6 已落地，P1-5 待做
+- **状态**：P0 全部完成；P1-1 ~ P1-6 全部落地（P1-5 仅桌面端，理由见该段）
 - **基线**：`v0.1.44`，HEAD `b02206a`，桌面测试 31 脚本 / 891 断言全绿
-- **当前实测**：33 脚本 / 957 断言全绿；`build` 成功；`check:render` 60 项全过；`measure-layout` 三档无横向溢出；移动端 `verify:shared`（0 漂移）+ `typecheck` + `export:android` 通过
+- **当前实测**：34 脚本 / 989 断言全绿；`build` 成功；`check:render` 73 项全过；`measure-layout` 三档无横向溢出；移动端 `verify:shared`（0 漂移）+ `typecheck` 通过
+- **下一批**：P2-1（移动周风险地图）/ 移动端详情三级披露 / 真机验收（播放器静音与自动换线、通知权限、托盘与自启）
 - **范围**：桌面端 `src/`、移动端 `mobile/src/`、共享 `src/core/`
 - **目标**：把「信息丰富的转播仪表盘」收敛为「在正确时机只回答一个问题的今晚决策台」
 
@@ -301,13 +302,26 @@ npm run export:android
   这块本来就只有一行（或一句「本赛季尚未交锋」），折叠后反而要多一次点击。
   真正的侵占来自「双方数据」整页的 4 张表，但那是用户主动进入的数据探索页，保留全量。
 
-#### P1-5 晨间连续补看
+#### P1-5 晨间连续补看 ✅ 已完成（桌面端）
 
-- 摘要主 CTA 从「稍后再看」改为「开始依序补看」。
-- 建立 `digestSession + cursor`，支持「标记已看并看下一场」「返回补看列表」。
-- 没有回顾资源时明确显示不可补看原因，不把用户送进空页面。
-- 已看/待看状态仍由统一队列源驱动。
-- 验收：3 场连续补看不丢失顺序，退出后恢复原摘要。
+- ✅ 摘要主 CTA 从「稍后再看」改为「开始依序补看」，「稍后再看」降为 ghost 次要动作
+  - 理由：摘要的动作是「连看」，不是「清单」。清单要逐条点开、看完、退回来找下一条；
+    连看只需要「下一场」。原来的主次刚好反了
+- ✅ 会话状态 `digestSession = { ids, cursor }` 抽成纯函数 `core/digest-session.js`
+  （`createDigestSession` / `digestPosition` / `stepDigest`）——会话只持 id 快照 + 游标，
+  **不记已看状态**，已看仍由补看队列这一个事实源决定
+- ✅ 常驻会话条 `DigestSessionBar`（右栏顶部 `sticky`）：`第 N / M 场` + 联赛·时间·对阵 +
+  上一场 / 下一场 / 标记已看，看下一场 / 结束补看；会话条存在时让位给它的「正在查看」提示条自动隐藏
+- ✅ 从第一条**未看**条目开始（已标记过已看的场次不该让用户再点一次）；向前/向后都会跳过已看项
+- ✅ 「没有回顾资源」是**事实到达后**才说的话：`RecapTimeline` / `HighlightsPanel` 各自把真实状态
+  经 `hooks/useReviewStatus.js`（CustomEvent 广播）上报，只有 `recap === 'empty' && highlights === 'empty'`
+  时，会话条才改口并把主行动换成「没有回顾，看下一场」+ 一行原因说明。
+  `loading` / `error` / `idle` 都不下结论 —— 提前猜「没有」会把用户从能看的那场赶走
+- ⏸ **不进移动端**：移动端早晨摘要走的是列表 + 详情页，返回即回列表，没有「退回摘要再找下一场」的中间态；
+  强行加会话条会多一层需要退出的浮层。移动端留到 P2 与详情页改造一并考虑
+- ✅ 验收：`check-render` 新增 5 条断言（主行动是「开始依序补看」/ 进入「第 1 / 3 场」/
+  下一场·上一场步进 / 标记已看写入队列并前进 / 结束补看）→ 73 项全过；
+  `test:digest` 32 项纯函数断言进 `test:all`
 
 #### P1-6 上下文守恒 ✅ 已完成（虚拟列表一项有意不做，见下）
 
@@ -372,6 +386,9 @@ npm run export:android
 src/core/format.js                  P0-1 时间格式化
 src/core/queue.js                   P0-2 队列三态
 src/core/decision-strip.js          P1-1 新增纯函数
+src/core/digest-session.js          P1-5 连续补看纯函数（会话只持 id + 游标）
+src/hooks/useScrollMemory.js        P1-6 滚动位置记忆（模块级 Map）
+src/hooks/useReviewStatus.js        P1-5 回顾资源真实状态广播
 src/App.jsx                         P0-2/P0-3/P1-5/P1-6 状态与流程
 src/components/WeekView.jsx         P0-1 时间轴
 src/components/TonightView.jsx      P0-2 同开球状态源
@@ -379,7 +396,10 @@ src/components/IntelPanel.jsx       P0-2/P1-4 补看动作与披露
 src/components/PlayerStage.jsx      P0-3/P1-2 停止与侧轨
 src/components/Player.jsx           P0-8 桌面静音策略参考
 src/components/StopLossBanner.jsx   P0-3 文案与行为一致
-src/components/MorningDigest.jsx    P1-5 连续补看
+src/components/MorningDigest.jsx    P1-5 摘要主行动
+src/components/DigestSessionBar.jsx P1-5 连看位置与跳过
+src/components/RecapTimeline.jsx    P1-5 回顾状态上报
+src/components/HighlightsPanel.jsx  P1-5 集锦状态上报
 mobile/src/ui/MatchRow.tsx          P0-4 移动比赛行
 mobile/src/app/(tabs)/index.tsx     P0-5 直播 Hero
 mobile/src/app/(tabs)/plan.tsx      P2-1 周风险地图

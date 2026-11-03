@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { teamName } from '../data/index.js';
 import { shouldHideScore } from '../core/reveal.js';
 import { EVENT_LABEL, EVENT_TONE, eventSummary } from '../core/live-events.js';
 import { Button, Chip, Crest, IconButton, Meta, SectionLabel } from './atoms.jsx';
 import { IconReset, IconWarn } from './icons.jsx';
 import { useRemoteJson } from '../hooks/useRemoteJson.js';
+import { reportReviewStatus } from '../hooks/useReviewStatus.js';
 
 /**
  * 赛后关键事件回顾
@@ -23,6 +24,14 @@ export default function RecapTimeline({ match, spoilerFree = true, revealed = fa
       : null,
     listKey: 'events'
   });
+
+  /* 把真实状态上报给连续补看会话：只有「上游确实没有事件」才允许会话条说
+     「这场没有回顾资源」。未完成的请求不上报，避免把 loading 当成没有。 */
+  useEffect(() => {
+    if (!match?.id || !finished) return;
+    if (status === 'idle' || status === 'loading') return;
+    reportReviewStatus('recap', match.id, status);
+  }, [match?.id, finished, status]);
 
   if (!finished || hidden) return null;
 

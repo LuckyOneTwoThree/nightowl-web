@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from '../server/index.js';
 import { loadRules } from '../server/proxy.js';
 import { ts as fixtureTs } from '../src/core/engine.js';
+import { morningDigestNight } from '../src/core/morning.js';
 
 app.disableHardwareAcceleration();
 
@@ -1375,6 +1376,166 @@ app.whenReady().then(async () => {
       );
       await sleep(300);
     }
+
+    /* 连续补看（P1-5）：摘要的主行动是「开始依序补看」，位置靠顶部会话条推进。
+       清单的做法是「点开一场、看完、退回摘要、再找下一场」；连看的做法是「下一场」。
+       队列用固定 3 场写入，不依赖当天快照里恰好有昨晚的场次（那会让门禁随日期漂移）。 */
+    const digestNight = morningDigestNight(Date.now());
+    const digestFixtures = repoFixtures.filter(m => m.st === 'done').slice(0, 3);
+    const digestQueue = digestFixtures.map((m, i) => ({
+      id: m.id,
+      night: digestNight,
+      addedAt: Date.now() - (digestFixtures.length - i) * 60000,
+      status: 'pending'
+    }));
+    await win.webContents.executeJavaScript(`
+      (() => {
+        localStorage.setItem('nightowl:watchLater:v1', ${JSON.stringify(JSON.stringify(digestQueue))});
+        return true;
+      })()
+    `);
+    await waitLoad(win, `${base}/?view=tonight`);
+    await sleep(1500);
+
+    // 从设置抽屉的「看摘要」进入：不依赖当前时刻是否落在起床窗口内
+    await win.webContents.executeJavaScript(`
+      (() => {
+        const b = [...document.querySelectorAll('button')].find(x => (x.textContent || '').includes('偏好与数据'));
+        b?.click();
+        return !!b;
+      })()
+    `);
+    await sleep(400);
+    const digestLauncher = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = [...document.querySelectorAll('aside button')].find(x => (x.textContent || '').trim() === '看摘要');
+        btn?.click();
+        return !!btn;
+      })()
+    `);
+    await sleep(500);
+    const digestState = await win.webContents.executeJavaScript(`
+      (() => {
+        const sec = document.querySelector('[aria-labelledby="morning-digest-title"]');
+        if (!sec) return { open: false };
+        const btns = [...sec.querySelectorAll('button')].map(b => (b.textContent || '').trim());
+        const start = [...sec.querySelectorAll('button')].find(b => (b.textContent || '').trim() === '开始依序补看');
+        return {
+          open: true,
+          items: sec.querySelectorAll('article').length,
+          hasStart: !!start,
+          startIsPrimary: !!start && start.className.includes('bg-accent'),
+          hasLater: btns.includes('稍后再看')
+        };
+      })()
+    `);
+    ok(
+      '★ 早晨摘要主行动是「开始依序补看」（连看不是清单）',
+      digestLauncher && digestState.open && digestState.items === 3 &&
+        digestState.hasStart && digestState.startIsPrimary && digestState.hasLater,
+      JSON.stringify(digestState)
+    );
+
+    const digestStarted = await win.webContents.executeJavaScript(`
+      (() => {
+        const sec = document.querySelector('[aria-labelledby="morning-digest-title"]');
+        const btn = [...(sec?.querySelectorAll('button') || [])].find(b => (b.textContent || '').trim() === '开始依序补看');
+        btn?.click();
+        return !!btn;
+      })()
+    `);
+    await win.webContents.executeJavaScript(
+      `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); true`
+    );
+    await sleep(700);
+    const barFirst = await win.webContents.executeJavaScript(`
+      (() => {
+        const bar = document.querySelector('[aria-label="连续补看"]');
+        if (!bar) return { bar: false };
+        const text = (bar.innerText || '').split(String.fromCharCode(10)).join(' ');
+        return {
+          bar: true,
+          text,
+          digestClosed: !document.querySelector('[aria-labelledby="morning-digest-title"]'),
+          first: text.includes('第 1 / 3 场'),
+          prevDisabled: [...bar.querySelectorAll('button')].find(b => (b.textContent || '').includes('上一场'))?.disabled ?? null
+        };
+      })()
+    `);
+    ok(
+      '★ 点「开始依序补看」进入第 1 场并显示「第 1 / 3 场」',
+      digestStarted && barFirst.bar && barFirst.digestClosed && barFirst.first && barFirst.prevDisabled === true,
+      JSON.stringify(barFirst)
+    );
+
+    const stepTo = async label => {
+      await win.webContents.executeJavaScript(`
+        (() => {
+          const bar = document.querySelector('[aria-label="连续补看"]');
+          const btns = [...(bar?.querySelectorAll('button') || [])];
+          const btn = btns.find(b => (b.textContent || '').trim().startsWith(${JSON.stringify(label)}));
+          btn?.click();
+          return !!btn;
+        })()
+      `);
+      await sleep(450);
+      return win.webContents.executeJavaScript(`
+        (() => {
+          const bar = document.querySelector('[aria-label="连续补看"]');
+          return bar ? (bar.innerText || '').split(String.fromCharCode(10)).join(' ') : '';
+        })()
+      `);
+    };
+
+    const afterNext = await stepTo('下一场');
+    const afterPrev = await stepTo('上一场');
+    ok(
+      '★ 会话条「下一场 / 上一场」按位置步进，不丢上下文',
+      afterNext.includes('第 2 / 3 场') && afterPrev.includes('第 1 / 3 场'),
+      JSON.stringify({ afterNext, afterPrev })
+    );
+
+    const marked = await win.webContents.executeJavaScript(`
+      (() => {
+        const bar = document.querySelector('[aria-label="连续补看"]');
+        const btns = [...(bar?.querySelectorAll('button') || [])];
+        const btn = btns.find(b => /标记已看|没有回顾/.test(b.textContent || ''));
+        btn?.click();
+        return !!btn;
+      })()
+    `);
+    await sleep(800);
+    const afterMark = await win.webContents.executeJavaScript(`
+      (() => {
+        const bar = document.querySelector('[aria-label="连续补看"]');
+        const saved = JSON.parse(localStorage.getItem('nightowl:watchLater:v1') || '[]');
+        return {
+          text: bar ? (bar.innerText || '').split(String.fromCharCode(10)).join(' ') : '',
+          firstStatus: saved[0]?.status || '',
+          watchedCount: saved.filter(item => item.status === 'watched').length
+        };
+      })()
+    `);
+    ok(
+      '★ 「标记已看，看下一场」写入队列并前进到第 2 场',
+      marked && afterMark.text.includes('第 2 / 3 场') && afterMark.text.includes('已看 1') &&
+        afterMark.firstStatus === 'watched' && afterMark.watchedCount === 1,
+      JSON.stringify(afterMark)
+    );
+
+    await win.webContents.executeJavaScript(`
+      (() => {
+        const bar = document.querySelector('[aria-label="连续补看"]');
+        const btn = [...(bar?.querySelectorAll('button') || [])].find(b => (b.textContent || '').trim() === '结束补看');
+        btn?.click();
+        return !!btn;
+      })()
+    `);
+    await sleep(450);
+    const barGone = await win.webContents.executeJavaScript(
+      `!document.querySelector('[aria-label="连续补看"]')`
+    );
+    ok('★ 「结束补看」收掉会话条，回到常规浏览', barGone);
   } catch (err) {
     ok('渲染冒烟执行完成', false, String(err?.stack || err));
   } finally {

@@ -5,6 +5,7 @@ import { highlightSources, sourceUrlFor } from '../core/watch-sources.js';
 import { Button, IconButton, Meta, SectionLabel } from './atoms.jsx';
 import { IconExternal, IconPlay, IconReset, IconReveal, IconWarn } from './icons.jsx';
 import { useRemoteJson } from '../hooks/useRemoteJson.js';
+import { reportReviewStatus } from '../hooks/useReviewStatus.js';
 
 /**
  * 赛后官方集锦
@@ -43,6 +44,13 @@ export default function HighlightsPanel({
     debounceMs: 350
   });
   const domestic = finished ? highlightSources(sources, match?.l) : [];
+
+  /* 同 RecapTimeline：把真实状态上报给连续补看会话，让「没有回顾资源」是事实而非猜测 */
+  useEffect(() => {
+    if (!match?.id || !finished) return;
+    if (status === 'idle' || status === 'loading') return;
+    reportReviewStatus('highlights', match.id, status);
+  }, [match?.id, finished, status]);
 
   if (!finished) return null;
 

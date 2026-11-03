@@ -51,11 +51,13 @@ import SplashScreen from './components/SplashScreen.jsx';
 import UpdateModal from './components/UpdateModal.jsx';
 import StopLossBanner from './components/StopLossBanner.jsx';
 import MorningDigest from './components/MorningDigest.jsx';
+import DigestSessionBar from './components/DigestSessionBar.jsx';
 import ScheduleChanges from './components/ScheduleChanges.jsx';
 import {
   getMorningDigest,
   morningDigestNight
 } from './core/morning.js';
+import { createDigestSession, digestPosition, stepDigest } from './core/digest-session.js';
 import {
   loadMorningDigestDismissed,
   saveMorningDigestDismissed
@@ -174,6 +176,9 @@ export default function App() {
   const [stopPlaybackRequest, setStopPlaybackRequest] = useState(0);
   const [morningDigestOpen, setMorningDigestOpen] = useState(false);
   const [morningDismissed, setMorningDismissed] = useState(() => loadMorningDigestDismissed());
+  /* 连续补看会话：{ ids, cursor }，null 表示没在连看。
+     只存 id 快照 + 游标（见 core/digest-session.js），比赛对象每次从 matchMap 取当前值。 */
+  const [digestSession, setDigestSession] = useState(null);
   const commitStopLoss = useCallback((night, state) => {
     const next = { ...stopLossStatesRef.current, [night]: state };
     stopLossStatesRef.current = next;
@@ -851,6 +856,71 @@ export default function App() {
     ).length;
   }, [watchLater, morningDigestAll.night]);
 
+  /* ---- 连续补看（P1-5） ----
+     摘要的主行动不再是「稍后再看」而是「开始依序补看」：连看的动作是「看下一场」，
+     清单的动作才是「逐条点开再退回来」。会话只持 id 快照 + 游标，
+     已看/待看仍然是补看队列这一个事实源 —— 会话自己不记状态。 */
+  const queueWatchedIds = useMemo(
+    () => new Set(normalizeQueue(watchLater).filter(item => item.status === 'watched').map(item => item.id)),
+    [watchLater]
+  );
+  const digestPositionInfo = useMemo(
+    () => digestPosition(digestSession, queueWatchedIds),
+    [digestSession, queueWatchedIds]
+  );
+  const digestMatch = digestPositionInfo.id ? matchMap[digestPositionInfo.id] || null : null;
+
+  const startDigestSession = useCallback(() => {
+    const ids = (morningDigestAll.items || []).filter(e => e.match).map(e => e.match.id);
+    if (!ids.length) return;
+    // 从第一条还没看的开始：已经标记过「已看」的条目不该让用户再点一次
+    const firstPending = ids.find(id => !queueWatchedIds.has(id)) || ids[0];
+    setDigestSession(createDigestSession(ids, firstPending));
+    closeMorningDigest();
+    setActiveMatchId(firstPending);
+  }, [morningDigestAll.items, queueWatchedIds, closeMorningDigest]);
+
+  const exitDigestSession = useCallback(() => setDigestSession(null), []);
+
+  const stepDigestSession = useCallback(
+    direction => {
+      if (!digestSession) return;
+      const next = stepDigest(digestSession, direction);
+      setDigestSession(next);
+      const id = digestPosition(next).id;
+      if (id && id !== activeMatchId) setActiveMatchId(id);
+    },
+    [digestSession, activeMatchId]
+  );
+
+  /**
+   * 标记已看并前进。
+   *
+   * 「没有回顾资源」的场次也走这条路 —— 标记已看是用户此刻唯一有意义的动作，
+   * 但队列仍然由用户显式确认，不因为资源缺失就自动帮他勾掉。
+   * 后面没有未看条目时直接结束会话（否则游标会停在原地，按钮看起来没反应）。
+   */
+  const markDigestWatchedAndNext = useCallback(() => {
+    if (!digestSession) return;
+    const currentId = digestPositionInfo.id;
+    if (!currentId) return;
+    markWatchLaterWatched(currentId);
+
+    const skip = new Set(queueWatchedIds);
+    skip.add(currentId);
+    const hasMorePending = digestSession.ids
+      .slice(digestSession.cursor + 1)
+      .some(id => !skip.has(id));
+    if (!hasMorePending) {
+      setDigestSession(null);
+      return;
+    }
+    const next = stepDigest(digestSession, 1, skip);
+    setDigestSession(next);
+    const id = digestPosition(next).id;
+    if (id && id !== activeMatchId) setActiveMatchId(id);
+  }, [digestSession, digestPositionInfo.id, queueWatchedIds, markWatchLaterWatched, activeMatchId]);
+
   const handleStopLossSleep = () => {
     if (!stopLossContext) return;
     const result = addWatchLater(stopLossContext.match);
@@ -1140,7 +1210,21 @@ export default function App() {
             className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto p-4"
           >
             <div className="mx-auto flex w-full max-w-[1800px] 2xl:max-w-full flex-col gap-3">
-              {activeMatch && !activeInView && (
+              {/* 连续补看会话条取代「正在查看」提示条：连看时已经有位置指示，
+                  两条都贴顶会互相遮挡，而它们说的是同一件事 */}
+              {digestSession && digestMatch && (
+                <div className="sticky top-0 z-30">
+                  <DigestSessionBar
+                    match={digestMatch}
+                    position={digestPositionInfo}
+                    onPrev={() => stepDigestSession(-1)}
+                    onNext={() => stepDigestSession(1)}
+                    onMarkWatchedAndNext={markDigestWatchedAndNext}
+                    onExit={exitDigestSession}
+                  />
+                </div>
+              )}
+              {activeMatch && !activeInView && !digestSession && (
                 <div
                   role="status"
                   className="sticky top-0 z-20 flex animate-view-enter items-center justify-between gap-3 rounded-lg border border-line-hairline bg-surface-panel/95 px-3 py-1.5 shadow-card backdrop-blur-xl motion-reduce:animate-none"
@@ -1219,6 +1303,7 @@ export default function App() {
           select(id);
         }}
         onClose={closeMorningDigest}
+        onStartSession={startDigestSession}
       />
 
       {paletteOpen && (
