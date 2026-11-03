@@ -101,6 +101,64 @@ export function pendingQueue(items, now = Date.now()) {
     .sort((a, b) => a.addedAt - b.addedAt);
 }
 
+/**
+ * 某个比赛在补看队列中的状态。
+ *
+ * none     -> 尚未加入
+ * pending  -> 待补看（显示「已入补看 · 取消」）
+ * watched  -> 已看过（显示「已看过 · 重新补看」）
+ *
+ * 不能只用 pendingQueue 判断：已看条目仍占一个队列位置，也需要可逆入口。
+ */
+export function queueStatusOf(items, id, now = Date.now()) {
+  if (!id) return 'none';
+  const item = normalizeQueue(items, now).find(entry => entry.id === id);
+  return item?.status || 'none';
+}
+
+/**
+ * 补看按钮的统一状态机：未加入 -> 加入；待看 -> 移出；已看 -> 恢复待看。
+ * 队列满时不静默丢弃任何条目。
+ */
+export function toggleQueue(items, match, now = Date.now()) {
+  if (!match?.id) {
+    return { ok: false, reason: 'invalid-match', action: 'invalid', state: 'none', queue: normalizeQueue(items, now) };
+  }
+  const queue = normalizeQueue(items, now);
+  const status = queueStatusOf(queue, match.id, now);
+
+  if (status === WATCH_LATER_STATUS.PENDING) {
+    return {
+      ok: true,
+      action: 'removed',
+      state: 'none',
+      queue: removeFromQueue(queue, match.id, now)
+    };
+  }
+
+  if (status === WATCH_LATER_STATUS.WATCHED) {
+    const night =
+      typeof match.t === 'string' && match.t.includes('T') ? owlDay(match.t) : '';
+    return {
+      ok: true,
+      action: 'restored',
+      state: 'pending',
+      queue: queue.map(item =>
+        item.id === match.id
+          ? { ...item, status: WATCH_LATER_STATUS.PENDING, addedAt: now, night: night || item.night }
+          : item
+      )
+    };
+  }
+
+  const result = addToQueue(queue, match, now);
+  return {
+    ...result,
+    action: result.added ? 'added' : result.reason || 'exists',
+    state: result.added ? 'pending' : 'none'
+  };
+}
+
 /** 队列展示：匹配本地 fixtures，按加入时间排序；不返回比分 */
 export function queueWithMatches(items, fixtures, now = Date.now()) {
   const map = new Map((fixtures || []).map(m => [m.id, m]));

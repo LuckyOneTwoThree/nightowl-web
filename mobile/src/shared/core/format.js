@@ -78,6 +78,19 @@ export function formatGoalDiff(value) {
   return v > 0 ? `+${v}` : `${v}`;
 }
 
+/**
+ * 一天中的分钟数 → "HH:mm"（跨零点按 24 小时制回绕）
+ *
+ * 周时间轴内部用「20:00 = 1200、次日 06:30 = 1830」的连续分钟轴，
+ * 因此展示时必须先 normalize，不能把 1500 直接交给只接受小时的格式化函数。
+ */
+export function formatMinuteOfDay(minutes) {
+  const value = Number(minutes);
+  if (!Number.isFinite(value)) return '--:--';
+  const normalized = ((Math.round(value) % 1440) + 1440) % 1440;
+  return `${pad2(Math.floor(normalized / 60))}:${pad2(normalized % 60)}`;
+}
+
 /** 秒数 → "00:14:32" */
 export function hmsFromSeconds(total) {
   const s = Math.max(0, Math.floor(total));

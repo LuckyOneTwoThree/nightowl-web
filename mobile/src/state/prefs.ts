@@ -14,6 +14,7 @@ export type Prefs = {
   sleepEnabled: boolean;
   sleepWakeTime: string;
   sleepMinHours: number;
+  sleepPromptDismissed: boolean;
   theme: 'dark';
   onboardingDone: boolean;
 };
@@ -28,6 +29,7 @@ export const DEFAULT_PREFS: Prefs = {
   sleepEnabled: false,
   sleepWakeTime: '07:30',
   sleepMinHours: 7,
+  sleepPromptDismissed: false,
   theme: 'dark',
   onboardingDone: false,
 };

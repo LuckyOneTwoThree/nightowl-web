@@ -43,20 +43,25 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
 
   const homeFollowed = prefs.followedTeams.includes(match.h);
   const awayFollowed = prefs.followedTeams.includes(match.a);
-  const hasScore = isDone && !!match.sc;
-  const winner = hasScore && scoreVisible ? parseScoreWinner(match.sc) : null;
+  const isTbd = !!match.tbd;
+  const score = isDone && match.sc && /^\d+-\d+$/.test(match.sc) ? match.sc : null;
+  const hasScore = !!score;
+  const [homeScore, awayScore] = score ? score.split('-') : [];
+  const winner = hasScore && scoreVisible ? parseScoreWinner(score) : null;
   const tColor = tierColor(tier.tier);
-  const stateLabel = isLive
-    ? `进行中 ${minute} 分钟`
-    : hasScore
-      ? scoreVisible
-        ? `已结束 ${match.sc}`
-        : '已结束，比分未揭晓'
-      : isDone
-        ? '已结束'
-        : state === 'pp'
-          ? '延期'
-          : '未开赛';
+  const stateLabel = isTbd
+    ? '时间待定'
+    : isLive
+      ? `进行中 ${minute} 分钟`
+      : hasScore
+        ? scoreVisible
+          ? `已结束 ${score}`
+          : '已结束，比分未揭晓'
+        : isDone
+          ? '已结束'
+          : state === 'pp'
+            ? '延期'
+            : '未开赛';
 
   return (
     <Pressable
@@ -66,9 +71,9 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
       }}
       android_ripple={{ color: colors.press }}
       accessibilityRole="button"
-      accessibilityLabel={`${teamName(match.h)} 对 ${teamName(match.a)}，${leagueName(match.l)}，${hm(
-        match.t
-      )}，${stateLabel}，夜猫指数 ${index.toFixed(1)}`}
+      accessibilityLabel={`${teamName(match.h)} 对 ${teamName(match.a)}，${leagueName(match.l)}，${
+        isTbd ? '时间待定' : hm(match.t)
+      }，${stateLabel}${isTbd ? '' : `，夜猫指数 ${index.toFixed(1)}`}`}
       accessibilityHint="双击查看比赛详情"
       style={({ pressed }) => [
         styles.row,
@@ -83,10 +88,10 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
         ]}
       />
       <View style={styles.timeCol}>
-        <Text style={styles.time}>{hm(match.t)}</Text>
+        <Text style={styles.time}>{isTbd ? '--:--' : hm(match.t)}</Text>
         <Text style={styles.league} numberOfLines={1}>
           {leagueName(match.l)}
-          {showTier ? (
+          {showTier && !isTbd ? (
             <Text style={[styles.tierInline, { color: tColor }]}>{` · ${tier.label}`}</Text>
           ) : null}
         </Text>
@@ -107,6 +112,11 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
             {teamName(match.h)}
           </Text>
           {homeFollowed ? <View style={styles.followDot} /> : null}
+          {hasScore && scoreVisible ? (
+            <Text style={[styles.rowScore, winner === 'h' && styles.rowScoreWinner]}>
+              {homeScore}
+            </Text>
+          ) : null}
         </View>
         <View style={styles.teamLine}>
           <Crest id={match.a} size={22} />
@@ -122,6 +132,11 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
             {teamName(match.a)}
           </Text>
           {awayFollowed ? <View style={styles.followDot} /> : null}
+          {hasScore && scoreVisible ? (
+            <Text style={[styles.rowScore, winner === 'a' && styles.rowScoreWinner]}>
+              {awayScore}
+            </Text>
+          ) : null}
         </View>
       </View>
 
@@ -133,10 +148,7 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
           </View>
         ) : hasScore ? (
           scoreVisible ? (
-            <View style={styles.scoreCol}>
-              <Text style={styles.scoreText}>{match.sc}</Text>
-              <Text style={styles.doneSub}>完场</Text>
-            </View>
+            <Text style={styles.doneSub}>完场</Text>
           ) : (
             <Pressable
               onPress={e => {
@@ -157,6 +169,8 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
           <Text style={styles.doneText}>已结束</Text>
         ) : state === 'pp' ? (
           <Text style={styles.doneText}>延期</Text>
+        ) : isTbd ? (
+          <Text style={styles.doneText}>待定</Text>
         ) : (
           <Text
             style={[
@@ -202,27 +216,29 @@ const styles = StyleSheet.create({
   tierInline: { fontWeight: '700', fontSize: fontSize.xs },
   teams: { flex: 1, gap: 5, paddingVertical: spacing.sm, paddingRight: spacing.xs },
   teamLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  teamName: { color: colors.textSecondary, fontSize: fontSize.md, flexShrink: 1 },
+  teamName: { color: colors.textSecondary, fontSize: fontSize.md, flex: 1 },
   teamNameFollowed: { color: colors.text, fontWeight: '600' },
   teamNameWinner: { color: colors.text, fontWeight: '700' },
   teamNameLoser: { color: colors.textMuted },
+  rowScore: {
+    color: colors.textSecondary,
+    fontSize: fontSize.base,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    minWidth: 14,
+    textAlign: 'right',
+  },
+  rowScoreWinner: { color: colors.text, fontWeight: '800' },
   followDot: {
     width: 5,
     height: 5,
     borderRadius: radius.full,
     backgroundColor: colors.accent,
   },
-  right: { minWidth: 56, alignItems: 'flex-end', gap: 3 },
+  right: { minWidth: 44, alignItems: 'flex-end', gap: 3 },
   index: {
     fontSize: fontSize.md,
     fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
-  scoreCol: { alignItems: 'flex-end', gap: 1 },
-  scoreText: {
-    color: colors.text,
-    fontSize: fontSize.base,
-    fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
   doneSub: { color: colors.textFaint, fontSize: fontSize.xs },

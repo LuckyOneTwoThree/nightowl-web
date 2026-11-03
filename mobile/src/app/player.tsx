@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -14,7 +15,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { ChevronLeft, ListVideo, RefreshCw } from 'lucide-react-native';
+import { ChevronLeft, ListVideo, RefreshCw, VolumeX } from 'lucide-react-native';
 
 import { autoSwitchDecision } from '@core/line-switch.js';
 import { teamName } from '@data/index.js';
@@ -26,6 +27,7 @@ import type { StreamLine } from '@/data/useLiveSources';
 
 const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+const MUTED_KEY = 'nightowl:player:muted:v1';
 
 export default function PlayerScreen() {
   const router = useRouter();
@@ -76,8 +78,10 @@ function PlayerView({
   const [panelOpen, setPanelOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [hudVisible, setHudVisible] = useState(true);
+  const [muted, setMuted] = useState(true);
   const hudOpacity = useRef(new Animated.Value(1)).current;
   const attemptsRef = useRef(0);
+  const mutedRef = useRef(true);
   const firstSourceRef = useRef(true);
   const stateRef = useRef({ lines, activeId: active.id });
   stateRef.current = { lines, activeId: active.id };
@@ -106,9 +110,33 @@ function PlayerView({
     },
     instance => {
       instance.loop = false;
+      // 夜间首次起播默认静音；用户显式选择过的偏好在下面异步恢复。
+      instance.muted = true;
       instance.play();
     }
   );
+
+  useEffect(() => {
+    let alive = true;
+    AsyncStorage.getItem(MUTED_KEY)
+      .then(value => {
+        if (!alive) return;
+        if (value === 'false') {
+          setMuted(false);
+        }
+      })
+      .catch(() => {
+        /* 读不到偏好时保持安全的静音默认值 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    mutedRef.current = muted;
+    player.muted = muted;
+  }, [muted, player]);
 
   useEffect(() => {
     if (firstSourceRef.current) {
@@ -120,6 +148,8 @@ function PlayerView({
       headers: { 'User-Agent': USER_AGENT },
       contentType: active.kind === 'm3u8' ? 'hls' : undefined,
     });
+    // 自动换线不能把夜间静音重置为外放。
+    player.muted = mutedRef.current;
     player.play();
   }, [active.id, player, active.url, active.kind]);
 
@@ -213,6 +243,22 @@ function PlayerView({
           <RefreshCw size={14} color={colors.accent} />
           <Text style={styles.noticeText}>{notice}</Text>
         </View>
+      ) : null}
+
+      {muted && hudVisible ? (
+        <Pressable
+          onPress={() => {
+            setMuted(false);
+            void AsyncStorage.setItem(MUTED_KEY, 'false');
+            setHudVisible(true);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="开启声音"
+          style={[styles.mutePrompt, { bottom: insets.bottom + 60 }]}
+        >
+          <VolumeX size={15} color={colors.accent} />
+          <Text style={styles.mutePromptText}>点击开启声音</Text>
+        </Pressable>
       ) : null}
 
       {panelOpen ? (
@@ -331,6 +377,20 @@ const styles = StyleSheet.create({
     borderColor: colors.control,
   },
   noticeText: { color: colors.textSecondary, fontSize: fontSize.xs },
+  mutePrompt: {
+    position: 'absolute',
+    alignSelf: 'center',
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(11,14,21,0.9)',
+    borderWidth: 1,
+    borderColor: colors.control,
+  },
+  mutePromptText: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
   panel: {
     position: 'absolute',
     left: 0,

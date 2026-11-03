@@ -7,9 +7,9 @@ import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react-native';
 import { TEAM_MAP, getFixtures, leagueName, teamName } from '@data/index.js';
 import { computeSeasonStats, computeTeamForm } from '@core/stats.js';
 import { unrevealedTonightIds } from '@core/reveal.js';
-import { evalOne } from '@core/owl.js';
+import { evalOne, stateOf } from '@core/owl.js';
 import { ts } from '@core/engine.js';
-import { hm, zhDate } from '@core/format.js';
+import { hm, liveMinute, zhDate } from '@core/format.js';
 
 import { useNow } from '@/lib/useNow';
 import { useAppStore, useDataRev } from '@/state/app';
@@ -58,6 +58,10 @@ export default function TeamScreen() {
         .sort((a, b) => ts(a.t) - ts(b.t)),
     [fixtures, id]
   );
+  const live = useMemo(
+    () => matches.filter(match => stateOf(match, now) === 'live'),
+    [matches, now]
+  );
   const upcoming = useMemo(
     () =>
       matches
@@ -74,7 +78,11 @@ export default function TeamScreen() {
     [matches]
   );
   const next = upcoming[0] || null;
-  const nextIntel = next ? (evalOne(next, prefs) as { index: number }) : null;
+  // 直播中的比赛优先于「下一场」；它不属于 upcoming，所以不会被后续赛程重复展示。
+  const featured = live[0] || next;
+  const featuredLive = !!featured && stateOf(featured, now) === 'live';
+  const upcomingAfterFeature = upcoming.filter(match => match.id !== featured?.id);
+  const featuredIntel = featured ? (evalOne(featured, prefs) as { index: number }) : null;
   const spoilerExcludedIds = useMemo(() => {
     const ids = unrevealedTonightIds(fixtures, now, prefs.spoilerFree, revealedIds);
     return ids.size ? ids : null;
@@ -175,29 +183,35 @@ export default function TeamScreen() {
           </Pressable>
         </View>
 
-        {next ? (
+        {featured ? (
           <Pressable
-            onPress={() => openMatch(next.id)}
+            onPress={() => openMatch(featured.id)}
             accessibilityRole="button"
-            accessibilityLabel={`下一场，${teamName(next.h)} 对 ${teamName(next.a)}`}
+            accessibilityLabel={`${featuredLive ? '正在进行' : '下一场'}，${teamName(featured.h)} 对 ${teamName(featured.a)}`}
             style={({ pressed }) => [pressed && styles.pressed]}
           >
             <Card tone="panel" style={styles.nextCard}>
               <View style={styles.nextTop}>
-                <Text style={styles.eyebrow}>下一场</Text>
-                {nextIntel ? (
-                  <Chip tone="accent">{nextIntel.index.toFixed(1)}</Chip>
+                <Text style={[styles.eyebrow, featuredLive && { color: colors.live }]}>
+                  {featuredLive ? '正在进行' : '下一场'}
+                </Text>
+                {featuredLive ? (
+                  <Chip tone="live">{liveMinute(ts(featured.t), now)}′</Chip>
+                ) : featuredIntel ? (
+                  <Chip tone="accent">{featuredIntel.index.toFixed(1)}</Chip>
                 ) : null}
               </View>
               <View style={styles.nextRow}>
-                <Crest id={next.h} size={36} />
-                <Crest id={next.a} size={36} />
+                <Crest id={featured.h} size={36} />
+                <Crest id={featured.a} size={36} />
                 <View style={styles.nextText}>
                   <Text style={styles.nextTeams} numberOfLines={1}>
-                    {teamName(next.h)} vs {teamName(next.a)}
+                    {teamName(featured.h)} vs {teamName(featured.a)}
                   </Text>
                   <Text style={styles.nextMeta}>
-                    {leagueName(next.l)} · {zhDate(next.t.slice(0, 10))} {hm(next.t)}
+                    {featuredLive
+                      ? `进行中 · ${leagueName(featured.l)}`
+                      : `${leagueName(featured.l)} · ${zhDate(featured.t.slice(0, 10))} ${hm(featured.t)}`}
                   </Text>
                 </View>
                 <ChevronRight size={18} color={colors.textFaint} />
@@ -244,10 +258,10 @@ export default function TeamScreen() {
         ) : null}
 
         <View style={styles.section}>
-          <SectionHeader title="后续赛程" count={upcoming.length} />
-          {upcoming.length > 0 ? (
+          <SectionHeader title="后续赛程" count={upcomingAfterFeature.length} />
+          {upcomingAfterFeature.length > 0 ? (
             <View style={styles.list}>
-              {upcoming.map(match => (
+              {upcomingAfterFeature.map(match => (
                 <MatchRow
                   key={match.id}
                   match={match}

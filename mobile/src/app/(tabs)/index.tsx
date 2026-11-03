@@ -24,9 +24,12 @@ import {
   computeTonight,
   groupTonight,
   heroTier,
+  sameNightPicks,
   stateOf,
 } from '@core/owl.js';
 import { countdown as engineCountdown, sleepTier, ts } from '@core/engine.js';
+import { decisionStrip } from '@core/decision-strip.js';
+import { formatSleepHours, sleepLedger } from '@core/sleep.js';
 import {
   bjClock,
   bjDate,
@@ -42,8 +45,8 @@ import { freshnessOf } from '@/data/fixtures';
 import { impactFeedback } from '@/lib/feedback';
 import { animateLayout } from '@/lib/layoutAnimation';
 import { useNow } from '@/lib/useNow';
-import { useAppStore, useDataRev } from '@/state/app';
-import { usePrefs } from '@/state/prefs';
+import { useAppStore, useDataRev, useMatchRevealed } from '@/state/app';
+import { usePrefs, usePrefsStore } from '@/state/prefs';
 import { SleepNote } from '@/ui/SleepNote';
 import { StopLossBanner } from '@/components/StopLossBanner';
 import { useStopLossPrompt } from '@/lib/useStopLoss';
@@ -52,6 +55,7 @@ import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
 import { Crest } from '@/ui/Crest';
 import { MatchRow } from '@/ui/MatchRow';
+import { DecisionStrip } from '@/ui/DecisionStrip';
 import { Screen } from '@/ui/Screen';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { SleepBadge } from '@/ui/SleepBadge';
@@ -74,6 +78,7 @@ export default function TonightScreen() {
   const source = useAppStore(state => state.source);
   const now = useNow(30_000);
   const { syncing, quickSyncing, syncError } = useSyncState();
+  const setPrefs = usePrefsStore(state => state.setPrefs);
   const [showFinished, setShowFinished] = useState(false);
   const [checking, setChecking] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
@@ -120,6 +125,31 @@ export default function TonightScreen() {
     return { stale, recent: Math.max(0, freshness.pendingCount - stale) };
   }, [freshness]);
   const stopLoss = useStopLossPrompt(tonight.hero?.m ?? null, prefs, now, focused);
+
+  // 首次睡眠价值预览：只在引导完成、尚未启用、也未跳过时出现一次。
+  // 先给结论（看完还剩多少睡眠），再问是否启用，避免开口就要设置。
+  const sleepPreview = useMemo(() => {
+    if (!prefs.onboardingDone || prefs.sleepEnabled || prefs.sleepPromptDismissed) return null;
+    const target = hero?.m ?? tonight.focal?.m ?? null;
+    if (!target?.t) return null;
+    const ledger = sleepLedger(target.t, {
+      enabled: true,
+      wakeTime: prefs.sleepWakeTime,
+      minSleep: prefs.sleepMinHours,
+    });
+    if (!ledger.valid || !ledger.ready) return null;
+    // 比赛已经结束就不再做「看完还剩多少」的预告。
+    if ((ledger.endTs ?? 0) < now) return null;
+    // 只带出原始值：sleepLedger 的联合返回里这些字段只存在于成功分支，
+    // 直接透传会把 undefined 泄漏到 props 类型上。
+    return {
+      wakeClock: String(ledger.wakeClock ?? prefs.sleepWakeTime),
+      remainingHours: Number(ledger.remainingHours ?? 0),
+      overWake: ledger.overWake === true,
+      belowFloor: ledger.belowFloor === true,
+      minSleep: Number(ledger.profile?.minSleep ?? prefs.sleepMinHours),
+    };
+  }, [prefs, hero, tonight.focal, now]);
 
   const refresh = useCallback(async () => {
     try {
@@ -169,14 +199,14 @@ export default function TonightScreen() {
 
   const openHero = useCallback(() => {
     if (!hero) return;
-    router.push({
-      pathname: '/match/[id]',
-      params: {
-        id: hero.m.id,
-        ...(stateOf(hero.m, now) === 'live' ? { watch: '1' } : {}),
-      },
-    });
-  }, [hero, now, router]);
+    // 卡片主体只负责进入详情；直播播放由下面的独立 CTA 触发。
+    router.push({ pathname: '/match/[id]', params: { id: hero.m.id } });
+  }, [hero, router]);
+
+  const openHeroWatch = useCallback(() => {
+    if (!hero) return;
+    router.push({ pathname: '/match/[id]', params: { id: hero.m.id, watch: '1' } });
+  }, [hero, router]);
 
   const todayLabel = `${bjDate(now)} ${weekdayOf(bjDate(now))}`;
 
@@ -264,6 +294,8 @@ export default function TonightScreen() {
           level={heroTier(hero.index) as 'highlight' | 'standard' | 'weak'}
           prefs={prefs}
           onPress={openHero}
+          onWatch={openHeroWatch}
+          onOpenMatch={openMatch}
         />
       ) : tonight.focal ? (
         <FocalCard entry={tonight.focal} now={now} onPress={() => openMatch(tonight.focal!.m.id)} />
@@ -279,6 +311,18 @@ export default function TonightScreen() {
           />
         </Card>
       )}
+
+      {sleepPreview ? (
+        <SleepSetupCard
+          wakeClock={sleepPreview.wakeClock}
+          remaining={formatSleepHours(sleepPreview.remainingHours)}
+          overWake={sleepPreview.overWake}
+          belowFloor={sleepPreview.belowFloor}
+          minSleep={sleepPreview.minSleep}
+          onEnable={() => setPrefs({ sleepEnabled: true, sleepPromptDismissed: true })}
+          onDismiss={() => setPrefs({ sleepPromptDismissed: true })}
+        />
+      ) : null}
 
       {prefs.followedTeams.length === 0 ? (
         <Pressable
@@ -442,6 +486,8 @@ function HeroCard({
   level,
   prefs,
   onPress,
+  onWatch,
+  onOpenMatch,
 }: {
   hero: Entry;
   narrative: Narrative | null;
@@ -449,24 +495,42 @@ function HeroCard({
   level: 'highlight' | 'standard' | 'weak';
   prefs: ReturnType<typeof usePrefs>;
   onPress: () => void;
+  onWatch: () => void;
+  onOpenMatch: (id: string) => void;
 }) {
   const tier = sleepTier(hero.m.t) as Tier;
   const countdown = engineCountdown(ts(hero.m.t), now);
   const isLive = stateOf(hero.m, now) === 'live';
+  // 防剧透开启且未揭晓时不泄露比分；已揭晓但上游还没回填时如实说待更新。
+  const scoreVisible = useMatchRevealed(hero.m.id, prefs.spoilerFree);
+  const hasScore = /^\d+-\d+$/.test(hero.m.sc || '');
+  const liveScore = isLive && scoreVisible && hasScore ? hero.m.sc : null;
+  const liveScoreNote = isLive && !liveScore ? (scoreVisible ? '比分待更新' : '比分未揭晓') : null;
+
+  // 决策条：与桌面同一份语义，移动端折成 2×2；同一屏只出现一次。
+  const decision = useMemo(() => {
+    const alternatives = sameNightPicks(hero.m, prefs, 4, now);
+    const strip = decisionStrip({
+      match: hero.m,
+      index: hero.index,
+      prefs,
+      now,
+      alternatives,
+      followed: hero.ev?.isFollowed === true,
+      spoilerFree: prefs.spoilerFree === true,
+      revealed: scoreVisible,
+    });
+    const alt = strip.alternativeId
+      ? alternatives.find(item => item.m.id === strip.alternativeId) ?? null
+      : null;
+    return { strip, alt };
+  }, [hero, prefs, now, scoreVisible]);
   const weak = level === 'weak';
   const isHighlight = level === 'highlight';
   const energyFill = Math.max(1, Math.min(5, Math.ceil(hero.index / 6)));
 
   return (
-    <Pressable
-      onPress={() => {
-        impactFeedback();
-        onPress();
-      }}
-      accessibilityRole="button"
-      accessibilityLabel={`今晚之选，${teamName(hero.m.h)} 对 ${teamName(hero.m.a)}`}
-      style={({ pressed }) => [pressed && styles.pressed]}
-    >
+    <View>
       <LinearGradient
         colors={
           weak
@@ -486,6 +550,15 @@ function HeroCard({
           weak && styles.heroWeak,
         ]}
       >
+        <Pressable
+          onPress={() => {
+            impactFeedback();
+            onPress();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`今晚之选，${teamName(hero.m.h)} 对 ${teamName(hero.m.a)}`}
+          style={({ pressed }) => [pressed && styles.pressed]}
+        >
         <View style={styles.heroTop}>
           <View style={styles.heroTopLeft}>
             <View style={styles.eyebrowRow}>
@@ -521,11 +594,15 @@ function HeroCard({
           <View style={styles.center}>
             {isLive ? (
               <>
+                {liveScore ? <Text style={styles.heroLiveScore}>{liveScore}</Text> : null}
                 <View style={styles.heroLivePill}>
                   <View style={styles.heroLiveDot} />
                   <Text style={styles.heroLiveLabel}>LIVE</Text>
                 </View>
                 <Text style={styles.heroLiveMinute}>{liveMinute(ts(hero.m.t), now)}'</Text>
+                {liveScoreNote ? (
+                  <Text style={styles.heroLiveNote}>{liveScoreNote}</Text>
+                ) : null}
               </>
             ) : (
               <>
@@ -594,8 +671,32 @@ function HeroCard({
             <Text style={styles.weakText}>指数偏低，今晚可以量力而行</Text>
           </View>
         ) : null}
+        </Pressable>
 
-        <View style={[styles.cta, weak && !isLive && styles.ctaSecondary]}>
+        <DecisionStrip
+          decision={decision.strip}
+          match={hero.m}
+          alternativeLabel={decision.alt ? `换 ${hm(decision.alt.m.t)} 那场` : null}
+          onSelectAlternative={() => {
+            if (!decision.alt) return;
+            impactFeedback();
+            onOpenMatch(decision.alt.m.id);
+          }}
+        />
+
+        <Pressable
+          onPress={() => {
+            impactFeedback();
+            isLive ? onWatch() : onPress();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={isLive ? '看直播' : '查看比赛详情'}
+          style={({ pressed }) => [
+            styles.cta,
+            weak && !isLive && styles.ctaSecondary,
+            pressed && styles.pressed,
+          ]}
+        >
           <Text style={[styles.ctaText, weak && !isLive && styles.ctaTextSecondary]}>
             {isLive ? '看直播' : weak ? '查看详情' : '查看比赛'}
           </Text>
@@ -603,9 +704,9 @@ function HeroCard({
             size={16}
             color={weak && !isLive ? colors.textSecondary : colors.accentInk}
           />
-        </View>
+        </Pressable>
       </LinearGradient>
-    </Pressable>
+    </View>
   );
 }
 
@@ -636,6 +737,49 @@ function FocalCard({
         </Text>
       </Card>
     </Pressable>
+  );
+}
+
+function SleepSetupCard({
+  wakeClock,
+  remaining,
+  overWake,
+  belowFloor,
+  minSleep,
+  onEnable,
+  onDismiss,
+}: {
+  wakeClock: string;
+  remaining: string;
+  overWake: boolean;
+  belowFloor: boolean;
+  minSleep: number;
+  onEnable: () => void;
+  onDismiss: () => void;
+}) {
+  const consequence = overWake
+    ? `按 ${wakeClock} 起床，这场看完正好到起床点`
+    : `按 ${wakeClock} 起床，这场看完约剩 ${remaining}`;
+
+  return (
+    <Card style={styles.sleepCard}>
+      <View style={styles.sleepHeader}>
+        <View style={styles.sleepIcon}>
+          <MoonStar size={15} color={colors.accent} />
+        </View>
+        <Text style={styles.sleepTitle}>把熬夜换算成睡眠</Text>
+      </View>
+      <Text style={styles.sleepBody}>{consequence}</Text>
+      {belowFloor && !overWake ? (
+        <Text style={styles.sleepWarn}>低于你设的 {minSleep}h 底线，到点会提醒你停</Text>
+      ) : (
+        <Text style={styles.sleepHint}>启用后到止损点会提醒，明早也能直接看结果</Text>
+      )}
+      <View style={styles.sleepActions}>
+        <Button label="启用个人睡眠账本" onPress={onEnable} style={styles.sleepPrimary} />
+        <Button label="暂不启用" variant="ghost" onPress={onDismiss} style={styles.sleepGhost} />
+      </View>
+    </Card>
   );
 }
 
@@ -744,12 +888,19 @@ const styles = StyleSheet.create({
   heroLivePill: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   heroLiveDot: { width: 6, height: 6, borderRadius: radius.full, backgroundColor: colors.live },
   heroLiveLabel: { color: colors.live, fontSize: fontSize.xs, fontWeight: '700' },
+  heroLiveScore: {
+    color: colors.text,
+    fontSize: fontSize.xxl,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
   heroLiveMinute: {
     color: colors.text,
     fontSize: fontSize.xxl,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
+  heroLiveNote: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: '600' },
   countdown: {
     color: colors.textSecondary,
     fontSize: fontSize.sm,
@@ -842,6 +993,28 @@ const styles = StyleSheet.create({
   promptText: { flex: 1, gap: 2 },
   promptTitle: { color: colors.text, fontSize: fontSize.sm, fontWeight: '600' },
   promptSub: { color: colors.textFaint, fontSize: fontSize.xs },
+  sleepCard: { gap: spacing.sm },
+  sleepHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  sleepIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.goldSoft,
+  },
+  sleepTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: '700' },
+  sleepBody: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    lineHeight: 19,
+    fontVariant: ['tabular-nums'],
+  },
+  sleepHint: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 16 },
+  sleepWarn: { color: colors.warn, fontSize: fontSize.xs, lineHeight: 16, fontWeight: '600' },
+  sleepActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
+  sleepPrimary: { flex: 1, height: 40 },
+  sleepGhost: { height: 40, paddingHorizontal: spacing.md },
   section: { gap: spacing.sm },
   list: {
     borderRadius: radius.xl,

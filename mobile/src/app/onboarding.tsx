@@ -39,12 +39,12 @@ export default function OnboardingScreen() {
   const finishOnboarding = usePrefsStore(state => state.finishOnboarding);
   const [step, setStep] = useState(0);
 
-  const finish = () => {
+  const finish = (requestPermissions = true) => {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const wantsNotifications = prefs.notifyBefore15;
     finishOnboarding();
     router.replace('/');
-    if (wantsNotifications && notificationsAvailable()) {
+    if (requestPermissions && wantsNotifications && notificationsAvailable()) {
       void (async () => {
         const granted = await requestNotificationPermission();
         if (granted) {
@@ -54,6 +54,13 @@ export default function OnboardingScreen() {
         }
       })();
     }
+  };
+
+  const skip = () => {
+    // 跳过引导不能静默索取系统通知权限；权限只在用户明确完成提醒设置后请求。
+    void Haptics.selectionAsync();
+    finishOnboarding();
+    router.replace('/');
   };
 
   const next = () => {
@@ -88,7 +95,7 @@ export default function OnboardingScreen() {
             <Text style={styles.brandSub}>让算法替你决定今晚值不值得熬</Text>
           </View>
         </View>
-        <Pressable onPress={finish} hitSlop={12} style={styles.skipHit}>
+        <Pressable onPress={skip} hitSlop={12} style={styles.skipHit}>
           <Text style={styles.skip}>跳过</Text>
         </Pressable>
       </View>
