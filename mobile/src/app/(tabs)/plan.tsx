@@ -2,12 +2,12 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, ChevronRight, TriangleAlert } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, TriangleAlert, X } from 'lucide-react-native';
 
 import { leagueName, teamName } from '@data/index.js';
 import { computeWeek } from '@core/owl.js';
 import { owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '@core/engine.js';
-import { formatSleepHours, sleepLedger } from '@core/sleep.js';
+import { weekRiskBands } from '@core/week-risk.js';
 import { hm, hmCost, zhDate } from '@core/format.js';
 import { animateLayout } from '@/lib/layoutAnimation';
 import { useNow } from '@/lib/useNow';
@@ -20,19 +20,14 @@ import { Crest } from '@/ui/Crest';
 import { Screen } from '@/ui/Screen';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { SleepBadge } from '@/ui/SleepBadge';
-import {
-  colors,
-  fontSize,
-  leagueColor,
-  radius,
-  spacing,
-  tierColor,
-  withAlpha,
-} from '@/ui/theme';
+import { WeekRiskBand } from '@/ui/WeekRiskBand';
+import type { WeekRisk } from '@/ui/WeekRiskBand';
+import { colors, fontSize, leagueColor, radius, spacing, tierColor, withAlpha } from '@/ui/theme';
 import type { Entry, Ev, Match } from '@/types';
 
 type WeekData = {
   weekStartStr: string;
+  matches: Match[];
   plan: {
     best: Entry[];
     alt: Entry[];
@@ -56,6 +51,7 @@ type KickoffGroup = {
 
 const BUDGETS = [0, 1, 2, 3, 4, 5, 6, 8];
 const DAY_MS = 86_400_000;
+/** 周一 → 周日，与 core 的 weekday 序号一一对应 */
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
 /** 精选名额上限以算法配置为唯一出处 */
 const PLAN_MAX_PICKS = PRODUCT_PLAN_OPTS.maxPicks;
@@ -84,34 +80,54 @@ export default function PlanScreen() {
     .slice(0, 10);
   const plan = week.plan;
   const remain = Math.max(0, plan.budget - plan.used);
-  const sleepSummary = useMemo(() => {
-    if (!prefs.sleepEnabled) return null;
-    const profile = {
-      enabled: true,
-      wakeTime: prefs.sleepWakeTime,
-      minSleep: prefs.sleepMinHours,
-    };
-    const ledgers = plan.best
-      .map(entry => sleepLedger(entry.m.t, profile))
-      .filter(ledger => ledger.valid && ledger.ready);
-    if (!ledgers.length) return null;
-    const below = ledgers.filter(ledger => ledger.belowFloor);
-    const lowest = ledgers.reduce((a, b) => ((a.remainingHours ?? 0) <= (b.remainingHours ?? 0) ? a : b));
-    return {
-      wakeTime: ledgers[0].profile.wakeTime,
-      minSleep: ledgers[0].profile.minSleep,
-      below: below.length,
-      lowest: lowest.remainingHours,
-    };
-  }, [plan.best, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepMinHours]);
+
+  /* 一周风险带：哪晚最重、到几点、是否越过睡眠底线。
+     参照线用「起床时间 − 最低睡眠」，和 P0 的睡眠账本同源；没设作息时 core 会给默认值
+     并标 assumed，界面必须说明这是默认线，不能冒充用户自己的作息。 */
+  const risk = useMemo(
+    () =>
+      weekRiskBands(
+        week,
+        { enabled: prefs.sleepEnabled, wakeTime: prefs.sleepWakeTime, minSleep: prefs.sleepMinHours },
+        now
+      ) as unknown as WeekRisk,
+    [week, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepMinHours, now]
+  );
+
   const hasAnyMatches = week.days.some(day => day.count > 0);
-  const bestDaySet = useMemo(() => {
-    const s = new Set<string>();
-    for (const entry of plan.best) {
-      s.add(owlDay(entry.m.t));
-    }
-    return s;
-  }, [plan.best]);
+
+  /* 点某一晚 → 原地只看那晚：精选 / 零成本 / 雷区 / 备选一起收窄。
+     再点一次同一天取消。筛选是视图层的事，不动预算与背包结果。 */
+  const inNight = (matchTime: string) => !selectedDay || owlDay(matchTime) === selectedDay;
+  const bestShown = useMemo(() => plan.best.filter(e => inNight(e.m.t)), [plan.best, selectedDay]);
+  const zeroShown = useMemo(() => plan.zeroList.filter(e => inNight(e.m.t)), [plan.zeroList, selectedDay]);
+  const altShown = useMemo(() => plan.alt.filter(e => inNight(e.m.t)), [plan.alt, selectedDay]);
+  const mineShown = useMemo(
+    () => week.minefield.filter(item => inNight(item.m.t)),
+    [week.minefield, selectedDay]
+  );
+  const activeBand = useMemo(
+    () => (selectedDay ? risk.bands.find(b => b.date === selectedDay) ?? null : null),
+    [risk.bands, selectedDay]
+  );
+  /**
+   * 该晚「其他场次」：既不在精选、也不在零成本 / 雷区 / 备选里的比赛。
+   *
+   * 只看某一晚之后，如果那晚的场次恰好都没被算法选中，页面上就没有任何入口了。
+   * 这份补集只在这时出现，且排掉上面已经列过的 id —— 不做重复展示。
+   */
+  const nightExtras = useMemo(() => {
+    if (!selectedDay) return [];
+    const day = week.days.find(d => d.date === selectedDay);
+    if (!day) return [];
+    const shown = new Set([
+      ...bestShown.map(e => e.m.id),
+      ...zeroShown.map(e => e.m.id),
+      ...altShown.map(e => e.m.id),
+      ...mineShown.map(item => item.m.id)
+    ]);
+    return day.matches.filter(m => !shown.has(m.id));
+  }, [selectedDay, week.days, bestShown, zeroShown, altShown, mineShown]);
   const kickoffGroupByMatch = useMemo(() => {
     const map = new Map<string, KickoffGroup>();
     for (const group of plan.kickoffGroups || []) {
@@ -121,10 +137,6 @@ export default function PlanScreen() {
     }
     return map;
   }, [plan.kickoffGroups]);
-  const activeDayObj = useMemo(
-    () => (selectedDay ? week.days.find(d => d.date === selectedDay) ?? null : null),
-    [selectedDay, week.days]
-  );
 
   const periodLabel =
     weekOffset === 0 ? '本周规划' : weekOffset > 0 ? '未来周规划' : '历史周规划';
@@ -229,24 +241,59 @@ export default function PlanScreen() {
         </Text>
       </Card>
 
-      {sleepSummary ? (
-        <Text style={[styles.sleepSummary, sleepSummary.below > 0 && styles.sleepSummaryWarn]}>
-          按 {sleepSummary.wakeTime} 起床 ·{' '}
-          {sleepSummary.below > 0
-            ? `精选有 ${sleepSummary.below} 晚低于 ${sleepSummary.minSleep}h 底线，最低约剩 ${formatSleepHours(sleepSummary.lowest)}`
-            : `精选均在 ${sleepSummary.minSleep}h 底线内`}
-        </Text>
-      ) : null}
+      <View style={styles.section}>
+        <SectionHeader title={`${weekWord}风险带`} />
+        <Card tone="panel">
+          <WeekRiskBand
+            risk={risk}
+            selectedDate={selectedDay}
+            onSelectDate={date => {
+              void Haptics.selectionAsync();
+              animateLayout();
+              setSelectedDay(date);
+              if (date) {
+                setShowZero(false);
+                setShowMinefield(false);
+              }
+            }}
+            weekWord={weekWord}
+          />
+        </Card>
+        {selectedDay ? (
+          <View style={styles.filterBar}>
+            <Text style={styles.filterText} numberOfLines={1}>
+              只看 {activeBand ? `周${WEEKDAYS[activeBand.weekday]} · ` : ''}
+              {zhDate(selectedDay)}
+              {activeBand && activeBand.count > 0 ? ` · ${activeBand.count} 场` : ''}
+            </Text>
+            <Pressable
+              onPress={() => {
+                void Haptics.selectionAsync();
+                animateLayout();
+                setSelectedDay(null);
+              }}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="清除夜晚筛选"
+              style={({ pressed }) => [styles.filterClear, pressed && styles.pressed]}
+            >
+              <X size={13} color={colors.textMuted} />
+              <Text style={styles.filterClearText}>清除</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {week.advice ? <Text style={styles.advice}>{week.advice}</Text> : null}
+      </View>
 
       <View style={styles.section}>
         <SectionHeader
           title={`${weekWord}精选`}
-          count={plan.best.length}
+          count={bestShown.length}
           right={<Text style={styles.ratio}>{plan.best.length} / {PLAN_MAX_PICKS}</Text>}
         />
-        {plan.best.length > 0 ? (
+        {bestShown.length > 0 ? (
           <View style={styles.list}>
-            {plan.best.map(entry => (
+            {bestShown.map(entry => (
               <PickRow
                 key={entry.m.id}
                 entry={entry}
@@ -260,11 +307,13 @@ export default function PlanScreen() {
             <Text style={styles.emptyTitle}>
               {!hasAnyMatches
                 ? `${weekWord}暂无比赛`
-                : plan.evs.length === 0
-                  ? `${weekWord}暂无可安排的未开赛场次`
-                  : '当前预算下暂未选出场次'}
+                : selectedDay
+                  ? `${zhDate(selectedDay)}没有排进精选的场次`
+                  : plan.evs.length === 0
+                    ? `${weekWord}暂无可安排的未开赛场次`
+                    : '当前预算下暂未选出场次'}
             </Text>
-            {plan.evs.length > 0 && plan.budget < 8 ? (
+            {!selectedDay && plan.evs.length > 0 && plan.budget < 8 ? (
               <Button
                 label="预算增加 1 小时"
                 variant="secondary"
@@ -276,11 +325,11 @@ export default function PlanScreen() {
         )}
       </View>
 
-      {plan.zeroCount > 0 ? (
+      {zeroShown.length > 0 ? (
         <View style={styles.section}>
           <SectionHeader
             title="零成本顺带"
-            count={plan.zeroCount}
+            count={zeroShown.length}
             actionLabel={showZero ? '收起' : '展开'}
             onAction={() => {
               animateLayout();
@@ -289,7 +338,7 @@ export default function PlanScreen() {
           />
           {showZero ? (
             <View style={styles.list}>
-              {plan.zeroList.map(entry => (
+              {zeroShown.map(entry => (
                 <Pressable
                   key={entry.m.id}
                   onPress={() => openMatch(entry.m.id)}
@@ -309,16 +358,14 @@ export default function PlanScreen() {
         </View>
       ) : null}
 
-      {week.minefield.length > 0 ? (
+      {mineShown.length > 0 ? (
         <View style={styles.section}>
           <SectionHeader
             title={`${weekWord}雷区`}
-            count={week.minefield.length}
-            actionLabel={
-              week.minefield.length > 4 ? (showMinefield ? '收起' : '查看全部') : undefined
-            }
+            count={mineShown.length}
+            actionLabel={mineShown.length > 4 ? (showMinefield ? '收起' : '查看全部') : undefined}
             onAction={
-              week.minefield.length > 4
+              mineShown.length > 4
                 ? () => {
                     animateLayout();
                     setShowMinefield(value => !value);
@@ -327,7 +374,7 @@ export default function PlanScreen() {
             }
           />
           <View style={styles.list}>
-            {(showMinefield ? week.minefield : week.minefield.slice(0, 4)).map(item => (
+            {(showMinefield ? mineShown : mineShown.slice(0, 4)).map(item => (
               <Pressable
                 key={item.m.id}
                 onPress={() => openMatch(item.m.id)}
@@ -351,124 +398,11 @@ export default function PlanScreen() {
         </View>
       ) : null}
 
-      <View style={styles.section}>
-        <SectionHeader title={`${weekWord}熬夜分布`} />
-        <Card tone="panel">
-          {hasAnyMatches ? (
-            <>
-              <View style={styles.chart}>
-                {week.days.map((day, index) => {
-                  const height = day.count === 0 ? 3 : Math.max(8, (day.cost / 4.5) * 58);
-                  const bucket =
-                    day.cost >= 4.5
-                      ? 4
-                      : day.cost >= 3.5
-                        ? 3
-                        : day.cost >= 2.5
-                          ? 2
-                          : day.cost >= 1
-                            ? 1
-                            : 0;
-                  const hasBest = bestDaySet.has(day.date);
-                  const isSelected = selectedDay === day.date;
-                  return (
-                    <Pressable
-                      key={day.date}
-                      onPress={() => {
-                        void Haptics.selectionAsync();
-                        animateLayout();
-                        setSelectedDay(cur => (cur === day.date ? null : day.date));
-                      }}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: isSelected }}
-                      accessibilityLabel={`周${WEEKDAYS[index]}，${day.count} 场，最高消耗 ${hmCost(day.cost)}`}
-                      style={[
-                        styles.chartColumn,
-                        isSelected && styles.chartColumnActive,
-                      ]}
-                    >
-                      <View style={styles.chartDotSlot}>
-                        {hasBest ? <View style={styles.chartBestDot} /> : null}
-                      </View>
-                      <View style={styles.chartBarWrap}>
-                        <View
-                          style={[
-                            styles.chartBar,
-                            {
-                              height,
-                              backgroundColor:
-                                day.count === 0 ? colors.hairline : tierColor(bucket),
-                            },
-                          ]}
-                        />
-                      </View>
-                      <Text
-                        style={[
-                          styles.chartLabel,
-                          isSelected && { color: colors.accent, fontWeight: '700' },
-                        ]}
-                      >
-                        周{WEEKDAYS[index]}
-                      </Text>
-                      <Text style={styles.chartCount}>{day.count || '·'}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              {activeDayObj ? (
-                <View style={styles.dayPreview}>
-                  <View style={styles.dayPreviewHead}>
-                    <Text style={styles.dayPreviewTitle}>
-                      {zhDate(activeDayObj.date)} · {activeDayObj.count} 场
-                    </Text>
-                    <Text style={styles.dayPreviewCost}>
-                      最高消耗 {hmCost(activeDayObj.cost)}
-                    </Text>
-                  </View>
-                  {activeDayObj.matches.length > 0 ? (
-                    <>
-                      {activeDayObj.matches.slice(0, 4).map(m => (
-                        <Pressable
-                          key={m.id}
-                          onPress={() => openMatch(m.id)}
-                          accessibilityRole="button"
-                          accessibilityLabel={`${teamName(m.h)} 对 ${teamName(m.a)}，${hm(m.t)}`}
-                          style={({ pressed }) => [
-                            styles.dayPreviewRow,
-                            pressed && styles.pressed,
-                          ]}
-                        >
-                          <Text style={styles.dayPreviewTime}>{hm(m.t)}</Text>
-                          <Text style={styles.dayPreviewTeams} numberOfLines={1}>
-                            {teamName(m.h)} vs {teamName(m.a)}
-                          </Text>
-                          <SleepBadge tier={sleepTier(m.t)} />
-                        </Pressable>
-                      ))}
-                      {activeDayObj.matches.length > 4 ? (
-                        <Text style={styles.dayPreviewMore}>
-                          还有 {activeDayObj.matches.length - 4} 场，可在赛程中查看
-                        </Text>
-                      ) : null}
-                    </>
-                  ) : (
-                    <Text style={styles.emptyText}>当日暂无未开赛场次</Text>
-                  )}
-                </View>
-              ) : null}
-              <Text style={styles.advice}>{week.advice}</Text>
-            </>
-          ) : (
-            <Text style={styles.emptyText}>{weekWord}暂无未开赛场次，暂无分布数据。</Text>
-          )}
-        </Card>
-      </View>
-
-      {plan.alt.length > 0 ? (
+      {altShown.length > 0 ? (
         <View style={styles.section}>
-          <SectionHeader title="备选" count={plan.alt.length} />
+          <SectionHeader title="备选" count={altShown.length} />
           <View style={styles.list}>
-            {plan.alt.map(entry => (
+            {altShown.map(entry => (
               <Pressable
                 key={entry.m.id}
                 onPress={() => openMatch(entry.m.id)}
@@ -484,6 +418,29 @@ export default function PlanScreen() {
                   {teamName(entry.m.h)} vs {teamName(entry.m.a)}
                 </Text>
                 <Text style={styles.altIndex}>{entry.index.toFixed(1)}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      {nightExtras.length > 0 ? (
+        <View style={styles.section}>
+          <SectionHeader title="该晚其他场次" count={nightExtras.length} />
+          <View style={styles.list}>
+            {nightExtras.map(m => (
+              <Pressable
+                key={m.id}
+                onPress={() => openMatch(m.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`${teamName(m.h)} 对 ${teamName(m.a)}，${hm(m.t)}`}
+                style={({ pressed }) => [styles.otherRow, pressed && styles.pressed]}
+              >
+                <Text style={styles.otherTime}>{hm(m.t)}</Text>
+                <Text style={styles.otherTeams} numberOfLines={1}>
+                  {teamName(m.h)} vs {teamName(m.a)}
+                </Text>
+                <SleepBadge tier={sleepTier(m.t)} />
               </Pressable>
             ))}
           </View>
@@ -639,6 +596,21 @@ const styles = StyleSheet.create({
   sleepSummaryWarn: { color: colors.warn, fontWeight: '600' },
   section: { gap: spacing.sm },
   ratio: { color: colors.textFaint, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    minHeight: 34,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.accent, 0.28),
+    backgroundColor: withAlpha(colors.accent, 0.06),
+  },
+  filterText: { flex: 1, color: colors.accent, fontSize: fontSize.xs, fontWeight: '600' },
+  filterClear: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 4 },
+  filterClearText: { color: colors.textMuted, fontSize: fontSize.xs },
   list: {
     borderRadius: radius.xl,
     borderWidth: 1,
@@ -711,58 +683,32 @@ const styles = StyleSheet.create({
   mineReason: { color: colors.textFaint, fontSize: fontSize.xs },
   mineTime: { color: colors.textMuted, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs, paddingTop: spacing.xs },
-  chartColumn: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    borderRadius: radius.md,
-  },
-  chartColumnActive: {
-    backgroundColor: withAlpha(colors.accent, 0.08),
-  },
   chartDotSlot: { height: 6, justifyContent: 'center', alignItems: 'center' },
-  chartBestDot: {
-    width: 5,
-    height: 5,
-    borderRadius: radius.full,
-    backgroundColor: colors.accent,
-  },
   chartBarWrap: { height: 60, width: '100%', justifyContent: 'flex-end', alignItems: 'center' },
   chartBar: { width: '62%', borderRadius: radius.sm, minHeight: 3 },
   chartLabel: { color: colors.textFaint, fontSize: fontSize.xs },
   chartCount: { color: colors.textMuted, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
-  dayPreview: {
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.hairline,
-    gap: spacing.xs,
-  },
-  dayPreviewHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-  },
   dayPreviewTitle: { color: colors.text, fontSize: fontSize.xs, fontWeight: '700' },
   dayPreviewCost: { color: colors.textMuted, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   dayPreviewMore: { color: colors.textFaint, fontSize: fontSize.xs, paddingTop: 2 },
-  dayPreviewRow: {
-    minHeight: 44,
+  dayPreviewTeams: { flex: 1, color: colors.textSecondary, fontSize: fontSize.xs },
+  advice: { color: colors.textMuted, fontSize: fontSize.xs, lineHeight: 18, marginTop: spacing.sm },
+  otherRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: 4,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.hairline,
   },
-  dayPreviewTime: {
+  otherTime: {
     width: 40,
     color: colors.textSecondary,
     fontSize: fontSize.xs,
     fontVariant: ['tabular-nums'],
   },
-  dayPreviewTeams: { flex: 1, color: colors.textSecondary, fontSize: fontSize.xs },
-  advice: { color: colors.textMuted, fontSize: fontSize.xs, lineHeight: 18, marginTop: spacing.sm },
+  otherTeams: { flex: 1, color: colors.textSecondary, fontSize: fontSize.xs },
   emptyText: { color: colors.textMuted, fontSize: fontSize.sm },
   altRow: {
     flexDirection: 'row',
