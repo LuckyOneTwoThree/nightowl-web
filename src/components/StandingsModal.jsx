@@ -73,10 +73,40 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
     return computeStandings(activeLeague, getFixtures(), { asOfTs, excludeIds: hiddenIds });
   }, [activeLeague, historical, match, nowTs, dataRev, hiddenIds]);
 
-  // 切联赛后回到榜首，避免停在上一联赛的滚动位置
+  /* 打开时的滚动落点：带本场上下文就锚定到交手双方，否则回榜首。
+   *
+   * 为什么必须锚定：欧冠联赛阶段 36 队、五大联赛 18–20 队，弹窗高度 86vh —— 排在第 14 名
+   * 的球队在首屏之外。此前只给「本场」胶囊做底色，等于让用户自己去一张 36 行长表里找。
+   *
+   * 落点分两种，按两队的名次距离决定：
+   *   · 两队相隔一屏内 → 让这一对**居中**，一眼看到对阵双方的位次差；
+   *   · 相隔超过一屏（如第 3 名 vs 第 20 名）→ 只锚主队，放在可视区上部 28%：
+   *     上面还有表头与分区标签要读，居中会把「前四参考线 / 附加赛区」推到屏幕外。
+   *
+   * 用 getBoundingClientRect 求差而不是 offsetTop —— 行在 table 里，offsetParent 不一定是滚动容器。 */
   useEffect(() => {
-    if (open && scrollRef.current) scrollRef.current.scrollTop = 0;
-  }, [activeLeague, open]);
+    const el = scrollRef.current;
+    if (!open || !el) return;
+    const rows = (isMatchLeague && match ? [match.h, match.a] : [])
+      .map(id => el.querySelector(`[data-team-id="${id}"]`))
+      .filter(Boolean);
+    if (!rows.length) {
+      el.scrollTop = 0;
+      return;
+    }
+    const box = el.getBoundingClientRect();
+    const rects = rows.map(r => r.getBoundingClientRect());
+    const first = Math.min(...rects.map(r => r.top)) - box.top;
+    const last = Math.max(...rects.map(r => r.bottom)) - box.top;
+    const span = last - first;
+    const target =
+      span <= el.clientHeight * 0.8
+        ? first - (el.clientHeight - span) / 2
+        : first - el.clientHeight * 0.28;
+    el.scrollTop = Math.max(0, el.scrollTop + target);
+    // 依赖只取两个 id：App 每次重渲染都会传新对象，把 match 整个放进依赖会反复重锚
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, activeLeague, isMatchLeague, match?.h, match?.a]);
 
   if (!open) return null;
 

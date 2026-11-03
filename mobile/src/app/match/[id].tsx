@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -144,6 +145,25 @@ export default function MatchScreen() {
   const [reminderSet, setReminderSet] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
+
+  /* 「情报 / 数据」两个页签共用同一个 ScrollView，默认行为是把上一个页签的偏移原样带过去 ——
+     在情报页读到 800px 再切到数据页，会落在一张还没读过的表中间；切回来时位置也已经丢了。
+     这里按页签各记一份偏移，切换时先存离开的位置、再恢复目标页签的位置。 */
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const tabOffsets = useRef<Record<Tab, number>>({ intel: 0, stats: 0 });
+  const liveOffset = useRef(0);
+
+  const changeTab = (value: string) => {
+    const next = value as Tab;
+    if (next === tab) return;
+    tabOffsets.current[tab] = liveOffset.current;
+    animateLayout();
+    setTab(next);
+    // 新页签的高度要等这一帧布局结束才成立，早于它 scrollTo 会被旧的滚动范围截断
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: tabOffsets.current[next], animated: false });
+    });
+  };
 
   // 以系统已排程通知为事实来源，而不是页面 state。
   useEffect(() => {
@@ -337,6 +357,7 @@ export default function MatchScreen() {
       </View>
 
       <Animated.ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
@@ -347,7 +368,14 @@ export default function MatchScreen() {
         scrollEventThrottle={16}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
+          {
+            useNativeDriver: true,
+            /* useNativeDriver 时 JS 侧读不到 Animated.Value 的当前值，
+               页签切换要记住离开位置就得靠 listener 另存一份。 */
+            listener: (event: { nativeEvent?: { contentOffset?: { y?: number } } }) => {
+              liveOffset.current = event?.nativeEvent?.contentOffset?.y ?? 0;
+            },
+          }
         )}
       >
         <LinearGradient
@@ -546,10 +574,7 @@ export default function MatchScreen() {
         <View style={styles.segmentWrap}>
           <SegmentedControl
             value={tab}
-            onChange={value => {
-              animateLayout();
-              setTab(value as Tab);
-            }}
+            onChange={changeTab}
             options={[
               { key: 'intel', label: '情报' },
               { key: 'stats', label: '数据' },

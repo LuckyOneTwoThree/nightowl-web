@@ -1270,6 +1270,111 @@ app.whenReady().then(async () => {
         onboardingRerun.step.includes('第 1 / 2 步') &&
         onboardingRerun.placeholder.includes('搜索 111 支球队'),
       JSON.stringify(onboardingRerun));
+
+    /* 上下文守恒（P1-6）：顶栏视图切换不该丢滚动位置。
+       此前切到「本周规划」再切回，左栏列表会跳回顶部 —— 刚从第 12 场翻到这里的人得重找。 */
+    await waitLoad(win, `${base}/?view=tonight`);
+    await sleep(1500);
+    const scrollSet = await win.webContents.executeJavaScript(`
+      (() => {
+        // 左栏赛程列表：TonightView 里唯一的 space-y-0.5 + overflow-y-auto 容器
+        // （标题「今晚赛程」在列表外层，不能用来定位）
+        const list = [...document.querySelectorAll('div')].find(
+          d => typeof d.className === 'string' && d.className.includes('overflow-y-auto')
+            && d.className.includes('space-y-0.5')
+        );
+        if (!list) return { ok: false };
+        const max = list.scrollHeight - list.clientHeight;
+        if (max < 120) return { ok: false, max };
+        list.scrollTop = Math.min(240, max);
+        return { ok: true, top: Math.round(list.scrollTop), max };
+      })()
+    `);
+    const switchView = async label => {
+      await win.webContents.executeJavaScript(`
+        (() => {
+          const b = [...document.querySelectorAll('button')].find(x => (x.textContent || '').includes(${JSON.stringify(label)}));
+          b?.click();
+          return !!b;
+        })()
+      `);
+      await sleep(900);
+    };
+    await switchView('本周规划');
+    await switchView('今晚观赛');
+    const scrollRestored = await win.webContents.executeJavaScript(`
+      (() => {
+        // 左栏赛程列表：TonightView 里唯一的 space-y-0.5 + overflow-y-auto 容器
+        // （标题「今晚赛程」在列表外层，不能用来定位）
+        const list = [...document.querySelectorAll('div')].find(
+          d => typeof d.className === 'string' && d.className.includes('overflow-y-auto')
+            && d.className.includes('space-y-0.5')
+        );
+        return list ? Math.round(list.scrollTop) : null;
+      })()
+    `);
+    ok(
+      '★ 切走视图再切回保留左栏滚动位置',
+      scrollSet.ok && scrollRestored != null && Math.abs(scrollRestored - scrollSet.top) <= 2,
+      JSON.stringify({ set: scrollSet, restored: scrollRestored })
+    );
+
+    /* 积分榜锚定（P1-6）：带本场上下文打开时，必须把交手双方滚进视野。
+       欧冠联赛阶段 36 队、弹窗 86vh，排在第 20 名的球队本来在首屏之外。 */
+    const uclFixture = repoFixtures.find(m => m.l === 'UCL' && m.st === 'sched' && !m.tbd);
+    if (uclFixture) {
+      await waitLoad(win, `${base}/?view=tonight&match=${uclFixture.id}`);
+      await sleep(1500);
+      await win.webContents.executeJavaScript(`
+        (() => {
+          const tab = [...document.querySelectorAll('#intel-panel button')].find(b => (b.textContent || '').includes('双方数据'));
+          tab?.click();
+          return !!tab;
+        })()
+      `);
+      await sleep(350);
+      await win.webContents.executeJavaScript(`
+        (() => {
+          const btn = [...document.querySelectorAll('#intel-panel button')].find(b => (b.textContent || '').includes('查看完整积分榜'));
+          btn?.click();
+          return !!btn;
+        })()
+      `);
+      await sleep(500);
+      const anchorState = await win.webContents.executeJavaScript(`
+        (() => {
+          const modal = document.querySelector('[aria-labelledby="standings-title"]');
+          if (!modal) return { open: false };
+          const scroller = modal.querySelector('.overflow-auto');
+          if (!scroller) return { open: true, scroller: false };
+          const box = scroller.getBoundingClientRect();
+          const hits = [...modal.querySelectorAll('tr[data-team-id]')]
+            .filter(r => (r.innerText || '').includes('本场'));
+          return {
+            open: true,
+            scroller: true,
+            rows: modal.querySelectorAll('[data-team-id]').length,
+            scrollable: scroller.scrollHeight > scroller.clientHeight + 20,
+            scrollTop: Math.round(scroller.scrollTop),
+            hits: hits.length,
+            visible: hits.some(r => {
+              const b = r.getBoundingClientRect();
+              return b.top >= box.top - 2 && b.bottom <= box.bottom + 2;
+            })
+          };
+        })()
+      `);
+      ok(
+        '★ 积分榜带本场打开时锚定交手双方',
+        anchorState.open && anchorState.rows === 36 && anchorState.scrollable &&
+          anchorState.hits === 2 && anchorState.visible,
+        JSON.stringify(anchorState)
+      );
+      await win.webContents.executeJavaScript(
+        `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); true`
+      );
+      await sleep(300);
+    }
   } catch (err) {
     ok('渲染冒烟执行完成', false, String(err?.stack || err));
   } finally {

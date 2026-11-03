@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { datePart, zhDate, weekdayOf } from '../core/format.js';
 import { narrativeOf } from '../core/narrative.js';
 import { evalOne, stateOf, heroTier, groupTonight, sameNightPicks } from '../core/owl.js';
@@ -10,6 +10,7 @@ import { Button, Chip, IndexTag, LiveDot, Meta, SectionLabel, SleepBadge } from 
 import { formatSleepHours } from '../core/sleep.js';
 import { queueStatusOf } from '../core/queue.js';
 import { sleepLedgerFor } from './SleepNote.jsx';
+import { useScrollMemory } from '../hooks/useScrollMemory.js';
 
 /** 夜猫指数口径说明 —— 从常驻版面收进 Hint（P2：界面不再解释自己） */
 export const INDEX_HINT =
@@ -192,7 +193,7 @@ export default function TonightView({
   );
   const groups = useMemo(() => groupTonight(listSlice, now), [listSlice, now]);
   const [showFinished, setShowFinished] = useState(false);
-  const listRef = useRef(null);
+  const listRef = useScrollMemory('tonight:list');
 
   /**
    * 同开球组（FR-10）：只取「当前主展示那场」所在的同开球组。

@@ -7,6 +7,7 @@ import { formatSleepHours, sleepLedger } from '../core/sleep.js';
 import { Chip, Crest, Hint, IndexTag, Meta, SectionLabel, SleepBadge, Stars } from './atoms.jsx';
 import { IconChevronDown, IconChevronUp, IconClose, IconWarn } from './icons.jsx';
 import MatchRow from './MatchRow.jsx';
+import { useScrollMemory } from '../hooks/useScrollMemory.js';
 
 const WEEKDAY_SHORT = ['一', '二', '三', '四', '五', '六', '日'];
 
@@ -250,6 +251,9 @@ export default function WeekView({
   const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState('best');
   const [selectedDay, setSelectedDay] = useState(null);
+  /* 滚动位置按「页签 + 日期筛选」分桶：切走再切回能回到原处，
+     换页签本来就是换了一份内容，沿用上一份的位置才是错的。 */
+  const listRef = useScrollMemory(`week:${activeTab}:${selectedDay || 'all'}`);
 
   const { plan, minefield, days, advice } = week;
   const hasScheduledMatches = days.some(day => day.count > 0);
@@ -475,6 +479,7 @@ export default function WeekView({
 
       {/* ---- 列表内容区 ---- */}
       <div
+        ref={listRef}
         key={`${activeTab}-${selectedDay || 'all'}`}
         className="scrollbar-thin -mr-1 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1"
       >
