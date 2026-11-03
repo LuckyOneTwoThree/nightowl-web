@@ -262,8 +262,12 @@ app.whenReady().then(async () => {
       (() => {
         const head = document.getElementById('match-lines');
         const rail = head?.parentElement;
+        const cls = rail?.className || '';
         return {
-          width: rail ? Math.round(rail.getBoundingClientRect().width) : 0,
+          // 隐藏窗口 CSS 过渡可能停滞，getBoundingClientRect 读不到终值；
+          // class 是结构性真相，过渡只是动画。
+          expandedClass: cls.includes('w-[315px]'),
+          collapsedClass: cls.includes('w-[52px]'),
           focused: document.activeElement === head,
           hasCollapse: !!document.querySelector('button[aria-label="收起线路侧栏"]')
         };
@@ -272,7 +276,7 @@ app.whenReady().then(async () => {
     ok(
       '★ 展开侧轨恢复 315px 并把焦点交给线路区',
       !railExpandClicked ||
-        (railExpanded.width >= 300 && railExpanded.focused && railExpanded.hasCollapse),
+        (railExpanded.expandedClass && !railExpanded.collapsedClass && railExpanded.focused && railExpanded.hasCollapse),
       JSON.stringify(railExpanded)
     );
 
@@ -289,16 +293,18 @@ app.whenReady().then(async () => {
       (() => {
         const head = document.getElementById('match-lines');
         const rail = head?.parentElement;
+        const cls = rail?.className || '';
         const btn = document.querySelector('button[aria-label="展开线路与官方平台"]');
         return {
-          width: rail ? Math.round(rail.getBoundingClientRect().width) : 0,
+          collapsedClass: cls.includes('w-[52px]'),
+          expandedClass: cls.includes('w-[315px]'),
           focusBack: !!btn && document.activeElement === btn
         };
       })()
     `);
     ok(
       '★ 收起后焦点归还展开按钮',
-      !railCollapseClicked || (railBack.width <= 60 && railBack.focusBack),
+      !railCollapseClicked || (railBack.collapsedClass && !railBack.expandedClass && railBack.focusBack),
       JSON.stringify(railBack)
     );
 

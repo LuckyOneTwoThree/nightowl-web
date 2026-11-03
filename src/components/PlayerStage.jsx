@@ -1043,13 +1043,14 @@ export default function PlayerStage({
   // 赛前无流且已折叠时收成 52px 状态轨（仅 ≥1280），播放/终场一律回到整栏。
   const expandRail = () => {
     setRailCollapsed(false);
-    requestAnimationFrame(() => {
+    // 不用 rAF：Windows 隐藏窗口会节流 rAF（见 App.jsx restoreFocus 同类修复）
+    setTimeout(() => {
       document.getElementById('match-lines')?.focus?.({ preventScroll: true });
-    });
+    }, 0);
   };
   const collapseRail = () => {
     setRailCollapsed(true);
-    requestAnimationFrame(() => railExpandRef.current?.focus?.({ preventScroll: true }));
+    setTimeout(() => railExpandRef.current?.focus?.({ preventScroll: true }), 0);
   };
 
   const lineStatusText = live
