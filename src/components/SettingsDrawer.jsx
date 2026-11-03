@@ -43,6 +43,7 @@ export default function SettingsDrawer({
   watchLater = [],
   onRemoveWatchLater,
   onMarkWatchLaterWatched,
+  onToggleWatchLater,
   onOpenMorningDigest,
   weekIds = null,
   desktopSettings = null,
@@ -392,23 +393,31 @@ export default function SettingsDrawer({
 
           <Fieldset title="明早补看" hint="只保存比赛 ID 与状态，不保存比分；最多 10 条，7 天过期。">
             {(() => {
-              const entries = queueWithMatches(watchLater, getFixtures()).sort((a, b) =>
-                String(a.match?.t || '').localeCompare(String(b.match?.t || ''))
-              );
+              const entries = queueWithMatches(watchLater, getFixtures(), Date.now(), { includeWatched: true })
+                .sort((a, b) => String(a.match?.t || '').localeCompare(String(b.match?.t || '')));
+              const pending = entries.filter(({ item }) => item.status === 'pending');
+              const watched = entries.filter(({ item }) => item.status === 'watched');
               if (!entries.length) {
                 return <Meta>还没有加入补看。可在比赛情报里点「明早补看」。</Meta>;
               }
               return (
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2 px-0.5">
-                    <Meta>{entries.length} 场待看 · 最早 {entries[0]?.match ? hm(entries[0].match.t) : '—'}</Meta>
+                    <Meta>
+                      {pending.length} 场待看
+                      {watched.length > 0 ? ` · ${watched.length} 场已看` : ''}
+                      {pending[0]?.match ? ` · 最早 ${hm(pending[0].match.t)}` : ''}
+                    </Meta>
                     {onOpenMorningDigest && (
                       <Button variant="ghost" size="xs" onClick={onOpenMorningDigest}>
                         看摘要
                       </Button>
                     )}
                   </div>
-                  {entries.map(({ item, match }) => (
+                  {pending.length === 0 ? (
+                    <Meta>待看已清空，已看过的场次仍在下面。</Meta>
+                  ) : null}
+                  {pending.map(({ item, match }) => (
                     <div
                       key={item.id}
                       className="flex items-center justify-between gap-2 rounded-md border border-line-hairline bg-surface-card px-2.5 py-1.5"
@@ -435,6 +444,38 @@ export default function SettingsDrawer({
                       </div>
                     </div>
                   ))}
+                  {watched.length > 0 ? (
+                    <>
+                      <Meta className="pt-1">已看过</Meta>
+                      {watched.map(({ item, match }) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between gap-2 rounded-md border border-line-hairline bg-surface-card px-2.5 py-1.5"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-medium text-text-primary">
+                              {match ? `${teamName(match.h)} vs ${teamName(match.a)}` : '比赛数据已移除'}
+                            </p>
+                            <Meta className="mt-0.5">
+                              {match ? `${leagueName(match.l)} · ${hm(match.t)} · 已看过` : `${item.id} · 已看过`}
+                            </Meta>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1">
+                            {match && onToggleWatchLater && (
+                              <Button variant="ghost" size="xs" onClick={() => onToggleWatchLater(match)}>
+                                重新补看
+                              </Button>
+                            )}
+                            {onRemoveWatchLater && (
+                              <Button variant="ghost" size="xs" onClick={() => onRemoveWatchLater(item.id)}>
+                                移除
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  ) : null}
                 </div>
               );
             })()}

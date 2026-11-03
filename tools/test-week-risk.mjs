@@ -101,7 +101,7 @@ console.log('二、合成一周');
   ];
 
   const week = { days, matches };
-  const risk = weekRiskBands(week, PROFILE, ts('2026-11-04T03:00'));
+  const risk = weekRiskBands(week, PROFILE, ts('2026-11-01T12:00'));
 
   ok('7 晚都有带', risk.bands.length === 7, String(risk.bands.length));
   ok('weekday 从周一起算', risk.bands[0].weekday === 0 && risk.bands[6].weekday === 6);
@@ -140,9 +140,45 @@ console.log('二、合成一周');
     risk.domain.ticks.map(t => t.label).join(',')
   );
 
-  // 03:00 时，11-03 那一夜正在进行，11-02 已过去
-  ok('当前夜是周二', tue.current === true && mon.current === false);
-  ok('未来的夜不是当前夜', sat.current === false);
+  // 03:00 时，11-03 那一夜正在进行，11-02 已过去；风险带只负责“还能影响睡眠”的夜，
+  // 因此这里单独验证 current 标记，不把当前标记和可行动过滤混在一起。
+  {
+    const currentRisk = weekRiskBands(week, PROFILE, ts('2026-11-04T03:00'));
+    ok('当前夜是周二', currentRisk.bands[1].current === true && currentRisk.bands[0].current === false);
+    ok('未来的夜不是当前夜', currentRisk.bands[5].current === false);
+  }
+  ok('周一开始前没有当前夜标记', mon.current === false && tue.current === false);
+}
+
+/* ================================================================== */
+console.log('');
+console.log('二·二、可行动口径（已结束/直播/tbd）');
+{
+  const DATES = ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08'];
+  const days = DATES.map(date => ({ date, cost: 0, matches: [] }));
+  const mk = (id, t, extra = {}) => ({ id, t, h: 'AAA', a: 'BBB', l: 'PL', st: 'sched', ...extra });
+  const week = {
+    days,
+    matches: [
+      mk('ended-fake', '2026-11-02T20:00'), // 11-03 02:00 时已结束，但 st 仍是 sched
+      mk('live-now', '2026-11-03T01:00'),   // 11-03 02:00 时仍在 120 分钟内
+      mk('tbd-now', '2026-11-03T02:00', { tbd: true }),
+      mk('future-now', '2026-11-03T22:00')
+    ]
+  };
+  const risk = weekRiskBands(week, PROFILE, ts('2026-11-03T02:00'));
+  const [mon, tue] = risk.bands;
+
+  ok('已结束的假 sched 不进风险带', mon.segments.every(s => s.id !== 'ended-fake'),
+    mon.segments.map(s => s.id).join(','));
+  ok('正在进行的场次仍进风险带', mon.segments.some(s => s.id === 'live-now'),
+    mon.segments.map(s => s.id).join(','));
+  ok('tbd 不进任何一晚', risk.bands.every(b => b.segments.every(s => s.id !== 'tbd-now')));
+  ok('tbd 仍只在周级计数', risk.tbdCount === 1, String(risk.tbdCount));
+  ok('周一只有正在直播的 1 场', mon.count === 1 && mon.latestEndClock === '03:00',
+    `${mon.count}/${mon.latestEndClock}`);
+  ok('未来场次仍计入对应夜晚', tue.segments.some(s => s.id === 'future-now'), tue.segments.map(s => s.id).join(','));
+  ok('已结束 + tbd 不会抬高 riskNights', risk.riskNights === 1, String(risk.riskNights));
 }
 
 /* ================================================================== */
@@ -188,15 +224,21 @@ console.log('四、真实快照不变量');
   const risk = weekRiskBands(week, { ...PROFILE }, now);
 
   ok('返回 7 晚', risk.bands.length === 7);
+  ok('★ computeWeek 显式返回可行动日网格', Array.isArray(week.actionableDays) && week.actionableDays.length === 7,
+    String(week.actionableDays?.length));
 
-  // buildWeekDays 已排除 tbd 与非 sched；风险带的 count 必须与它逐个对上，
-  // 否则「柱状图」与「风险带」会给出两个场次数
+  // 风险带与周计划/周建议必须使用同一个「可行动」集合：
+  // 已结束但状态仍为 sched 的场次不得画进风险带，也不得抬高 riskNights。
   let countMismatch = null;
   let endMismatch = null;
   let segOutside = null;
   for (let i = 0; i < 7; i++) {
     const band = risk.bands[i];
-    const day = week.days[i];
+    const day = week.actionableDays?.[i];
+    if (!day) {
+      countMismatch = `missing actionableDays[${i}]`;
+      continue;
+    }
     if (band.count !== day.count) countMismatch = `${day.date}: ${band.count} vs ${day.count}`;
     for (const seg of band.segments) {
       if (seg.endMin - seg.startMin !== 120) endMismatch = `${seg.id}: ${seg.endMin - seg.startMin}`;
@@ -204,7 +246,11 @@ console.log('四、真实快照不变量');
       if (seg.startMin < -12 * 60 || seg.endMin > 20 * 60) segOutside = `${seg.id}: ${seg.startMin}..${seg.endMin}`;
     }
   }
-  ok('每夜场次数与 computeWeek 一致', countMismatch === null, countMismatch);
+  ok('每夜场次数与 computeWeek 可行动网格一致', countMismatch === null, countMismatch);
+  ok('可行动网格不含已结束的假 sched',
+    week.actionableDays.every(day => day.matches.every(m =>
+      m.st === 'sched' && !m.tbd && now < ts(m.t) + 120 * 60000)),
+    '存在已结束/待定场次');
   ok('每段时长都是 120 分钟', endMismatch === null, endMismatch);
   ok('没有场次被画到一夜之外', segOutside === null, segOutside);
 

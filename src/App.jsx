@@ -730,10 +730,10 @@ export default function App() {
    * 周三那场，切去今晚再切回来，点按钮却回到周一 —— 上下文被动丢失。
    * 这里只记「确实属于该视图的选择」，预览态（视图外比赛）不入账。
    */
-  const lastInViewRef = useRef({});
+  const [lastInView, setLastInView] = useState({});
   useEffect(() => {
     if (!activeMatchId || !activeInView) return;
-    lastInViewRef.current[view] = activeMatchId;
+    setLastInView(prev => (prev[view] === activeMatchId ? prev : { ...prev, [view]: activeMatchId }));
   }, [activeMatchId, activeInView, view]);
 
   /** 预览态的“回到当前视图”落点：优先该视图上次选中的那场，其次最该看的一场 */
@@ -758,7 +758,7 @@ export default function App() {
 
   /** 记忆可能已过期（比赛结束 / 被筛选掉），失效时回退到最该看的一场 */
   const returnToViewId = useMemo(() => {
-    const remembered = lastInViewRef.current[view];
+    const remembered = lastInView[view];
     if (!remembered) return firstInViewId;
     if (view === 'tonight') {
       const stillThere =
@@ -776,7 +776,7 @@ export default function App() {
         : firstInViewId;
     }
     return firstInViewId;
-  }, [view, firstInViewId, tonight, replayPicks, week, scheduleRows]);
+  }, [view, firstInViewId, lastInView, tonight, replayPicks, week, scheduleRows]);
 
   const activeIntel = useMemo(() => {
     if (!activeMatch) return null;
@@ -1045,36 +1045,66 @@ export default function App() {
     !!standingsState;
 
   /**
-   * Escape 浮层栈：一次 Esc 只关最上层浮层。
+   * 浮层顺序：按实际打开顺序入栈，Escape 只关最上层。
    *
-   * 此前各浮层在 window 上无条件监听 Escape，设置抽屉 + 更新弹窗叠加时
-   * （设置里点「检查更新」不关抽屉）一次 Esc 会连关两层，丢失上下文。
-   * 由这里按「后开者在上」派发。
-   *
-   * SplashScreen **不入栈**：它自己监听 Space/Enter/Escape 并播 450ms 退出动画，
-   * 若同时入栈，一次 Esc 会「栈立即关闭（无动画）+ 组件启动退出动画」双路派发 ——
-   * 表现为开屏一闪而过。首启时引导也不会与开屏同屏（`onboardingVisible` 已排除）。
+   * 旧实现按固定优先级排序：更新弹窗自动叠到积分榜上时，Esc 会先关积分榜。
+   * 顺序由每个浮层的 open 状态变化增量维护；渲染时把「刚打开但 effect 还没同步」
+   * 的浮层追加到末尾，避免新弹窗在首帧被 inert 掉、焦点进不去。
    */
-  const overlayCloseStack = useMemo(() => {
-    const stack = [];
-    if (settingsOpen) stack.push(closeSettings);
-    if (onboardingVisible) stack.push(closeOnboarding);
-    if (updateModalOpen) stack.push(closeUpdateModal);
-    if (standingsState) stack.push(closeStandings);
-    if (paletteOpen) stack.push(closePalette);
-    if (morningDigestOpen) stack.push(closeMorningDigest);
-    return stack;
-  }, [settingsOpen, onboardingVisible, updateModalOpen, standingsState, paletteOpen, morningDigestOpen, closeStandings, closeSettings, closeUpdateModal, closePalette, closeOnboarding, closeMorningDigest]);
+  const [overlayOrder, setOverlayOrder] = useState([]);
+  const prevOverlayOpenRef = useRef({});
+  const overlayState = [
+    { id: 'settings', open: settingsOpen },
+    { id: 'onboarding', open: onboardingVisible },
+    { id: 'update', open: updateModalOpen },
+    { id: 'standings', open: !!standingsState },
+    { id: 'palette', open: paletteOpen },
+    { id: 'morning', open: morningDigestOpen }
+  ];
+  const openOverlayIds = overlayState.filter(x => x.open).map(x => x.id);
+  const effectiveOverlayOrder = [
+    ...overlayOrder.filter(id => openOverlayIds.includes(id)),
+    ...openOverlayIds.filter(id => !overlayOrder.includes(id))
+  ];
+  const topOverlay = effectiveOverlayOrder[effectiveOverlayOrder.length - 1] || null;
+  const inertFor = id => (openOverlayIds.includes(id) && id !== topOverlay ? true : undefined);
 
   useEffect(() => {
-    if (overlayCloseStack.length === 0) return undefined;
+    const prev = prevOverlayOpenRef.current;
+    const next = Object.fromEntries(overlayState.map(x => [x.id, x.open]));
+    setOverlayOrder(order => {
+      const kept = order.filter(id => next[id]);
+      const added = overlayState.filter(x => x.open && !prev[x.id]).map(x => x.id);
+      return added.length ? [...kept, ...added] : kept;
+    });
+    prevOverlayOpenRef.current = next;
+    // overlayState 的顺序固定，这里只需响应每个浮层的开关
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsOpen, onboardingVisible, updateModalOpen, !!standingsState, paletteOpen, morningDigestOpen]);
+
+  useEffect(() => {
+    if (overlayOrder.length === 0) return undefined;
     const onEsc = e => {
       if (e.key !== 'Escape') return;
-      overlayCloseStack[overlayCloseStack.length - 1]();
+      const id = overlayOrder[overlayOrder.length - 1];
+      if (id === 'settings') closeSettings();
+      else if (id === 'onboarding') closeOnboarding();
+      else if (id === 'update') closeUpdateModal();
+      else if (id === 'standings') closeStandings();
+      else if (id === 'palette') closePalette();
+      else if (id === 'morning') closeMorningDigest();
     };
     window.addEventListener('keydown', onEsc);
     return () => window.removeEventListener('keydown', onEsc);
-  }, [overlayCloseStack]);
+  }, [
+    overlayOrder,
+    closeSettings,
+    closeOnboarding,
+    closeUpdateModal,
+    closeStandings,
+    closePalette,
+    closeMorningDigest
+  ]);
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden stage-atmosphere text-text-primary">
@@ -1258,31 +1288,34 @@ export default function App() {
         />
       )}
 
-      <MorningDigest
-        open={morningDigestOpen}
-        items={morningDigestAll.items}
-        watchedCount={morningWatchedCount}
-        revealed={revealed}
-        onReveal={reveal}
-        onMarkRead={markWatchLaterWatched}
-        onOpenMatch={id => {
-          closeMorningDigest();
-          select(id);
-        }}
-        onClose={closeMorningDigest}
-        onStartSession={startDigestSession}
-      />
+      <div inert={inertFor('morning') || undefined}>
+        <MorningDigest
+          open={morningDigestOpen}
+          items={morningDigestAll.items}
+          watchedCount={morningWatchedCount}
+          revealed={revealed}
+          onReveal={reveal}
+          onMarkRead={markWatchLaterWatched}
+          onOpenMatch={id => {
+            closeMorningDigest();
+            select(id);
+          }}
+          onClose={closeMorningDigest}
+          onStartSession={startDigestSession}
+        />
+      </div>
 
       {paletteOpen && (
-        <CommandPalette
-          items={paletteItems}
-          onClose={closePalette}
-          onRun={runPaletteItem}
-        />
+        <div inert={inertFor('palette') || undefined}>
+          <CommandPalette
+            items={paletteItems}
+            onClose={closePalette}
+            onRun={runPaletteItem}
+          />
+        </div>
       )}
 
-      {/* 更新的 z 层高于设置抽屉；抽屉开着时再打开更新弹窗，必须把下层移出焦点 */}
-      <div inert={updateModalOpen || undefined}>
+      <div inert={inertFor('settings') || undefined}>
         <SettingsDrawer
           open={settingsOpen}
           prefs={prefs}
@@ -1295,6 +1328,7 @@ export default function App() {
           watchLater={watchLater}
           onRemoveWatchLater={removeWatchLater}
           onMarkWatchLaterWatched={markWatchLaterWatched}
+          onToggleWatchLater={toggleWatchLater}
           onOpenMorningDigest={() => setMorningDigestOpen(true)}
           weekIds={weekBestIds}
           desktopSettings={desktopSettings}
@@ -1308,7 +1342,7 @@ export default function App() {
         />
       </div>
 
-      <div inert={updateModalOpen || undefined}>
+      <div inert={inertFor('onboarding') || undefined}>
         <Onboarding
           open={onboardingVisible}
           prefs={prefs}
@@ -1319,26 +1353,30 @@ export default function App() {
 
       {splashOpen && <SplashScreen onClose={handleCloseSplash} />}
 
-      <StandingsModal
-        open={!!standingsState}
-        initialLeague={standingsState?.league}
-        match={standingsState?.matchId ? matchMap[standingsState.matchId] || null : null}
-        now={clockTs}
-        dataRev={dataRev}
-        spoilerFree={prefs.spoilerFree}
-        revealed={revealed}
-        onClose={closeStandings}
-      />
+      <div inert={inertFor('standings') || undefined}>
+        <StandingsModal
+          open={!!standingsState}
+          initialLeague={standingsState?.league}
+          match={standingsState?.matchId ? matchMap[standingsState.matchId] || null : null}
+          now={clockTs}
+          dataRev={dataRev}
+          spoilerFree={prefs.spoilerFree}
+          revealed={revealed}
+          onClose={closeStandings}
+        />
+      </div>
 
-      <UpdateModal
-        open={updateModalOpen}
-        onClose={closeUpdateModal}
-        currentVersion={__APP_VERSION__}
-        updateState={updateState}
-        onCheck={handleCheckUpdate}
-        onDownload={handleDownloadUpdate}
-        onInstall={handleInstallUpdate}
-      />
+      <div inert={inertFor('update') || undefined}>
+        <UpdateModal
+          open={updateModalOpen}
+          onClose={closeUpdateModal}
+          currentVersion={__APP_VERSION__}
+          updateState={updateState}
+          onCheck={handleCheckUpdate}
+          onDownload={handleDownloadUpdate}
+          onInstall={handleInstallUpdate}
+        />
+      </div>
 
       {/* 发现新版本时的轻量主动浮动提醒（避免用户不知道有更新） */}
       {updateAvailable && !toastDismissed && !updateModalOpen && !settingsOpen && !onboardingOpen && !splashOpen && !standingsState && (

@@ -21,6 +21,7 @@ const REASON_COPY = {
   followed: '关注球队',
   highlight: '今晚焦点',
   'lighter-alternative': '有更轻的同夜场',
+  'below-floor': '看完低于底线',
   'low-index': '看点一般',
   tbd: '时间未定',
   invalid: '时间无效',
@@ -32,6 +33,13 @@ const REASON_COPY = {
  * 同一个语义在两处用不同措辞，用户会以为是两个判断。
  */
 export { VERDICT_COPY, REASON_COPY };
+
+/** 低于底线时保留“关注球队”这个原因，再补上真正的代价。 */
+export function reasonTextOf(decision) {
+  if (!decision) return '';
+  if (decision.belowFloor && decision.followed) return '关注球队 · 看完低于底线';
+  return REASON_COPY[decision.reason] || '';
+}
 
 function hoursOf(minutes) {
   const h = Math.round((minutes / 60) * 10) / 10;
@@ -56,7 +64,7 @@ function Segment({ label, children, muted = false }) {
 export default function DecisionStrip({ decision, match, alternative, onSelectAlternative, onOpenSettings }) {
   if (!decision || !match) return null;
   const verdict = VERDICT_COPY[decision.verdict] || VERDICT_COPY.unknown;
-  const reason = REASON_COPY[decision.reason] || '';
+  const reason = reasonTextOf(decision);
 
   const endLabel = match.tbd || decision.endAt == null ? '待定' : `${bjClock(decision.endAt, false)} 结束`;
 

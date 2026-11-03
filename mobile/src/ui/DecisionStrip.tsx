@@ -13,6 +13,8 @@ export type DecisionStripData = {
   remainingMinutes: number | null;
   alternativeId: string | null;
   sleepKnown: boolean;
+  belowFloor: boolean;
+  followed: boolean;
   resultHidden: boolean;
 };
 
@@ -33,6 +35,7 @@ const REASON_COPY: Record<string, string> = {
   followed: '关注球队',
   highlight: '今晚焦点',
   'lighter-alternative': '有更轻的同夜场',
+  'below-floor': '看完低于底线',
   'low-index': '看点一般',
   tbd: '时间未定',
   invalid: '时间无效',
@@ -40,6 +43,13 @@ const REASON_COPY: Record<string, string> = {
 };
 
 export { REASON_COPY };
+
+/** 低于底线时保留“关注球队”这个原因，再补上真正的代价。 */
+export function reasonTextOf(decision: DecisionStripData | null): string {
+  if (!decision) return '';
+  if (decision.belowFloor && decision.followed) return '关注球队 · 看完低于底线';
+  return REASON_COPY[decision.reason] ?? '';
+}
 
 function hoursOf(minutes: number): string {
   const h = Math.round((minutes / 60) * 10) / 10;

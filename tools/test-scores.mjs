@@ -353,6 +353,31 @@ console.log('六、HTTP API 端点集成（依赖注入，离线且不写盘）'
     ok('dryRun 不调用写盘', getSaveCalls() === 0);
   });
 
+  // 2.1 没有任何可尝试的目标时，不能被冒充成“已检查”
+  await withServer(
+    {
+      syncScores: async () => ({
+        patches: new Map(),
+        errors: [],
+        stats: {},
+        bySource: {},
+        attempted: false,
+        conflicts: [],
+        incompleteScore: [],
+        unmatched: []
+      })
+    },
+    async ({ port }) => {
+      const r = await fetch(`http://127.0.0.1:${port}/api/scores/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apply: true })
+      });
+      const j = await r.json();
+      ok('★ attempted=false 原样回传，不再恒真', j.summary?.attempted === false, JSON.stringify(j.summary));
+    }
+  );
+
   // 3. apply=true 成功：written.ok / changed / fixtures 回传
   await withServer({}, async ({ port, getSaveCalls, getSaved }) => {
     const r = await fetch(`http://127.0.0.1:${port}/api/scores/sync`, {

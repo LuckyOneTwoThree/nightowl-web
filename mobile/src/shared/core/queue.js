@@ -159,10 +159,16 @@ export function toggleQueue(items, match, now = Date.now()) {
   };
 }
 
-/** 队列展示：匹配本地 fixtures，按加入时间排序；不返回比分 */
-export function queueWithMatches(items, fixtures, now = Date.now()) {
+/**
+ * 队列展示：匹配本地 fixtures；默认只列待看，管理视图可用 includeWatched 把已看也列出来。
+ * 不返回比分。
+ */
+export function queueWithMatches(items, fixtures, now = Date.now(), options = {}) {
+  const source = options.includeWatched
+    ? normalizeQueue(items, now).sort((a, b) => a.addedAt - b.addedAt)
+    : pendingQueue(items, now);
   const map = new Map((fixtures || []).map(m => [m.id, m]));
-  return pendingQueue(items, now).map(item => ({
+  return source.map(item => ({
     item,
     match: map.get(item.id) || null
   }));

@@ -31,6 +31,7 @@ export const DECISION_REASON = Object.freeze({
   FOLLOWED: 'followed',
   HIGHLIGHT: 'highlight',
   LIGHTER_ALTERNATIVE: 'lighter-alternative',
+  BELOW_FLOOR: 'below-floor',
   LOW_INDEX: 'low-index',
   MISSING_INDEX: 'missing-index'
 });
@@ -124,6 +125,8 @@ export function decisionStrip({
     remainingMinutes: null,
     alternativeId: null,
     sleepKnown: false,
+    belowFloor: false,
+    followed: false,
     resultHidden
   };
 
@@ -140,27 +143,38 @@ export function decisionStrip({
   let costMinutes = null;
   let remainingMinutes = null;
   let sleepKnown = false;
+  let belowFloor = false;
   if (profile.enabled) {
     const ledger = sleepLedger(match.t, profile);
     if (ledger.valid && (ledger.ready === true)) {
       sleepKnown = true;
       costMinutes = Math.round((ledger.gapHours || 0) * 60);
       remainingMinutes = Math.round((ledger.remainingHours || 0) * 60);
+      belowFloor = ledger.belowFloor === true;
     }
   }
 
   const resolved = finiteIndex(index);
   const alt = lighterAlternative(match, resolved, alternatives);
   const verdictOf = () => {
+    // 看完会低于个人睡眠底线时，不再给金色“值得熬”。
+    // 关注球队仍保留（reason 带上 followed），但不让关注分支跳过睡眠代价。
+    if (belowFloor) {
+      if (
+        !followed &&
+        alt &&
+        resolved != null &&
+        resolved < DECISION_HIGHLIGHT_INDEX &&
+        costMinutes >= DEFER_MIN_COST_MINUTES
+      ) {
+        return { verdict: DECISION_VERDICT.DEFER, reason: DECISION_REASON.LIGHTER_ALTERNATIVE };
+      }
+      return { verdict: DECISION_VERDICT.NEUTRAL, reason: DECISION_REASON.BELOW_FLOOR };
+    }
     if (followed) return { verdict: DECISION_VERDICT.RECOMMENDED, reason: DECISION_REASON.FOLLOWED };
     if (resolved == null) return { verdict: DECISION_VERDICT.NEUTRAL, reason: DECISION_REASON.MISSING_INDEX };
     if (resolved >= DECISION_HIGHLIGHT_INDEX) {
       return { verdict: DECISION_VERDICT.RECOMMENDED, reason: DECISION_REASON.HIGHLIGHT };
-    }
-    // 只有「确实睡不够」且「有更轻的同夜替代」才建议换一场；
-    // 睡眠账本没启用时永远不劝退（没有依据就别动摇用户）。
-    if (alt && sleepKnown && costMinutes >= DEFER_MIN_COST_MINUTES) {
-      return { verdict: DECISION_VERDICT.DEFER, reason: DECISION_REASON.LIGHTER_ALTERNATIVE };
     }
     return { verdict: DECISION_VERDICT.NEUTRAL, reason: DECISION_REASON.LOW_INDEX };
   };
@@ -175,6 +189,8 @@ export function decisionStrip({
     // 仅当真的建议换一场时才给出替代，避免主结论与副信息互相打脸。
     alternativeId: verdict === DECISION_VERDICT.DEFER && alt ? alt.id : null,
     sleepKnown,
+    belowFloor,
+    followed: !!followed,
     resultHidden
   };
 }

@@ -13,6 +13,7 @@
 import { getFixtures, rivalries, storylines, REC_MAP, LEAGUE_ORDER, TEAM_MAP, leagueName } from '../data/index.js';
 import * as E from './engine.js';
 import { weekDistributionAdvice } from './narrative.js';
+import { isActionable } from './actionable.js';
 
 const DAY_MS = 86400000;
 
@@ -38,10 +39,7 @@ function byTs(a, b) {
  *   时间有效性属于「应用层对数据的信任边界」，不是算法本身的一部分。
  */
 function isPickable(m, nowTs) {
-  if (m.st !== 'sched' || m.tbd) return false;
-  const kick = E.ts(m.t);
-  if (isNaN(kick)) return false; // 时间不可解析 → 保守排除，不猜
-  return nowTs < kick + E.MATCH_DURATION_MS;
+  return isActionable(m, nowTs);
 }
 
 /* ------------------------------------------------------------------ */
@@ -136,12 +134,12 @@ export function computeWeek(nowTs, prefs, opts = {}) {
     .filter(m => dayDates.includes(E.owlDay(m.t)))
     .sort(byTs);
 
-  // 周窗口内"尚未结束"的场次才进算法；
-  // 已踢完但状态未同步的场次（本地单机 + 手动保鲜下很常见）不参与背包与雷区
-  const pickable = matches.filter(m => isPickable(m, nowTs));
+  // 周窗口内"尚未结束"的场次才进算法与风险带；
+  // 已踢完但状态未同步的场次（本地单机 + 手动保鲜下很常见）不参与背包、雷区与越线判断。
+  const actionableMatches = matches.filter(m => isPickable(m, nowTs));
 
   const plan = E.planWeek(
-    pickable,
+    actionableMatches,
     REC_MAP,
     rivalries,
     storylines,
@@ -151,16 +149,26 @@ export function computeWeek(nowTs, prefs, opts = {}) {
     { ...E.PRODUCT_PLAN_OPTS, nowTs }
   );
 
-  const mine = E.minefield(pickable, REC_MAP, rivalries, storylines, prefs.followedTeams, prefs.followedLeagues);
+  const mine = E.minefield(actionableMatches, REC_MAP, rivalries, storylines, prefs.followedTeams, prefs.followedLeagues);
   const days = buildWeekDays(weekStartStr, matches);
+  const actionableDays = buildWeekDays(weekStartStr, actionableMatches);
 
   // 周度建议只基于「还能安排」的场次。
   // 若沿用全周场次，会出现"建议本周注意 09-10 的重度档"而那天早已过去的情况 ——
-  // 背包看未来、建议却看全周，两者口径不一致会让人怀疑结论。柱状图仍展示全周（历史视角）。
-  const upcomingDays = buildWeekDays(weekStartStr, pickable);
-  const advice = weekDistributionAdvice(upcomingDays.filter(d => d.count > 0));
+  // 背包看未来、建议却看全周，两者口径不一致会让人怀疑结论。
+  const advice = weekDistributionAdvice(actionableDays.filter(d => d.count > 0));
 
-  return { weekStartStr, weekOffset, matches, plan, minefield: mine, days, advice };
+  return {
+    weekStartStr,
+    weekOffset,
+    matches,
+    actionableMatches,
+    plan,
+    minefield: mine,
+    days,
+    actionableDays,
+    advice
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -316,7 +324,7 @@ export function computeReplayPicks(nowTs, prefs, limit = 3) {
 export function liveCountAt(nowTs) {
   let n = 0;
   for (const m of getFixtures()) {
-    if (m.st !== 'sched') continue;
+    if (m.st !== 'sched' || m.tbd) continue;
     if (E.matchState(m, nowTs) === 'live') n++;
   }
   return n;
@@ -353,7 +361,43 @@ export function sameNightPicks(m, prefs, limit = 3, nowTs = Date.now()) {
     .slice(0, Math.max(0, limit));
 }
 
+/**
+ * 决策条的“更轻替代”候选池。
+ *
+ * 与同夜推荐不同：这里要回答的是“有没有更早结束的一场”，
+ * 所以先按结束时间筛/排，再把指数交给 decisionStrip 的 60% 门槛判断。
+ * 若沿用 sameNightPicks 的指数前 4，Hero 通常就是当晚最高分，早结束的场次天然被挤掉。
+ */
+export function sameNightLighterPicks(m, prefs, limit = 50, nowTs = Date.now()) {
+  const night = E.owlDay(m.t);
+  const currentEnd = E.ts(m.t) + E.MATCH_DURATION_MS;
+  if (!Number.isFinite(currentEnd)) return [];
+  return getFixtures()
+    .filter(
+      x =>
+        x.id !== m.id &&
+        !x.tbd &&
+        E.owlDay(x.t) === night &&
+        isPickable(x, nowTs)
+    )
+    .map(x => {
+      const { ev } = evalOne(x, prefs);
+      return {
+        m: x,
+        ev,
+        index: E.owlIndex(ev, x, E.PRODUCT_WEIGHTS),
+        tier: E.tierOf(x),
+        endTs: E.ts(x.t) + E.MATCH_DURATION_MS
+      };
+    })
+    .filter(x => x.endTs < currentEnd)
+    .sort((a, b) => a.endTs - b.endTs || b.index - a.index)
+    .slice(0, Math.max(0, limit));
+}
+
 export function stateOf(m, nowTs) {
+  // tbd 的 t 是整轮占位时间；它没有真实开球时刻，不能推导成 live/finished。
+  if (m?.tbd) return 'tbd';
   return E.matchState(m, nowTs);
 }
 
@@ -400,9 +444,14 @@ export function groupTonight(slice, nowTs) {
   const upcoming = [];
   const finished = [];
   for (const m of slice) {
+    // tbd 的 t 是整轮占位时间，到点不等于开球；它只能留在“未开赛/待定”侧。
+    if (m.tbd) {
+      upcoming.push(m);
+      continue;
+    }
     const s = E.matchState(m, nowTs);
     if (s === 'live') live.push(m);
-    else if (s === 'ended_pending' || s === 'done') finished.push(m);
+    else if (s === 'finished' || s === 'ended_pending') finished.push(m);
     else upcoming.push(m);
   }
   live.sort(byTs);

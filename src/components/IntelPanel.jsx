@@ -17,7 +17,7 @@ import { decisionStrip } from '../core/decision-strip.js';
 import { computeMatchStats } from '../core/stats.js';
 import { canRecheck, dataStateHint, dataStateTone, dataStateTrustLabel, matchDataState } from '../core/data-health.js';
 import { Button, Chip, Crest, Hint, Meta } from './atoms.jsx';
-import { VERDICT_COPY, REASON_COPY } from './DecisionStrip.jsx';
+import { VERDICT_COPY, reasonTextOf } from './DecisionStrip.jsx';
 import { PanelTab, Block } from './intel/primitives.jsx';
 import { FormSection, StandingsSection, SeasonSection, H2HSection } from './intel/StatsSections.jsx';
 import UpcomingFixtures from './UpcomingFixtures.jsx';
@@ -270,7 +270,7 @@ function Cell({ label, children }) {
 function VerdictCell({ decision }) {
   if (!decision) return null;
   const verdict = VERDICT_COPY[decision.verdict] || VERDICT_COPY.unknown;
-  const reason = REASON_COPY[decision.reason] || '';
+  const reason = reasonTextOf(decision);
   return (
     <Cell label="结论">
       <span className={`text-sm font-bold ${verdict.tone}`}>{verdict.label}</span>
@@ -576,8 +576,9 @@ function IdentitySection({ match, identity, fold = false }) {
 
 function AttributionSection({ ev, tier, index, storyB, followedB, leagueB, tbd = false }) {
   const tierStyle = TIER_MAP[tier.label] || TIER_MAP.S0;
+  const starPart = ev.star * 10;
   const rows = [
-    ['看点星级', `${ev.star} 星`, (ev.star / 3) * 100, 'bg-text-secondary'],
+    ['基础看点', starPart, Math.min(100, (starPart / 30) * 100), 'bg-text-secondary'],
     ['故事线加成', storyB, Math.min(100, (storyB / 16) * 100), 'bg-text-secondary'],
     ['主队加成', followedB, Math.min(100, (followedB / 16) * 100), 'bg-text-secondary'],
     ['联赛加成', leagueB, Math.min(100, (leagueB / 16) * 100), 'bg-text-secondary'],

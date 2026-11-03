@@ -7,6 +7,7 @@ import {
   markQueueWatched,
   normalizeQueue,
   removeFromQueue,
+  toggleQueue,
 } from '@core/queue.js';
 import type { Match } from '@/types';
 
@@ -24,9 +25,18 @@ type AddResult = {
   queue: WatchLaterItem[];
 };
 
+type ToggleResult = {
+  ok: boolean;
+  action: string;
+  state: string;
+  reason?: string;
+  queue: WatchLaterItem[];
+};
+
 type QueueStore = {
   items: WatchLaterItem[];
   add: (match: Match) => AddResult;
+  toggle: (match: Match) => ToggleResult;
   remove: (id: string) => void;
   markWatched: (id: string) => void;
 };
@@ -38,6 +48,11 @@ export const useWatchLaterStore = create<QueueStore>()(
       add: match => {
         const result = addToQueue(get().items, match) as AddResult;
         if (result.ok && result.added) set({ items: result.queue });
+        return result;
+      },
+      toggle: match => {
+        const result = toggleQueue(get().items, match) as ToggleResult;
+        if (result.ok) set({ items: result.queue });
         return result;
       },
       remove: id => set({ items: removeFromQueue(get().items, id) as WatchLaterItem[] }),

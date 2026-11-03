@@ -53,21 +53,33 @@ console.log('');
 console.log('一、结论判定');
 
 const highlight = decisionStrip({ match: heavyNight, index: 22, prefs: sleepOn, now: NOW });
-ok('指数 22 → 推荐', highlight.verdict === DECISION_VERDICT.RECOMMENDED, highlight.verdict);
-ok('推荐原因标为高光', highlight.reason === DECISION_REASON.HIGHLIGHT, highlight.reason);
+ok('指数 22 但低于底线 → 中性（不再值得熬）', highlight.verdict === DECISION_VERDICT.NEUTRAL, highlight.verdict);
+ok('低于底线原因可区分', highlight.reason === DECISION_REASON.BELOW_FLOOR, highlight.reason);
+ok('低于底线标记为 true', highlight.belowFloor === true);
+
+const earlyHighlight = decisionStrip({ match: earlyMatch, index: 22, prefs: sleepOn, now: NOW });
+ok('不越线的高指数 → 推荐', earlyHighlight.verdict === DECISION_VERDICT.RECOMMENDED, earlyHighlight.verdict);
+ok('推荐原因标为高光', earlyHighlight.reason === DECISION_REASON.HIGHLIGHT, earlyHighlight.reason);
+ok('不越线标记为 false', earlyHighlight.belowFloor === false);
 
 const neutral = decisionStrip({ match: heavyNight, index: 6, prefs: sleepOn, now: NOW });
-ok('指数 6 且无替代 → 中性', neutral.verdict === DECISION_VERDICT.NEUTRAL, neutral.verdict);
-ok('中性原因为低指数', neutral.reason === DECISION_REASON.LOW_INDEX, neutral.reason);
+ok('越线且无替代 → 中性', neutral.verdict === DECISION_VERDICT.NEUTRAL, neutral.verdict);
+ok('越线优先于低指数原因', neutral.reason === DECISION_REASON.BELOW_FLOOR, neutral.reason);
+const earlyNeutral = decisionStrip({ match: earlyMatch, index: 6, prefs: sleepOn, now: NOW });
+ok('不越线且低指数 → 中性', earlyNeutral.verdict === DECISION_VERDICT.NEUTRAL, earlyNeutral.verdict);
+ok('不越线中性原因为低指数', earlyNeutral.reason === DECISION_REASON.LOW_INDEX, earlyNeutral.reason);
 
 const followed = decisionStrip({ match: heavyNight, index: 3, prefs: sleepOn, now: NOW, followed: true });
-ok('关注球队 → 推荐', followed.verdict === DECISION_VERDICT.RECOMMENDED, followed.verdict);
-ok('关注优先于低指数', followed.reason === DECISION_REASON.FOLLOWED, followed.reason);
+ok('关注球队但越线 → 中性', followed.verdict === DECISION_VERDICT.NEUTRAL, followed.verdict);
+ok('关注球队越线仍保留关注标记', followed.followed === true && followed.reason === DECISION_REASON.BELOW_FLOOR, JSON.stringify({ r: followed.reason, f: followed.followed }));
+const followedEarly = decisionStrip({ match: earlyMatch, index: 3, prefs: sleepOn, now: NOW, followed: true });
+ok('不越线的关注球队 → 推荐', followedEarly.verdict === DECISION_VERDICT.RECOMMENDED, followedEarly.verdict);
+ok('关注优先于低指数', followedEarly.reason === DECISION_REASON.FOLLOWED, followedEarly.reason);
 
 const followedHighlight = decisionStrip({ match: heavyNight, index: 22, prefs: sleepOn, now: NOW, followed: true });
-ok('关注 + 高光仍只算推荐一次', followedHighlight.verdict === DECISION_VERDICT.RECOMMENDED);
+ok('关注 + 越线仍降级为中性', followedHighlight.verdict === DECISION_VERDICT.NEUTRAL);
 
-const missing = decisionStrip({ match: heavyNight, prefs: sleepOn, now: NOW });
+const missing = decisionStrip({ match: earlyMatch, prefs: sleepOn, now: NOW });
 ok('缺指数不崩且不误判为推荐', missing.verdict === DECISION_VERDICT.NEUTRAL, missing.verdict);
 ok('缺指数原因可区分', missing.reason === DECISION_REASON.MISSING_INDEX, missing.reason);
 
@@ -137,8 +149,8 @@ const noDeferBecauseHighlight = decisionStrip({
   now: NOW,
   alternatives: [altGood]
 });
-ok('高光场不被替代打脸', noDeferBecauseHighlight.verdict === DECISION_VERDICT.RECOMMENDED);
-ok('高光场不输出替代 id', noDeferBecauseHighlight.alternativeId === null);
+ok('高光但越线 → 中性，不再打“值得熬”', noDeferBecauseHighlight.verdict === DECISION_VERDICT.NEUTRAL, noDeferBecauseHighlight.verdict);
+ok('高光越线不输出替代 id', noDeferBecauseHighlight.alternativeId === null);
 
 const lightGap = decisionStrip({
   match: earlyMatch,
@@ -164,8 +176,9 @@ ok('但代价仍然如实给出', borderline.costMinutes === 30, String(borderli
 console.log('');
 console.log('五、防剧透');
 
+const doneEarly = match({ id: 'D1', st: 'done', sc: '2-1', t: at(2, '21:00') });
 const hidden = decisionStrip({
-  match: match({ id: 'D1', st: 'done', sc: '2-1' }),
+  match: doneEarly,
   index: 20,
   prefs: sleepOn,
   now: NOW,
@@ -176,7 +189,7 @@ ok('完赛未揭晓 → 结果需隐藏', hidden.resultHidden === true);
 ok('隐藏结果不影响结论', hidden.verdict === DECISION_VERDICT.RECOMMENDED);
 
 const shown = decisionStrip({
-  match: match({ id: 'D1', st: 'done', sc: '2-1' }),
+  match: doneEarly,
   index: 20,
   prefs: sleepOn,
   now: NOW,
@@ -186,7 +199,7 @@ const shown = decisionStrip({
 ok('已揭晓 → 结果可见', shown.resultHidden === false);
 
 const noSpoilerFree = decisionStrip({
-  match: match({ id: 'D1', st: 'done', sc: '2-1' }),
+  match: doneEarly,
   index: 20,
   prefs: sleepOn,
   now: NOW
@@ -200,7 +213,7 @@ const sample = decisionStrip({ match: heavyNight, index: 22, prefs: sleepOn, now
 const keys = Object.keys(sample).sort().join(',');
 ok(
   '返回字段固定',
-  keys === 'alternativeId,costMinutes,endAt,reason,remainingMinutes,resultHidden,sleepKnown,verdict',
+  keys === 'alternativeId,belowFloor,costMinutes,endAt,followed,reason,remainingMinutes,resultHidden,sleepKnown,verdict',
   keys
 );
 ok('不含任何中文文案', !JSON.stringify(sample).match(/[\u4e00-\u9fa5]/));

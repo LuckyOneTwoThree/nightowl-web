@@ -2,7 +2,7 @@
 
 - **状态**：P0 全部完成；P1-1 ~ P1-6 全部落地（P1-5 仅桌面端，理由见该段）；P2-1 移动端风险带、P2-2 Token 与排版收敛、P2-3 反馈与失败恢复、桌面周视图接 `core/week-risk.js`、移动端详情三级披露 已落地
 - **基线**：`v0.1.44`，HEAD `b02206a`，桌面测试 31 脚本 / 891 断言全绿
-- **当前实测**：37 脚本 / 1060 断言全绿；`build` 成功；`check:render` 77 项全过（含周时间轴 4 项）；`measure-layout` 三档（1120/1366/1440）无横向溢出；移动端 `npm run check`（`verify:shared` 0 漂移 + `audit:touch` 99 个控件全达标 + `typecheck`）+ `export:android` 通过
+- **当前实测**：37 脚本 / 1060 断言全绿；`build` 成功；`check:render` 77 项全过（含周时间轴 4 项）；`measure-layout` 三档（1120/1366/1440）完成尺寸测量（该脚本只输出尺寸，不是横向溢出断言）；移动端 `npm run check`（`verify:shared` 0 漂移 + `audit:touch` 99 个控件全达标 + `typecheck`）+ `export:android` 通过
 - **剩余**：真机验收（播放器静音与自动换线、通知权限、托盘与自启、风险带视觉、系统字号 1.3× 与 1.6×、外链失败提示）
 - **范围**：桌面端 `src/`、移动端 `mobile/src/`、共享 `src/core/`
 - **目标**：把「信息丰富的转播仪表盘」收敛为「在正确时机只回答一个问题的今晚决策台」
@@ -612,7 +612,7 @@ tools/check-render.mjs              桌面周视图接入 week-risk：新增 4 �
 | 共享算法  | `npm run test:all`                                 | 既有断言不回归，新纯函数测试通过             |
 | 桌面构建  | `npm run build`                                    | Vite 构建成功，无新 chunk 异常        |
 | 桌面渲染  | `env -u ELECTRON_RUN_AS_NODE npm run check:render` | 首屏、补看、核心视图、周时间轴无异常      |
-| 桌面布局  | `npx electron tools/measure-layout.mjs`            | 1120 / 1366 / 1440 无溢出、无滚动陷阱 |
+| 桌面布局  | `npx electron tools/measure-layout.mjs`            | 输出 1120 / 1366 / 1440 的尺寸；横向溢出需另行断言（该脚本当前只测量） |
 | 对比度   | `node tools/check-contrast.mjs`                    | 现有 token 对比度不降级              |
 | 移动共享层 | `cd mobile && npm run verify:shared`               | 0 漂移                         |
 | 移动触控  | `cd mobile && npm run audit:touch`                 | 99 个 Pressable 全部 ≥ 44dp     |
@@ -688,6 +688,8 @@ tools/check-render.mjs              桌面周视图接入 week-risk：新增 4 �
 ---
 
 ## 九、完成定义
+
+> 本清单是发布前人工验收表，不代表当前状态；自动验证结果见开头「当前实测」。
 
 - [ ] 6 种比赛状态都有可验收的真实界面表现。
 - [ ] 补看从任何入口加入/移除/恢复，状态一致。

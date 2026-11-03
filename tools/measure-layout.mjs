@@ -26,6 +26,7 @@ const sizes = [[1440, 900], [1366, 768], [1120, 700]];
 
 app.whenReady().then(async () => {
   if (!existsSync(resolve(DIST, 'index.html'))) { console.error('no dist'); app.exit(1); return; }
+  const failures = [];
   const silent = { log: () => {}, warn: () => {}, error: () => {} };
   const server = createServer(loadRules(), silent, { backgroundSync: false });
   const port = await new Promise((res) => server.listen(0, '127.0.0.1', () => res(server.address().port)));
@@ -62,11 +63,15 @@ app.whenReady().then(async () => {
           return {
             innerH: window.innerHeight, innerW: window.innerWidth,
             docH: document.documentElement.clientHeight,
+            docW: document.documentElement.clientWidth,
+            scrollW: document.documentElement.scrollWidth,
             headerH: header ? Math.round(header.getBoundingClientRect().height) : null,
             scrollables: list.slice(0, 5)
           };
         })()`);
-        console.log(`[${f.label}] ${w}×${h}  innerH=${m.innerH} docH=${m.docH} header=${m.headerH}`);
+        const overflow = m.scrollW - m.docW;
+        console.log(`[${f.label}] ${w}×${h}  innerH=${m.innerH} docH=${m.docH} header=${m.headerH} 横向溢出=${overflow}px`);
+        if (overflow > 1) failures.push(`${f.label} ${w}×${h} 横向溢出 ${overflow}px`);
         m.scrollables.forEach(s => console.log(`    滚动容器 h=${s.h} scrollH=${s.sh}  ${s.cls}`));
       } catch (e) {
         console.log('  !! 失败:', e.message);
@@ -75,6 +80,13 @@ app.whenReady().then(async () => {
     }
     if (win && !win.isDestroyed()) win.destroy();
     await sleep(300);
+  }
+  if (failures.length) {
+    console.error(`>> 发现 ${failures.length} 处横向溢出`);
+    failures.forEach(f => console.error(`   - ${f}`));
+    server.close();
+    app.exit(1);
+    return;
   }
   console.log('>> 全部测完');
   server.close();

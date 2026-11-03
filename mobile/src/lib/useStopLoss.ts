@@ -126,7 +126,7 @@ export function useStopLossPrompt(
   }, [now, context]);
 
   const sleep = useCallback(() => {
-    if (!context) return;
+    if (!context) return false;
     const result = addWatchLater(context.match);
     if (!result?.ok) {
       setNotice(
@@ -134,11 +134,12 @@ export function useStopLossPrompt(
           ? '补看队列已满，请先在「我的 → 明早补看」移除旧条目'
           : '加入补看失败'
       );
-      return;
+      return false;
     }
     writeState(context.night, sleepStopLoss(statesRef.current[context.night]) as NightState);
     setContext(null);
     setNotice(null);
+    return true;
   }, [context, addWatchLater, writeState]);
 
   const snooze = useCallback(() => {

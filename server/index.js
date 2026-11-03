@@ -177,6 +177,9 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
       log.warn?.(`[checks] 记录失败（不影响同步）: ${err?.message || err}`);
     }
   };
+  /** 至少有一个上游请求成功才把待录场次记为“已检查”；零请求/全失败不动新鲜度。 */
+  const hadSuccessfulRequest = result =>
+    Object.values(result?.bySource || {}).some(info => (info.ok || 0) > 0);
 
   /**
    * 来源校验：浏览器跨域请求不认「只绑 127.0.0.1」这个限制，
@@ -456,7 +459,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
             onlyMatchIds: matchId ? [matchId] : null,
             log
           });
-          recordPendingChecks(fixtures);
+          if (hadSuccessfulRequest(result)) recordPendingChecks(fixtures);
 
           let written = null;
           let nextFixtures = null;
@@ -619,7 +622,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
     let written = { ok: true, changed: 0, note: '没有需要写入的补丁' };
     let applied = false;
     let nextFixtures = fixtures;
-    recordPendingChecks(fixtures);
+    if (hadSuccessfulRequest(result)) recordPendingChecks(fixtures);
     if (result.patches.size > 0) {
       const { fixtures: next, changed } = applyPatches(fixtures, result.patches);
       const issues = validateFixtures(next);

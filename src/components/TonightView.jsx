@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { datePart, zhDate, weekdayOf } from '../core/format.js';
 import { narrativeOf } from '../core/narrative.js';
-import { evalOne, stateOf, heroTier, groupTonight, sameNightPicks } from '../core/owl.js';
+import { evalOne, stateOf, heroTier, groupTonight } from '../core/owl.js';
 import { decisionStrip } from '../core/decision-strip.js';
 import { storylines, teamName } from '../data/index.js';
 import HeroCard, { NoMatchCard } from './HeroCard.jsx';
@@ -9,6 +9,7 @@ import MatchRow from './MatchRow.jsx';
 import { Button, Chip, IndexTag, LiveDot, Meta, SectionLabel, SleepBadge } from './atoms.jsx';
 import { formatSleepHours } from '../core/sleep.js';
 import { queueStatusOf } from '../core/queue.js';
+import { sameNightLighterPicks } from '../core/owl.js';
 import { sleepLedgerFor } from './SleepNote.jsx';
 import { useScrollMemory } from '../hooks/useScrollMemory.js';
 
@@ -157,12 +158,13 @@ export default function TonightView({
 
   /**
    * 决策条（P1-1）：同一屏只出现一次，只给结论，不重算算法。
-   * 替代场次复用 sameNightPicks 的候选口径（已排除 tbd / 已开球 / 本场），
-   * 再剔除已经标记看过的，避免让人「换」到一场已经看掉的比赛。
+   * 替代场次用“同夜且更早结束”的候选池，而不是同夜推荐的前 4 ——
+   * 后者按指数排序，Hero 通常就是最高分，早结束的场次会被挤掉。
+   * 已标记看过的场次不进入替代，避免让人“换”到一场已经看掉的比赛。
    */
   const decision = useMemo(() => {
     if (!hero) return null;
-    const alternatives = sameNightPicks(hero.m, prefs, 4, now).filter(
+    const alternatives = sameNightLighterPicks(hero.m, prefs, 50, now).filter(
       alt => queueStatusOf(watchLater, alt.m.id) !== 'watched'
     );
     const strip = decisionStrip({

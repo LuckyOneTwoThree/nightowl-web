@@ -24,7 +24,7 @@ import {
   computeTonight,
   groupTonight,
   heroTier,
-  sameNightPicks,
+  sameNightLighterPicks,
   stateOf,
 } from '@core/owl.js';
 import { countdown as engineCountdown, sleepTier, ts } from '@core/engine.js';
@@ -509,7 +509,7 @@ function HeroCard({
 
   // 决策条：与桌面同一份语义，移动端折成 2×2；同一屏只出现一次。
   const decision = useMemo(() => {
-    const alternatives = sameNightPicks(hero.m, prefs, 4, now);
+    const alternatives = sameNightLighterPicks(hero.m, prefs, 50, now);
     const strip = decisionStrip({
       match: hero.m,
       index: hero.index,

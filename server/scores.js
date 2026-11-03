@@ -441,10 +441,12 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
 
   const { merged, conflicts } = mergeEvents(events, order);
   const { patches, stats, unmatched, incompleteScore } = planPatches(merged, fixtures, conflicts);
+  const attempted = Object.values(bySource || {}).some(info => (info.requests || 0) > 0);
 
   return {
     patches, merged, conflicts, unmatched, incompleteScore,
     bySource, errors,
+    attempted,
     stats,
     months: list,
     targets,

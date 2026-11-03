@@ -67,7 +67,7 @@ import { useNow } from '@/lib/useNow';
 import { useStopLossPrompt } from '@/lib/useStopLoss';
 import { useAppStore, useDataRev } from '@/state/app';
 import { useWatchLaterStore } from '@/state/queue';
-import { pendingQueue } from '@core/queue.js';
+import { queueStatusOf } from '@core/queue.js';
 import { usePrefs, type Prefs } from '@/state/prefs';
 import { toast } from '@/state/toast';
 import { Button } from '@/ui/Button';
@@ -80,7 +80,7 @@ import { StopLossBanner } from '@/components/StopLossBanner';
 import { EmptyState } from '@/ui/EmptyState';
 import { Fold } from '@/ui/Fold';
 import { FormDots } from '@/ui/FormDots';
-import { REASON_COPY, VERDICT_COPY } from '@/ui/DecisionStrip';
+import { reasonTextOf, VERDICT_COPY } from '@/ui/DecisionStrip';
 import { SegmentedControl } from '@/ui/SegmentedControl';
 import { SleepBadge } from '@/ui/SleepBadge';
 import { SleepNote } from '@/ui/SleepNote';
@@ -123,7 +123,7 @@ export default function MatchScreen() {
   const prefs = usePrefs();
   const rev = useDataRev();
   const watchLaterItems = useWatchLaterStore(state => state.items);
-  const addWatchLater = useWatchLaterStore(state => state.add);
+  const toggleWatchLater = useWatchLaterStore(state => state.toggle);
   const now = useNow(30_000);
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('intel');
@@ -140,7 +140,13 @@ export default function MatchScreen() {
     }, [])
   );
   const scoreVisible = prefs.spoilerFree ? revealedInStore : !forceHidden;
-  const queuedForMorning = pendingQueue(watchLaterItems).some(item => item.id === id);
+  const queueState = queueStatusOf(watchLaterItems, id);
+  const queueLabel =
+    queueState === 'pending'
+      ? '已入补看 · 取消'
+      : queueState === 'watched'
+        ? '已看过 · 重新补看'
+        : '明早补看';
   const handleRevealScore = () => {
     setForceHidden(false);
     if (id) revealMatch(id);
@@ -549,32 +555,37 @@ export default function MatchScreen() {
 
           <Pressable
             onPress={() => {
-              if (!queuedForMorning) {
-                const result = addWatchLater(match);
-                if (result.ok) {
-                  toast.success('已加入明早补看');
-                } else {
-                  toast.error(
-                    result.reason === 'full'
-                      ? '补看队列已满，请先在「我的」移除旧条目'
-                      : '加入补看失败'
-                  );
-                }
+              const result = toggleWatchLater(match);
+              if (!result.ok) {
+                toast.error(
+                  result.reason === 'full'
+                    ? '补看队列已满，请先在「我的」移除旧条目'
+                    : '更新补看失败'
+                );
+                return;
               }
+              if (result.action === 'added') toast.success('已加入明早补看');
+              else if (result.action === 'removed') toast.success('已移出明早补看');
+              else if (result.action === 'restored') toast.success('已恢复为待补看');
             }}
-            disabled={queuedForMorning}
             hitSlop={12}
             accessibilityRole="button"
-            accessibilityLabel={queuedForMorning ? '已加入明早补看' : '加入明早补看'}
+            accessibilityLabel={
+              queueState === 'pending'
+                ? '已加入明早补看，点击取消'
+                : queueState === 'watched'
+                  ? '已看过，点击恢复为待补看'
+                  : '加入明早补看'
+            }
             style={({ pressed }) => [
               styles.watchLaterButton,
-              queuedForMorning && styles.watchLaterButtonOn,
+              queueState === 'pending' && styles.watchLaterButtonOn,
               pressed && styles.pressed,
             ]}
           >
-            <Bookmark size={14} color={queuedForMorning ? colors.accent : colors.textSecondary} />
-            <Text style={[styles.watchLaterText, queuedForMorning && styles.watchLaterTextOn]}>
-              {queuedForMorning ? '已加入明早补看' : '明早补看'}
+            <Bookmark size={14} color={queueState === 'pending' ? colors.accent : colors.textSecondary} />
+            <Text style={[styles.watchLaterText, queueState === 'pending' && styles.watchLaterTextOn]}>
+              {queueLabel}
             </Text>
           </Pressable>
 
@@ -739,7 +750,7 @@ function IntelTab({
   const dataState = matchDataState(match, now);
   const trustTone = dataStateTone(dataState);
   const verdict = VERDICT_COPY[decision.verdict] ?? VERDICT_COPY.unknown;
-  const reason = REASON_COPY[decision.reason] ?? '';
+  const reason = reasonTextOf(decision);
 
   return (
     <View style={styles.tabGap}>
@@ -851,9 +862,9 @@ function IntelTab({
         {showAttribution ? (
           <>
             <AttributionRow
-              label="看点星级"
+              label="基础看点"
               value={`+${starPart.toFixed(1)}`}
-              ratio={starPart / 50}
+              ratio={starPart / 30}
               positive
             />
             <AttributionRow

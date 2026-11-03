@@ -62,6 +62,13 @@ export default function MeScreen() {
   const watchLaterItems = useWatchLaterStore(state => state.items);
   const removeWatchLater = useWatchLaterStore(state => state.remove);
   const markWatchLaterWatched = useWatchLaterStore(state => state.markWatched);
+  const toggleWatchLater = useWatchLaterStore(state => state.toggle);
+  const queueEntries = useMemo(
+    () => queueWithMatches(watchLaterItems, getFixtures(), Date.now(), { includeWatched: true }),
+    [watchLaterItems, rev]
+  );
+  const pendingQueueEntries = queueEntries.filter(entry => entry.item.status === 'pending');
+  const watchedQueueEntries = queueEntries.filter(entry => entry.item.status === 'watched');
   const revealedIds = useAppStore(state => state.revealedIds);
   const revealMatch = useAppStore(state => state.revealMatch);
   const now = useNow(60_000);
@@ -368,39 +375,80 @@ export default function MeScreen() {
       <View style={styles.section}>
         <SectionHeader title="明早补看" actionLabel="看摘要" onAction={digest.open} />
         <Card style={styles.cardGap}>
-          {queueWithMatches(watchLaterItems, getFixtures()).length === 0 ? (
+          {queueEntries.length === 0 ? (
             <Text style={styles.emptyText}>还没有加入补看。可在比赛详情点「明早补看」。</Text>
           ) : (
-            queueWithMatches(watchLaterItems, getFixtures()).map(({ item, match }) => (
-              <View key={item.id} style={styles.queueRow}>
-                <View style={styles.queueText}>
-                  <Text style={styles.queueTitle} numberOfLines={1}>
-                    {match ? `${teamName(match.h)} vs ${teamName(match.a)}` : '比赛数据已移除'}
-                  </Text>
-                  <Text style={styles.queueMeta}>
-                    {match ? `${leagueName(match.l)} · ${hm(match.t)}` : item.id}
-                  </Text>
-                </View>
-                {match ? (
-                  <Pressable
-                    onPress={() => markWatchLaterWatched(item.id)}
-                    hitSlop={16}
-                    accessibilityRole="button"
-                    accessibilityLabel="标记已看"
-                  >
-                    <Text style={styles.queueAction}>已看</Text>
-                  </Pressable>
-                ) : null}
-                <Pressable
-                  onPress={() => removeWatchLater(item.id)}
-                  hitSlop={16}
-                  accessibilityRole="button"
-                  accessibilityLabel="移除补看"
-                >
-                  <Text style={styles.queueRemove}>移除</Text>
-                </Pressable>
-              </View>
-            ))
+            <>
+              {pendingQueueEntries.length === 0 ? (
+                <Text style={styles.emptyText}>待看已清空，已看过的场次仍在下面。</Text>
+              ) : (
+                pendingQueueEntries.map(({ item, match }) => (
+                  <View key={item.id} style={styles.queueRow}>
+                    <View style={styles.queueText}>
+                      <Text style={styles.queueTitle} numberOfLines={1}>
+                        {match ? `${teamName(match.h)} vs ${teamName(match.a)}` : '比赛数据已移除'}
+                      </Text>
+                      <Text style={styles.queueMeta}>
+                        {match ? `${leagueName(match.l)} · ${hm(match.t)}` : item.id}
+                      </Text>
+                    </View>
+                    {match ? (
+                      <Pressable
+                        onPress={() => markWatchLaterWatched(item.id)}
+                        hitSlop={16}
+                        accessibilityRole="button"
+                        accessibilityLabel="标记已看"
+                      >
+                        <Text style={styles.queueAction}>已看</Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      onPress={() => removeWatchLater(item.id)}
+                      hitSlop={16}
+                      accessibilityRole="button"
+                      accessibilityLabel="移除补看"
+                    >
+                      <Text style={styles.queueRemove}>移除</Text>
+                    </Pressable>
+                  </View>
+                ))
+              )}
+              {watchedQueueEntries.length > 0 ? (
+                <>
+                  <Text style={styles.queueSectionLabel}>已看过 {watchedQueueEntries.length} 场</Text>
+                  {watchedQueueEntries.map(({ item, match }) => (
+                    <View key={item.id} style={styles.queueRow}>
+                      <View style={styles.queueText}>
+                        <Text style={styles.queueTitle} numberOfLines={1}>
+                          {match ? `${teamName(match.h)} vs ${teamName(match.a)}` : '比赛数据已移除'}
+                        </Text>
+                        <Text style={styles.queueMeta}>
+                          {match ? `${leagueName(match.l)} · ${hm(match.t)} · 已看过` : `${item.id} · 已看过`}
+                        </Text>
+                      </View>
+                      {match ? (
+                        <Pressable
+                          onPress={() => toggleWatchLater(match)}
+                          hitSlop={16}
+                          accessibilityRole="button"
+                          accessibilityLabel="恢复为待补看"
+                        >
+                          <Text style={styles.queueAction}>重新补看</Text>
+                        </Pressable>
+                      ) : null}
+                      <Pressable
+                        onPress={() => removeWatchLater(item.id)}
+                        hitSlop={16}
+                        accessibilityRole="button"
+                        accessibilityLabel="移除补看"
+                      >
+                        <Text style={styles.queueRemove}>移除</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </>
+              ) : null}
+            </>
           )}
         </Card>
       </View>
@@ -684,6 +732,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.sm,
+  },
+  queueSectionLabel: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    fontWeight: weight.label,
+    marginTop: spacing.sm,
   },
   queueText: { flex: 1, gap: 2 },
   queueTitle: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.title },

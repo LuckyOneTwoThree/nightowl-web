@@ -91,6 +91,13 @@ ok('待看列表不再包含已看', pendingQueue(watched, now).length === 0);
 const joined = queueWithMatches([fresh], [{ ...match, id: fresh.id }, other], now);
 ok('队列匹配本地比赛', joined.length === 1 && joined[0].match.id === fresh.id);
 ok('队列展示不带比分', joined.every(entry => !('sc' in entry.match)));
+const watchedFixtures = [{ ...match, id: fresh.id }, other];
+ok('默认展示不包含已看', queueWithMatches(watched, watchedFixtures, now).length === 0);
+const joinedWatched = queueWithMatches(watched, watchedFixtures, now, { includeWatched: true });
+ok('管理视图 includeWatched 包含已看',
+  joinedWatched.length === 1 && joinedWatched[0].item.status === 'watched' &&
+    joinedWatched[0].match.id === fresh.id,
+  JSON.stringify(joinedWatched.map(entry => entry.item.status)));
 
 console.log('');
 console.log('四、三态切换');

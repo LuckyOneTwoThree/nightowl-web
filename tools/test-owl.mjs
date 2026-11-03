@@ -20,6 +20,7 @@ import {
   liveCountAt,
   groupTonight,
   sameNightPicks,
+  sameNightLighterPicks,
   upcomingForTeams,
   rankReplayPicks
 } from '../src/core/owl.js';
@@ -90,11 +91,36 @@ console.log('一、今晚视图');
   ok('★ 分区总数与切片一致（不丢不重）', gTotal === t.slice.length, `${gTotal} vs ${t.slice.length}`);
   ok('★ live 组只含进行中的场次', g.live.every(m => stateOf(m, NOW) === 'live'),
     g.live.filter(m => stateOf(m, NOW) !== 'live').map(m => m.id).join('、'));
-  ok('★ finished 组只含已结束（done / ended_pending）',
-    g.finished.every(m => ['done', 'ended_pending'].includes(stateOf(m, NOW))));
-  ok('★ upcoming 组不含已结束场次', g.upcoming.every(m => !isEnded(m) && stateOf(m, NOW) !== 'live'));
+  ok('★ finished 组只含已结束（finished / ended_pending）',
+    g.finished.every(m => ['finished', 'ended_pending'].includes(stateOf(m, NOW))));
+  ok('★ upcoming 组不含已结束/进行中/待定场次',
+    g.upcoming.every(m => !m.tbd && !isEnded(m) && !['done', 'finished', 'live'].includes(stateOf(m, NOW))));
   const sortedByTs = arr => arr.every((m, i) => i === 0 || E.ts(arr[i - 1].t) <= E.ts(m.t));
   ok('三组内均按时间升序', sortedByTs(g.live) && sortedByTs(g.upcoming) && sortedByTs(g.finished));
+
+  // 合成切片：状态分区必须由 st 优先推导，不能把 done 当成未开赛。
+  // 旧实现把 matchState() 的 'finished' 写成 'done'，这组会直接抓到。
+  {
+    const AT = E.ts('2026-11-03T04:00');
+    const mk = (id, t, st = 'sched', extra = {}) => ({ id, l: 'PL', t, h: 'AAA', a: 'BBB', st, ...extra });
+    const slice = [
+      mk('syn-done', '2026-11-02T20:00', 'done', { sc: '2-0' }),
+      mk('syn-ended', '2026-11-03T01:00'),
+      mk('syn-live', '2026-11-03T03:00'),
+      mk('syn-future', '2026-11-03T22:00'),
+      mk('syn-tbd', '2026-11-04T02:00', 'sched', { tbd: true }),
+      mk('syn-pp', '2026-11-04T02:00', 'pp')
+    ];
+    const sg = groupTonight(slice, AT);
+    const ids = arr => arr.map(m => m.id).sort().join(',');
+    ok('合成切片：done 进 finished', sg.finished.some(m => m.id === 'syn-done'), ids(sg.finished));
+    ok('合成切片：过完赛时间仍 sched 进 finished', sg.finished.some(m => m.id === 'syn-ended'), ids(sg.finished));
+    ok('合成切片：进行中进 live', ids(sg.live) === 'syn-live', ids(sg.live));
+    ok('合成切片：未开赛进 upcoming', sg.upcoming.some(m => m.id === 'syn-future'), ids(sg.upcoming));
+    ok('合成切片：tbd 不进入 live/finished', ![...sg.live, ...sg.finished].some(m => m.tbd), ids([...sg.live, ...sg.finished]));
+    ok('合成切片：tbd/pp 归 upcoming', ['syn-tbd', 'syn-pp'].every(id => sg.upcoming.some(m => m.id === id)), ids(sg.upcoming));
+    ok('合成切片：分区不丢不重', sg.live.length + sg.upcoming.length + sg.finished.length === slice.length);
+  }
 }
 
 /* ================================================================== */
@@ -205,12 +231,24 @@ console.log('五、状态推导与实时计数');
   const live = liveCountAt(NOW);
   ok('进行中计数为非负整数', Number.isInteger(live) && live >= 0, `live=${live}`);
 
-  // 同一时刻，liveCountAt 应与逐场推导一致
+  // 同一时刻，liveCountAt 应与逐场推导一致（tbd 没有真实开球时间，不能算 live）
   let manual = 0;
   for (const m of (await import('../src/data/index.js')).fixtures) {
-    if (m.st === 'sched' && E.matchState(m, NOW) === 'live') manual++;
+    if (m.st === 'sched' && !m.tbd && E.matchState(m, NOW) === 'live') manual++;
   }
   ok('★ liveCountAt 与逐场推导结果一致', live === manual, `${live} vs ${manual}`);
+
+  // tbd 占位时间一到：不能变成进行中，也不能驱动顶栏直播计数。
+  {
+    const TBD_NOW = E.ts('2027-03-15T02:30');
+    const t = computeTonight(TBD_NOW, prefs);
+    const g = groupTonight(t.slice, TBD_NOW);
+    ok('★ tbd 不进入 live 分区', g.live.every(m => !m.tbd),
+      g.live.filter(m => m.tbd).map(m => m.id).slice(0, 3).join('、'));
+    ok('★ tbd 占位时间不驱动 liveCountAt', liveCountAt(TBD_NOW) === 0, `liveCountAt=${liveCountAt(TBD_NOW)}`);
+    ok('★ tbd 的显示状态不是 live', stateOf(t.slice.find(m => m.tbd), TBD_NOW) === 'tbd',
+      stateOf(t.slice.find(m => m.tbd), TBD_NOW));
+  }
 }
 
 console.log('');
@@ -236,6 +274,25 @@ console.log('六、右栏模块区（后续赛程 / 同夜推荐）');
   ok('★ 同夜推荐按夜猫指数降序', picks.every((p, i) => i === 0 || picks[i - 1].index >= p.index));
   ok('同夜推荐不超过 3 条', picks.length <= 3);
   ok('同夜推荐与锚点同一夜猫日', picks.every(p => E.owlDay(p.m.t) === E.owlDay(anchor.t)));
+
+  // 决策条替代池：必须按“更早结束”筛，而不是按指数前 N 截断
+  const lighterAnchor = fixtures.find(m => {
+    if (m.st !== 'sched' || m.tbd || E.ts(m.t) <= NOW) return false;
+    const end = E.ts(m.t) + E.MATCH_DURATION_MS;
+    return fixtures.some(x =>
+      x.id !== m.id && x.st === 'sched' && !x.tbd && E.owlDay(x.t) === E.owlDay(m.t) &&
+      E.ts(x.t) + E.MATCH_DURATION_MS < end && NOW < E.ts(x.t) + E.MATCH_DURATION_MS);
+  });
+  if (!lighterAnchor) {
+    ok('（跳过：当前数据没有同夜更早的可行动样本）', true);
+  } else {
+    const anchorEnd = E.ts(lighterAnchor.t) + E.MATCH_DURATION_MS;
+    const lighter = sameNightLighterPicks(lighterAnchor, prefs, 20, NOW);
+    ok('★ 更轻候选全部早于锚点结束', lighter.every(p => E.ts(p.m.t) + E.MATCH_DURATION_MS < anchorEnd),
+      lighter.filter(p => E.ts(p.m.t) + E.MATCH_DURATION_MS >= anchorEnd).map(p => p.m.id).join('、'));
+    ok('★ 更轻候选按结束时间升序', lighter.every((p, i) => i === 0 || (E.ts(lighter[i - 1].m.t) + E.MATCH_DURATION_MS) <= (E.ts(p.m.t) + E.MATCH_DURATION_MS)));
+    ok('更轻候选同夜且可行动', lighter.every(p => E.owlDay(p.m.t) === E.owlDay(lighterAnchor.t) && p.m.st === 'sched' && !p.m.tbd));
+  }
 }
 
 console.log('');

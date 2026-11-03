@@ -40,6 +40,7 @@ type WeekData = {
   };
   minefield: Array<{ m: Match; ev: Ev; reason: string }>;
   days: Array<{ date: string; count: number; cost: number; matches: Match[] }>;
+  actionableDays: Array<{ date: string; count: number; cost: number; matches: Match[] }>;
   advice: string;
 };
 
@@ -94,7 +95,7 @@ export default function PlanScreen() {
     [week, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepMinHours, now]
   );
 
-  const hasAnyMatches = week.days.some(day => day.count > 0);
+  const hasAnyMatches = week.actionableDays.some(day => day.count > 0);
 
   /* 点某一晚 → 原地只看那晚：精选 / 零成本 / 雷区 / 备选一起收窄。
      再点一次同一天取消。筛选是视图层的事，不动预算与背包结果。 */
@@ -118,7 +119,7 @@ export default function PlanScreen() {
    */
   const nightExtras = useMemo(() => {
     if (!selectedDay) return [];
-    const day = week.days.find(d => d.date === selectedDay);
+    const day = week.actionableDays.find(d => d.date === selectedDay);
     if (!day) return [];
     const shown = new Set([
       ...bestShown.map(e => e.m.id),
@@ -127,7 +128,7 @@ export default function PlanScreen() {
       ...mineShown.map(item => item.m.id)
     ]);
     return day.matches.filter(m => !shown.has(m.id));
-  }, [selectedDay, week.days, bestShown, zeroShown, altShown, mineShown]);
+  }, [selectedDay, week.actionableDays, bestShown, zeroShown, altShown, mineShown]);
   const kickoffGroupByMatch = useMemo(() => {
     const map = new Map<string, KickoffGroup>();
     for (const group of plan.kickoffGroups || []) {
@@ -141,6 +142,8 @@ export default function PlanScreen() {
   const periodLabel =
     weekOffset === 0 ? '本周规划' : weekOffset > 0 ? '未来周规划' : '历史周规划';
   const weekWord = weekOffset === 0 ? '本周' : '该周';
+  /** 风险是前瞻语义：历史周只保留赛程事实，不显示风险带/风险建议。 */
+  const showRisk = weekOffset >= 0;
 
   const openMatch = (id: string) =>
     router.push({ pathname: '/match/[id]', params: { id } });
@@ -241,49 +244,58 @@ export default function PlanScreen() {
         </Text>
       </Card>
 
-      <View style={styles.section}>
-        <SectionHeader title={`${weekWord}风险带`} />
-        <Card tone="panel">
-          <WeekRiskBand
-            risk={risk}
-            selectedDate={selectedDay}
-            onSelectDate={date => {
-              void Haptics.selectionAsync();
-              animateLayout();
-              setSelectedDay(date);
-              if (date) {
-                setShowZero(false);
-                setShowMinefield(false);
-              }
-            }}
-            weekWord={weekWord}
-          />
-        </Card>
-        {selectedDay ? (
-          <View style={styles.filterBar}>
-            <Text style={styles.filterText} numberOfLines={1}>
-              只看 {activeBand ? `周${WEEKDAYS[activeBand.weekday]} · ` : ''}
-              {zhDate(selectedDay)}
-              {activeBand && activeBand.count > 0 ? ` · ${activeBand.count} 场` : ''}
-            </Text>
-            <Pressable
-              onPress={() => {
+      {showRisk ? (
+        <View style={styles.section}>
+          <SectionHeader title={`${weekWord}风险带`} />
+          <Card tone="panel">
+            <WeekRiskBand
+              risk={risk}
+              selectedDate={selectedDay}
+              onSelectDate={date => {
                 void Haptics.selectionAsync();
                 animateLayout();
-                setSelectedDay(null);
+                setSelectedDay(date);
+                if (date) {
+                  setShowZero(false);
+                  setShowMinefield(false);
+                }
               }}
-              hitSlop={13}
-              accessibilityRole="button"
-              accessibilityLabel="清除夜晚筛选"
-              style={({ pressed }) => [styles.filterClear, pressed && styles.pressed]}
-            >
-              <X size={13} color={colors.textMuted} />
-              <Text style={styles.filterClearText}>清除</Text>
-            </Pressable>
-          </View>
-        ) : null}
-        {week.advice ? <Text style={styles.advice}>{week.advice}</Text> : null}
-      </View>
+              weekWord={weekWord}
+            />
+          </Card>
+          {selectedDay ? (
+            <View style={styles.filterBar}>
+              <Text style={styles.filterText} numberOfLines={1}>
+                只看 {activeBand ? `周${WEEKDAYS[activeBand.weekday]} · ` : ''}
+                {zhDate(selectedDay)}
+                {activeBand && activeBand.count > 0 ? ` · ${activeBand.count} 场` : ''}
+              </Text>
+              <Pressable
+                onPress={() => {
+                  void Haptics.selectionAsync();
+                  animateLayout();
+                  setSelectedDay(null);
+                }}
+                hitSlop={13}
+                accessibilityRole="button"
+                accessibilityLabel="清除夜晚筛选"
+                style={({ pressed }) => [styles.filterClear, pressed && styles.pressed]}
+              >
+                <X size={13} color={colors.textMuted} />
+                <Text style={styles.filterClearText}>清除</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {week.advice ? <Text style={styles.advice}>{week.advice}</Text> : null}
+        </View>
+      ) : (
+        <View style={styles.section}>
+          <SectionHeader title="历史周" />
+          <Card tone="panel">
+            <Text style={styles.hint}>历史周只保留赛程记录，不提供风险判断；风险带只回答接下来还要熬到几点。</Text>
+          </Card>
+        </View>
+      )}
 
       <View style={styles.section}>
         <SectionHeader
@@ -306,7 +318,9 @@ export default function PlanScreen() {
           <Card tone="panel" style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>
               {!hasAnyMatches
-                ? `${weekWord}暂无比赛`
+                ? risk.tbdCount > 0
+                  ? `${weekWord}暂无已定场次，${risk.tbdCount} 场时间待定`
+                  : `${weekWord}暂无比赛`
                 : selectedDay
                   ? `${zhDate(selectedDay)}没有排进精选的场次`
                   : plan.evs.length === 0

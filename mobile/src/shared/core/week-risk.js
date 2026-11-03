@@ -13,7 +13,8 @@
  *   · 不产出任何中文文案，只出语义（weekday 序号、overMinutes、clock），文案归各端
  */
 
-import { MATCH_DURATION_MS, owlDay, ts } from './engine.js';
+import { MATCH_DURATION_MS, owlDay, tierOf, ts } from './engine.js';
+import { isActionable } from './actionable.js';
 import { normalizeSleepProfile, parseClockTime } from './sleep.js';
 
 const DAY_MIN = 1440;
@@ -127,13 +128,17 @@ export function weekRiskBands(week, profile, now) {
   const floor = sleepFloorOf(profile);
   const nowTs = Number.isFinite(now) ? Number(now) : null;
 
-  // 与 buildWeekDays 同口径：只算已定开球时间、未开赛的场次。
-  // tbd 单独计数 —— 它们不属于任何一晚。
+  // 与 computeWeek 的可行动口径同源：只看未开赛、时间已定、且尚未过完赛时间的场次。
+  // 已结束但状态仍为 sched 的「假 sched」不再是风险；正在直播的仍计入（它占用接下来的睡眠）。
+  // now 不传时保留全量 non-tbd 场次，供纯坐标/合成测试使用。
   const scheduled = all.filter(m => m && typeof m.t === 'string' && m.st === 'sched');
   const tbdCount = scheduled.filter(m => m.tbd).length;
+  const actionable = nowTs == null
+    ? scheduled.filter(m => !m.tbd)
+    : scheduled.filter(m => isActionable(m, nowTs));
 
   const bands = days.map((day, index) => {
-    const known = scheduled.filter(m => !m.tbd && Number.isFinite(ts(m.t)) && owlDay(m.t) === day.date);
+    const known = actionable.filter(m => Number.isFinite(ts(m.t)) && owlDay(m.t) === day.date);
 
     const segments = known
       .map(m => {
@@ -152,11 +157,12 @@ export function weekRiskBands(week, profile, now) {
 
     const overMinutes =
       latest && floor ? Math.max(0, latest.endMin - floor.nightMin) : 0;
+    const cost = known.reduce((max, m) => Math.max(max, tierOf(m).cost), 0);
 
     return {
       date: day.date,
       weekday: index,
-      cost: Number.isFinite(day.cost) ? day.cost : 0,
+      cost,
       count: segments.length,
       segments,
       firstStartMin: segments.length ? segments[0].startMin : null,

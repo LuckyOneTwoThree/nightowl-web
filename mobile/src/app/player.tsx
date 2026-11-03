@@ -21,6 +21,10 @@ import { autoSwitchDecision } from '@core/line-switch.js';
 import { teamName } from '@data/index.js';
 
 import { usePlayerStore } from '@/state/player';
+import { usePrefs } from '@/state/prefs';
+import { StopLossBanner } from '@/components/StopLossBanner';
+import { useStopLossPrompt } from '@/lib/useStopLoss';
+import { useNow } from '@/lib/useNow';
 import { durations } from '@/ui/motion';
 import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 import type { Match } from '@/types';
@@ -76,6 +80,9 @@ function PlayerView({
   onBack: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const prefs = usePrefs();
+  const now = useNow(30_000);
+  const stopLoss = useStopLossPrompt(match, prefs, now, true);
   const [panelOpen, setPanelOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [hudVisible, setHudVisible] = useState(true);
@@ -303,6 +310,22 @@ function PlayerView({
             })}
           </ScrollView>
         </View>
+      ) : null}
+
+      {/* 播放器是独立路由：首页/详情的止损提示在这里看不到，必须在播放页再挂一次。 */}
+      {!panelOpen ? (
+        <StopLossBanner
+          context={stopLoss.context}
+          notice={stopLoss.notice}
+          onSnooze={stopLoss.snooze}
+          onIgnore={stopLoss.ignore}
+          onSleep={() => {
+            if (stopLoss.sleep()) {
+              player.pause();
+              setNotice('已停止播放，明早补看');
+            }
+          }}
+        />
       ) : null}
     </View>
   );

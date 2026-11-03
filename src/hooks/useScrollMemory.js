@@ -21,8 +21,10 @@ export function useScrollMemory(key) {
   const ref = useRef(null);
   const touched = useRef(false);
 
-  // 挂载后恢复（切视图会把容器 unmount/remount，滚动位置本来会丢）
+  // 挂载或换 key 时恢复；touched 必须随 key 重置，否则上一个 key 的滚动会让
+  // 新 key 的下一帧修正被跳过，内容晚到时位置只恢复一半。
   useLayoutEffect(() => {
+    touched.current = false;
     const el = ref.current;
     if (!el) return undefined;
     const saved = memory.get(key);

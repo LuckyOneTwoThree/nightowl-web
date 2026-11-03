@@ -418,6 +418,8 @@ export default function PlayerStage({
    * 只在组件挂载时读一次 —— 它属于"上一次运行留下的经验"，本会话内的更新走 state。
    */
   const [lineMemory, setLineMemory] = useState(() => loadLineMemory());
+  const lineMemoryRef = useRef(lineMemory);
+  lineMemoryRef.current = lineMemory;
   const [loadingLines, setLoadingLines] = useState(false);
   const [activeLineId, setActiveLineId] = useState(null);
   const [liveInfo, setLiveInfo] = useState(null);
@@ -440,11 +442,10 @@ export default function PlayerStage({
   /** 记录一次起播结果；只有真正开始播放才算成功（见 Player 的 onFirstPlay） */
   const rememberLine = useCallback((line, ok, reason) => {
     if (!line) return;
-    setLineMemory(prev => {
-      const next = recordLineAttempt(prev, line, { ok, reason });
-      saveLineMemory(next);
-      return next;
-    });
+    const next = recordLineAttempt(lineMemoryRef.current, line, { ok, reason });
+    lineMemoryRef.current = next;
+    setLineMemory(next);
+    saveLineMemory(next);
   }, []);
 
   /** 真正开始播放才算这条线路成功（由 Player 的 video:playing 回调触发） */
@@ -454,7 +455,10 @@ export default function PlayerStage({
 
   // 用户在设置里清除线路记忆后，本组件（常驻挂载）要立刻按默认顺序重排
   useEffect(() => {
-    const onCleared = () => setLineMemory({});
+    const onCleared = () => {
+      lineMemoryRef.current = {};
+      setLineMemory({});
+    };
     window.addEventListener(LINE_MEMORY_CLEARED_EVENT, onCleared);
     return () => window.removeEventListener(LINE_MEMORY_CLEARED_EVENT, onCleared);
   }, []);
@@ -515,7 +519,10 @@ export default function PlayerStage({
    * 必须定义在下面的 useEffect 之前并进入其依赖数组：原实现定义在 effect 之后，
    * 靠「effect 回调异步执行时 const 已初始化」侥幸可用，属于隐式闭包依赖。
    */
+  const selectSeqRef = useRef(0);
   const selectLine = useCallback(async line => {
+    const seq = ++selectSeqRef.current;
+    const currentMatchId = matchRef.current?.id || null;
     setActiveLineId(line.id);
     setError(null);
 
@@ -527,9 +534,14 @@ export default function PlayerStage({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ host: u.hostname })
         });
+        // 慢 allow 返回时用户可能已换线或切场：后到的旧请求不能覆盖新选择
+        if (seq !== selectSeqRef.current) return;
+        if ((matchRef.current?.id || null) !== currentMatchId) return;
         setStreamUrl(line.url);
         setStreamKind(line.kind || null);
       } catch (e) {
+        if (seq !== selectSeqRef.current) return;
+        if ((matchRef.current?.id || null) !== currentMatchId) return;
         setError(`起播失败：${e.message}`);
       }
     } else if (line.url) {
