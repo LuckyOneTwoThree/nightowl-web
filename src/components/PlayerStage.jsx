@@ -1,4 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, memo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
+import { useMediaQuery } from '../hooks/useMediaQuery.js';
 import { shouldHideScore } from '../core/reveal.js';
 import { datePart, liveMinute, humanCountdown } from '../core/format.js';
 import { teamName, leagueName } from '../data/index.js';
@@ -20,6 +22,8 @@ import {
   IconCalendar,
   IconCheck,
   IconChevronDown,
+  IconChevronLeft,
+  IconChevronRight,
   IconChevronUp,
   IconExternal,
   IconKeyboard,
@@ -318,7 +322,8 @@ export default function PlayerStage({
   onReveal,
   notifyLiveEvents = true,
   underVideo = null,
-  excludedIds = null
+  excludedIds = null,
+  stopRequest = 0
 }) {
   // 秒级刷新只存在于本组件（倒计时文本与进行中的分钟数）。
   // 若由 App 供秒级 now，每秒重渲染会波及整个视图树 —— 赛程视图会每秒
@@ -345,6 +350,44 @@ export default function PlayerStage({
   const [streamUrl, setStreamUrl] = useState(null);
   const [streamKind, setStreamKind] = useState(null);
   const [error, setError] = useState(null);
+
+  /**
+   * 无视频流时的侧轨折叠（P1-2）
+   *
+   * 赛前状态下一整列 315px 的线路栏会占掉近三分之一的横向空间，而此刻
+   * 用户真正要决定的是「看不看」，不是「用哪条线」。折叠成 52px 状态轨，
+   * 保留线路数量与接入状态（不隐藏「当前没有可播线路」这种真实信息）。
+   * 只在 ≥1280 生效：更窄时整栏本来就纵向铺在画面下方，再折成竖轨只会更难按。
+   */
+  const wideStage = useMediaQuery('(min-width: 1280px)');
+  const [railCollapsed, setRailCollapsed] = useState(true);
+  const railExpandRef = useRef(null);
+
+  /* 这三个判断只依赖 state 与 streamUrl，提前到早退之前算，
+     好让「是否有侧轨」参与渲染决策时不违反 hooks 调用顺序。 */
+  const live = state === 'live';
+  const finished = state === 'finished' || state === 'ended_pending';
+  // 有长回顾/直播面板时，把情报放进主列，填满画面下方的空间；
+  // 赛前短侧栏仍保持「视频 + 侧栏」的广播台布局。
+  const stackIntel = finished || (live && !streamUrl);
+  const railMode = wideStage && !streamUrl && railCollapsed && !stackIntel;
+
+  // 开播即展开：播放期间线路、画质、停止都在侧栏里，52px 会藏掉操作。
+  useEffect(() => {
+    if (streamUrl) setRailCollapsed(false);
+  }, [streamUrl]);
+
+  // 「查看线路」这类页内定位落到折叠侧轨上时，先展开再高亮。
+  useEffect(() => {
+    const onLocate = event => {
+      if (event.detail?.id !== 'match-lines') return;
+      if (!railMode) return;
+      // 同步刷新：高亮 class 由 DOM 直接添加，晚一帧会被 React 重渲染抹掉。
+      flushSync(() => setRailCollapsed(false));
+    };
+    window.addEventListener('nightowl:locate', onLocate);
+    return () => window.removeEventListener('nightowl:locate', onLocate);
+  }, [railMode]);
 
   // 广播行（赛前 / 有视频直播）里右栏高度跟随画面卡片：
   // 内容短于画面时拉伸补齐，长于画面时栏内滚动，避免任一侧露出大片空白。
@@ -451,6 +494,19 @@ export default function PlayerStage({
     setActiveLineId(null);
     setError(null);
   }, []);
+
+  /**
+   * 外部受控停止：止损「现在睡」需要真正切断应用内播放，而不是只把比赛加入补看。
+   * 用请求 ID 而非布尔值/计数器，避免 PlayerStage 重新挂载或切场时误触发。
+   */
+  const lastStopRequestRef = useRef(stopRequest);
+  useEffect(() => {
+    if (stopRequest === lastStopRequestRef.current) return;
+    lastStopRequestRef.current = stopRequest;
+    stopPlayback();
+    setTheaterMode(false);
+    setTheaterLinesExpanded(false);
+  }, [stopRequest, stopPlayback]);
 
   /**
    * 选中线路切换播放
@@ -857,16 +913,11 @@ export default function PlayerStage({
   }
 
   const kickTs = ts(match.t);
-  const live = state === 'live';
   const minute = live ? liveMinute(kickTs, now) : 0;
-  const finished = state === 'finished' || state === 'ended_pending';
   const postponed = state === 'pp';
   const diffMs = kickTs - now;
   const isNearKickoff = state === 'sched' && diffMs <= 30 * 60 * 1000 && diffMs >= 0;
   const directLines = orderedLines.filter(l => l.isDirect && l.url);
-  // 有长回顾/直播面板时，把情报放进主列，填满画面下方的空间；
-  // 赛前短侧栏仍保持「视频 + 侧栏」的广播台布局。
-  const stackIntel = finished || (live && !streamUrl);
 
   /* ---------------- 状态提示：按真实状态说话，不写死排期文案 ---------------- */
   const notices = [];
@@ -992,12 +1043,38 @@ export default function PlayerStage({
   /* ---------------- 右侧协同栏 ---------------- */
   // 广播行：栏高钉在画面卡片高度（短则拉伸、长则栏内滚动）；
   // 堆叠分支：栏随主列等高拉伸，不做上限。
+  // 赛前无流且已折叠时收成 52px 状态轨（仅 ≥1280），播放/终场一律回到整栏。
+  const expandRail = () => {
+    setRailCollapsed(false);
+    requestAnimationFrame(() => {
+      document.getElementById('match-lines')?.focus?.({ preventScroll: true });
+    });
+  };
+  const collapseRail = () => {
+    setRailCollapsed(true);
+    requestAnimationFrame(() => railExpandRef.current?.focus?.({ preventScroll: true }));
+  };
+
+  const lineStatusText = live
+    ? orderedLines.length > 0
+      ? `直播线路 ${orderedLines.length} 条`
+      : '直播线路：当前无可用'
+    : postponed
+      ? '直播线路：比赛已延期'
+      : isNearKickoff
+        ? '直播线路：信号接入中'
+        : orderedLines.length > 0
+          ? `直播线路 ${orderedLines.length} 条`
+          : '直播线路：待开播';
+
   const ControlSidebar = (
     <div
-      className={`broadcast-sheen flex w-full shrink-0 flex-col rounded-2xl border border-line-hairline bg-surface-panel/75 p-3 shadow-card backdrop-blur-xl transition-all xl:w-[315px] xl:p-4 min-h-0 ${
-        stackIntel ? '' : 'xl:max-h-[var(--rail-h)] xl:overflow-y-auto xl:overscroll-contain scrollbar-thin'
+      className={`broadcast-sheen flex w-full shrink-0 flex-col rounded-2xl border border-line-hairline bg-surface-panel/75 shadow-card backdrop-blur-xl transition-all min-h-0 ${
+        railMode ? 'items-center gap-1.5 p-1.5 xl:w-[52px] xl:p-1.5' : 'p-3 xl:w-[315px] xl:p-4'
+      } ${
+        stackIntel || railMode ? '' : 'xl:max-h-[var(--rail-h)] xl:overflow-y-auto xl:overscroll-contain scrollbar-thin'
       }`}
-      style={stackIntel ? undefined : { '--rail-h': videoCardH ? `${videoCardH}px` : 'none' }}
+      style={stackIntel || railMode ? undefined : { '--rail-h': videoCardH ? `${videoCardH}px` : 'none' }}
     >
       {live && (
         <LiveMatchPanel
@@ -1018,68 +1095,136 @@ export default function PlayerStage({
             id="match-lines"
             tabIndex={-1}
             aria-label="直播线路"
-            className="flex scroll-mt-4 items-center justify-between gap-2 shrink-0 focus:outline-none"
+            className={
+              railMode
+                ? 'flex w-full shrink-0 scroll-mt-4 flex-col items-center gap-1.5 focus:outline-none'
+                : 'flex scroll-mt-4 items-center justify-between gap-2 shrink-0 focus:outline-none'
+            }
           >
-            <span className="inline-flex items-center gap-2">
-              <IconLive className={live ? 'text-live' : 'text-text-faint'} />
-              <span className="text-xs font-medium text-text-primary">直播线路</span>
-              <Meta num>
-                {orderedLines.length > 0
-                  ? `${orderedLines.length} 条`
-                  : live
-                    ? '无可用'
-                    : postponed
-                      ? '已延期'
-                      : isNearKickoff
-                        ? '接入中'
-                        : '待开播'}
-              </Meta>
-            </span>
-            <div className="flex items-center gap-1">
-              {directLines.length > 1 && (
-                <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
-                  换线
-                </Button>
-              )}
-              <IconButton
-                label={loadingLines ? '正在检测线路…' : '刷新线路'}
-                onClick={() => fetchLines({ reset: false, autoPlay: true })}
-                disabled={loadingLines}
-              >
-                <IconReset className={loadingLines ? 'animate-spin text-accent' : ''} size={12} />
-              </IconButton>
-            </div>
+            {railMode ? (
+              <>
+                <span
+                  title={lineStatusText}
+                  aria-label={lineStatusText}
+                  className="inline-flex flex-col items-center gap-0.5"
+                >
+                  <IconLive className={live ? 'text-live' : 'text-text-faint'} />
+                  <span className="font-num text-2xs leading-none tabular-nums text-text-muted">
+                    {orderedLines.length > 0 ? orderedLines.length : '—'}
+                  </span>
+                </span>
+                <IconButton
+                  label={loadingLines ? '正在检测线路…' : '刷新线路'}
+                  onClick={() => fetchLines({ reset: false, autoPlay: true })}
+                  disabled={loadingLines}
+                >
+                  <IconReset className={loadingLines ? 'animate-spin text-accent' : ''} size={12} />
+                </IconButton>
+                {sources[0] ? (
+                  <a
+                    href={sourceUrlFor(sources[0], match, { replay: false })}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    title={`官方平台：${sources[0].name}`}
+                    aria-label={`官方平台：${sources[0].name}`}
+                    onClick={e => {
+                      const url = sourceUrlFor(sources[0], match, { replay: false });
+                      if (window.desktop?.openExternal && url) {
+                        e.preventDefault();
+                        window.desktop.openExternal(url);
+                      }
+                    }}
+                    className="no-drag inline-flex h-6 w-6 items-center justify-center rounded-md border border-line-hairline bg-surface-raised/60 text-text-secondary transition-colors hover:border-line-control hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+                  >
+                    <IconExternal size={12} />
+                  </a>
+                ) : null}
+                <IconButton
+                  ref={railExpandRef}
+                  label="展开线路与官方平台"
+                  aria-expanded={false}
+                  onClick={expandRail}
+                >
+                  <IconChevronLeft size={13} />
+                </IconButton>
+              </>
+            ) : (
+              <>
+                <span className="inline-flex items-center gap-2">
+                  <IconLive className={live ? 'text-live' : 'text-text-faint'} />
+                  <span className="text-xs font-medium text-text-primary">直播线路</span>
+                  <Meta num>
+                    {orderedLines.length > 0
+                      ? `${orderedLines.length} 条`
+                      : live
+                        ? '无可用'
+                        : postponed
+                          ? '已延期'
+                          : isNearKickoff
+                            ? '接入中'
+                            : '待开播'}
+                  </Meta>
+                </span>
+                <div className="flex items-center gap-1">
+                  {directLines.length > 1 && (
+                    <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
+                      换线
+                    </Button>
+                  )}
+                  <IconButton
+                    label={loadingLines ? '正在检测线路…' : '刷新线路'}
+                    onClick={() => fetchLines({ reset: false, autoPlay: true })}
+                    disabled={loadingLines}
+                  >
+                    <IconReset className={loadingLines ? 'animate-spin text-accent' : ''} size={12} />
+                  </IconButton>
+                  {wideStage && !streamUrl && !stackIntel && (
+                    <IconButton
+                      label="收起线路侧栏"
+                      aria-expanded={true}
+                      onClick={collapseRail}
+                    >
+                      <IconChevronRight size={13} />
+                    </IconButton>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
-          {orderedLines.length > 0 ? (
-            // 1120 宽度下用两列压缩高度；xl 协同模式再回到单列。
-            // 只有一条线路时不要切成两列 —— 否则单按钮只占半行，右半边整块留白。
-            <div className={`scrollbar-thin -mr-1 mt-2.5 grid min-h-[48px] max-h-[220px] content-start gap-1.5 overflow-y-auto pr-1 ${
-              orderedLines.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'
-            } xl:min-h-[56px] xl:grid-cols-1`}>
-              {orderedLines.map(l => {
-                const meta = lineLabels.get(l.id);
-                return (
-                  <LineButton
-                    key={l.id}
-                    l={l}
-                    active={activeLineId === l.id}
-                    onSelect={manualSelectLine}
-                    suffix={meta?.suffix}
-                    memory={meta?.memory}
-                  />
-                );
-              })}
-            </div>
-          ) : (
-            <LineEmptyState
-              loading={loadingLines}
-              state={state}
-              isNearKickoff={isNearKickoff}
-              scrapeError={liveInfo?.scrapeError}
-              onRefresh={() => fetchLines({ reset: false, autoPlay: true })}
-            />
-          )}
+          {/* 折叠时不渲染线路列表：52px 里塞不下按钮，留一个藏起来的空壳只会误导读屏 */}
+          {!railMode &&
+            (orderedLines.length > 0 ? (
+              // 1120 宽度下用两列压缩高度；xl 协同模式再回到单列。
+              // 只有一条线路时不要切成两列 —— 否则单按钮只占半行，右半边整块留白。
+              <div
+                className={`scrollbar-thin -mr-1 mt-2.5 grid min-h-[48px] max-h-[220px] content-start gap-1.5 overflow-y-auto pr-1 ${
+                  orderedLines.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'
+                } xl:min-h-[56px] xl:grid-cols-1`}
+              >
+                {orderedLines.map(l => {
+                  const meta = lineLabels.get(l.id);
+                  return (
+                    <LineButton
+                      key={l.id}
+                      l={l}
+                      active={activeLineId === l.id}
+                      onSelect={manualSelectLine}
+                      suffix={meta?.suffix}
+                      memory={meta?.memory}
+                    />
+                  );
+                })}
+              </div>
+            ) : (
+              <LineEmptyState
+                loading={loadingLines}
+                state={state}
+                isNearKickoff={isNearKickoff}
+                scrapeError={liveInfo?.scrapeError}
+                onRefresh={() => fetchLines({ reset: false, autoPlay: true })}
+              />
+            ))}
         </>
       )}
 
@@ -1105,14 +1250,16 @@ export default function PlayerStage({
         />
       </div>
 
-      <div className="mt-2.5 shrink-0 border-t border-line-hairline pt-3">
-        <SectionLabel>{finished ? '官方全场回放' : '官方平台'}</SectionLabel>
-        <div className="mt-1.5">
-          <OfficialLinks sources={sources} match={match} replay={finished} />
+      {!railMode && (
+        <div className="mt-2.5 shrink-0 border-t border-line-hairline pt-3">
+          <SectionLabel>{finished ? '官方全场回放' : '官方平台'}</SectionLabel>
+          <div className="mt-1.5">
+            <OfficialLinks sources={sources} match={match} replay={finished} />
+          </div>
         </div>
-      </div>
+      )}
 
-      {!streamUrl && (
+      {!streamUrl && !railMode && (
         <div className="mt-auto flex shrink-0 items-center justify-between gap-2 border-t border-line-hairline pt-3">
           <Meta>官方平台直达 · 播放与线路说明</Meta>
           <Hint

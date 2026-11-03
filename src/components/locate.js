@@ -14,22 +14,27 @@ export function locateSection(id, { focus = false } = {}) {
   const el = document.getElementById(id);
   if (!el) return;
 
-  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-  el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+  // 目标可能被折叠（例如无视频流时的 52px 侧轨），先在同步帧里让容器展开，
+  // 再重新取一次节点 —— 否则高亮和焦点会落在马上要消失的节点上。
+  window.dispatchEvent(new CustomEvent('nightowl:locate', { detail: { id } }));
+  const target = document.getElementById(id) || el;
 
-  if (flashEl && flashEl !== el) flashEl.classList.remove('locate-focus-flash');
-  el.classList.remove('locate-focus-flash');
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  target.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+
+  if (flashEl && flashEl !== target) flashEl.classList.remove('locate-focus-flash');
+  target.classList.remove('locate-focus-flash');
   // 强制回流，让连续点击也能重新触发高亮
-  void el.offsetWidth;
-  el.classList.add('locate-focus-flash');
+  void target.offsetWidth;
+  target.classList.add('locate-focus-flash');
   window.clearTimeout(flashTimer);
-  flashEl = el;
+  flashEl = target;
   flashTimer = window.setTimeout(() => {
-    el.classList.remove('locate-focus-flash');
-    if (flashEl === el) flashEl = null;
+    target.classList.remove('locate-focus-flash');
+    if (flashEl === target) flashEl = null;
   }, 1100);
 
-  if (focus && el.hasAttribute('tabindex') && el.getBoundingClientRect().height > 0) {
-    el.focus({ preventScroll: true });
+  if (focus && target.hasAttribute('tabindex') && target.getBoundingClientRect().height > 0) {
+    target.focus({ preventScroll: true });
   }
 }

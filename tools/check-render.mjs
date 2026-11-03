@@ -117,6 +117,161 @@ app.whenReady().then(async () => {
       errors.join(' | ')
     );
 
+    /* 决策条（P1-1）：全屏唯一结论条，四段齐全且不重复出现。 */
+    const strip = await win.webContents.executeJavaScript(`
+      (() => {
+        const nodes = [...document.querySelectorAll('[aria-label="今晚决策结论"]')];
+        const el = nodes[0];
+        const hasHero = !!document.querySelector('[data-hero-index]');
+        if (!el) return { count: 0, hasHero };
+        const labels = [...el.querySelectorAll('span')].map(s => (s.textContent || '').trim());
+        return {
+          count: nodes.length,
+          hasHero,
+          text: el.innerText.replace(/\\n/g, ' | '),
+          hasFour: ['结论', '结束', '睡眠代价', '同夜替代'].every(k => labels.includes(k))
+        };
+      })()
+    `);
+    // Hero 是否存在取决于当晚是否有可推荐场次（数据相关），无 hero 时不做形态断言。
+    ok(
+      '★ 决策条四段齐全',
+      strip.hasHero ? strip.count > 0 && strip.hasFour : true,
+      JSON.stringify(strip)
+    );
+    ok('★ 决策条同屏只出现一次', strip.count <= 1, `${strip.count}`);
+
+    /* 同开球面板（P1-3）：默认只留一行摘要，展开才逐条铺开。
+       否则欧冠整轮 7 场同开时会吃掉近 500px，把 Hero 和赛程列表一起挤死。 */
+    const kickoffPanel = await win.webContents.executeJavaScript(`
+      (() => {
+        const panel = document.querySelector('[aria-label="同开球对比"]');
+        if (!panel) return { exists: false };
+        const btn = panel.querySelector('button[aria-expanded]');
+        return {
+          exists: true,
+          h: Math.round(panel.getBoundingClientRect().height),
+          expanded: btn ? btn.getAttribute('aria-expanded') : null
+        };
+      })()
+    `);
+    ok(
+      '★ 同开球默认收起为一行摘要',
+      !kickoffPanel.exists ||
+        (kickoffPanel.h <= 80 && kickoffPanel.expanded === 'false'),
+      JSON.stringify(kickoffPanel)
+    );
+
+    const kickoffOpen = await win.webContents.executeJavaScript(`
+      (() => {
+        const panel = document.querySelector('[aria-label="同开球对比"]');
+        const btn = panel?.querySelector('button[aria-expanded="false"]');
+        if (!btn) return false;
+        btn.click();
+        return true;
+      })()
+    `);
+    await sleep(240);
+    const kickoffAfter = await win.webContents.executeJavaScript(`
+      (() => {
+        const panel = document.querySelector('[aria-label="同开球对比"]');
+        if (!panel) return null;
+        return {
+          h: Math.round(panel.getBoundingClientRect().height),
+          expanded: panel.querySelector('button[aria-expanded]')?.getAttribute('aria-expanded') ?? null
+        };
+      })()
+    `);
+    ok(
+      '★ 展开后同开球逐条可比',
+      !kickoffOpen || (kickoffAfter.h > 42 && kickoffAfter.expanded === 'true'),
+      JSON.stringify(kickoffAfter)
+    );
+
+    // 收回来，避免影响后续左栏高度相关的断言
+    await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = document.querySelector('[aria-label="同开球对比"] button[aria-expanded="true"]');
+        if (btn) btn.click();
+        return true;
+      })()
+    `);
+    await sleep(160);
+
+    /* 侧轨折叠（P1-2）：无视频流时收成 52px 状态轨，展开回到 315px，焦点双向归还。 */
+    const railState = await win.webContents.executeJavaScript(`
+      (() => {
+        const head = document.getElementById('match-lines');
+        const rail = head?.parentElement;
+        const expand = rail?.querySelector('button[aria-label="展开线路与官方平台"]');
+        return {
+          hasRail: !!rail,
+          width: rail ? Math.round(rail.getBoundingClientRect().width) : 0,
+          hasExpand: !!expand,
+          expandedAttr: expand ? expand.getAttribute('aria-expanded') : null
+        };
+      })()
+    `);
+    ok(
+      '★ 无视频流时侧轨收成 52px 且标注 aria-expanded=false',
+      !railState.hasRail ||
+        (railState.width <= 60 && railState.hasExpand && railState.expandedAttr === 'false'),
+      JSON.stringify(railState)
+    );
+
+    const railExpandClicked = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = document.querySelector('button[aria-label="展开线路与官方平台"]');
+        if (!btn) return false;
+        btn.click();
+        return true;
+      })()
+    `);
+    await sleep(240);
+    const railExpanded = await win.webContents.executeJavaScript(`
+      (() => {
+        const head = document.getElementById('match-lines');
+        const rail = head?.parentElement;
+        return {
+          width: rail ? Math.round(rail.getBoundingClientRect().width) : 0,
+          focused: document.activeElement === head,
+          hasCollapse: !!document.querySelector('button[aria-label="收起线路侧栏"]')
+        };
+      })()
+    `);
+    ok(
+      '★ 展开侧轨恢复 315px 并把焦点交给线路区',
+      !railExpandClicked ||
+        (railExpanded.width >= 300 && railExpanded.focused && railExpanded.hasCollapse),
+      JSON.stringify(railExpanded)
+    );
+
+    const railCollapseClicked = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = document.querySelector('button[aria-label="收起线路侧栏"]');
+        if (!btn) return false;
+        btn.click();
+        return true;
+      })()
+    `);
+    await sleep(240);
+    const railBack = await win.webContents.executeJavaScript(`
+      (() => {
+        const head = document.getElementById('match-lines');
+        const rail = head?.parentElement;
+        const btn = document.querySelector('button[aria-label="展开线路与官方平台"]');
+        return {
+          width: rail ? Math.round(rail.getBoundingClientRect().width) : 0,
+          focusBack: !!btn && document.activeElement === btn
+        };
+      })()
+    `);
+    ok(
+      '★ 收起后焦点归还展开按钮',
+      !railCollapseClicked || (railBack.width <= 60 && railBack.focusBack),
+      JSON.stringify(railBack)
+    );
+
     /* 「情报」是页内定位，不是弹窗。1440 下目标本来就完整可见，
        scrollIntoView 不会产生位移 —— 必须靠高亮 + 焦点给出反馈。 */
     const heroAction = await win.webContents.executeJavaScript(`
@@ -160,9 +315,13 @@ app.whenReady().then(async () => {
 
     const queueAddClicked = await win.webContents.executeJavaScript(`
       (() => {
-        const btn = [...document.querySelectorAll('button')].find(
-          b => (b.textContent || '').trim() === '明早补看'
-        );
+        // 必须点「当前选中场」的入口（情报面板）。Hero 也有补看按钮，
+        // 但它代表的是今晚之选，不是 ?match= 指定的那场。
+        const btn =
+          document.querySelector('#intel-panel [data-watch-later-action="toggle"]') ||
+          [...document.querySelectorAll('[data-watch-later-action="toggle"]')].find(
+            b => !b.closest('article')
+          );
         if (!btn) return false;
         btn.click();
         return true;
@@ -174,7 +333,7 @@ app.whenReady().then(async () => {
         const saved = JSON.parse(localStorage.getItem('nightowl:watchLater:v1') || '[]');
         return {
           button: [...document.querySelectorAll('button')].some(
-            b => (b.textContent || '').trim() === '已加入明早补看'
+            b => (b.textContent || '').trim() === '已入补看 · 取消'
           ),
           savedIds: saved.map(item => item.id),
           hasScore: [...document.querySelectorAll('button')].some(
@@ -183,7 +342,7 @@ app.whenReady().then(async () => {
         };
       })()
     `);
-    ok('★ 比赛详情可加入明早补看并本地持久化',
+    ok('★ 比赛详情可加入补看并本地持久化',
       queueAddClicked && queueAddState.button && queueAddState.savedIds.includes(futureFixture.id),
       JSON.stringify(queueAddState));
 
