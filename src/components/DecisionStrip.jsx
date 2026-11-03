@@ -27,6 +27,12 @@ const REASON_COPY = {
   'missing-index': '缺少指数'
 };
 
+/**
+ * 文案表对外导出：情报面板的「结论」单元格必须与决策条逐字一致 ——
+ * 同一个语义在两处用不同措辞，用户会以为是两个判断。
+ */
+export { VERDICT_COPY, REASON_COPY };
+
 function hoursOf(minutes) {
   const h = Math.round((minutes / 60) * 10) / 10;
   return `${h.toFixed(h === Math.round(h) ? 0 : 1)}h`;

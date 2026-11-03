@@ -367,6 +367,68 @@ app.whenReady().then(async () => {
       queueAddClicked && queueAddState.button && queueAddState.savedIds.includes(futureFixture.id),
       JSON.stringify(queueAddState));
 
+    /* 情报面板三级披露（P1-4）：第一层结论级信息 + 第二层唯一主图表，
+       其余分区默认收起为抽屉。此前面板把 8 个分区一次铺开，五块等权 = 没有主次。 */
+    const tiered = await win.webContents.executeJavaScript(`
+      (() => {
+        const panel = document.getElementById('intel-panel');
+        if (!panel) return { exists: false };
+        const folds = [...panel.querySelectorAll('[data-fold]')];
+        const text = panel.innerText;
+        return {
+          exists: true,
+          foldCount: folds.length,
+          allClosed: folds.every(b => b.getAttribute('aria-expanded') === 'false'),
+          // 第一层四件：为什么看这场 / 数据可信度 必须常驻；结论在 Hero 场次被去重
+          hasWhy: text.includes('为什么看这场'),
+          hasTrust: text.includes('数据可信度'),
+          hasVerdict: text.includes('结论'),
+          hasChart: text.includes('指数归因'),
+          foldTitles: folds.map(b => b.getAttribute('data-fold'))
+        };
+      })()
+    `);
+    ok(
+      '★ 情报面板首屏只留结论级信息',
+      tiered.exists && tiered.hasWhy && tiered.hasTrust && tiered.hasChart,
+      JSON.stringify(tiered)
+    );
+    ok(
+      '★ 面板次级分区默认收起（第三层抽屉）',
+      tiered.foldCount >= 1 && tiered.allClosed,
+      JSON.stringify(tiered.foldTitles)
+    );
+
+    // 点击与读取必须分成两次执行：React 的 setState 在下一帧才生效，
+    // 同一次 executeJavaScript 里点完立刻读，只会读到折叠前的 DOM。
+    const foldBefore = await win.webContents.executeJavaScript(`
+      (() => {
+        const panel = document.getElementById('intel-panel');
+        const btn = panel.querySelector('[data-fold]');
+        if (!btn) return { ok: false };
+        const bodyId = btn.getAttribute('aria-controls');
+        const before = (document.getElementById(bodyId)?.innerText || '').trim().length;
+        btn.click();
+        return { ok: true, before, bodyId };
+      })()
+    `);
+    await sleep(200);
+    const foldExpanded = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = document.getElementById('intel-panel').querySelector('[data-fold]');
+        const bodyId = btn.getAttribute('aria-controls');
+        return {
+          open: btn.getAttribute('aria-expanded'),
+          after: (document.getElementById(bodyId)?.innerText || '').trim().length
+        };
+      })()
+    `);
+    ok(
+      '★ 抽屉展开后才出现正文',
+      foldBefore.ok && foldExpanded.open === 'true' && foldBefore.before === 0 && foldExpanded.after > 0,
+      JSON.stringify({ ...foldBefore, ...foldExpanded })
+    );
+
     const intelClicked = await win.webContents.executeJavaScript(`
       (() => {
         const btn = [...document.querySelectorAll('button')].find(

@@ -12,9 +12,11 @@ import {
   TIER_MAP
 } from '../core/narrative.js';
 import { evalOne } from '../core/owl.js';
+import { decisionStrip } from '../core/decision-strip.js';
 import { computeMatchStats } from '../core/stats.js';
 import { canRecheck, dataStateHint, dataStateLabel, dataStateTone, matchDataState } from '../core/data-health.js';
 import { Button, Chip, Crest, Hint, Meta } from './atoms.jsx';
+import { VERDICT_COPY, REASON_COPY } from './DecisionStrip.jsx';
 import { PanelTab, Block } from './intel/primitives.jsx';
 import { FormSection, StandingsSection, SeasonSection, H2HSection } from './intel/StatsSections.jsx';
 import UpcomingFixtures from './UpcomingFixtures.jsx';
@@ -27,7 +29,6 @@ import {
   IconDerby,
   IconForm,
   IconIdentity,
-  IconInfo,
   IconTier
 } from './icons.jsx';
 
@@ -38,12 +39,18 @@ import {
  *    禁止：xG / 控球率 / 传球精度 / 阵型 / 首发 / 节律 / 对抗强度 / 码率 / 线路延迟
  *    本面板只用真实资产：睡眠档位 · 德比与故事线 · 赛季身份 · 真实已赛战绩与交手数据
  *
- * 结构（P1 重构）：
- *   此前是 `md:grid-cols-3` 的三张等宽卡片 —— 那是落地页的版式，不是工具界面的版式：
+ * 结构（P1 重构 + P1-4 三级披露）：
+ *   更早是 `md:grid-cols-3` 的三张等宽卡片 —— 那是落地页的版式，不是工具界面的版式：
  *   三栏内容量天然不等，短的那两栏底部留出一大片空白；而且每栏都自带圆角、底色、
  *   标题栏和图标，卡片里再套卡片，一屏十几个盒子却没有主次。
- *   现在改为**一个面板 + 两列分区流**：分区之间用 hairline 与留白分隔，
- *   内容量决定高度，不再有需要时才有底的等高盒子。
+ *   中间那版改成「一个面板 + 两列分区流」，解决了盒子问题，但仍是 8 个分区同时铺开 ——
+ *   每块都成立，可五块等权等于没有主次。
+ *
+ *   现在按「结论 → 证据 → 算法」三段披露：
+ *     第一层  结论 / 为什么看这场（最多三条语义驱动） / 数据可信度  ← 不滚动就能答完
+ *     第一层  睡眠代价（分母必须与分子同屏，否则结论无法自证）
+ *     第二层  指数归因（唯一主图表，分子分母在一张表里闭合）
+ *     第三层  看点与故事线 / 赛季身份（折叠抽屉，收起时留一行摘要）
  *
  *   对阵标题也不再在这里重复一次 —— 主舞台顶部条是全应用唯一的对阵命名处。
  */
@@ -96,6 +103,18 @@ export default function IntelPanel({
   const storyB = storyBonus(ev, PRODUCT_WEIGHTS);
   const followedB = followedBonus(ev, PRODUCT_WEIGHTS);
   const leagueB = leagueBonus(ev, PRODUCT_WEIGHTS);
+  const drivers = driversOf(ev);
+
+  /* 面板里的结论与左栏决策条共用同一个纯函数与同一份文案表 ——
+     但**不传 alternatives**：面板只解释这场值不值，不承担「换一场」的判断与入口。
+     一个只说不做的建议比不说更糟。 */
+  const decision = decisionStrip({
+    match,
+    index,
+    prefs,
+    now: now ?? Date.now(),
+    followed: !!ev.isFollowed
+  });
 
   return (
     <section
@@ -133,36 +152,50 @@ export default function IntelPanel({
       </div>
 
       {tab === 'decision' ? (
-        <div className="grid grid-cols-1 gap-x-0 gap-y-0 p-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
-          <div className="space-y-4 lg:border-r lg:border-line-hairline lg:pr-6">
-            <SleepCostSection
-              tier={tier}
-              match={match}
-              prefs={prefs}
-              watchLaterState={watchLaterState}
-              onWatchLater={onWatchLater}
-              hidePersonal={isHeroMatch}
-            />
-            <NarrativeSection narrative={narrative} stories={stories} ev={ev} hideHeadline={isHeroMatch} />
-          </div>
-          <div className="space-y-4 pt-4 lg:pl-6 lg:pt-0">
-            <DataNoteSection
+        /* 三级披露（P1-4）。此前 8 个分区一次铺开：睡眠代价、看点故事线、数据说明、
+           赛季身份、指数归因同时可见，每块都成立但五块等权 = 没有主次。
+           现在 —— 第一层「结论 / 驱动因素 / 数据可信度」+ 睡眠代价（分母必须与分子同屏），
+           第二层只有一张主图表（指数归因），其余降为抽屉，收起时留一行摘要。 */
+        <div className="space-y-4 p-4">
+          <div className="grid gap-x-5 gap-y-3 [grid-template-columns:repeat(auto-fit,minmax(148px,1fr))]">
+            {!isHeroMatch && <VerdictCell decision={decision} />}
+            <DriversCell drivers={drivers} />
+            <DataTrustCell
               match={match}
               checkedAt={matchChecks?.[match.id] || 0}
               onRecheck={onRecheckMatch}
               rechecking={recheckingId === match.id}
               result={recheckMsg && recheckMsg.matchId === match.id ? recheckMsg : null}
             />
-            <IdentitySection match={match} identity={identity} />
-            <AttributionSection
-              ev={ev}
-              tier={tier}
-              index={index}
-              storyB={storyB}
-              followedB={followedB}
-              leagueB={leagueB}
-              tbd={!!match.tbd}
-            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-x-0 gap-y-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+            <div className="lg:border-r lg:border-line-hairline lg:pr-6">
+              <SleepCostSection
+                tier={tier}
+                match={match}
+                prefs={prefs}
+                watchLaterState={watchLaterState}
+                onWatchLater={onWatchLater}
+                hidePersonal={isHeroMatch}
+              />
+            </div>
+            <div className="pt-4 lg:pl-6 lg:pt-0">
+              <AttributionSection
+                ev={ev}
+                tier={tier}
+                index={index}
+                storyB={storyB}
+                followedB={followedB}
+                leagueB={leagueB}
+                tbd={!!match.tbd}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2 border-t border-line-hairline pt-3">
+            <NarrativeSection narrative={narrative} stories={stories} ev={ev} hideHeadline={isHeroMatch} fold />
+            <IdentitySection match={match} identity={identity} fold />
           </div>
         </div>
       ) : tab === 'stats' ? (
@@ -216,6 +249,126 @@ export default function IntelPanel({
 /* ------------------------------------------------------------------ */
 /* 决策视图                                                            */
 /* ------------------------------------------------------------------ */
+
+/**
+ * 「为什么是这个指数」的语义驱动因素（第一层只给最多三条）
+ *
+ * 指数 = (星级×10 + 故事线 + 主队 + 联赛) ÷ (1 + 睡眠代价 + 观看占用)。
+ * 分子回答「值不值得看」，分母是代价 —— 代价有独立分区且是第一层成员，
+ * 所以这里只列分子项，按贡献值降序取前三；其余细节留给第二层的归因表。
+ *
+ * 只出语义标签，不出数字：第一层给三个「+5.9 / +0.0 / +0.0」只会让用户
+ * 去做他做不了的除法，真正的数值分解在归因表里。
+ */
+function driversOf(ev) {
+  if (!ev) return [];
+  const head = ev.rivalry || (ev.rec ? '人工精编推荐' : ev.star >= 3 ? '焦点战' : ev.star === 2 ? '有看点' : '常规场次');
+  const list = [{ key: 'star', label: head, value: ev.star * 10 }];
+  const storyB = storyBonus(ev, PRODUCT_WEIGHTS);
+  if (storyB > 0) {
+    list.push({ key: 'story', label: ev.keyNode ? '故事线关键节点' : '故事线在役', value: storyB });
+  }
+  const followedB = followedBonus(ev, PRODUCT_WEIGHTS);
+  if (followedB > 0) list.push({ key: 'followed', label: '关注球队出战', value: followedB });
+  const leagueB = leagueBonus(ev, PRODUCT_WEIGHTS);
+  if (leagueB > 0) list.push({ key: 'league', label: '关注联赛', value: leagueB });
+  return list.sort((a, b) => b.value - a.value).slice(0, 3);
+}
+
+/** 首屏单元格：小标签 + 主值，三格共用同一套版式，避免各写一份 */
+function Cell({ label, children }) {
+  return (
+    <div className="min-w-0">
+      <span className="block text-2xs leading-none text-text-faint">{label}</span>
+      <div className="mt-1 min-w-0">{children}</div>
+    </div>
+  );
+}
+
+/** 第一层 · 结论（与左栏决策条同源同文案；Hero 场次已经在左栏给过，不重复） */
+function VerdictCell({ decision }) {
+  if (!decision) return null;
+  const verdict = VERDICT_COPY[decision.verdict] || VERDICT_COPY.unknown;
+  const reason = REASON_COPY[decision.reason] || '';
+  return (
+    <Cell label="结论">
+      <span className={`text-sm font-bold ${verdict.tone}`}>{verdict.label}</span>
+      {reason && <span className="ml-1.5 text-2xs text-text-faint">{reason}</span>}
+    </Cell>
+  );
+}
+
+/** 第一层 · 驱动因素（最多三条，一行可读） */
+function DriversCell({ drivers }) {
+  return (
+    <Cell label="为什么看这场">
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        {drivers.map((d, i) => (
+          <span key={d.key} className="inline-flex items-center gap-1.5 text-xs text-text-secondary">
+            {i > 0 && (
+              <span className="text-text-faint" aria-hidden="true">
+                ·
+              </span>
+            )}
+            {d.label}
+          </span>
+        ))}
+      </div>
+    </Cell>
+  );
+}
+
+/**
+ * 第一层 · 数据可信度
+ *
+ * 与旧「数据说明」分区的区别在提问方式：那块只在「说不清为什么没比分」时出现，
+ * 这块永远在场 —— 用户需要知道手上这份情报有多可信，而不是只在出问题时才被告知。
+ *
+ * 正常状态只留一行字，不铺开解释；只有待同步 / 上游未提供才给出说明与重查入口。
+ */
+const TRUST_LABEL = {
+  ok: '已同步',
+  upcoming: '赛前快照',
+  pending: '待同步',
+  missing: '上游未提供',
+  tbd: '时间待定',
+  postponed: '已延期'
+};
+
+function DataTrustCell({ match, checkedAt = 0, onRecheck, rechecking = false, result = null }) {
+  const state = matchDataState(match, Date.now());
+  const tone = dataStateTone(state);
+  const toneCls = tone === 'warn' ? 'text-warn' : tone === 'danger' ? 'text-danger' : 'text-text-muted';
+  const action = canRecheck(state) && typeof onRecheck === 'function';
+  return (
+    <Cell label="数据可信度">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${toneCls}`}>
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${
+              tone === 'warn' ? 'bg-warn' : tone === 'danger' ? 'bg-danger' : 'bg-line-control'
+            }`}
+            aria-hidden="true"
+          />
+          {TRUST_LABEL[state] || dataStateLabel(state)}
+        </span>
+        {action && (
+          <Button variant="ghost" size="xs" onClick={() => onRecheck(match.id)} disabled={rechecking}>
+            {rechecking ? '重查中…' : '重查该场'}
+          </Button>
+        )}
+      </div>
+      {action && (
+        <p className="mt-1 text-2xs leading-relaxed text-text-muted">
+          {dataStateHint(state, checkedAt)}
+        </p>
+      )}
+      {result && (
+        <p className={`mt-1 text-2xs ${result.ok ? 'text-resource' : 'text-warn'}`}>{result.text}</p>
+      )}
+    </Cell>
+  );
+}
 
 function SleepCostSection({ tier, match, prefs, watchLaterState = 'none', onWatchLater, hidePersonal = false }) {
   const [queueMsg, setQueueMsg] = useState(null);
@@ -321,7 +474,7 @@ function SleepCostSection({ tier, match, prefs, watchLaterState = 'none', onWatc
   );
 }
 
-function NarrativeSection({ narrative, stories, ev, hideHeadline = false }) {
+function NarrativeSection({ narrative, stories, ev, hideHeadline = false, fold = false }) {
   /* 同屏去重：narrativeOf 的 L2 层会把故事线拼成「名：简介」塞进 lines，
      而本节下面又把同一批故事线渲染成 name / desc 列表 —— 一条内容出现两遍。
      这里只在渲染层过滤，数据层不动：lines 同时是 headline 的候选池，
@@ -346,10 +499,19 @@ function NarrativeSection({ narrative, stories, ev, hideHeadline = false }) {
     !!narrative.trivia;
   if (!hasBody) return null;
 
+  // 抽屉摘要：收起时告诉用户里面有几条线索，而不是一个空的标题
+  const clueCount = (rivalryShown ? 1 : 0) + distinctLines.length + shownStories.length + (narrative.trivia ? 1 : 0);
+  const summary = fold
+    ? clueCount > 0
+      ? `${clueCount} 条线索`
+      : narrative.headline
+    : null;
+
   return (
     <Block
       icon={<IconDerby />}
       title="看点与故事线"
+      fold={fold ? { summary } : null}
       right={
         <Hint
           content="看点内容分三层供给：人工精修 → 规则合成（德比 / 故事线 / 赛季身份）→ 联赛与档位兜底，保证任何一场都不会空白。"
@@ -404,9 +566,14 @@ function NarrativeSection({ narrative, stories, ev, hideHeadline = false }) {
   );
 }
 
-function IdentitySection({ match, identity }) {
+function IdentitySection({ match, identity, fold = false }) {
+  const tags = [match.h, match.a].map(id => TEAM_MAP[id]?.tag).filter(Boolean);
   return (
-    <Block icon={<IconIdentity />} title="赛季身份">
+    <Block
+      icon={<IconIdentity />}
+      title="赛季身份"
+      fold={fold ? { summary: tags.length ? tags.join(' · ') : '两队均为常规身份' } : null}
+    >
       <ul className="space-y-1">
         {[
           { id: match.h, side: '主' },
@@ -481,43 +648,6 @@ function AttributionSection({ ev, tier, index, storyB, followedB, leagueB, tbd =
           </dd>
         </div>
       </dl>
-    </Block>
-  );
-}
-
-/**
- * 数据说明（FR-06）
- *
- * 只回答一个问题：这场的数据为什么是这样 —— 是「还没同步」还是「上游就没有」。
- * 这两句话对用户的含义完全不同：前者值得再等等，后者应该直接去官方平台。
- * 因此这里不展示逐源冲突明细，也不对冲突做裁决（首版边界，见 PRD FR-06）。
- */
-function DataNoteSection({ match, checkedAt = 0, onRecheck, rechecking = false, result = null }) {
-  const state = matchDataState(match, Date.now());
-  const tone = dataStateTone(state);
-  const toneCls = tone === 'warn' ? 'text-warn' : tone === 'danger' ? 'text-danger' : 'text-text-muted';
-  const showAction = canRecheck(state) && typeof onRecheck === 'function';
-  // 一切正常（已同步 / 还没开赛）时这块不出现：单场详情只在「说不清为什么没比分」时才需要解释
-  if (!showAction) return null;
-
-  return (
-    <Block
-      icon={<IconInfo />}
-      title="数据说明"
-      right={<Meta className={toneCls}>{dataStateLabel(state)}</Meta>}
-    >
-      <p className="text-xs leading-relaxed text-text-secondary">{dataStateHint(state, checkedAt)}</p>
-      {showAction && (
-        <div className="mt-2 flex items-center gap-2">
-          <Button variant="ghost" size="xs" onClick={() => onRecheck(match.id)} disabled={rechecking}>
-            {rechecking ? '重查中…' : '重查该场'}
-          </Button>
-          <Meta>只查这一场所在的联赛与日期</Meta>
-        </div>
-      )}
-      {result && (
-        <p className={`mt-1.5 text-2xs ${result.ok ? 'text-resource' : 'text-warn'}`}>{result.text}</p>
-      )}
     </Block>
   );
 }
