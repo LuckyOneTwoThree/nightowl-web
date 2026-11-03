@@ -30,12 +30,24 @@ export function useScrollMemory(key) {
 
     el.scrollTop = saved;
     /* 首帧内容高度可能还没定稿（队徽图片、自托管字体仍在加载），
-       scrollTop 会被截断到当时可滚范围内。下一帧补一次；
-       如果用户在这一帧里已经自己滚过，就不动他。 */
-    const raf = requestAnimationFrame(() => {
+       scrollTop 会被截断到当时可滚范围内。下一拍补一次；
+       如果用户在这一帧里已经自己滚过，就不动他。
+       不用 rAF：Windows 隐藏窗口会节流 rAF（见 App.jsx restoreFocus 同类修复），CI 与真实窗口行为会分叉。 */
+    const timer = setTimeout(() => {
       if (!touched.current) el.scrollTop = saved;
-    });
-    return () => cancelAnimationFrame(raf);
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [key]);
+
+  // 卸载兜底：布局清理（DOM 尚未移除）时读一次真实 scrollTop，
+  // 防止隐藏窗口里程序化 scrollTop 不派发 scroll 事件、lastTop 没记上。
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    return () => {
+      const top = el.scrollTop;
+      if (top) memory.set(key, top);
+    };
   }, [key]);
 
   useEffect(() => {

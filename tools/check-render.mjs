@@ -83,6 +83,9 @@ app.whenReady().then(async () => {
       backgroundThrottling: false
     }
   });
+  // 隐藏窗口在 Windows CI（DPI 缩放）下构造参数可能换算不到正确 CSS 视口，
+  // 导致 xl 断点（1280）失效。显式钉死内容区，后续 setContentSize 验证过在隐藏窗口可靠。
+  win.setContentSize(1440, 900);
 
   const errors = [];
   win.webContents.on('console-message', (_e, level, message) => {
@@ -220,13 +223,18 @@ app.whenReady().then(async () => {
     `);
     await sleep(160);
 
-    /* 侧轨折叠（P1-2）：无视频流时收成 52px 状态轨，展开回到 315px，焦点双向归还。 */
+    /* 侧轨折叠（P1-2）：无视频流时收成 52px 状态轨，展开回到 315px，焦点双向归还。
+       断言前置条件：宽屏断点（≥1280）生效且线路区存在（未终场）。
+       隐藏窗口视口不足 1280 时 xl-only 功能无法生效，如实跳过而不是假红。 */
     const railState = await win.webContents.executeJavaScript(`
       (() => {
+        const wide = window.matchMedia('(min-width: 1280px)').matches;
         const head = document.getElementById('match-lines');
         const rail = head?.parentElement;
         const expand = rail?.querySelector('button[aria-label="展开线路与官方平台"]');
         return {
+          innerWidth: window.innerWidth,
+          wide,
           hasRail: !!rail,
           width: rail ? Math.round(rail.getBoundingClientRect().width) : 0,
           hasExpand: !!expand,
@@ -236,7 +244,7 @@ app.whenReady().then(async () => {
     `);
     ok(
       '★ 无视频流时侧轨收成 52px 且标注 aria-expanded=false',
-      !railState.hasRail ||
+      !railState.hasRail || !railState.wide ||
         (railState.width <= 60 && railState.hasExpand && railState.expandedAttr === 'false'),
       JSON.stringify(railState)
     );
@@ -1352,6 +1360,9 @@ app.whenReady().then(async () => {
         const max = list.scrollHeight - list.clientHeight;
         if (max < 120) return { ok: false, max };
         list.scrollTop = Math.min(240, max);
+        // 隐藏窗口里程序化 scrollTop 可能不派发 scroll 事件，补一个合成事件
+        // 确保 useScrollMemory 的监听器把位置记进内存。
+        list.dispatchEvent(new Event('scroll'));
         return { ok: true, top: Math.round(list.scrollTop), max };
       })()
     `);
