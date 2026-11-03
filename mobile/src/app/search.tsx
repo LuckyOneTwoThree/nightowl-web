@@ -45,28 +45,25 @@ export default function SearchScreen() {
 
   const trimmed = debounced.trim();
 
-  const teamResults = useMemo(() => {
+  const teamAll = useMemo(() => {
     const q = trimmed.toLowerCase();
     if (!q) return [];
-    return teams
-      .filter(team =>
-        [team.zh, team.en, team.id].some(value => value.toLowerCase().includes(q))
-      )
-      .slice(0, 8);
+    return teams.filter(team =>
+      [team.zh, team.en, team.id].some(value => value.toLowerCase().includes(q))
+    );
   }, [trimmed]);
+  const teamResults = useMemo(() => teamAll.slice(0, 8), [teamAll]);
 
-  const matchResults = useMemo(() => {
+  const matchAll = useMemo(() => {
     if (!trimmed) return [] as Match[];
     const rows = computeScheduleRows(now, prefs, {
       leagues: [...LEAGUE_ORDER],
       onlyFollowed: false,
       query: trimmed,
     }) as Array<{ type: 'date' | 'match'; m?: Match }>;
-    return rows
-      .filter(row => row.type === 'match' && row.m)
-      .slice(0, 30)
-      .map(row => row.m as Match);
+    return rows.filter(row => row.type === 'match' && row.m).map(row => row.m as Match);
   }, [trimmed, now, prefs, rev]);
+  const matchResults = useMemo(() => matchAll.slice(0, 30), [matchAll]);
 
   const suggestedTeams = useMemo(
     () => teams.filter(team => SUGGESTED_TEAMS.includes(team.id)),
@@ -103,6 +100,9 @@ export default function SearchScreen() {
             placeholderTextColor={colors.textFaint}
             style={styles.input}
             returnKeyType="search"
+            onSubmitEditing={() => {
+              if (trimmed) goSchedule(trimmed);
+            }}
           />
           {query ? (
             <Pressable onPress={() => setQuery('')} hitSlop={14} accessibilityLabel="清空搜索">
@@ -158,7 +158,7 @@ export default function SearchScreen() {
           <>
             {teamResults.length > 0 ? (
               <View style={styles.section}>
-                <SectionHeader title="球队" count={teamResults.length} />
+                <SectionHeader title="球队" count={teamAll.length} />
                 <View style={styles.list}>
                   {teamResults.map(team => (
                     <Pressable
@@ -180,7 +180,16 @@ export default function SearchScreen() {
             ) : null}
 
             <View style={styles.section}>
-              <SectionHeader title="比赛" count={matchResults.length} />
+              <SectionHeader
+                title="比赛"
+                count={matchAll.length}
+                actionLabel={
+                  matchAll.length > matchResults.length
+                    ? `查看全部 ${matchAll.length} 场`
+                    : undefined
+                }
+                onAction={() => goSchedule(trimmed)}
+              />
               {matchResults.length > 0 ? (
                 <View style={styles.list}>
                   {matchResults.map(match => (

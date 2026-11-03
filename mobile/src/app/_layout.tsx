@@ -20,6 +20,7 @@ import { MorningDigestSheet } from '@/components/MorningDigestSheet';
 import { useSyncOnLaunch } from '@/data/sync/useSync';
 import { usePrematchReminders } from '@/lib/usePrematchReminders';
 import { ErrorBoundary } from '@/ui/ErrorBoundary';
+import { ToastHost } from '@/ui/Toast';
 import { colors } from '@/ui/theme';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -117,6 +118,7 @@ function AppShell() {
           }}
           onClose={digest.close}
         />
+        <ToastHost />
         </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -34,6 +34,7 @@ import { useMorningDigest } from '@/lib/useMorningDigest';
 import { MorningDigestSheet } from '@/components/MorningDigestSheet';
 import { useSyncState } from '@/data/sync/useSync';
 import { animateLayout } from '@/lib/layoutAnimation';
+import { openExternal } from '@/lib/openExternal';
 import { useNow } from '@/lib/useNow';
 import { useAppStore, useDataRev } from '@/state/app';
 import {
@@ -464,7 +465,7 @@ export default function MeScreen() {
             <Pressable
               key={sourceItem.id}
               onPress={() => {
-                if (sourceItem.homeUrl) void Linking.openURL(sourceItem.homeUrl);
+                if (sourceItem.homeUrl) void openExternal(sourceItem.homeUrl, sourceItem.name);
               }}
               style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
             >

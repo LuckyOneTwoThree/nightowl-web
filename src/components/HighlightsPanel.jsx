@@ -6,6 +6,7 @@ import { Button, IconButton, Meta, SectionLabel } from './atoms.jsx';
 import { IconExternal, IconPlay, IconReset, IconReveal, IconWarn } from './icons.jsx';
 import { useRemoteJson } from '../hooks/useRemoteJson.js';
 import { reportReviewStatus } from '../hooks/useReviewStatus.js';
+import { openExternal } from '../lib/openExternal.js';
 
 /**
  * 赛后官方集锦
@@ -19,10 +20,9 @@ function isYouTube(url) {
   return /^https:\/\/www\.youtube\.com\/watch\?v=[A-Za-z0-9_-]{11}$/.test(String(url || ''));
 }
 
-function openExternal(url) {
+function openVideo(url) {
   if (!isYouTube(url)) return;
-  if (window.desktop?.openExternal) window.desktop.openExternal(url);
-  else window.open(url, '_blank', 'noopener,noreferrer');
+  void openExternal(url, 'YouTube 集锦');
 }
 
 export default function HighlightsPanel({
@@ -94,7 +94,7 @@ export default function HighlightsPanel({
                   onClick={e => {
                     if (window.desktop?.openExternal && url) {
                       e.preventDefault();
-                      window.desktop.openExternal(url);
+                      void openExternal(url, s.name);
                     }
                   }}
                   className="inline-flex items-center gap-1 rounded-md border border-line-control bg-surface-raised px-2.5 py-1 text-2xs text-text-secondary transition-colors hover:border-line-control hover:bg-surface-accent hover:text-text-primary focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none"
@@ -141,7 +141,7 @@ export default function HighlightsPanel({
               <button
                 key={v.id}
                 type="button"
-                onClick={() => openExternal(v.url)}
+                onClick={() => openVideo(v.url)}
                 title={v.eventName || '官方集锦'}
                 className="flex w-full items-center gap-2 rounded-md border border-line-hairline bg-surface-raised/50 px-2.5 py-2 text-left transition-colors hover:border-line-control hover:bg-surface-accent/60 focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none"
               >

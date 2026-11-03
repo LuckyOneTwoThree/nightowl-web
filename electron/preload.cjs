@@ -15,8 +15,11 @@ try {
     minimize: () => ipcRenderer.send('win:minimize'),
     toggleMaximize: () => ipcRenderer.send('win:toggle-maximize'),
     close: () => ipcRenderer.send('win:close'),
-    /** 在系统默认浏览器中打开外部链接（央视频、咪咕等官方平台） */
-    openExternal: url => ipcRenderer.send('win:open-external', url),
+    /**
+     * 在系统默认浏览器中打开外部链接（央视频、咪咕等官方平台）。
+     * 用 invoke 而不是 send：打不开时渲染层要能说「失败并给重试」，send 没有回执。
+     */
+    openExternal: url => ipcRenderer.invoke('win:open-external', url),
     /** 系统通知：赛前提醒 / 进球红牌 / 终场；主进程负责前台抑制与点击聚焦 */
     notify: payload => ipcRenderer.send('app:notify', payload),
     /**

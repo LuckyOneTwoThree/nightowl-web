@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDialogFocus } from '../hooks/useDialogFocus.js';
 import { getFixtures, leagueName, teamName } from '../data/index.js';
 import { STANDINGS_LEAGUES, computeStandings, standingsCutoff } from '../core/standings.js';
 import { isFinished } from '../core/engine.js';
@@ -49,11 +50,7 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
     }
   }, [open, initialLeague]);
 
-  useEffect(() => {
-    if (!open) return undefined;
-    closeRef.current?.focus();
-    return undefined;
-  }, [open]);
+  useDialogFocus(open, closeRef);
 
   const activeLeague = STANDINGS_LEAGUES.includes(league) ? league : 'PL';
   const nowTs = Number.isFinite(now) ? now : Date.now();

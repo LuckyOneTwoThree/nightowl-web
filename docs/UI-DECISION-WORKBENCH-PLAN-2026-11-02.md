@@ -1,9 +1,9 @@
 # 夜猫看台 · 「今晚决策台」双端体验升级计划
 
-- **状态**：P0 全部完成；P1-1 ~ P1-6 全部落地（P1-5 仅桌面端，理由见该段）；P2-1 移动端风险带、P2-2 Token 与排版收敛已落地
+- **状态**：P0 全部完成；P1-1 ~ P1-6 全部落地（P1-5 仅桌面端，理由见该段）；P2-1 移动端风险带、P2-2 Token 与排版收敛、P2-3 反馈与失败恢复已落地
 - **基线**：`v0.1.44`，HEAD `b02206a`，桌面测试 31 脚本 / 891 断言全绿
-- **当前实测**：36 脚本 / 1044 断言全绿；`build` 成功；`check:render` 73 项全过；`measure-layout` 三档无横向溢出；移动端 `npm run check`（`verify:shared` 0 漂移 + `audit:touch` 97 个控件全达标 + `typecheck`）+ `export:android` 通过
-- **下一批**：P2-3 反馈与失败恢复 / 移动端详情三级披露 / 真机验收（播放器静音与自动换线、通知权限、托盘与自启、风险带视觉、系统字号 1.3× 与 1.6×）
+- **当前实测**：37 脚本 / 1060 断言全绿；`build` 成功；`check:render` 73 项全过；`measure-layout` 三档无横向溢出；移动端 `npm run check`（`verify:shared` 0 漂移 + `audit:touch` 98 个控件全达标 + `typecheck`）+ `export:android` 通过
+- **下一批**：移动端详情三级披露 / 桌面周视图接 `core/week-risk.js` / 真机验收（播放器静音与自动换线、通知权限、托盘与自启、风险带视觉、系统字号 1.3× 与 1.6×、外链失败提示）
 - **范围**：桌面端 `src/`、移动端 `mobile/src/`、共享 `src/core/`
 - **目标**：把「信息丰富的转播仪表盘」收敛为「在正确时机只回答一个问题的今晚决策台」
 
@@ -436,13 +436,56 @@ npm run export:android
 
 - ⚠️ 未真机走查：本机起不了模拟器，系统字号 1.3× / 1.6× 的实际溢出、徽章增长后的对齐只能真机看。
 
-#### P2-3 反馈与失败恢复
+#### P2-3 反馈与失败恢复 · ✅ 已完成（双端）
 
-- 外链失败必须有「重试 / 复制链接」；不允许静默 `catch`。
-- WatchSheet 只保留一条免责声明；多条视频显示真实标题与 provider。
-- Toast 区分 success / error / info，错误可携带恢复动作。
-- 搜索显示总数与「查看全部 N 场」，提交键有明确行为。
-- 浮层建立统一焦点栈；新侧轨、Popover、摘要都纳入 Esc 和焦点归还。
+这一项的共同点是：**失败必须留下痕迹，并且当场能补救**。原来三类失败都是静默的 ——
+外链打不开（`Linking.openURL(...).catch(() => {})`）、操作失败和操作成功长得一模一样（同一个绿勾）、
+外壳桥 `ipcRenderer.send` 发完就没有回执。
+
+**Toast 分级（双端各自一份，形态随平台）**
+
+- 移动 `state/toast.ts` + `ui/Toast.tsx`：`success / info / error` 三档，错误停 6s、成功 3.2s
+  （成功扫一眼就够，失败要读完还能点到按钮），最多挂两个恢复动作。挂在根布局上，
+  页面不再各写一份。
+- 桌面 `lib/toast.js` + `components/ToastHost.jsx`：模块级订阅（不用 Context，因为调用点常在
+  事件处理函数甚至非组件模块里）。新增层叠档 `zIndex.toast = 130` —— 高于 modal、低于 splash，
+  否则弹窗开着时「已复制」看不见。
+- 桌面新增 `test:toast` 16 项：失败必须带恢复动作、旧提示退场不能误伤新提示、
+  错误存活时间长于成功。
+
+**外链失败「重试 / 复制链接」**
+
+- 移动 `lib/openExternal.ts`：`Linking.openURL` 失败 → `打不开「X」` + 重试 + 复制链接
+  （`expo-clipboard`）。WatchSheet 的两处、我的页官方平台入口全部改走它。
+- 桌面 `lib/openExternal.js`：打不开的判定有两条路 —— Electron 桥的返回值和 `window.open` 的 null。
+  为此把 `ipcRenderer.send('win:open-external')` 改成 `invoke`，主进程 `shell.openExternal` 抛错时回 `false`
+  （老 preload 返回 undefined，按成功处理，不会误报）。PlayerStage 三处、HighlightsPanel 两处、
+  UpdateModal 一处全部收口。
+- `lib/clipboard.js` 保留 `execCommand` 回退：本地 http / `file://` 下 `navigator.clipboard` 不可用。
+  返回布尔值，调用方必须据此说「已复制」或「复制失败」，不做乐观提示。
+
+**WatchSheet**
+
+- 免责声明 3 条并 1 条：直链段、集锦段、页尾原来各写了一遍「不代理 / 不下载」，同一件事说三次
+  只会被当成噪音跳过。合并后一条讲清「索引可能失效 + 原生播放器打开 + 不代理不下载不转码 + 官方平台可能需登录」。
+- YouTube 集锦显示真实 `eventName` 与平台名（`provider` → 「YouTube」），不再一律写「队名 vs 队名 · 官方集锦」。
+
+**搜索**
+
+- 结果区改「先取全量再截断」：区块头显示真实总数，超出 30 条时给「查看全部 N 场」跳赛程。
+  此前直接 `.slice(0, 30)`，用户不知道还有多少。
+- 输入框回车 = 带关键词跳赛程看全部（`returnKeyType="search"` 之前没有任何行为）。
+
+**浮层焦点栈**
+
+- 新增 `hooks/useDialogFocus.js`：打开时记住原落点并移进对话框，关闭时归还；
+  原元素已移除或已处于 inert 子树内则不归还。
+- 六个对话框（设置抽屉、更新弹窗、积分榜、早晨摘要、命令面板、首次引导）统一接入，
+  其中摘要原本有一份手写实现，一并收掉。
+- **删掉 App 里那套 `rememberFocus` / `restoreFocus`**（连同四个 `*ReturnRef` 与集中归还的 effect）：
+  同一件事两处实现，新增弹窗必须两边都登记才有归还。现在只在弹窗自己身上。
+- 既有断言 `设置关闭后焦点回到偏好入口` 在删掉 App 那套之后仍然通过 —— 说明归还确实由 hook 完成，
+  不是靠旧代码兜着。
 
 ---
 
@@ -478,6 +521,15 @@ mobile/src/app/player.tsx           P0-8 夜间静音
 mobile/src/ui/theme.ts              P2-2 圆角三档 / 字重角色制 / fontScale.micro
 mobile/src/ui/motion.ts             P2-2 动效 160 / 200 / 220
 mobile/scripts/audit-touch.mjs      P2-2 44dp 触控门禁（npm run audit:touch）
+src/lib/toast.js                    P2-3 桌面全局提示（模块级订阅）
+src/components/ToastHost.jsx        P2-3 提示渲染与恢复动作
+src/lib/openExternal.js             P2-3 外链打开：失败给「重试 / 复制链接」
+src/lib/clipboard.js                P2-3 复制（含 execCommand 回退）
+src/hooks/useDialogFocus.js         P2-3 弹窗焦点进场与归还（六处共用）
+mobile/src/state/toast.ts           P2-3 移动全局提示
+mobile/src/ui/Toast.tsx             P2-3 移动提示条
+mobile/src/lib/openExternal.ts      P2-3 移动外链打开与复制
+electron/{main,preload}.cjs         P2-3 外链桥改为 invoke 并回报结果
 ```
 
 ---

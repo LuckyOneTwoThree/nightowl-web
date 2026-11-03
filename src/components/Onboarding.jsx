@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useDialogFocus } from '../hooks/useDialogFocus.js';
 import { FOLLOWABLE_LEAGUES, LEAGUE_NAMES, leagueColor } from '../data/index.js';
 import { BrandLogo, Button, Chip, Hint, Meta, TogglePill } from './atoms.jsx';
 import TeamPicker from './TeamPicker.jsx';
@@ -54,11 +55,9 @@ export default function Onboarding({ open, prefs, onPrefsChange, onClose }) {
     if (!open) setStep(1);
   }, [open]);
 
-  // 背景 inert 时键盘焦点不能落在 body 上：第 1 步 TeamPicker 自带 autoFocus，
-  // 第 2 步此前没有落点 —— 聚焦第一个联赛开关。
-  useEffect(() => {
-    if (open && step === 2) step2FirstRef.current?.focus();
-  }, [open, step]);
+  // 背景 inert 时键盘焦点不能落在 body 上：第 1 步 TeamPicker 自带 autoFocus（不抢），
+  // 第 2 步聚焦第一个联赛开关；关闭时统一归还。
+  useDialogFocus(open, step === 2 ? step2FirstRef : null);
 
   const patch = p => onPrefsChange({ ...prefs, ...p });
 

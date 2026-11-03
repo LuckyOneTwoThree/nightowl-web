@@ -10,7 +10,7 @@
  *   - 圆角规范：sm(2px) 柱条 · DEFAULT(4px) 小标签 · md(6px) 控件/按钮 ·
  *     lg(8px) 列表条目 · xl(12px) 核心模块大卡 · 2xl(16px) 浮层弹窗 · 3xl(24px) 视觉徽章 · full(9999px) 队徽/圆环。
  *   - 阴影两档：shadow-card 卡片 · shadow-pop 浮层。发光类阴影已废除。
- *   - 层叠只用 zIndex 的命名档（overlay / pop / scrim / drawer / modal），
+ *   - 层叠只用 zIndex 的命名档（overlay / pop / scrim / drawer / modal / toast），
  *     组件里出现 `z-[999]` 之类的数字即为回归。
  */
 
@@ -121,6 +121,7 @@ export default {
         scrim: '100', // 遮罩
         drawer: '110', // 设置抽屉
         modal: '120', // 首次引导 / 更新弹窗
+        toast: '130', // 全局提示（须高于弹窗，否则弹窗开着时复制成功看不到）
         splash: '200' // 开屏画面（须高于一切浮层）
       },
       keyframes: {

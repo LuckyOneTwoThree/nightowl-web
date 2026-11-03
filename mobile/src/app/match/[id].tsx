@@ -61,6 +61,7 @@ import { useAppStore, useDataRev } from '@/state/app';
 import { useWatchLaterStore } from '@/state/queue';
 import { pendingQueue } from '@core/queue.js';
 import { usePrefs } from '@/state/prefs';
+import { toast } from '@/state/toast';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
@@ -143,7 +144,9 @@ export default function MatchScreen() {
   };
   const [watchOpen, setWatchOpen] = useState(params.watch === '1');
   const [reminderSet, setReminderSet] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  // 比赛事件提示（进球 / 红牌）留在页面内，它指的是「刚刚发生了什么」，不是操作反馈；
+  // 操作反馈统一走全局 toast，才能区分成功与失败。
+  const [eventNote, setEventNote] = useState<string | null>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
 
   /* 「情报 / 数据」两个页签共用同一个 ScrollView，默认行为是把上一个页签的偏移原样带过去 ——
@@ -241,7 +244,7 @@ export default function MatchScreen() {
       next.add(key);
       // 防剧透：比分未揭晓时进球/红牌事件 toast 等于直接剧透
       if (prefs.notifyLiveEvents && scoreVisible && shouldNotifyEvent(event)) {
-        setToast(eventSummary(event, match));
+        setEventNote(eventSummary(event, match));
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     }
@@ -249,10 +252,10 @@ export default function MatchScreen() {
   }, [liveEvents, match, prefs.notifyLiveEvents, scoreVisible]);
 
   useEffect(() => {
-    if (!toast) return undefined;
-    const timer = setTimeout(() => setToast(null), 2600);
+    if (!eventNote) return undefined;
+    const timer = setTimeout(() => setEventNote(null), 2600);
     return () => clearTimeout(timer);
-  }, [toast]);
+  }, [eventNote]);
 
   if (!match || !intel) {
     return (
@@ -304,9 +307,9 @@ export default function MatchScreen() {
     const ok = await scheduleMatchReminder(match);
     if (ok) {
       setReminderSet(true);
-      setToast('已设置赛前提醒');
+      toast.success('已设置赛前提醒');
     } else {
-      setToast('未设置成功：安装版或赛前 15 分钟内可用');
+      toast.error('未设置成功：安装版或赛前 15 分钟内可用');
     }
   };
 
@@ -538,13 +541,15 @@ export default function MatchScreen() {
             onPress={() => {
               if (!queuedForMorning) {
                 const result = addWatchLater(match);
-                setToast(
-                  result.ok
-                    ? '已加入明早补看'
-                    : result.reason === 'full'
+                if (result.ok) {
+                  toast.success('已加入明早补看');
+                } else {
+                  toast.error(
+                    result.reason === 'full'
                       ? '补看队列已满，请先在「我的」移除旧条目'
                       : '加入补看失败'
-                );
+                  );
+                }
               }
             }}
             disabled={queuedForMorning}
@@ -622,13 +627,13 @@ export default function MatchScreen() {
         </View>
       ) : null}
 
-      {toast ? (
+      {eventNote ? (
         <View
           pointerEvents="none"
           style={[styles.toast, { bottom: insets.bottom + (liveNow ? 92 : 24) }]}
         >
-          <CheckCircle2 size={14} color={colors.accent} />
-          <Text style={styles.toastText}>{toast}</Text>
+          <Bell size={14} color={colors.accent} />
+          <Text style={styles.toastText}>{eventNote}</Text>
         </View>
       ) : null}
 

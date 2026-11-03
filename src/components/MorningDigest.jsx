@@ -3,6 +3,7 @@ import { leagueName, teamName } from '../data/index.js';
 import { hm } from '../core/format.js';
 import { Button, Chip, Crest, Meta } from './atoms.jsx';
 import { IconClose } from './icons.jsx';
+import { useDialogFocus } from '../hooks/useDialogFocus.js';
 
 /**
  * 次日补看摘要
@@ -27,31 +28,17 @@ export default function MorningDigest({
 }) {
   const [confirmAll, setConfirmAll] = useState(false);
   const closeBtnRef = useRef(null);
-  const returnFocusRef = useRef(null);
 
   useEffect(() => {
     if (!open) setConfirmAll(false);
   }, [open]);
 
   /**
-   * 焦点进场与归还。
-   *
+   * 焦点进场与归还走统一 hook（与设置抽屉、更新弹窗、积分榜同一份实现）。
    * 摘要多为自动弹出（起床后首次打开），此时 `document.activeElement` 往往是 body；
-   * 归还时 body 不可聚焦，`focus()` 自然无副作用，不需要特判。
-   * 若原元素已被遮挡（处于 inert 子树内），则不归还 —— 与 App 的 restoreFocus 同口径。
+   * body 不可聚焦，归还时 `focus()` 自然无副作用，不需要特判。
    */
-  useEffect(() => {
-    if (!open) return undefined;
-    returnFocusRef.current = typeof document !== 'undefined' ? document.activeElement : null;
-    closeBtnRef.current?.focus();
-    return () => {
-      const el = returnFocusRef.current;
-      returnFocusRef.current = null;
-      if (!el?.isConnected) return;
-      if (el.closest?.('[inert]')) return;
-      el.focus?.();
-    };
-  }, [open]);
+  useDialogFocus(open, closeBtnRef);
 
   if (!open) return null;
 

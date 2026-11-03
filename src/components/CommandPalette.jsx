@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDialogFocus } from '../hooks/useDialogFocus.js';
 import { searchPalette } from '../core/command-palette.js';
 import {
   IconCalendar,
@@ -41,9 +42,8 @@ export default function CommandPalette({ items = [], onClose, onRun }) {
 
   const results = useMemo(() => searchPalette(items, query, 12), [items, query]);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  // 面板整体挂载即代表打开：进场聚焦搜索框，卸载时把焦点还回触发它的按钮。
+  useDialogFocus(true, inputRef);
 
   useEffect(() => {
     setActiveIndex(0);

@@ -386,9 +386,14 @@ ipcMain.on('win:toggle-maximize', () => {
   else mainWindow.maximize();
 });
 ipcMain.on('win:close', () => mainWindow?.close());
-ipcMain.on('win:open-external', (_event, url) => {
-  if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
-    shell.openExternal(url);
+ipcMain.handle('win:open-external', async (_event, url) => {
+  if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return false;
+  try {
+    await shell.openExternal(url);
+    return true;
+  } catch {
+    // 没有默认浏览器、被系统策略拦截：结果退回渲染层，由它给出「重试 / 复制链接」
+    return false;
   }
 });
 

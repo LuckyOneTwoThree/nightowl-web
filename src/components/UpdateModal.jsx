@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useDialogFocus } from '../hooks/useDialogFocus.js';
 import { compareSemver } from '../core/semver.js';
 import { BrandLogo, Button, Chip, Meta } from './atoms.jsx';
 import { IconClose, IconWarn } from './icons.jsx';
+import { openExternal } from '../lib/openExternal.js';
 
 const REPO_OWNER = 'LuckyOneTwoThree';
 const REPO_NAME = 'nightowl-web';
@@ -28,10 +30,8 @@ export default function UpdateModal({
   const isDesktop = !!window.desktop?.isDesktop;
   const closeBtnRef = useRef(null);
 
-  // 弹窗打开时背景已 inert，焦点必须进入对话框，否则键盘用户会失去焦点。
-  useEffect(() => {
-    if (open) closeBtnRef.current?.focus();
-  }, [open]);
+  // 弹窗打开时背景已 inert，焦点必须进入对话框；关闭时还回原处（hook 内统一处理）。
+  useDialogFocus(open, closeBtnRef);
 
   // Web 回退状态（纯浏览器环境通过 GitHub API 探测）
   const [webCheck, setWebCheck] = useState({
@@ -106,11 +106,7 @@ export default function UpdateModal({
 
   const handleOpenReleasePage = () => {
     const targetUrl = (!isDesktop && webCheck.downloadUrl) ? webCheck.downloadUrl : RELEASES_PAGE_URL;
-    if (window.desktop?.openExternal) {
-      window.desktop.openExternal(targetUrl);
-    } else {
-      window.open(targetUrl, '_blank', 'noopener,noreferrer');
-    }
+    void openExternal(targetUrl, 'Release 页面');
   };
 
   return (

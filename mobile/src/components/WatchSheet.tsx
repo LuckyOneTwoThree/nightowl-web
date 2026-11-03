@@ -1,11 +1,4 @@
-import {
-  ActivityIndicator,
-  Linking,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ExternalLink, Play, Radio, RefreshCw, WifiOff } from 'lucide-react-native';
 
@@ -17,6 +10,7 @@ import watchSources from '../shared/server/watch-sources.json';
 
 import { useHighlights } from '@/data/useHighlights';
 import { useLiveSources } from '@/data/useLiveSources';
+import { openExternal } from '@/lib/openExternal';
 import { usePlayerStore } from '@/state/player';
 import { Crest } from '@/ui/Crest';
 import { Skeleton } from '@/ui/Skeleton';
@@ -49,6 +43,14 @@ type Props = {
   revealed: boolean;
   onReveal: () => void;
 };
+
+/** 集锦来源按平台展示，不要把 provider 的原始小写值直接甩给用户 */
+function providerLabel(provider?: string): string {
+  if (!provider) return '官方频道';
+  if (provider === 'youtube') return 'YouTube';
+  if (provider === 'dailymotion') return 'Dailymotion';
+  return provider;
+}
 
 export function WatchSheet({
   visible,
@@ -237,9 +239,7 @@ export function WatchSheet({
             </View>
           )}
 
-          <Text style={styles.note}>
-            直链来自公开索引，可能随时失效；播放器内置自动换线。App 不代理、不下载、不转码视频。
-          </Text>
+
         </View>
       ) : null}
 
@@ -288,19 +288,17 @@ export function WatchSheet({
             highlights.videos.map(video => (
               <Pressable
                 key={video.id}
-                onPress={() => {
-                  void Linking.openURL(video.url).catch(() => {});
-                }}
+                onPress={() => void openExternal(video.url, 'YouTube 集锦')}
                 style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
                 accessibilityRole="link"
-                accessibilityLabel="打开 YouTube 官方集锦"
+                accessibilityLabel={video.eventName || '打开 YouTube 官方集锦'}
               >
                 <Play size={16} color={colors.accent} />
                 <View style={styles.linkText}>
-                  <Text style={styles.linkName} numberOfLines={1}>
-                    {teamName(match.h)} vs {teamName(match.a)} · 官方集锦
+                  <Text style={styles.linkName} numberOfLines={2}>
+                    {video.eventName || `${teamName(match.h)} vs ${teamName(match.a)} · 官方集锦`}
                   </Text>
-                  <Text style={styles.linkNote}>YouTube · 在浏览器打开</Text>
+                  <Text style={styles.linkNote}>{providerLabel(video.provider)} · 在浏览器打开</Text>
                 </View>
                 <ExternalLink size={16} color={colors.textFaint} />
               </Pressable>
@@ -310,14 +308,14 @@ export function WatchSheet({
               暂未索引到本场 YouTube 集锦，可先用上方官方入口。
             </Text>
           )}
-          <Text style={styles.note}>
-            视频来自官方频道；App 不代理、不下载视频。
-          </Text>
         </View>
       ) : null}
 
+      {/* 免责声明只留这一条：直链段和集锦段原来各写了一遍「不代理 / 不下载」，
+          同一件事说三次，读者只会当成噪音跳过去。 */}
       <Text style={styles.note}>
-        直链由手机原生播放器打开；App 不代理、不下载、不转码任何视频。官方平台可能需要登录或会员。
+        直链来自公开索引，可能随时失效，播放器会尝试自动换线；直链由手机原生播放器打开。
+        App 不代理、不下载、不转码任何视频。官方平台可能需要登录或会员。
       </Text>
     </Sheet>
   );
@@ -339,9 +337,7 @@ function SourceSection({
         links.map(({ source, url }) => (
           <Pressable
             key={`${title}-${source.id}`}
-            onPress={() => {
-              void Linking.openURL(url).catch(() => {});
-            }}
+            onPress={() => void openExternal(url, source.name)}
             style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
             accessibilityRole="link"
             accessibilityLabel={`打开 ${source.name}`}

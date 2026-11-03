@@ -11,6 +11,7 @@ import LiveMatchPanel from './LiveMatchPanel.jsx';
 import MatchCanvas from './MatchCanvas.jsx';
 import RecapTimeline from './RecapTimeline.jsx';
 import { locateSection } from './locate.js';
+import { openExternal } from '../lib/openExternal.js';
 import { sourceUrlFor } from '../core/watch-sources.js';
 import { eventKey, shouldNotifyEvent } from '../core/live-events.js';
 import { liveEventNotification, fullTimeNotification } from '../core/notifications.js';
@@ -186,7 +187,7 @@ function OfficialLinks({ sources, match, limit = 99, replay = false }) {
             onClick={e => {
               if (window.desktop?.openExternal && url) {
                 e.preventDefault();
-                window.desktop.openExternal(url);
+                void openExternal(url, s.name);
               }
             }}
             className="inline-flex items-center gap-1 rounded-lg border border-line-hairline bg-surface-raised/60 px-2.5 py-1 text-2xs text-text-secondary transition-colors hover:border-line-control hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
@@ -532,11 +533,7 @@ export default function PlayerStage({
         setError(`起播失败：${e.message}`);
       }
     } else if (line.url) {
-      if (window.desktop?.openExternal) {
-        window.desktop.openExternal(line.url);
-      } else {
-        window.open(line.url, '_blank', 'noopener,noreferrer');
-      }
+      void openExternal(line.url, line.name);
     }
   }, []);
 
@@ -1131,7 +1128,7 @@ export default function PlayerStage({
                       const url = sourceUrlFor(sources[0], match, { replay: false });
                       if (window.desktop?.openExternal && url) {
                         e.preventDefault();
-                        window.desktop.openExternal(url);
+                        void openExternal(url, sources[0].name);
                       }
                     }}
                     className="no-drag inline-flex h-6 w-6 items-center justify-center rounded-md border border-line-hairline bg-surface-raised/60 text-text-secondary transition-colors hover:border-line-control hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"

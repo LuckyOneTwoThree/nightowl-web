@@ -63,6 +63,7 @@ import {
   saveMorningDigestDismissed
 } from './components/morning-digest-storage.js';
 import { IconClose } from './components/icons.jsx';
+import { ToastHost } from './components/ToastHost.jsx';
 import { compareSemver } from './core/semver.js';
 import { requestScoreSync, SYNC_STATUS_BUSY } from './api/score-sync.js';
 import { useDataHealth } from './hooks/useDataHealth.js';
@@ -83,18 +84,6 @@ function buildMatchMap() {
 }
 
 const VALID_VIEWS = ['tonight', 'week', 'schedule'];
-
-/** 浮层打开前的焦点落点：关闭后若原元素仍可聚焦就归还，避免键盘用户被丢到 body。 */
-function rememberFocus(ref) {
-  ref.current = typeof document !== 'undefined' ? document.activeElement : null;
-}
-function restoreFocus(ref) {
-  const el = ref.current;
-  ref.current = null;
-  if (!el?.isConnected || typeof window === 'undefined') return;
-  if (el.closest?.('[inert]')) return;
-  el.focus?.();
-}
 
 /** 读取 URL 深链（?view=week&match=PL-12-ARS-MCI），使三个视图可直接分享/刷新定位 */
 function initialFromUrl() {
@@ -237,10 +226,6 @@ export default function App() {
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const settingsReturnRef = useRef(null);
-  const paletteReturnRef = useRef(null);
-  const standingsReturnRef = useRef(null);
-  const updateReturnRef = useRef(null);
   const [revealed, setRevealed] = useState(() => new Set());
   const [filters, setFilters] = useState(() => defaultScheduleFilters());
   // 完整积分榜是参考视图：{ league, matchId }；matchId 为空表示从赛程入口全局查看
@@ -255,8 +240,6 @@ export default function App() {
     setOnboardingOpen(false);
   }, []);
   const rerunOnboarding = () => {
-    // 焦点交给引导，不归还到即将被遮住的设置入口
-    settingsReturnRef.current = null;
     setSettingsOpen(false);
     setOnboardingOpen(true);
   };
@@ -286,38 +269,26 @@ export default function App() {
     } catch {}
   }, []);
 
-  /* 浮层开关统一收口：记录打开前的焦点，关闭时归还。
-     此前 Esc 关闭设置/积分榜/命令面板后焦点直接落到 body，键盘用户会失去上下文。 */
+  /* 浮层开关收口在 App；焦点进场与归还由各弹窗自己的 useDialogFocus 负责 ——
+     一处实现，新增弹窗不需要再回到这里登记。 */
   const openSettings = useCallback(() => {
-    rememberFocus(settingsReturnRef);
     setSettingsOpen(true);
   }, []);
   const closeSettings = useCallback(() => {
     setSettingsOpen(false);
   }, []);
   const openPalette = useCallback(() => {
-    rememberFocus(paletteReturnRef);
     setPaletteOpen(true);
   }, []);
   const closePalette = useCallback(() => {
     setPaletteOpen(false);
   }, []);
   const openUpdateModal = useCallback(() => {
-    rememberFocus(updateReturnRef);
     setUpdateModalOpen(true);
   }, []);
   const closeUpdateModal = useCallback(() => {
     setUpdateModalOpen(false);
   }, []);
-
-  // 关闭动画/状态提交后再归还焦点，避免目标仍处于 inert 祖先里。
-  // 不用 rAF：Windows 隐藏窗口会节流，CI 与真实窗口行为会分叉。
-  useEffect(() => {
-    if (!settingsOpen) restoreFocus(settingsReturnRef);
-    if (!standingsState) restoreFocus(standingsReturnRef);
-    if (!paletteOpen) restoreFocus(paletteReturnRef);
-    if (!updateModalOpen) restoreFocus(updateReturnRef);
-  }, [settingsOpen, standingsState, paletteOpen, updateModalOpen]);
 
   useEffect(() => {
     if (!window.desktop?.onUpdaterEvent) return;
@@ -423,7 +394,6 @@ export default function App() {
   const onboardingVisible = onboardingOpen && !splashOpen;
 
   const replaySplash = useCallback(() => {
-    settingsReturnRef.current = null;
     setSettingsOpen(false);
     setSplashOpen(true);
   }, []);
@@ -993,7 +963,6 @@ export default function App() {
   }, [activeMatchId]);
 
   const openStandings = useCallback((league, matchId = null) => {
-    rememberFocus(standingsReturnRef);
     setStandingsState({ league, matchId });
   }, []);
   const closeStandings = useCallback(() => {
@@ -1037,8 +1006,6 @@ export default function App() {
   const runPaletteItem = useCallback(item => {
     const action = item?.action;
     if (!action) return;
-    // 执行动作会切换视图或打开新的浮层，不把焦点抢回搜索入口
-    paletteReturnRef.current = null;
     setPaletteOpen(false);
     if (action.type === 'view') {
       setView(action.view);
@@ -1408,6 +1375,9 @@ export default function App() {
           </div>
         </aside>
       )}
+
+      {/* 全局提示不参与 backdrop 的 inert：它常常是浮层内动作的结果（复制链接、外链失败） */}
+      <ToastHost />
     </div>
   );
 }

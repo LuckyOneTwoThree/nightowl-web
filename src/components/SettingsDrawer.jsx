@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDialogFocus } from '../hooks/useDialogFocus.js';
 import { getFixtures, FOLLOWABLE_LEAGUES, LEAGUE_NAMES, leagueColor, leagueName, teamName } from '../data/index.js';
 import { defaultPrefs } from '../core/prefs.js';
 import { queueWithMatches } from '../core/queue.js';
@@ -57,11 +58,9 @@ export default function SettingsDrawer({
     if (!open) setConfirmReset(false);
   }, [open]);
 
-  // 抽屉打开时把焦点移进对话框：背景已 inert，若焦点留在原按钮上，
-  // 键盘用户会直接失去可见焦点。
-  useEffect(() => {
-    if (open) closeBtnRef.current?.focus();
-  }, [open]);
+  // 焦点进场与归还统一由 hook 处理：背景已 inert，焦点不送进来键盘用户就失去可见焦点；
+  // 关闭后不还回去，焦点会掉到 body 顶部。
+  useDialogFocus(open, closeBtnRef);
 
   const { health, refresh } = useServiceHealth(open);
 
