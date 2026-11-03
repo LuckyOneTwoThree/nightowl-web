@@ -748,7 +748,20 @@ export default function App() {
     return false;
   }, [view, activeMatchId, tonight, replayPicks, week, scheduleRows]);
 
-  /** 预览态的“回到当前视图”落点：当前视图里最该看的那场 */
+  /**
+   * 每个视图各自的「上次选中」。
+   *
+   * 此前「回到当前视图」固定跳到该视图最该看的**第一场**：用户在周视图选了
+   * 周三那场，切去今晚再切回来，点按钮却回到周一 —— 上下文被动丢失。
+   * 这里只记「确实属于该视图的选择」，预览态（视图外比赛）不入账。
+   */
+  const lastInViewRef = useRef({});
+  useEffect(() => {
+    if (!activeMatchId || !activeInView) return;
+    lastInViewRef.current[view] = activeMatchId;
+  }, [activeMatchId, activeInView, view]);
+
+  /** 预览态的“回到当前视图”落点：优先该视图上次选中的那场，其次最该看的一场 */
   const firstInViewId = useMemo(() => {
     if (view === 'tonight') {
       return tonight.hero?.m.id || tonight.focal?.m.id || tonight.slice[0]?.id || null;
@@ -767,6 +780,28 @@ export default function App() {
     }
     return null;
   }, [view, tonight, week, scheduleRows]);
+
+  /** 记忆可能已过期（比赛结束 / 被筛选掉），失效时回退到最该看的一场 */
+  const returnToViewId = useMemo(() => {
+    const remembered = lastInViewRef.current[view];
+    if (!remembered) return firstInViewId;
+    if (view === 'tonight') {
+      const stillThere =
+        tonight.slice.some(m => m.id === remembered) ||
+        replayPicks.some(p => p.m.id === remembered) ||
+        tonight.focal?.m.id === remembered;
+      return stillThere ? remembered : firstInViewId;
+    }
+    if (view === 'week') {
+      return week?.matches.some(m => m.id === remembered) ? remembered : firstInViewId;
+    }
+    if (view === 'schedule') {
+      return scheduleRows.some(row => row.type === 'match' && row.m.id === remembered)
+        ? remembered
+        : firstInViewId;
+    }
+    return firstInViewId;
+  }, [view, firstInViewId, tonight, replayPicks, week, scheduleRows]);
 
   const activeIntel = useMemo(() => {
     if (!activeMatch) return null;
@@ -874,6 +909,18 @@ export default function App() {
   }, [tonight.focal, clockTs]);
 
   const select = useCallback(id => setActiveMatchId(id), []);
+
+  /**
+   * 切场把右栏拉回顶部。
+   *
+   * 右栏是整列滚动（视频 + 情报 + 回顾），用户在情报中部换一场后，
+   * 新比赛的画面会被留在视口上方看不到 —— 看起来像"点了没反应"。
+   */
+  const rightPaneRef = useRef(null);
+  useEffect(() => {
+    const el = rightPaneRef.current;
+    if (el) el.scrollTop = 0;
+  }, [activeMatchId]);
 
   const openStandings = useCallback((league, matchId = null) => {
     rememberFocus(standingsReturnRef);
@@ -1088,7 +1135,10 @@ export default function App() {
           </section>
 
           {/* 右栏：转播舞台 + 情报中枢 */}
-          <section className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
+          <section
+            ref={rightPaneRef}
+            className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto p-4"
+          >
             <div className="mx-auto flex w-full max-w-[1800px] 2xl:max-w-full flex-col gap-3">
               {activeMatch && !activeInView && (
                 <div
@@ -1103,8 +1153,8 @@ export default function App() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => firstInViewId && setActiveMatchId(firstInViewId)}
-                    disabled={!firstInViewId}
+                    onClick={() => returnToViewId && setActiveMatchId(returnToViewId)}
+                    disabled={!returnToViewId}
                     className="shrink-0 rounded-md px-2 py-0.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     回到当前视图
