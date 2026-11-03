@@ -5,7 +5,7 @@ import { stateOf } from '../core/owl.js';
 import { owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '../core/engine.js';
 import { weekRiskBands } from '../core/week-risk.js';
 import { Chip, Crest, Hint, IndexTag, Meta, SectionLabel, SleepBadge, Stars } from './atoms.jsx';
-import { IconChevronDown, IconChevronUp, IconClose, IconWarn } from './icons.jsx';
+import { IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronUp, IconClose, IconWarn } from './icons.jsx';
 import MatchRow from './MatchRow.jsx';
 import { useScrollMemory } from '../hooks/useScrollMemory.js';
 
@@ -221,6 +221,8 @@ export default function WeekView({
   activeMatchId,
   onSelect,
   onBudgetChange,
+  weekOffset = 0,
+  onWeekOffsetChange,
   revealed,
   onReveal
 }) {
@@ -233,6 +235,16 @@ export default function WeekView({
 
   const { plan, minefield, days, advice } = week;
   const remaining = Math.max(0, plan.budget - plan.used);
+
+  /* 周切换：只平移锚点，可排性仍按真实 now（口径见 core/owl.js 的 weekOffset）。
+     历史周没有「还要熬到几点」的风险语义，风险带与底线结论一律不显示。 */
+  const weekTitle =
+    weekOffset === 0 ? '本周熬夜规划' : weekOffset > 0 ? '未来周熬夜规划' : '历史周规划';
+  const showRisk = weekOffset >= 0;
+  const changeWeek = delta => {
+    setSelectedDay(null);
+    onWeekOffsetChange?.(delta === 0 ? 0 : weekOffset + delta);
+  };
 
   /* 一周风险带：夜坐标 / 睡眠底线 / 自适应轴全部来自 core/week-risk.js。
      结论行与时间轴共用同一份计算 —— 早先这里另有一套「精选有几晚低于底线」的摘要，
@@ -309,19 +321,52 @@ export default function WeekView({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2.5 overflow-hidden">
-      {/* 夜猫周口径标题行 */}
+      {/* 夜猫周口径标题行：左标题 + 右周导航（上一周 / 本周 / 下一周） */}
       <div className="flex items-center justify-between gap-2 px-0.5">
         <SectionLabel
           hint="周一格从周一 06:00 起，含周二凌晨；周日格含周一凌晨（06:00 前归前一夜）。"
           right={<Meta num>{weekRange} 夜</Meta>}
-          className="w-full"
+          className="min-w-0 flex-1"
         >
-          本周熬夜规划
+          {weekTitle}
         </SectionLabel>
+        <div className="flex shrink-0 items-center gap-0.5" role="group" aria-label="切换周">
+          <button
+            type="button"
+            onClick={() => changeWeek(-1)}
+            aria-label="上一周"
+            title="上一周"
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
+          >
+            <IconChevronLeft />
+          </button>
+          <button
+            type="button"
+            onClick={() => changeWeek(0)}
+            disabled={weekOffset === 0}
+            aria-label="回到本周"
+            className={`rounded-md px-1.5 py-0.5 text-2xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none ${
+              weekOffset === 0
+                ? 'cursor-default text-text-faint'
+                : 'cursor-pointer text-text-secondary hover:bg-surface-raised hover:text-text-primary'
+            }`}
+          >
+            本周
+          </button>
+          <button
+            type="button"
+            onClick={() => changeWeek(1)}
+            aria-label="下一周"
+            title="下一周"
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
+          >
+            <IconChevronRight />
+          </button>
+        </div>
       </div>
 
       {/* 睡眠底线结论：口径 = 整周未开赛场次，与下方时间轴完全同源（core/week-risk.js） */}
-      {risk.floor && (
+      {showRisk && risk.floor && (
         <div className={`px-0.5 text-2xs ${risk.riskNights > 0 ? 'text-warn' : 'text-text-muted'}`}>
           按 <span className="font-num tabular-nums">{risk.floor.wakeTime}</span> 起床 · 底线{' '}
           <span className="font-num tabular-nums">{risk.floor.clock}</span>
@@ -413,7 +458,9 @@ export default function WeekView({
         {/* 7 晚时间轴：把「熬到几点」画回时间上 */}
         {!hasScheduledMatches ? (
           <div className="border-t border-line-hairline px-2.5 py-3">
-            <p className="text-center text-2xs text-text-faint">本周暂无未开赛场次</p>
+            <p className="text-center text-2xs text-text-faint">
+              {showRisk ? '本周暂无未开赛场次' : '历史周不显示熬夜风险，仅列出赛程'}
+            </p>
           </div>
         ) : (
           <WeekTimeline
@@ -484,11 +531,15 @@ export default function WeekView({
                 <p className="text-xs font-medium text-text-secondary">
                   {selectedDay
                     ? '当晚没有入选本周精选的场次'
-                    : !hasScheduledMatches
-                      ? '本周暂无比赛'
-                      : plan.evs.length === 0
-                        ? '本周暂无可安排的未开赛场次'
-                        : '当前预算下暂未选出场次'}
+                    : !showRisk
+                      ? '历史周没有可计划的未开赛场次'
+                      : risk.tbdCount > 0 && plan.evs.length === 0
+                        ? `本周 ${risk.tbdCount} 场开球时间待定，公布开球时间后会自动进入规划`
+                        : !hasScheduledMatches
+                          ? '本周暂无比赛'
+                          : plan.evs.length === 0
+                            ? '本周暂无可安排的未开赛场次'
+                            : '当前预算下暂未选出场次'}
                 </p>
                 {!selectedDay && plan.evs.length > 0 && (
                   <button

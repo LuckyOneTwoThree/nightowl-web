@@ -436,7 +436,7 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
   }
 
   const { events, bySource, errors } = await fetchAllEvents({
-    leagues, months: list, targets, order, log, season
+    leagues, months: list, targets, order, log, season, timeoutMs: cfg.timeoutMs
   });
 
   const { merged, conflicts } = mergeEvents(events, order);

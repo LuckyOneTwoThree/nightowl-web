@@ -64,6 +64,7 @@ import { animateLayout } from '@/lib/layoutAnimation';
 import { hasScheduledMatchReminder, scheduleMatchReminder } from '@/lib/reminders';
 import { useLiveMatch, type LiveData } from '@/data/useLiveMatch';
 import { useNow } from '@/lib/useNow';
+import { formatGd } from '@/lib/format';
 import { useStopLossPrompt } from '@/lib/useStopLoss';
 import { useAppStore, useDataRev } from '@/state/app';
 import { useWatchLaterStore } from '@/state/queue';
@@ -1181,10 +1182,6 @@ function StandingsCard({
       )}
     </Card>
   );
-}
-
-function formatGd(gd: number) {
-  return gd > 0 ? `+${gd}` : `${gd}`;
 }
 
 function TierMeter({ tier }: { tier: Tier }) {

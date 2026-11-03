@@ -202,9 +202,16 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
     try {
       /* ---------------- 健康检查 ---------------- */
       if (pathname === '/api/health') {
+        // 报「真实绑定端口」而不是配置端口：Electron 在 3100 被占用时会回退到
+        // 3101–3104（见 electron/main.cjs 的 PORT_CANDIDATES），此时若还报
+        // rules.listen.port 就是错的。server.address() 在 listen 之后才拿得到。
+        const bound = server.address();
+        const listening = bound && typeof bound === 'object'
+          ? `${bound.address}:${bound.port}`
+          : `${rules.listen.host}:${rules.listen.port}`;
         sendJSON(res, 200, {
           ok: true,
-          listening: `${rules.listen.host}:${rules.listen.port}`,
+          listening,
           proxy: {
             allowedHosts: rules.proxy?.allowedHosts?.length || 0,
             allowedHostSuffixes: rules.proxy?.allowedHostSuffixes?.length || 0,
@@ -300,6 +307,10 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
           res.end();
           return;
         }
+        // 实际 GET/POST 同样校验来源：此前只有 OPTIONS 校验，外部网页虽然读不到
+        // 响应体（ACAO 受限），但仍能驱动代理流量、占用并发槽。同源 / 非浏览器
+        // 请求不带 Origin，照旧放行。
+        if (rejectForeignOrigin(req, res)) return;
         await proxy.handle(searchParams, req, res);
         return;
       }

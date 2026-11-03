@@ -65,7 +65,7 @@ const STRATEGY = {
  * 拉取所有源的事件
  * @returns {{ events: object[], bySource: object, errors: object[] }}
  */
-export async function fetchAllEvents({ leagues, months, targets, targetDates, season, order = DEFAULT_ORDER, log = console }) {
+export async function fetchAllEvents({ leagues, months, targets, targetDates, season, order = DEFAULT_ORDER, log = console, timeoutMs }) {
   const events = [];
   const bySource = {};
   const errors = [];
@@ -89,7 +89,9 @@ export async function fetchAllEvents({ leagues, months, targets, targetDates, se
   for (const r of requests) {
     bySource[r.sid].requests++;
     try {
-      const evs = await r.strat.fetch(r.league, r.unit, { log, season });
+      // 单请求超时统一走 rules.scores.timeoutMs（未配置时各源自带默认值），
+      // 避免「配置了 30s 但 ESPN 恒用 25s」这类配置失效。
+      const evs = await r.strat.fetch(r.league, r.unit, { log, season, timeoutMs });
       events.push(...evs);
       bySource[r.sid].events += evs.length;
       bySource[r.sid].ok++;

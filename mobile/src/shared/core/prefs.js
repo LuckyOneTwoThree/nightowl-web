@@ -16,7 +16,6 @@ const KEY = {
   spoilerFree: 'spoilerFree',
   notify: 'notifyBefore15',
   liveNotify: 'notifyLiveEvents',
-  theme: 'theme',
   sleepEnabled: 'sleepEnabled',
   sleepWakeTime: 'sleepWakeTime',
   sleepMinHours: 'sleepMinHours'
@@ -27,8 +26,6 @@ export const DEFAULT_FOLLOWED_LEAGUES = ['PL'];
 
 export const DEFAULT_BUDGET_HOURS = 4.0;
 
-export const DEFAULT_THEME = 'dark';
-
 export const defaultPrefs = () => ({
   followedTeams: [],
   followedLeagues: [...DEFAULT_FOLLOWED_LEAGUES],
@@ -36,7 +33,6 @@ export const defaultPrefs = () => ({
   spoilerFree: true,
   notifyBefore15: true,
   notifyLiveEvents: true,
-  theme: DEFAULT_THEME,
   sleepEnabled: false,
   sleepWakeTime: '07:30',
   sleepMinHours: 7
@@ -95,7 +91,6 @@ export function loadPrefs() {
     spoilerFree: readJSON(KEY.spoilerFree, d.spoilerFree) !== false,
     notifyBefore15: readJSON(KEY.notify, d.notifyBefore15) !== false,
     notifyLiveEvents: readJSON(KEY.liveNotify, d.notifyLiveEvents) !== false,
-    theme: 'dark',
     sleepEnabled: readJSON(KEY.sleepEnabled, d.sleepEnabled) === true,
     sleepWakeTime: readString(KEY.sleepWakeTime, d.sleepWakeTime),
     sleepMinHours: readNumber(KEY.sleepMinHours, d.sleepMinHours)
@@ -110,7 +105,6 @@ export function savePrefs(p) {
     localStorage.setItem(KEY.spoilerFree, JSON.stringify(p.spoilerFree));
     localStorage.setItem(KEY.notify, JSON.stringify(p.notifyBefore15));
     localStorage.setItem(KEY.liveNotify, JSON.stringify(p.notifyLiveEvents));
-    localStorage.setItem(KEY.theme, 'dark');
     localStorage.setItem(KEY.sleepEnabled, JSON.stringify(!!p.sleepEnabled));
     localStorage.setItem(KEY.sleepWakeTime, String(p.sleepWakeTime || '07:30'));
     localStorage.setItem(KEY.sleepMinHours, String(Number.isFinite(p.sleepMinHours) ? p.sleepMinHours : 7));

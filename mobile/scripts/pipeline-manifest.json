@@ -1,0 +1,78 @@
+{
+  "_readme": "手机端数据管道是桌面端的手抄分支（存在有意差异）。本清单让差异可见：任一侧改动都会让 verify:pipeline 失败；确认两端仍等价后运行 npm run sync:pipeline -- --write 更新哈希。",
+  "generatedAt": "2026-11-03T08:29:16.070Z",
+  "pairs": [
+    {
+      "desktop": "server/scores.js",
+      "mobile": "mobile/src/data/sync/scores.js",
+      "reason": "手机多 quickSyncTargets（72h 下拉快检）；共享函数应保持同口径",
+      "desktopSha": "3511ede9bbf2316ee469d4447b0ee59849e3b9cc83804796c6b5fe04632e0bd0",
+      "mobileSha": "0242af017fa7bccfb72d88eceab64bcb3b09d32d41c5fbd7d8d649e5b00d15de",
+      "desktopLines": 505,
+      "mobileLines": 551
+    },
+    {
+      "desktop": "server/sources/index.js",
+      "mobile": "mobile/src/data/sync/sources.js",
+      "reason": "端侧取数入口不同（桌面本地服务 / 手机直连 ESPN）",
+      "desktopSha": "a6bb5cd31a94b303119c6478b7348daafc098a393a3e2d8ce84758e40014c9ff",
+      "mobileSha": "01ad1ea646f565f09869bcee55cee22bd955c66a1e16daf6d13330f657469bbb",
+      "desktopLines": 205,
+      "mobileLines": 201
+    },
+    {
+      "desktop": "server/sources/espn.js",
+      "mobile": "mobile/src/data/sync/espn.js",
+      "reason": "ESPN 主源适配，两端应保持字段映射一致",
+      "desktopSha": "5e352ea179d94172a9c2def0caa39f078e45187f25cb3fbf87f38ed84e5d9142",
+      "mobileSha": "22e620d469d8c37ccb6fd59bf331f0685a5d9686ccafa2d792b8f27a2790988e",
+      "desktopLines": 126,
+      "mobileLines": 112
+    },
+    {
+      "desktop": "server/sources/openfootball.js",
+      "mobile": "mobile/src/data/sync/openfootball.js",
+      "reason": "副源适配；手机版传 retries",
+      "desktopSha": "baf9fc2fe21f96d870c5c5f3f87d22731f0dab60925a3dc3a075a69257254f3a",
+      "mobileSha": "083fc66d982822dd4c4005f3df2a6c19b8ae489079cc5176c58bd6663232761c",
+      "desktopLines": 96,
+      "mobileLines": 100
+    },
+    {
+      "desktop": "server/sources/normalize.js",
+      "mobile": "mobile/src/data/sync/normalize.js",
+      "reason": "桌面有 curl 兜底与事故背景注释，手机精简",
+      "desktopSha": "e4d8031259a66ab78cad35a5fb03ac47842c17b8dc9cc80e65d512593b89ea10",
+      "mobileSha": "f9f8f6e3aa349e6b806adf5c9021bd4e3a7d7e3735b40d686e14d77bf91f7947",
+      "desktopLines": 161,
+      "mobileLines": 97
+    },
+    {
+      "desktop": "server/live.js",
+      "mobile": "mobile/src/data/live.js",
+      "reason": "实时比分解析；缓存介质不同（内存 / AsyncStorage）",
+      "desktopSha": "3431df501992e8b70f63c3cda9acefeaba09a7bb81aaa5d51e3ce06feec67a04",
+      "mobileSha": "7c407acbd71d2159fdf8c2417db82a2bbe1caca15535ac2efb98d714a645cfac",
+      "desktopLines": 299,
+      "mobileLines": 299
+    },
+    {
+      "desktop": "server/highlights.js",
+      "mobile": "mobile/src/data/highlights.js",
+      "reason": "集锦解析；磁盘缓存 vs AsyncStorage，URL 校验实现不同",
+      "desktopSha": "bbb6262a4561e2f4649443d27a5b111d6c1e924d793201183a38000171a2c49b",
+      "mobileSha": "fef8cab928eaa3b56702131785ab2ed3b8d158d125f868dfb14810e39520c78c",
+      "desktopLines": 391,
+      "mobileLines": 379
+    },
+    {
+      "desktop": "server/scraper.js",
+      "mobile": "mobile/src/data/scraper.js",
+      "reason": "直播源抓取；手机不内置签名频道（TV_SPORTS_CHANNELS=[]）",
+      "desktopSha": "f0ba2588f2f8d03e72530088601f641514a334346074b3fb6a8f7ac1a1d6159d",
+      "mobileSha": "40fa99d134628e21845f39e3571d44a4296a34db0b0f767319d75bdc3da1be73",
+      "desktopLines": 494,
+      "mobileLines": 496
+    }
+  ]
+}

@@ -21,6 +21,7 @@ import { Screen } from '@/ui/Screen';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { SleepBadge } from '@/ui/SleepBadge';
 import { WeekRiskBand } from '@/ui/WeekRiskBand';
+import { WEEKLY_BUDGET_OPTIONS as BUDGETS } from '@/ui/budgetOptions';
 import type { WeekRisk } from '@/ui/WeekRiskBand';
 import { colors, fontSize, leagueColor, radius, spacing, tierColor, withAlpha, weight } from '@/ui/theme';
 import type { Entry, Ev, Match } from '@/types';
@@ -50,7 +51,6 @@ type KickoffGroup = {
   chosen: Entry;
 };
 
-const BUDGETS = [0, 1, 2, 3, 4, 5, 6, 8];
 const DAY_MS = 86_400_000;
 /** 周一 → 周日，与 core 的 weekday 序号一一对应 */
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];

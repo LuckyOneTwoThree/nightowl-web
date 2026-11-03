@@ -138,7 +138,34 @@ console.log('一、安全边界');
   const r = await fetch(`${PROXY}/api/health`);
   const j = await r.json();
   ok('GET /api/health 返回 200 且 ok=true', r.status === 200 && j.ok === true);
+  ok('健康检查回报真实监听端口（非配置端口 0）', j.listening === `127.0.0.1:${proxyPort}`, `${j.listening} vs 127.0.0.1:${proxyPort}`);
   ok('健康检查回报监听地址', String(j.listening).startsWith('127.0.0.1'), j.listening);
+}
+
+/** 用原生 http 发请求：方便精确设置 Origin（fetch 不保证放行该头）。 */
+const rawGet = (url, origin) =>
+  new Promise(resolve => {
+    const u = new URL(url);
+    const req = http.request(
+      { hostname: u.hostname, port: u.port, path: u.pathname + u.search, method: 'GET', headers: { origin } },
+      res => {
+        let body = '';
+        res.on('data', c => (body += c));
+        res.on('end', () => resolve({ status: res.statusCode, body }));
+      }
+    );
+    req.on('error', e => resolve({ status: 0, body: String(e) }));
+    req.end();
+  });
+
+{
+  const r = await rawGet(P(`${ORIGIN}/master.m3u8`), 'https://evil.example.com');
+  ok('实际 GET 带外部 Origin → 403（不只校验 OPTIONS）', r.status === 403 && r.body.includes('来源不在允许列表'), String(r.status));
+}
+
+{
+  const r = await rawGet(P(`${ORIGIN}/master.m3u8`), 'http://127.0.0.1:5173');
+  ok('实际 GET 带本机回环 Origin → 放行（200）', r.status === 200 && r.body.includes('/api/proxy?url='), String(r.status));
 }
 
 {

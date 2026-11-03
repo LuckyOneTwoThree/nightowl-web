@@ -16,6 +16,7 @@ import { useNow } from '@/lib/useNow';
 import { usePrefs } from '@/state/prefs';
 import { useAppStore, useDataRev } from '@/state/app';
 import { useWatchLaterStore } from '@/state/queue';
+import { useMorningDigestStore } from '@/state/morningDigest';
 import { MorningDigestSheet } from '@/components/MorningDigestSheet';
 import { useSyncOnLaunch } from '@/data/sync/useSync';
 import { usePrematchReminders } from '@/lib/usePrematchReminders';
@@ -68,6 +69,13 @@ function AppShell() {
     prefs,
     !pathname.includes('onboarding')
   );
+  // 「我的」页的「看摘要」发出递增信号，由这里唯一的摘要实例响应。
+  // 不把 digest.open 放进依赖（每次渲染 identity 都变），只在信号变化时调用一次。
+  const digestOpenSignal = useMorningDigestStore(state => state.openSignal);
+  useEffect(() => {
+    if (digestOpenSignal > 0) digest.open();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [digestOpenSignal]);
 
   return (
     <GestureHandlerRootView style={styles.root}>

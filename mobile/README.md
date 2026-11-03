@@ -68,6 +68,7 @@ npm start
 
 ```bash
 npm run verify:shared    # 桌面端 core/data 与 mobile 生成副本是否一致
+npm run verify:pipeline  # 手抄数据管道（scores/live/highlights/scraper…）是否有未登记改动
 npm run typecheck        # TypeScript
 npm run export:android   # 生成 Android JS bundle（不是 APK，用于验证打包阶段）
 ```
@@ -128,6 +129,17 @@ npm run verify:shared   # 漂移检查；不一致时 CI / 提交前必须失败
 ```
 
 **改动顺序**：先改桌面端 `src/core` / `src/data` / `server/*.json`，再同步到手机端；不要在 `mobile/src/shared` 里直接改。`prestart`、`pretypecheck`、`preexport:android` 会自动跑同步。
+
+### 手抄数据管道（不在 `verify:shared` 覆盖内）
+
+以下文件是桌面端 `server/*` 的**手抄分支**（有合理差异：无 curl 兜底、含 `quickSyncTargets`、用 AsyncStorage 而非磁盘缓存等）：
+
+```
+src/data/sync/{scores,sources,espn,openfootball,normalize}.js  ← server/scores.js · server/sources/*
+src/data/{live,highlights,scraper}.js                          ← server/{live,highlights,scraper}.js
+```
+
+`verify:shared` 的绿灯**不代表**这条管道一致。`verify:pipeline` 用 `scripts/pipeline-manifest.json` 记录每对文件的内容哈希：任一侧改动都会失败，提示你复核两端是否仍等价；确认后 `npm run sync:pipeline`（即 `--write`）更新哈希。它每次还会打印两端行数差，让「这对手抄分支已经差多少」一眼可见。
 
 路径别名：
 

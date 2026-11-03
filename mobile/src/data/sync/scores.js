@@ -476,9 +476,12 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
 
   const { events, bySource, errors } = await fetchAllEvents({
     leagues, months: list, targets, order, log, season,
-    // 下拉快检不能让单次超时占住手势：6s / 单次尝试；完整同步仍用默认的 20s / 3 次。
+    // 下拉快检不能让单次超时占住手势：6s / 单次尝试；完整同步用 rules.scores.timeoutMs
+    // （默认 30s，与桌面同口径），未配置时交给各源默认。
     // 另加总时长上限：快检 20s、完整同步 90s，避免慢网把状态灯拖成常驻。
-    fetchOptions: quick ? { timeoutMs: 6000, retries: 1 } : undefined,
+    fetchOptions: quick
+      ? { timeoutMs: 6000, retries: 1 }
+      : (Number.isFinite(cfg.timeoutMs) && cfg.timeoutMs > 0 ? { timeoutMs: cfg.timeoutMs } : undefined),
     deadlineMs: quick ? 20000 : 90000
   });
 

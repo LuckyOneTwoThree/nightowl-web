@@ -27,9 +27,9 @@ import { usePrefs, usePrefsStore } from '@/state/prefs';
 import { Button } from '@/ui/Button';
 import { Chip } from '@/ui/Chip';
 import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
+import { WEEKLY_BUDGET_OPTIONS as BUDGETS } from '@/ui/budgetOptions';
 
 const STEP_TITLES = ['选择关注联赛', '选择关注球队', '设定熬夜额度'];
-const BUDGETS = [0, 1, 2, 3, 4, 5, 6, 8];
 
 export default function OnboardingScreen() {
   const router = useRouter();

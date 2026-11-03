@@ -4,24 +4,7 @@ import { countdown as engineCountdown, ts, MATCH_DURATION_MS, sleepTier } from '
 import { hm, humanCountdownShort } from './core/format.js';
 import { STANDINGS_LEAGUES } from './core/standings.js';
 import { loadPrefs, savePrefs } from './core/prefs.js';
-import {
-  addToQueue,
-  markQueueWatched,
-  normalizeQueue,
-  queueStatusOf,
-  removeFromQueue,
-  toggleQueue
-} from './core/queue.js';
-import { loadWatchLater, saveWatchLater } from './components/watch-later-storage.js';
-import { loadStopLossStates, saveStopLossStates } from './components/stop-loss-storage.js';
-import {
-  ignoreStopLoss,
-  markStopLossPrompted,
-  shouldStopLossPrompt,
-  sleepStopLoss,
-  snoozeStopLoss,
-  stopLossNightKey
-} from './core/stop-loss.js';
+import { normalizeQueue, queueStatusOf } from './core/queue.js';
 import { isPrematchDue, prematchNotification } from './core/notifications.js';
 import {
   computeTonight,
@@ -67,6 +50,10 @@ import { ToastHost } from './components/ToastHost.jsx';
 import { compareSemver } from './core/semver.js';
 import { requestScoreSync, SYNC_STATUS_BUSY } from './api/score-sync.js';
 import { useDataHealth } from './hooks/useDataHealth.js';
+import { useWatchLater } from './hooks/useWatchLater.js';
+import { useStopLoss } from './hooks/useStopLoss.js';
+import { useOverlayStack } from './hooks/useOverlayStack.js';
+import { useFixturesRefresh } from './hooks/useFixturesRefresh.js';
 import { VIEW_COMMANDS, ACTION_COMMANDS, buildMatchCommands } from './core/command-palette.js';
 
 /**
@@ -125,55 +112,20 @@ export default function App() {
   }, []);
 
   // ---- 明早补看（本地单机，只存比赛 ID / 夜晚 / 状态，不存比分）----
-  const [watchLater, setWatchLater] = useState(() => loadWatchLater());
-  const watchLaterRef = useRef(watchLater);
-  watchLaterRef.current = watchLater;
-  const commitWatchLater = useCallback(next => {
-    const normalized = normalizeQueue(next);
-    watchLaterRef.current = normalized;
-    setWatchLater(normalized);
-    saveWatchLater(normalized);
-    return normalized;
-  }, []);
-  const addWatchLater = useCallback(match => {
-    const result = addToQueue(watchLaterRef.current, match);
-    if (result.ok && result.added) commitWatchLater(result.queue);
-    return result;
-  }, [commitWatchLater]);
-  /**
-   * 补看按钮的唯一入口：未加入 -> 加入；待看 -> 移出；已看 -> 恢复待看。
-   * 组件不再各自保存 queued，避免同一场比赛在不同入口出现不同状态。
-   */
-  const toggleWatchLater = useCallback(match => {
-    const result = toggleQueue(watchLaterRef.current, match);
-    if (result.ok) commitWatchLater(result.queue);
-    return result;
-  }, [commitWatchLater]);
-  const removeWatchLater = useCallback(id => {
-    commitWatchLater(removeFromQueue(watchLaterRef.current, id));
-  }, [commitWatchLater]);
-  const markWatchLaterWatched = useCallback(id => {
-    commitWatchLater(markQueueWatched(watchLaterRef.current, id));
-  }, [commitWatchLater]);
+  const {
+    watchLater,
+    addWatchLater,
+    toggleWatchLater,
+    removeWatchLater,
+    markWatchLaterWatched
+  } = useWatchLater();
 
-  // ---- 止损提醒：只在前台、到达个人止损点且比赛尚未结束时出现 ----
-  const [stopLossStates, setStopLossStates] = useState(() => loadStopLossStates());
-  const stopLossStatesRef = useRef(stopLossStates);
-  stopLossStatesRef.current = stopLossStates;
-  const [stopLossContext, setStopLossContext] = useState(null);
-  const [stopLossNotice, setStopLossNotice] = useState(null);
-  const [stopPlaybackRequest, setStopPlaybackRequest] = useState(0);
+  // ---- 明早补看摘要 / 连续补看会话 ----
   const [morningDigestOpen, setMorningDigestOpen] = useState(false);
   const [morningDismissed, setMorningDismissed] = useState(() => loadMorningDigestDismissed());
   /* 连续补看会话：{ ids, cursor }，null 表示没在连看。
      只存 id 快照 + 游标（见 core/digest-session.js），比赛对象每次从 matchMap 取当前值。 */
   const [digestSession, setDigestSession] = useState(null);
-  const commitStopLoss = useCallback((night, state) => {
-    const next = { ...stopLossStatesRef.current, [night]: state };
-    stopLossStatesRef.current = next;
-    setStopLossStates(next);
-    saveStopLossStates(next);
-  }, []);
 
   // ---- 桌面外壳设置（关闭到托盘 / 开机自启）----
   // 存在主进程：这两项要在窗口创建前生效，不能只放 localStorage
@@ -215,6 +167,8 @@ export default function App() {
   // ---- 视图与选中 ----
   const boot = useMemo(initialFromUrl, []);
   const [view, setView] = useState(boot.view);
+  // 周视图看哪一周：0=本周，正数未来、负数过去。只移动锚点，可排性仍用真实 now（见 core/owl.js）
+  const [weekOffset, setWeekOffset] = useState(0);
   const [activeMatchId, setActiveMatchId] = useState(() => {
     if (boot.matchId) return boot.matchId;
     try {
@@ -411,48 +365,12 @@ export default function App() {
     });
   }, []);
 
-  // ---- 数据热更新 ----
+  // ---- 数据热更新（dataRev / refreshData / 竞态保护 / focus 校准收在 hook 里）----
   // 打包后 fixtures 是构建期内联的快照，保鲜同步把新比分写到了 userData。
   // 启动时（以及点「立即同步」后）从 /api/fixtures 拉最新数据替换掉它，
   // dataRev 变化会让下面所有派生数据重算 —— 否则「刚结束的比赛」会一直显示待录比分。
-  const [dataRev, setDataRev] = useState(0);
+  const { dataRev, refreshData, bumpDataRev } = useFixturesRefresh();
   const lastSyncTriggerRef = useRef(0);
-
-  // 竞态保护：refreshData 有 4 个并发来源（挂载 effect / focus 监听 /
-  // triggerSync 的 409 延迟分支 / 设置抽屉按钮）。旧实现无任何保护，
-  // 后返回的旧响应会覆盖新数据（last-response-wins）。
-  // 两层：in-flight 复用避免重复请求；序号保证只有最新一次的响应才会被应用。
-  const refreshInFlightRef = useRef(null);
-  const refreshSeqRef = useRef(0);
-
-  const refreshData = useCallback(async () => {
-    // 已有相同拉取在进行：复用同一个 promise，不重复发请求
-    if (refreshInFlightRef.current) return refreshInFlightRef.current;
-    refreshSeqRef.current += 1;
-    const seq = refreshSeqRef.current;
-    const p = (async () => {
-      try {
-        const r = await fetch('/api/fixtures');
-        if (!r.ok) return null;
-        const j = await r.json();
-        // 只接受最后一次发起的响应，避免旧响应覆盖新数据
-        if (seq !== refreshSeqRef.current) return null;
-        if (j?.fixtures?.length && setFixtures(j.fixtures)) {
-          setDataRev(v => v + 1);
-        }
-        return j;
-      } catch {
-        /* 服务不可用（纯静态预览）时静默沿用内置快照，不打扰用户 */
-      }
-      return null;
-    })();
-    refreshInFlightRef.current = p;
-    try {
-      return await p;
-    } finally {
-      refreshInFlightRef.current = null;
-    }
-  }, []);
 
   // 数据健康 / 计划有变 / 单场重查：一套状态与轮询收在 hook 里
   const {
@@ -509,11 +427,11 @@ export default function App() {
     // 写盘失败已被判据函数归为 failed（HTTP 200 不等于写盘成功）；
     // 走到这里说明响应可采信，服务端回传了新 fixtures 就立刻热替换。
     if (outcome.payload?.fixtures?.length && setFixtures(outcome.payload.fixtures)) {
-      setDataRev(v => v + 1);
+      bumpDataRev();
     } else if (outcome.status === 'updated' || outcome.status === 'partial_failure') {
       refreshData();
     }
-  }, [refreshData, refreshHealth]);
+  }, [refreshData, refreshHealth, bumpDataRev]);
 
   // 每次刚启动/进入就检查是否有未同步完赛比分，有则立即更新
   useEffect(() => {
@@ -551,13 +469,6 @@ export default function App() {
     }, 5 * 60 * 1000);
     return () => clearInterval(timer);
   }, [triggerSync]);
-
-  useEffect(() => {
-    // 页面重新聚焦时轻量校准一次
-    const onFocus = () => refreshData();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [refreshData]);
 
   // ---- 派生数据（分钟粒度重算，故意不依赖秒级 now）----
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -627,8 +538,8 @@ export default function App() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const week = useMemo(
-    () => (view === 'week' ? computeWeek(Date.now(), prefs) : null),
-    [view, minuteKey, prefs, dataRev]
+    () => (view === 'week' ? computeWeek(Date.now(), prefs, { weekOffset }) : null),
+    [view, minuteKey, prefs, dataRev, weekOffset]
   );
 
   /**
@@ -660,44 +571,23 @@ export default function App() {
   const matchMap = useMemo(buildMatchMap, [dataRev]);
   const activeMatch = activeMatchId ? matchMap[activeMatchId] || null : null;
 
-  // 切换比赛时收起上一场的提示，避免旧止损卡停留在新场次上。
-  useEffect(() => {
-    setStopLossContext(null);
-    setStopLossNotice(null);
-  }, [activeMatchId]);
-
-  useEffect(() => {
-    if (
-      !activeMatch || !prefs.sleepEnabled || stopLossContext ||
-      settingsOpen || onboardingOpen || splashOpen || updateModalOpen || standingsState
-    ) {
-      return;
-    }
-    const night = stopLossNightKey(activeMatch);
-    if (!night) return;
-    const profile = {
-      enabled: true,
-      wakeTime: prefs.sleepWakeTime,
-      minSleep: prefs.sleepMinHours
-    };
-    const prompt = shouldStopLossPrompt(activeMatch, profile, clockTs, stopLossStates[night]);
-    if (!prompt) return;
-    setStopLossContext({ ...prompt, match: activeMatch });
-    setStopLossNotice(null);
-    commitStopLoss(night, markStopLossPrompted(stopLossStates[night]));
-  }, [
-    activeMatch, clockTs, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepMinHours,
-    stopLossStates, stopLossContext, settingsOpen, onboardingOpen, splashOpen,
-    updateModalOpen, standingsState, commitStopLoss
-  ]);
-
-  useEffect(() => {
-    if (!stopLossContext) return;
-    if (clockTs > stopLossContext.ledger.endTs) {
-      setStopLossContext(null);
-      setStopLossNotice(null);
-    }
-  }, [clockTs, stopLossContext]);
+  // ---- 止损提醒：状态 / 触发 / 三个动作都收在 useStopLoss 里 ----
+  const {
+    stopLossContext,
+    stopLossNotice,
+    stopPlaybackRequest,
+    handleStopLossSleep,
+    handleStopLossSnooze,
+    handleStopLossIgnore
+  } = useStopLoss({
+    activeMatchId,
+    activeMatch,
+    clockTs,
+    prefs,
+    blocked: !!(settingsOpen || onboardingOpen || splashOpen || updateModalOpen || standingsState),
+    addWatchLater,
+    markWatchLaterWatched
+  });
 
   /**
    * 当前选中是否属于左栏当前列表。
@@ -891,38 +781,6 @@ export default function App() {
     if (id && id !== activeMatchId) setActiveMatchId(id);
   }, [digestSession, digestPositionInfo.id, queueWatchedIds, markWatchLaterWatched, activeMatchId]);
 
-  const handleStopLossSleep = () => {
-    if (!stopLossContext) return;
-    const result = addWatchLater(stopLossContext.match);
-    if (!result?.ok) {
-      setStopLossNotice('补看队列已满，请先在「偏好与数据 → 明早补看」移除旧条目');
-      return;
-    }
-    commitStopLoss(stopLossContext.night, sleepStopLoss(stopLossStatesRef.current[stopLossContext.night]));
-    // 先落队列与止损状态，再通知 PlayerStage 停止；即便播放器已卸载，也只是多一次无效请求。
-    setStopPlaybackRequest(value => value + 1);
-    setStopLossContext(null);
-    setStopLossNotice(null);
-  };
-  const handleStopLossSnooze = () => {
-    if (!stopLossContext) return;
-    commitStopLoss(
-      stopLossContext.night,
-      snoozeStopLoss(stopLossStatesRef.current[stopLossContext.night])
-    );
-    setStopLossContext(null);
-    setStopLossNotice(null);
-  };
-  const handleStopLossIgnore = () => {
-    if (!stopLossContext) return;
-    markWatchLaterWatched(stopLossContext.match.id);
-    commitStopLoss(
-      stopLossContext.night,
-      ignoreStopLoss(stopLossStatesRef.current[stopLossContext.night])
-    );
-    setStopLossContext(null);
-    setStopLossNotice(null);
-  };
   const spoilerExcludedIds = useMemo(
     () => unrevealedTonightIds(getFixtures(), clockTs, prefs.spoilerFree, revealed),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1032,79 +890,26 @@ export default function App() {
     }
   }, [tonight, triggerSync]);
 
-  // 任一全屏浮层打开时，背景内容必须同时退出键盘焦点与点击（inert）。
-  // 只靠遮罩挡鼠标，Tab 仍会跑进后面的列表，这是真实的无障碍缺陷。
-  // 早晨补看摘要声明了 aria-modal，同样属于此列 —— 此前漏收，弹窗开着还能 Tab 到背景。
-  const overlayOpen =
-    settingsOpen ||
-    onboardingVisible ||
-    updateModalOpen ||
-    splashOpen ||
-    paletteOpen ||
-    morningDigestOpen ||
-    !!standingsState;
-
-  /**
-   * 浮层顺序：按实际打开顺序入栈，Escape 只关最上层。
-   *
-   * 旧实现按固定优先级排序：更新弹窗自动叠到积分榜上时，Esc 会先关积分榜。
-   * 顺序由每个浮层的 open 状态变化增量维护；渲染时把「刚打开但 effect 还没同步」
-   * 的浮层追加到末尾，避免新弹窗在首帧被 inert 掉、焦点进不去。
-   */
-  const [overlayOrder, setOverlayOrder] = useState([]);
-  const prevOverlayOpenRef = useRef({});
-  const overlayState = [
-    { id: 'settings', open: settingsOpen },
-    { id: 'onboarding', open: onboardingVisible },
-    { id: 'update', open: updateModalOpen },
-    { id: 'standings', open: !!standingsState },
-    { id: 'palette', open: paletteOpen },
-    { id: 'morning', open: morningDigestOpen }
-  ];
-  const openOverlayIds = overlayState.filter(x => x.open).map(x => x.id);
-  const effectiveOverlayOrder = [
-    ...overlayOrder.filter(id => openOverlayIds.includes(id)),
-    ...openOverlayIds.filter(id => !overlayOrder.includes(id))
-  ];
-  const topOverlay = effectiveOverlayOrder[effectiveOverlayOrder.length - 1] || null;
-  const inertFor = id => (openOverlayIds.includes(id) && id !== topOverlay ? true : undefined);
-
-  useEffect(() => {
-    const prev = prevOverlayOpenRef.current;
-    const next = Object.fromEntries(overlayState.map(x => [x.id, x.open]));
-    setOverlayOrder(order => {
-      const kept = order.filter(id => next[id]);
-      const added = overlayState.filter(x => x.open && !prev[x.id]).map(x => x.id);
-      return added.length ? [...kept, ...added] : kept;
-    });
-    prevOverlayOpenRef.current = next;
-    // overlayState 的顺序固定，这里只需响应每个浮层的开关
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settingsOpen, onboardingVisible, updateModalOpen, !!standingsState, paletteOpen, morningDigestOpen]);
-
-  useEffect(() => {
-    if (overlayOrder.length === 0) return undefined;
-    const onEsc = e => {
-      if (e.key !== 'Escape') return;
-      const id = overlayOrder[overlayOrder.length - 1];
-      if (id === 'settings') closeSettings();
-      else if (id === 'onboarding') closeOnboarding();
-      else if (id === 'update') closeUpdateModal();
-      else if (id === 'standings') closeStandings();
-      else if (id === 'palette') closePalette();
-      else if (id === 'morning') closeMorningDigest();
-    };
-    window.addEventListener('keydown', onEsc);
-    return () => window.removeEventListener('keydown', onEsc);
-  }, [
-    overlayOrder,
-    closeSettings,
-    closeOnboarding,
-    closeUpdateModal,
-    closeStandings,
-    closePalette,
-    closeMorningDigest
-  ]);
+  // ---- 浮层栈：背景 inert / Esc 只关最上层 / 打开顺序决定层级（实现见 hooks/useOverlayStack）----
+  const { overlayOpen, inertFor } = useOverlayStack({
+    flags: {
+      settings: settingsOpen,
+      onboarding: onboardingVisible,
+      update: updateModalOpen,
+      standings: !!standingsState,
+      palette: paletteOpen,
+      morning: morningDigestOpen
+    },
+    splashOpen,
+    closers: {
+      settings: closeSettings,
+      onboarding: closeOnboarding,
+      update: closeUpdateModal,
+      standings: closeStandings,
+      palette: closePalette,
+      morning: closeMorningDigest
+    }
+  });
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden stage-atmosphere text-text-primary">
@@ -1167,6 +972,8 @@ export default function App() {
                 activeMatchId={activeMatchId}
                 onSelect={select}
                 onBudgetChange={v => setPrefs({ ...prefs, weeklyBudget: v })}
+                weekOffset={weekOffset}
+                onWeekOffsetChange={setWeekOffset}
                 revealed={revealed}
                 onReveal={reveal}
               />

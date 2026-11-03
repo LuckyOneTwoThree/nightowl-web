@@ -57,6 +57,7 @@ npm install
 npm start                  # Expo 开发服务器；prestart 自动同步共享层与队徽
 npm run typecheck          # tsc --noEmit
 npm run verify:shared      # 共享层漂移检查（提交前必跑）
+npm run verify:pipeline    # 手抄数据管道差异清单校验（提交前必跑）
 npm run export:android     # 验证 Android JS bundle 可产出（不是 APK）
 npm run eas:dev            # development APK（通知 / PiP / HLS 真机调试）
 npm run eas:preview        # 内测 APK（arm64，用于真机验收）
@@ -72,6 +73,10 @@ npm run sync:crests   # ../public/crests → assets/crests + src/data/crests.ts
 ```
 
 改动必须先落在桌面端源文件，再同步；不要在 `mobile/src/shared` 里直接改。`prestart` / `pretypecheck` / `preexport:android` 已挂同步，`verify:shared` 负责发现漂移。
+
+### 手抄数据管道
+
+`mobile/src/data/sync/{scores,sources,espn,openfootball,normalize}.js` 与 `mobile/src/data/{live,highlights,scraper}.js` 是桌面 `server/*` 的**手抄分支**（无 curl 兜底、含 quickSyncTargets、用 AsyncStorage 等有意差异），**不在 `verify:shared` 覆盖内**（`verify:shared` 只保证 `src/core`/`src/data`/JSON/tz 一致）。`verify:pipeline` 用 `mobile/scripts/pipeline-manifest.json` 记录每对文件哈希，任一侧改动即失败，提示复核两端；确认后 `npm run sync:pipeline` 更新哈希。`pretypecheck` 已挂该门禁。
 
 ### 原生能力与构建门禁
 

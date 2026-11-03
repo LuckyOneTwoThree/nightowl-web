@@ -11,6 +11,7 @@ import { useAppStore, useDataRev } from '@/state/app';
 import { usePrefs } from '@/state/prefs';
 import { unrevealedTonightIds } from '@core/reveal.js';
 import { useNow } from '@/lib/useNow';
+import { formatGd } from '@/lib/format';
 import { Chip } from '@/ui/Chip';
 import { Crest } from '@/ui/Crest';
 import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
@@ -53,10 +54,6 @@ function displayItems(rows: StandingsRow[], league: string): DisplayItem[] {
     out.push({ type: 'row', key: row.teamId, row });
   });
   return out;
-}
-
-function formatGd(gd: number) {
-  return gd > 0 ? `+${gd}` : `${gd}`;
 }
 
 /**
