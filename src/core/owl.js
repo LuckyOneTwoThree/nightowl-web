@@ -244,10 +244,12 @@ export function owlDayOffset(n, nowTs = Date.now()) {
 /**
  * 单场评估（供列表行按需取星级 / 德比名 / 指数）
  * evaluate 成本很低（20 条德比 + 8 条故事线的线性扫描），虚拟滚动下每次只算可见行。
+ *
+ * ⚠️ 曾经这里还有一个 INDEX_HIGHLIGHT_THRESHOLD（超阈值把行内指数点亮成金色），
+ * 现已随「指数弱化」删除：全站只允许 Hero 卡与情报面板头部使用强调色，
+ * 列表行、同开球逐条、备选场次的指数一律中性次级色（见 atoms.jsx 的 IndexTag）。
+ * 想恢复高亮前先想清楚：一屏几十个金色数字会让「今晚之选」失去唯一性。
  */
-/** 列表行指数的强调阈值；桌面与移动端必须共用，避免同一个数字两端判断不同。 */
-export const INDEX_HIGHLIGHT_THRESHOLD = 8;
-
 export function evalOne(m, prefs) {
   const ev = E.evaluate(m, REC_MAP, rivalries, storylines, prefs.followedTeams, prefs.followedLeagues);
   return { ev, index: E.owlIndex(ev, m, E.PRODUCT_WEIGHTS) };

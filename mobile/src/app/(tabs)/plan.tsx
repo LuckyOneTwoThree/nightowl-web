@@ -669,9 +669,9 @@ const styles = StyleSheet.create({
   pickLeague: { color: colors.textMuted, fontSize: fontSize.xs },
   pickIndex: {
     marginLeft: 'auto',
-    color: colors.accent,
-    fontSize: fontSize.md,
-    fontWeight: '700',
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
   pickTeams: { flexDirection: 'row', alignItems: 'center', gap: 6 },

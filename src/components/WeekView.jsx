@@ -4,7 +4,7 @@ import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { stateOf } from '../core/owl.js';
 import { owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '../core/engine.js';
 import { formatSleepHours, sleepLedger } from '../core/sleep.js';
-import { Chip, Crest, Hint, Meta, SectionLabel, SleepBadge, Stars } from './atoms.jsx';
+import { Chip, Crest, Hint, IndexTag, Meta, SectionLabel, SleepBadge, Stars } from './atoms.jsx';
 import { IconChevronDown, IconChevronUp, IconClose, IconWarn } from './icons.jsx';
 import MatchRow from './MatchRow.jsx';
 
@@ -633,9 +633,7 @@ export default function WeekView({
                       <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
                         {teamName(e.m.h)} vs {teamName(e.m.a)}
                       </span>
-                      <span className="shrink-0 font-num text-2xs tabular-nums text-text-secondary">
-                        指数 {e.index.toFixed(1)}
-                      </span>
+                      <IndexTag value={e.index} />
                     </button>
                   ))}
                 </div>
@@ -686,9 +684,7 @@ function KickoffAlternatives({ group, selectedId, activeMatchId, onSelect }) {
               <span className="min-w-0 flex-1 truncate text-2xs text-text-secondary">
                 {teamName(x.m.h)} vs {teamName(x.m.a)}
               </span>
-              <span className="shrink-0 font-num text-2xs tabular-nums text-text-muted">
-                指数 {x.index.toFixed(1)}
-              </span>
+              <IndexTag value={x.index} />
             </button>
           ))}
         </div>
@@ -750,9 +746,7 @@ function PickRow({ e, active, kickoffGroup, onSelect }) {
                 同时开球 ({conflictCount})
               </span>
             )}
-            <span className="ml-auto shrink-0 font-num text-xs font-semibold tabular-nums text-text-primary">
-              指数 {e.index.toFixed(1)}
-            </span>
+            <IndexTag value={e.index} className="ml-auto" />
           </div>
 
           <div className="mt-1.5 flex items-center gap-2">

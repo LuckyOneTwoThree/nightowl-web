@@ -6,7 +6,7 @@ import { decisionStrip } from '../core/decision-strip.js';
 import { storylines, teamName } from '../data/index.js';
 import HeroCard, { NoMatchCard } from './HeroCard.jsx';
 import MatchRow from './MatchRow.jsx';
-import { Button, Chip, LiveDot, Meta, SectionLabel, SleepBadge } from './atoms.jsx';
+import { Button, Chip, IndexTag, LiveDot, Meta, SectionLabel, SleepBadge } from './atoms.jsx';
 import { formatSleepHours } from '../core/sleep.js';
 import { queueStatusOf } from '../core/queue.js';
 import { sleepLedgerFor } from './SleepNote.jsx';
@@ -72,9 +72,7 @@ function SameKickoffPanel({ group, activeMatchId, prefs, onSelect, onWatchLater,
                 <span className="min-w-0 truncate text-xs font-medium text-text-primary">
                   {teamName(m.h)} vs {teamName(m.a)}
                 </span>
-                <span className="shrink-0 font-num text-xs font-semibold tabular-nums text-text-primary">
-                  {index.toFixed(1)}
-                </span>
+                <IndexTag value={index} />
               </div>
               <div className="mt-1 flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-1.5">

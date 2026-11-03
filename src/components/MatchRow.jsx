@@ -2,8 +2,7 @@ import { shouldHideScore } from '../core/reveal.js';
 import { hm, liveMinute } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { ts, MATCH_DURATION_MS } from '../core/engine.js';
-import { INDEX_HIGHLIGHT_THRESHOLD } from '../core/owl.js';
-import { Crest, Chip, LiveDot, ScoreText, SleepBadge } from './atoms.jsx';
+import { Crest, Chip, IndexTag, LiveDot, ScoreText, SleepBadge } from './atoms.jsx';
 import { IconDerby, IconWarn } from './icons.jsx';
 
 /**
@@ -132,16 +131,9 @@ export default function MatchRow({
                    行内已经有「待定」标记，这里不再给一个看起来确定的分数。 */
                 null
               ) : state === 'sched' && index != null ? (
-                <span
-                  className="inline-flex items-baseline gap-1 font-num text-xs font-semibold tabular-nums"
-                  title="夜猫指数"
-                  aria-label={`夜猫指数 ${index.toFixed(1)}`}
-                >
-                  <span className="text-2xs font-normal text-text-faint">指数</span>
-                  <span className={index >= INDEX_HIGHLIGHT_THRESHOLD ? 'text-accent' : 'text-text-secondary'}>
-                    {index.toFixed(1)}
-                  </span>
-                </span>
+                /* 指数只做佐证（弱化版）：强调色留给 Hero 与情报面板头部，
+                   一屏几十行都点金会让「今晚之选」失去唯一性。 */
+                <IndexTag value={index} />
               ) : scoreShown ? (
                 <span className="text-2xs text-text-faint">终场</span>
               ) : (

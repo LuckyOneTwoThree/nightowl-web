@@ -10,7 +10,7 @@ import { sameNightPicks } from '../core/owl.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { hm } from '../core/format.js';
 import { tierTextClass } from '../core/narrative.js';
-import { Crest, EmptyState, Meta } from './atoms.jsx';
+import { Crest, EmptyState, IndexTag, Meta } from './atoms.jsx';
 
 export default function SameNightPicks({ match, prefs, now = Date.now(), onSelect, compact = false, embedded = false }) {
   // ⚠️ hooks 必须在 early-return 之前调用（同 UpcomingFixtures：match null→非 null
@@ -58,9 +58,7 @@ export default function SameNightPicks({ match, prefs, now = Date.now(), onSelec
                   <span className="min-w-0 flex-1 truncate text-2xs text-text-primary">
                     {teamName(m.h)} vs {teamName(m.a)}
                   </span>
-                  <span className="shrink-0 font-num text-2xs font-semibold tabular-nums text-text-primary">
-                    {index.toFixed(1)}
-                  </span>
+                  <IndexTag value={index} label={false} />
                   <span className={`shrink-0 font-num text-2xs font-semibold ${tierTextClass(tier.label) || ''}`}>
                     {tier.label}
                   </span>
@@ -108,11 +106,10 @@ export default function SameNightPicks({ match, prefs, now = Date.now(), onSelec
                   </span>
                   <Crest id={m.a} size={14} />
                 </span>
-                {/* 指数用中性主文字色：accent 只留给 Hero 与情报面板头的核心指数，
-                    一个次级推荐模块每行 3 个金色数字会稀释强调 */}
-                <span className="font-num text-2xs font-semibold tabular-nums text-text-primary">
-                  指数 {index.toFixed(1)}
-                </span>
+                {/* 指数弱化：accent 只留给 Hero 与情报面板头的核心指数，
+                    一个次级推荐模块每行都点金会稀释强调。排序语境已由标题给出，
+                    行内不再重复「指数」二字。 */}
+                <IndexTag value={index} label={false} />
                 <span className={`font-num text-2xs font-semibold ${tierTextClass(tier.label) || ''}`}>
                   {tier.label}
                 </span>

@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AlertTriangle, Eye } from 'lucide-react-native';
 
-import { evalOne, stateOf, INDEX_HIGHLIGHT_THRESHOLD } from '@core/owl.js';
+import { evalOne, stateOf } from '@core/owl.js';
 import { sleepTier, ts } from '@core/engine.js';
 import { hm, liveMinute } from '@core/format.js';
 import { leagueColor, leagueName, teamName } from '@data/index.js';
@@ -172,14 +172,10 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
         ) : isTbd ? (
           <Text style={styles.doneText}>待定</Text>
         ) : (
-          <Text
-            style={[
-              styles.index,
-              { color: index >= INDEX_HIGHLIGHT_THRESHOLD ? colors.accent : colors.textSecondary },
-            ]}
-          >
-            {index.toFixed(1)}
-          </Text>
+          /* 指数弱化：金色强调只留给 Hero 与详情页的指数归因，
+             列表行逐行点金会让「今晚之选」失去唯一性。
+             读屏口径仍由父级 accessibilityLabel 完整给出。 */
+          <Text style={styles.index}>{index.toFixed(1)}</Text>
         )}
         {minefield ? (
           <View style={styles.warnRow}>
@@ -237,8 +233,9 @@ const styles = StyleSheet.create({
   },
   right: { minWidth: 44, alignItems: 'flex-end', gap: 3 },
   index: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
+    color: colors.textMuted,
+    fontSize: fontSize.sm,
+    fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
   doneSub: { color: colors.textFaint, fontSize: fontSize.xs },

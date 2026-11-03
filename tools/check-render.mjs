@@ -141,6 +141,27 @@ app.whenReady().then(async () => {
     );
     ok('★ 决策条同屏只出现一次', strip.count <= 1, `${strip.count}`);
 
+    /* 指数弱化：全站只有 Hero 卡与情报面板头部允许用强调色。
+       列表行 / 同开球逐条 / 备选场次的指数一律走 IndexTag（次级文字色）——
+       一屏几十个金色数字会让「今晚之选」失去唯一性。 */
+    const indexTone = await win.webContents.executeJavaScript(`
+      (() => {
+        const nodes = [...document.querySelectorAll('[title^="夜猫指数"]')];
+        const probe = document.createElement('span');
+        probe.className = 'text-text-muted';
+        document.body.appendChild(probe);
+        const mutedRgb = getComputedStyle(probe).color;
+        probe.remove();
+        const bad = nodes.filter(n => getComputedStyle(n).color !== mutedRgb);
+        return { count: nodes.length, bad: bad.length, mutedRgb, sample: bad[0] ? getComputedStyle(bad[0]).color : null };
+      })()
+    `);
+    ok(
+      '★ 列表行指数不用强调色',
+      indexTone.count >= 1 && indexTone.bad === 0,
+      `弱化 ${indexTone.count} 处，异常 ${indexTone.bad} 处（${indexTone.sample} ≠ ${indexTone.mutedRgb}）`
+    );
+
     /* 同开球面板（P1-3）：默认只留一行摘要，展开才逐条铺开。
        否则欧冠整轮 7 场同开时会吃掉近 500px，把 Hero 和赛程列表一起挤死。 */
     const kickoffPanel = await win.webContents.executeJavaScript(`

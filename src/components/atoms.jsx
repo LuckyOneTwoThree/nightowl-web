@@ -157,6 +157,30 @@ export function Stars({ star, className = '' }) {
   return <IconStars count={star} className={className} />;
 }
 
+/**
+ * 夜猫指数（弱化版）
+ *
+ * 全站只保留两处强调：Hero 卡顶部的大号指数、情报面板头部的指数。
+ * 列表行、同开球逐条、备选场次里的指数是「为什么是这场」的佐证，
+ * 每一行都配一个金色粗体数字，会把一屏的强调全部稀释掉 —— 这里统一降到
+ * 11px 常规字重 + 次级文字色：可读、可比较，但不与主行动争抢。
+ *
+ * `label={false}` 用于已经处在「指数排序」语境里、逐行重复标签会变噪音的紧凑列表。
+ */
+export function IndexTag({ value, label = true, className = '' }) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  return (
+    <span
+      className={`inline-flex shrink-0 items-baseline gap-1 font-num text-2xs tabular-nums text-text-muted ${className}`}
+      title={`夜猫指数 ${num.toFixed(1)}`}
+    >
+      {label && <span className="font-normal text-text-faint">指数</span>}
+      <span className="font-medium">{num.toFixed(1)}</span>
+    </span>
+  );
+}
+
 /** 直播状态点：唯一的"动"元素，全站不再叠加 ping / 发光 */
 export function LiveDot({ className = '' }) {
   return (
