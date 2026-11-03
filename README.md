@@ -10,7 +10,7 @@
   <br />
 
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Android-2b6cb0?style=flat-square" alt="platform" />
-  <img src="https://img.shields.io/badge/release-v0.1.46-2f855a?style=flat-square" alt="release" />
+  <img src="https://img.shields.io/badge/release-v0.1.47-2f855a?style=flat-square" alt="release" />
   <img src="https://img.shields.io/badge/electron-33-47848f?style=flat-square" alt="electron" />
   <img src="https://img.shields.io/badge/expo%20sdk-58-000020?style=flat-square" alt="expo" />
   <img src="https://img.shields.io/badge/react-19-149eca?style=flat-square" alt="react" />
@@ -131,7 +131,7 @@
 
 - **四 Tab**：今晚 / 赛程 / 规划 / 我的；比赛详情分「情报 / 数据 / 观看」，另有球队页与全局搜索
 - **同一套算法**：夜猫指数、睡眠分档、背包规划直接复用桌面端纯函数 core，手机端不 fork
-- **离线优先**：内置全量赛程快照，启动后台增量同步 ESPN / openfootball；进行中比赛每 30 秒刷新比分与事件
+- **离线优先**：内置全量赛程快照，启动后台增量同步 ESPN；进行中比赛每 30 秒刷新比分与事件
 - **原生播放**：HLS 直连、线路切换、断流自动换线、PiP、横屏；无本地 / 远程代理
 - **防剧透**：默认隐藏已结束比分，通知文案也不含比分
 - **赛前提醒**：本地通知，开球前 15 分钟；需安装 APK（Expo Go 不支持通知原生模块）
@@ -258,7 +258,7 @@ mobile/          Android 客户端（Expo SDK 58 + React Native）
 - **时区口径**：数据时间为北京墙钟，全部换算走纯 UTC 算术（禁用设备本地时区解析）
 - **状态只落三值**：`sched` / `done` / `pp`，进行中状态运行时推导，避免落库状态与真实时间打架
 - **打包自检**：跨平台 node 脚本扫描产物内的相对 import 与运行时依赖，并断言本地签名直链与运行期缓存未入包；本地与 CI 共用同一份逻辑（开发环境是 mac，CI 同时跑 Windows 与 macOS——验证脚本必须两边都能跑）
-- **测试即验收**：离线套件与联网检查分离——`npm run test:all` 不联网、不写盘，400+ 项断言串行跑完；`npm run test:online` 单独验证真实上游（含错配零容忍的直播源匹配回归）
+- **测试即验收**：离线套件与联网检查分离——`npm run test:all` 不联网、不写盘，1000+ 项断言串行跑完；`npm run test:online` 单独验证真实上游（含错配零容忍的直播源匹配回归）
 
 详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
