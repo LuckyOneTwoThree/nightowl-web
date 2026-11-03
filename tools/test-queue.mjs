@@ -8,8 +8,10 @@ import {
   markQueueWatched,
   normalizeQueue,
   pendingQueue,
+  queueStatusOf,
   queueWithMatches,
-  removeFromQueue
+  removeFromQueue,
+  toggleQueue
 } from '../src/core/queue.js';
 
 let pass = 0;
@@ -89,6 +91,30 @@ ok('待看列表不再包含已看', pendingQueue(watched, now).length === 0);
 const joined = queueWithMatches([fresh], [{ ...match, id: fresh.id }, other], now);
 ok('队列匹配本地比赛', joined.length === 1 && joined[0].match.id === fresh.id);
 ok('队列展示不带比分', joined.every(entry => !('sc' in entry.match)));
+
+console.log('');
+console.log('四、三态切换');
+
+const emptyStatus = queueStatusOf([], match.id, now);
+const addedByToggle = toggleQueue([], match, now);
+ok('未加入状态为 none', emptyStatus === 'none');
+ok('未加入点击后加入待看',
+  addedByToggle.ok && addedByToggle.action === 'added' && addedByToggle.state === 'pending' &&
+    addedByToggle.queue.length === 1);
+ok('待看状态可读回', queueStatusOf(addedByToggle.queue, match.id, now) === 'pending');
+const removedByToggle = toggleQueue(addedByToggle.queue, match, now + 1000);
+ok('待看再次点击移出', removedByToggle.ok && removedByToggle.action === 'removed' && removedByToggle.queue.length === 0);
+const watchedState = markQueueWatched(addedByToggle.queue, match.id, now);
+ok('已看状态可读回', queueStatusOf(watchedState, match.id, now) === 'watched');
+const restoredByToggle = toggleQueue(watchedState, match, now + 2000);
+ok('已看点击恢复为待看',
+  restoredByToggle.ok && restoredByToggle.action === 'restored' &&
+    restoredByToggle.state === 'pending' &&
+    restoredByToggle.queue[0].status === 'pending');
+ok('恢复后加入时间刷新', restoredByToggle.queue[0].addedAt === now + 2000);
+const toggleFull = toggleQueue(full, other, now);
+ok('队列满时三态切换不静默丢条目',
+  !toggleFull.ok && toggleFull.reason === 'full' && toggleFull.queue.length === 10);
 
 console.log('');
 console.log('────────────────────────────────────────────────────');

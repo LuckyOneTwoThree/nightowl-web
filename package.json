@@ -30,6 +30,8 @@
     "test:score-sync": "node tools/test-score-sync.mjs",
     "test:line-memory": "node tools/test-line-memory.mjs",
     "test:ics": "node tools/test-ics.mjs",
+    "test:format": "node tools/test-format.mjs",
+    "test:decision": "node tools/test-decision-strip.mjs",
     "test:data-health": "node tools/test-data-health.mjs",
     "test:schedule-diff": "node tools/test-schedule-diff.mjs",
     "test:contrast": "node tools/check-contrast.mjs",
@@ -58,7 +60,7 @@
     "test:reveal": "node tools/test-reveal.mjs",
     "test:tz": "node tools/test-tz.mjs",
     "test:scraper-parse": "node tools/test-scraper-parse.mjs",
-    "test:all": "npm run verify:algo && npm run test:m3u8 && npm run test:proxy && npm run test:proxy-timeout && npm run test:playback && npm run test:media && npm run test:scraper-match && npm run test:scraper-parse && npm run test:session && npm run test:scores && npm run test:owl && npm run test:sleep && npm run test:queue && npm run test:stop-loss && npm run test:morning && npm run test:reveal && npm run test:alias && npm run test:stats && npm run test:standings && npm run test:tz && npm run test:sync-outcome && npm run test:score-sync && npm run test:line-memory && npm run test:ics && npm run test:data-health && npm run test:schedule-diff && npm run test:highlights && npm run test:live && npm run test:notifications && npm run test:line-switch && npm run test:palette && npm run test:contrast"
+    "test:all": "npm run verify:algo && npm run test:m3u8 && npm run test:proxy && npm run test:proxy-timeout && npm run test:playback && npm run test:media && npm run test:scraper-match && npm run test:scraper-parse && npm run test:session && npm run test:scores && npm run test:format && npm run test:decision && npm run test:owl && npm run test:sleep && npm run test:queue && npm run test:stop-loss && npm run test:morning && npm run test:reveal && npm run test:alias && npm run test:stats && npm run test:standings && npm run test:tz && npm run test:sync-outcome && npm run test:score-sync && npm run test:line-memory && npm run test:ics && npm run test:data-health && npm run test:schedule-diff && npm run test:highlights && npm run test:live && npm run test:notifications && npm run test:line-switch && npm run test:palette && npm run test:contrast"
   },
   "dependencies": {
     "artplayer": "^5.4.0",
