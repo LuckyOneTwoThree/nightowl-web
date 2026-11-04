@@ -70,21 +70,21 @@
   },
   "dependencies": {
     "artplayer": "^5.4.0",
-    "electron-updater": "^6.8.9",
-    "hls.js": "^1.7.3",
+    "electron-updater": "^6.8.11",
+    "hls.js": "^1.7.4",
     "lucide-react": "^1.45.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "virtua": "^0.51.3"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^6.1.1",
-    "autoprefixer": "^10.5.6",
+    "@vitejs/plugin-react": "^6.2.1",
+    "autoprefixer": "^10.6.2",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
-    "postcss": "^8.5.28",
+    "postcss": "^8.5.32",
     "tailwindcss": "^3.4.19",
-    "vite": "^8.3.0"
+    "vite": "^8.3.5"
   },
   "build": {
     "appId": "com.nightowl.terrace",
