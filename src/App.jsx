@@ -424,8 +424,10 @@ export default function App() {
       return;
     }
 
-    // 写盘失败已被判据函数归为 failed（HTTP 200 不等于写盘成功）；
-    // 走到这里说明响应可采信，服务端回传了新 fixtures 就立刻热替换。
+    // 写盘失败 / 全部来源失败已在判据函数里归为 ok:false（HTTP 200 不等于写盘成功）；
+    // 走到这里说明响应可采信 —— 包括 partial_failure：补丁已经落盘，只是有来源没响应。
+    // partial 也必须应用 payload.fixtures，否则用户要等 120s 健康轮询才看到比分，
+    // 而顶栏还写着「同步失败」。这是旧实现里 partial 分支永远走不到的原因。
     if (outcome.payload?.fixtures?.length && setFixtures(outcome.payload.fixtures)) {
       bumpDataRev();
     } else if (outcome.status === 'updated' || outcome.status === 'partial_failure') {
@@ -572,6 +574,13 @@ export default function App() {
   const activeMatch = activeMatchId ? matchMap[activeMatchId] || null : null;
 
   // ---- 止损提醒：状态 / 触发 / 三个动作都收在 useStopLoss 里 ----
+  // 浮层是否挡住视线：一处定义，供「是否消费止损提示」和「是否渲染横幅」共用。
+  // 分开写两份清单的结果是两边会漂移 —— 早晨摘要曾被渲染侧排除、消费侧没排除，
+  // 于是提醒在用户看不见的情况下被永久用掉。
+  const anyOverlayOpen = !!(
+    settingsOpen || onboardingOpen || splashOpen || updateModalOpen
+    || standingsState || morningDigestOpen || paletteOpen
+  );
   const {
     stopLossContext,
     stopLossNotice,
@@ -584,7 +593,9 @@ export default function App() {
     activeMatch,
     clockTs,
     prefs,
-    blocked: !!(settingsOpen || onboardingOpen || splashOpen || updateModalOpen || standingsState),
+    // 浮层打开时既不弹、也不消费「今晚已提示」的状态（useStopLoss 在 blocked 时直接
+    // return），所以这份清单必须与渲染条件同源 —— 见 anyOverlayOpen。
+    blocked: anyOverlayOpen,
     addWatchLater,
     markWatchLaterWatched
   });
@@ -1086,7 +1097,7 @@ export default function App() {
       </div>
 
       {/* 止损条是非阻断提示，但摘要模态打开时它不能仍可 Tab 到（模态语义优先） */}
-      {!settingsOpen && !onboardingOpen && !splashOpen && !updateModalOpen && !standingsState && !morningDigestOpen && (
+      {!anyOverlayOpen && (
         <StopLossBanner
           context={stopLossContext}
           notice={stopLossNotice}

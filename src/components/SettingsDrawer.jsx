@@ -152,7 +152,7 @@ export default function SettingsDrawer({
         return;
       }
 
-      setSyncMsg({ ok: outcome.ok, text: outcome.text });
+      setSyncMsg({ ok: outcome.ok, degraded: !!outcome.degraded, text: outcome.text });
       // 只有真正写盘成功才替换内存快照；失败时仍刷新状态，让用户看到失败原因
       if (outcome.ok && (outcome.status === 'updated' || outcome.status === 'partial_failure')) {
         await onDataRefresh?.();
@@ -167,7 +167,9 @@ export default function SettingsDrawer({
   };
 
   const freshText = useMemo(() => {
-    if (!fresh?.lastScoreAt) return '暂无已录比分';
+    // 用「完赛时间」而不是「开球时间」：后者会把最新赛果的年龄高估一场比赛的时长。
+    const endAt = fresh?.lastScoreEndAt || fresh?.lastScoreAt;
+    if (!endAt) return '暂无已录比分';
     const h = fresh.staleHours ?? 0;
     if (h < 1) return '刚刚';
     if (h < 24) return `${h.toFixed(1)} 小时前`;
@@ -636,7 +638,7 @@ export default function SettingsDrawer({
                         {syncing ? '同步中…' : '立即同步比分'}
                       </button>
                       {syncMsg && (
-                        <span className={syncMsg.ok ? 'text-resource' : 'text-warn'}>{syncMsg.text}</span>
+                        <span className={syncMsg.ok ? (syncMsg.degraded ? 'text-warn' : 'text-resource') : 'text-danger'}>{syncMsg.text}</span>
                       )}
                     </div>
                   </div>

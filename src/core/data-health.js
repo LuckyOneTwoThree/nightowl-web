@@ -97,8 +97,11 @@ export function dataStateTone(state) {
  *
  * 注意文案里的「24 小时」与 MISSING_AFTER_MS 必须同源 —— 阈值改了这个句子要跟着改。
  */
-export function dataStateHint(state, checkedAt = 0, nowTs = Date.now()) {
+export function dataStateHint(state, checkedAt = 0, nowTs = Date.now(), canRecheck = true) {
   const checked = Number.isFinite(checkedAt) && checkedAt > 0 ? formatClock(checkedAt) : null;
+  // 「可以重查一次」只有在调用方真的提供重查按钮时才成立 —— 手机端没有这个入口，
+  // 照搬会让文案把用户指向一个不存在的操作。
+  const tail = canRecheck ? '可以重查一次，或直接去官方平台看。' : '可以直接去官方平台看。';
   switch (state) {
     case DATA_STATE.PENDING:
       return checked
@@ -106,8 +109,8 @@ export function dataStateHint(state, checkedAt = 0, nowTs = Date.now()) {
         : '已过完赛时间，比分还没有同步进来。';
     case DATA_STATE.MISSING:
       return checked
-        ? `最后一次检查在 ${checked}，上游仍未提供这场比分。可以重查一次，或直接去官方平台看。`
-        : '上游没有提供这场比分。可以重查一次，或直接去官方平台看。';
+        ? `最后一次检查在 ${checked}，上游仍未提供这场比分。${tail}`
+        : `上游没有提供这场比分。${tail}`;
     case DATA_STATE.UPCOMING:
       return '比赛还没开始，不需要比分。';
     case DATA_STATE.TBD:

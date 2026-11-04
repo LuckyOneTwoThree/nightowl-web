@@ -112,9 +112,31 @@ export function getFixtures() {
   return _fixtures;
 }
 
-/** 返回是否真的替换成功（空数组 / 非数组一律拒绝，避免把界面清空） */
+/**
+ * 最小结构校验。
+ *
+ * 热门路径直接裸用 `m.t.split('T')[0]`（WeekView / SettingsDrawer / ScheduleView），
+ * 一条 t 为 null 的记录就抛 TypeError。而 main.jsx 只有**一个**根 ErrorBoundary，
+ * 且只能「重新加载」——单条脏数据（手改 userData、旧版本残留、异常写入）
+ * 足以把整页打成「界面遇到错误」。宁可丢掉这一条，也不要丢掉整个应用。
+ */
+function isValidFixture(m) {
+  return !!m
+    && typeof m.id === 'string' && m.id.length > 0
+    && typeof m.h === 'string'
+    && typeof m.a === 'string'
+    && typeof m.l === 'string'
+    && typeof m.t === 'string' && m.t.length >= 10;
+}
+
+/** 返回是否真的替换成功（过滤后为空一律拒绝，避免把界面清空） */
 export function setFixtures(next) {
   if (!Array.isArray(next) || next.length === 0) return false;
-  _fixtures = next;
+  const clean = next.filter(isValidFixture);
+  if (clean.length === 0) return false;
+  if (clean.length !== next.length) {
+    console.warn(`[fixtures] 丢弃 ${next.length - clean.length} 条结构不完整的记录（id/h/a/l/t）`);
+  }
+  _fixtures = clean;
   return true;
 }

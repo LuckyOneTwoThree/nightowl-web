@@ -48,8 +48,14 @@ export function summarizeSyncResponse(payload) {
 
   if (errors > 0) {
     if (changed > 0) {
+      // 有补丁落盘 + 部分来源失败：结果**可采信、必须应用**，只是要在 UI 上降级提示。
+      // 旧实现返回 ok:false，于是调用方 `if (!outcome.ok) return` 把已写盘的补丁丢掉，
+      // 用户看到「同步失败」而服务端其实已经写入 —— App.jsx 里处理 partial_failure 的
+      // 分支因此永远走不到（死代码）。
+      // 现在：ok 表示「结果可用」，degraded 表示「有来源没响应」。
       return {
-        ok: false,
+        ok: true,
+        degraded: true,
         status: 'partial_failure',
         text: `已更新 ${changed} 场，${errors} 个来源失败`
       };

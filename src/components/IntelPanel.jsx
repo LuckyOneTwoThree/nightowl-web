@@ -337,7 +337,7 @@ function DataTrustCell({ match, checkedAt = 0, onRecheck, rechecking = false, re
         </p>
       )}
       {result && (
-        <p className={`mt-1 text-2xs ${result.ok ? 'text-resource' : 'text-warn'}`}>{result.text}</p>
+        <p className={`mt-1 text-2xs ${result.ok ? (result.degraded ? 'text-warn' : 'text-resource') : 'text-danger'}`}>{result.text}</p>
       )}
     </Cell>
   );

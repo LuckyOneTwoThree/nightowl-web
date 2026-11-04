@@ -47,6 +47,9 @@ export function useDataHealth({ refreshData }) {
       }
       const errors = Number(j?.lastSync?.errors || 0);
       const writtenOk = j?.lastSync?.written?.ok !== false;
+      // 有补丁落盘就不算「同步失败」——把「已更新 3 场」和「2 个来源没响应」
+      // 压成红色的「同步失败」，会让用户以为数据没动，而服务端其实已经写盘。
+      const changed = Number(j?.lastSync?.written?.changed || 0);
       const pending = Number(j?.freshness?.pendingCount || 0);
       const stalePending = Number(j?.freshness?.stalePendingCount || 0);
       const recentPending = Math.max(0, pending - stalePending);
@@ -58,9 +61,16 @@ export function useDataHealth({ refreshData }) {
         // 完成后下一次短轮询会检测到 lastSync 变化并热更新 fixtures。
         state = 'ok';
         label = '正在更新比分…';
-      } else if (j?.lastSync && (errors > 0 || !writtenOk)) {
+      } else if (j?.lastSync && !writtenOk) {
         state = 'error';
-        label = errors > 0 ? `同步失败 · ${errors} 个来源` : '同步写盘失败';
+        label = '同步写盘失败';
+      } else if (j?.lastSync && errors > 0 && changed === 0) {
+        state = 'error';
+        label = `同步失败 · ${errors} 个来源`;
+      } else if (j?.lastSync && errors > 0) {
+        // 部分来源失败但补丁已落盘：降级为提示，不报错。
+        state = 'warn';
+        label = `已更新 ${changed} 场 · ${errors} 个来源未响应`;
       } else if (recentPending > 0) {
         state = 'warn';
         label = `待录 ${recentPending} 场`;
@@ -69,7 +79,9 @@ export function useDataHealth({ refreshData }) {
         // 继续显示「待录」会让用户以为应用一直在等一个永远不会来的结果。
         state = 'warn';
         label = `上游缺分 ${stalePending} 场`;
-      } else if (stale >= 24) {
+      } else if (stale >= 24 && pending > 0) {
+        // 「落后」必须同时满足「有待录场次」和「赛果超过一天没更新」。
+        // 只看 staleHours 会把休赛日（没有新赛果是正常的）误报成数据过期。
         state = 'warn';
         label = `数据落后 ${Math.floor(stale / 24)} 天`;
       } else if (at) {
@@ -148,7 +160,7 @@ export function useDataHealth({ refreshData }) {
                   : outcome.payload?.summary?.written?.ok === false
                     ? outcome.payload.summary.written.reason || '写盘失败'
                     : '本场已查，来源暂未响应';
-        setRecheckMsg({ matchId, ok: outcome.ok, text });
+        setRecheckMsg({ matchId, ok: outcome.ok, degraded: !!outcome.degraded, text });
         return outcome;
       } finally {
         setRecheckingMatchId(null);
