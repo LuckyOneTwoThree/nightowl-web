@@ -93,8 +93,11 @@ console.log('一、今晚视图');
     g.live.filter(m => stateOf(m, NOW) !== 'live').map(m => m.id).join('、'));
   ok('★ finished 组只含已结束（finished / ended_pending）',
     g.finished.every(m => ['finished', 'ended_pending'].includes(stateOf(m, NOW))));
-  ok('★ upcoming 组不含已结束/进行中/待定场次',
-    g.upcoming.every(m => !m.tbd && !isEnded(m) && !['done', 'finished', 'live'].includes(stateOf(m, NOW))));
+  // 旧断言写成 `!m.tbd`，与实现（tbd 归 upcoming）相反；只因 NOW 那晚没有 tbd 才一直是绿的。
+  // 这里改成按 stateOf 判定：upcoming 只允许 sched / tbd / pp。
+  ok('★ upcoming 组只含未开赛 / 待定 / 延期（tbd 归这里，不算越界）',
+    g.upcoming.every(m => ['sched', 'tbd', 'pp'].includes(stateOf(m, NOW))),
+    g.upcoming.filter(m => !['sched', 'tbd', 'pp'].includes(stateOf(m, NOW))).map(m => m.id).join('、'));
   const sortedByTs = arr => arr.every((m, i) => i === 0 || E.ts(arr[i - 1].t) <= E.ts(m.t));
   ok('三组内均按时间升序', sortedByTs(g.live) && sortedByTs(g.upcoming) && sortedByTs(g.finished));
 
@@ -248,6 +251,11 @@ console.log('五、状态推导与实时计数');
     ok('★ tbd 占位时间不驱动 liveCountAt', liveCountAt(TBD_NOW) === 0, `liveCountAt=${liveCountAt(TBD_NOW)}`);
     ok('★ tbd 的显示状态不是 live', stateOf(t.slice.find(m => m.tbd), TBD_NOW) === 'tbd',
       stateOf(t.slice.find(m => m.tbd), TBD_NOW));
+    // 正向断言：整轮 tbd 的夜晚，upcoming 必须是 tbd 的归宿。
+    // 这样「把 tbd 挪出 upcoming」或「tbd 又被算成 live」都会红。
+    ok('★ tbd 归 upcoming（占位时间已过也不算已结束）',
+      g.upcoming.length > 0 && g.upcoming.every(m => m.tbd),
+      `upcoming=${g.upcoming.length} 其中 tbd=${g.upcoming.filter(m => m.tbd).length}`);
   }
 }
 

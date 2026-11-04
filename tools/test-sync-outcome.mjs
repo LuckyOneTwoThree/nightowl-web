@@ -91,6 +91,19 @@ console.log('');
   });
   ok('★ 部分来源失败时 status=partial_failure', r.status === 'partial_failure' && r.text.includes('已更新 2 场'),
     JSON.stringify(r));
+  // 关键：ok 表示「结果可用」，不是「一切顺利」。旧实现返回 ok:false，
+  // 导致调用方 `if (!outcome.ok) return` 把已写盘的补丁丢掉（App.jsx 里
+  // 处理 partial_failure 的分支因此永远走不到）。
+  ok('★ partial_failure 仍 ok=true（补丁可用）但 degraded=true（要降级提示）',
+    r.ok === true && r.degraded === true, JSON.stringify(r));
+}
+
+/* 全部来源失败且无补丁：这才是真失败 */
+{
+  const r = summarizeSyncResponse({
+    summary: { patches: 0, errors: 3, attempted: true, written: { ok: true, changed: 0 } }
+  });
+  ok('★ 零补丁 + 有错误 → ok=false / failed', r.ok === false && r.status === 'failed', JSON.stringify(r));
 }
 
 /* 没有需要检查的场次：不是「最新」 */

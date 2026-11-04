@@ -15,7 +15,7 @@ import { dirname, resolve } from 'node:path';
 import { planPatches, applyPatches, validateFixtures, ALLOWED_ST, activeSyncTargets, uclWeeklyTargets, seasonMonths } from '../server/scores.js';
 import { createServer } from '../server/index.js';
 import { loadRules } from '../server/proxy.js';
-import { freshness } from '../server/data-store.js';
+import { freshness, mergeFixtures } from '../server/data-store.js';
 import { ts } from '../src/core/engine.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -157,7 +157,14 @@ console.log('五、增量定向同步（activeSyncTargets）');
   ];
 
   const targets = activeSyncTargets(sampleFixtures, now);
-  ok('已完赛记录不纳入同步目标', !targets.get('PL')?.has('20260911'));
+  // 「done 不产生目标」必须用独立样本验证：混合样本里别的场次的扩窗可能覆盖同一天
+  // （id=2 积压后按 ±4 展开，正好把 0911 也包进来），用「某日期是否在集合里」会误判。
+  {
+    const onlyDone = [{ id: 'd1', l: 'PL', t: '2026-09-12T03:00', st: 'done', sc: '3-0' }];
+    const t1 = activeSyncTargets(onlyDone, now);
+    ok('已完赛记录不产生任何查询目标',
+      !t1.has('PL') || t1.get('PL').size === 0, [...(t1.get('PL') || [])].join(','));
+  }
   ok('未同步的过去比赛纳入目标并准确转换为 UTC 日期', targets.get('PL')?.has('20260914'));
   ok('★ 待录场次同时查询前后一天（覆盖改期/源日期漂移）',
     targets.get('PL')?.has('20260913') && targets.get('PL')?.has('20260915'),
@@ -166,6 +173,29 @@ console.log('五、增量定向同步（activeSyncTargets）');
   ok('未来比赛不展开前后一天', targets.get('PD')?.size === 1, `实际 ${targets.get('PD')?.size}`);
   ok('远期比赛不纳入目标', !targets.has('SA'));
   ok('无时间的改期比赛不纳入目标', !targets.has('BL'));
+}
+
+/* ================================================================== */
+console.log('');
+console.log('五·一之二、★ 改期超过 1 天的场次：查询窗口必须放宽到匹配窗口');
+{
+  // 实测案例：FL-9-LOR-BRT 本地记 2026-11-01T03:45 sched，
+  // ESPN 实际 2026-11-02T19:45Z（北京 11-03 03:45）已完赛 0-2。
+  // 查询日期由本地墙钟换算成 UTC 日期 → 20261031；只查 ±1 天（1030/1031/1101）
+  // 永远覆盖不到实际日期 20261102，界面就会一直显示「待录比分」。
+  const AT = new Date('2026-11-04T12:00:00+08:00').getTime();
+  const backlog = [{ id: 'bk', l: 'FL', t: '2026-11-01T03:45', st: 'sched', sc: null }];
+  const set = activeSyncTargets(backlog, AT).get('FL') || new Set();
+  ok('★ 积压场次覆盖实际比赛日期（20261102）', set.has('20261102'), [...set].join(','));
+  ok('积压场次按匹配窗口展开为 ±4 天共 9 个日期', set.size === 9, `${set.size}: ${[...set].join(',')}`);
+}
+
+{
+  // 反向保护：当天刚完赛的场次不能也被放大成 9 个日期，否则整轮同步会明显变慢。
+  const AT = new Date('2026-11-03T12:00:00+08:00').getTime();
+  const fresh = [{ id: 'fr', l: 'PL', t: '2026-11-03T06:00', st: 'sched', sc: null }];
+  const set = activeSyncTargets(fresh, AT).get('PL') || new Set();
+  ok('当天刚完赛（积压 < 1 天）仍只查 ±1 天', set.size === 3, `${set.size}: ${[...set].join(',')}`);
 }
 
 /* ================================================================== */
@@ -458,11 +488,17 @@ console.log('七、数据新鲜度语义（lastScoreAt 是赛果时间，不是�
   const f = freshness(sample, now, { usingUser: true });
   ok('★ lastScoreAt 取最近完赛的开球时间',
     f.lastScoreAt === new Date(ts('2026-09-15T03:00')).toISOString(), f.lastScoreAt);
+  // 开球 2026-09-15T03:00 + 120min 完赛 → 2026-09-15T05:00（北京墙钟）
+  ok('★ lastScoreEndAt 是完赛时刻（开球 + 120min）',
+    f.lastScoreEndAt === new Date(ts('2026-09-15T05:00')).toISOString(), f.lastScoreEndAt);
+  // now = 09-16 15:00，距完赛 34 小时（此前按开球算会得到 36 小时，高估一整场）
+  ok('★ staleHours 以完赛时刻为基准（不高估一场比赛时长）',
+    f.staleHours === 34, `实际 ${f.staleHours}`);
   ok('pendingCount 只计已过完赛窗口的 sched 场次', f.pendingCount === 2, `实际 ${f.pendingCount}`);
   ok('★ stalePendingCount 单独标记超过 24h 的缺分场次', f.stalePendingCount === 1, `实际 ${f.stalePendingCount}`);
   ok('liveCount 只计进行中窗口的 sched 场次', f.liveCount === 1, `实际 ${f.liveCount}`);
   ok('freshness 字段完整',
-    ['source', 'lastScoreAt', 'staleHours', 'pendingCount', 'stalePendingCount', 'liveCount', 'writable']
+    ['source', 'lastScoreAt', 'lastScoreEndAt', 'staleHours', 'pendingCount', 'stalePendingCount', 'liveCount', 'writable']
       .every(k => k in f));
 }
 
@@ -483,6 +519,36 @@ console.log('八、赛季窗口配置化（不再硬编码 2027-05）');
   ok('非法 / 不连续赛季串返回空',
     seasonMonths('2026-28').length === 0 && seasonMonths('bad').length === 0);
   ok('默认赛季仍是 2026-27', JSON.stringify(seasonMonths()) === JSON.stringify(s2627));
+}
+
+/* ================================================================== */
+console.log('');
+console.log('九、★ 内置快照与用户数据合并（升级后新场次必须送得到）');
+{
+  const builtin = [
+    { id: 'A', l: 'PL', t: '2026-11-01T03:00', st: 'sched', h: 'AAA', a: 'BBB' },
+    { id: 'B', l: 'PL', t: '2026-11-02T03:00', st: 'sched', h: 'CCC', a: 'DDD' },
+    // 新版本才有的场次（UCL 淘汰赛对阵之类）
+    { id: 'NEW', l: 'UCL', t: '2027-02-18T04:00', st: 'sched', h: 'EEE', a: 'FFF' }
+  ];
+  const user = [
+    { id: 'A', l: 'PL', t: '2026-11-01T03:00', st: 'done', sc: '2-1', h: 'AAA', a: 'BBB' },
+    { id: 'U', l: 'PL', t: '2026-11-05T03:00', st: 'sched', h: 'GGG', a: 'HHH' }
+  ];
+  const merged = mergeFixtures(builtin, user);
+  const byId = new Map(merged.map(m => [m.id, m]));
+  ok('★ 内置独有的场次不会被用户数据挡住（核心修复）', byId.has('NEW'), merged.map(m => m.id).join(','));
+  ok('★ 用户侧已录比分覆盖内置', byId.get('A')?.st === 'done' && byId.get('A')?.sc === '2-1',
+    JSON.stringify(byId.get('A')));
+  ok('内置其他场次原样保留', byId.get('B')?.h === 'CCC', JSON.stringify(byId.get('B')));
+  ok('用户独有场次也保留（并集而非替换）', byId.has('U'), merged.map(m => m.id).join(','));
+  ok('合并后 id 不重复', merged.length === new Set(merged.map(m => m.id)).size, `实际 ${merged.length}`);
+
+  ok('用户数据为空时返回内置',
+    mergeFixtures(builtin, []).length === builtin.length);
+  ok('内置为空时返回用户', mergeFixtures([], user).length === user.length);
+  ok('两侧都为空返回空数组', mergeFixtures([], []).length === 0);
+  ok('脏条目（无 id）被丢弃', mergeFixtures(builtin, [{ id: null }, { foo: 1 }]).length === builtin.length);
 }
 
 console.log('');
