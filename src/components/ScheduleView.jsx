@@ -106,7 +106,7 @@ export default function ScheduleView({
     let curDate = '';
     for (const row of rows) {
       if (row.type === 'date') {
-        counts.set(row.date, row.count);
+        counts.set(row.date, { count: row.count, tbd: row.tbdCount || 0 });
         curDate = row.date;
       } else if (
         curDate &&
@@ -122,7 +122,8 @@ export default function ScheduleView({
       list.push({
         offset: i,
         date: d,
-        count: counts.get(d) || 0,
+        count: counts.get(d)?.count || 0,
+        tbdCount: counts.get(d)?.tbd || 0,
         hasFollowed: followedSet.has(d),
         isToday: i === 0,
         isYesterday: i === -1,
@@ -353,7 +354,10 @@ export default function ScheduleView({
                   {label}
                 </div>
                 <div className="text-2xs text-text-faint">
-                  {item.count > 0 ? `${item.count} 场` : '—'}
+                  {/* 整天都是待定就直说「待定 N」，别用场次数假装那天有比赛 */}
+                  {item.count > 0
+                    ? (item.tbdCount === item.count ? `待定 ${item.count}` : `${item.count} 场`)
+                    : '—'}
                 </div>
               </button>
             );
@@ -563,7 +567,14 @@ export default function ScheduleView({
                     </span>
                     <span className="text-2xs text-text-faint">{weekdayOf(row.date)}</span>
                     <span className="ml-auto font-num text-2xs tabular-nums text-text-faint">
-                      {row.count} 场
+                      {row.tbdCount > 0 ? (
+                        <>
+                          {row.count} 场
+                          <span className="ml-1 text-text-faint/70">（待定 {row.tbdCount}）</span>
+                        </>
+                      ) : (
+                        `${row.count} 场`
+                      )}
                     </span>
                   </div>
                 );

@@ -186,6 +186,23 @@ console.log('三、赛程行（含 O(n²) 修复的回归）');
   ok('★ 每个日期行的场次数与实际一致', countMismatch.length === 0,
     countMismatch.slice(0, 3).map(r => `${r.date}: 标注 ${r.count} 实际 ${byCount.get(r.date)}`).join('；'));
 
+  // tbd 单独计数：940 场（49.6%）的开球时间是整轮占位值，表头如果只报总数，
+  // 会让用户以为某个凌晨真有 20 场比赛，而它们散落在整轮各天。
+  const byTbd = new Map();
+  for (const r of matchRows) {
+    if (!r.m.tbd) continue;
+    const d = E.owlDay(r.m.t);
+    byTbd.set(d, (byTbd.get(d) || 0) + 1);
+  }
+  const tbdMismatch = dateRows.filter(r => (byTbd.get(r.date) || 0) !== (r.tbdCount || 0));
+  ok('★ 每个日期行的待定场次数与实际一致', tbdMismatch.length === 0,
+    tbdMismatch.slice(0, 3).map(r => `${r.date}: 标注 ${r.tbdCount} 实际 ${byTbd.get(r.date) || 0}`).join('；'));
+  ok('待定计数不超过总场次',
+    dateRows.every(r => (r.tbdCount || 0) <= r.count));
+  ok('确实存在整组待定的日期（否则该字段没有存在意义）',
+    dateRows.some(r => r.tbdCount > 0 && r.tbdCount === r.count),
+    `${dateRows.filter(r => r.tbdCount > 0).length} 组含待定`);
+
   // 日期行必须按夜猫日连续出现，且不与后一组的比赛交错
   let lastDay = null;
   let interleaved = 0;

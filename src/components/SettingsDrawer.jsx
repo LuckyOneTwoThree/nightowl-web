@@ -71,6 +71,23 @@ export default function SettingsDrawer({
   const [lastSync, setLastSync] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState(null);
+  /**
+   * 抽屉内的「X 分钟前」需要一个会走的时钟。
+   *
+   * 旧实现把 Date.now() 直接写在 useMemo 里却只依赖 [lastSync]，于是抽屉开着
+   * 不动 20 分钟，仍然显示「刚刚」—— 数据新鲜度是这款产品的核心可信度指标，
+   * 却在这里持续说谎。只跟着 minuteKey 重渲染也不够：useMemo 的依赖没变就不会重算。
+   */
+  const [nowTs, setNowTs] = useState(() => Date.now());
+  /** 上次拉到 freshness 的时刻：staleHours 是服务端按请求时刻算的，要按它向后推算 */
+  const [freshAt, setFreshAt] = useState(0);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    setNowTs(Date.now());
+    const timer = setInterval(() => setNowTs(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, [open]);
 
   const loadFreshness = useCallback(async () => {
     try {
@@ -79,9 +96,11 @@ export default function SettingsDrawer({
       const j = await r.json();
       setFresh(j?.freshness || null);
       setLastSync(j?.lastSync || null);
+      setFreshAt(Date.now());
     } catch {
       setFresh(null);
       setLastSync(null);
+      setFreshAt(0);
     }
   }, []);
 
@@ -170,11 +189,13 @@ export default function SettingsDrawer({
     // 用「完赛时间」而不是「开球时间」：后者会把最新赛果的年龄高估一场比赛的时长。
     const endAt = fresh?.lastScoreEndAt || fresh?.lastScoreAt;
     if (!endAt) return '暂无已录比分';
-    const h = fresh.staleHours ?? 0;
+    // staleHours 是服务端在 freshAt 那一刻算的，抽屉开着要往后推算，否则永远不动
+    const elapsed = freshAt && nowTs > freshAt ? (nowTs - freshAt) / 3600000 : 0;
+    const h = (fresh.staleHours ?? 0) + elapsed;
     if (h < 1) return '刚刚';
     if (h < 24) return `${h.toFixed(1)} 小时前`;
     return `${Math.floor(h / 24)} 天前`;
-  }, [fresh]);
+  }, [fresh, freshAt, nowTs]);
 
   const pendingSplit = useMemo(() => {
     const stale = Number(fresh?.stalePendingCount || 0);
@@ -185,12 +206,13 @@ export default function SettingsDrawer({
     if (!lastSync?.at) return '本次启动后未同步';
     const t = Date.parse(lastSync.at);
     if (!Number.isFinite(t)) return '时间未知';
-    const h = (Date.now() - t) / 3600000;
+    // nowTs 必须进依赖（见上面的注释）：抽屉开着不动也要继续走字
+    const h = (nowTs - t) / 3600000;
     if (h < 1 / 60) return '刚刚';
     if (h < 1) return `${Math.max(1, Math.round(h * 60))} 分钟前`;
     if (h < 24) return `${h.toFixed(1)} 小时前`;
     return `${Math.floor(h / 24)} 天前`;
-  }, [lastSync]);
+  }, [lastSync, nowTs]);
   // ⚠️ 不能用模块级 import { fixtures }：setFixtures 换的是 data/index.js 内部的
   // _fixtures，那个绑定永远停在构建期快照。这里取 getFixtures()，并在新鲜度
   // 刷新后（抽屉打开 / 同步完成）重算，保证与列表的「命中 N 场」口径一致。
@@ -395,7 +417,9 @@ export default function SettingsDrawer({
 
           <Fieldset title="明早补看" hint="只保存比赛 ID 与状态，不保存比分；最多 10 条，7 天过期。">
             {(() => {
-              const entries = queueWithMatches(watchLater, getFixtures(), Date.now(), { includeWatched: true })
+              // 用 nowTs 而不是 Date.now()：抽屉开着不动时，7 天过期的条目
+              // 也该在下一个 30s tick 里消失，而不是等某次偶然重渲染。
+              const entries = queueWithMatches(watchLater, getFixtures(), nowTs, { includeWatched: true })
                 .sort((a, b) => String(a.match?.t || '').localeCompare(String(b.match?.t || '')));
               const pending = entries.filter(({ item }) => item.status === 'pending');
               const watched = entries.filter(({ item }) => item.status === 'watched');

@@ -206,10 +206,16 @@ export function computeScheduleRows(nowTs, prefs, filters) {
   // 先一次遍历统计每个夜猫日的场次，再生成行。
   // 原写法在循环内对全表 filter 求 count，是 O(n²)：1,897 场实测 67ms（优化后 0ms）。
   // 这个函数在搜索框每次键入时都会重算，那 67ms 会直接表现为输入卡顿。
+  //
+  // tbd 单独计数：940 场（49.6%）的开球时间是整轮占位值，把 20 场待定都算进某一天的
+  // 「20 场」，会让用户以为那个凌晨有两场比赛——而它们真正散落在整轮各天。
+  // 场次本身仍要出现在列表里（行内已显示 --:-- 与「待定」），只是计数要分开。
   const counts = new Map();
+  const tbdCounts = new Map();
   for (const m of sorted) {
     const day = E.owlDay(m.t);
     counts.set(day, (counts.get(day) || 0) + 1);
+    if (m.tbd) tbdCounts.set(day, (tbdCounts.get(day) || 0) + 1);
   }
 
   // 分组头按夜猫口径（owlDay），保证凌晨场次归属正确
@@ -218,7 +224,13 @@ export function computeScheduleRows(nowTs, prefs, filters) {
   for (const m of sorted) {
     const day = E.owlDay(m.t);
     if (day !== lastDay) {
-      rows.push({ type: 'date', key: `d-${day}`, date: day, count: counts.get(day) });
+      rows.push({
+        type: 'date',
+        key: `d-${day}`,
+        date: day,
+        count: counts.get(day),
+        tbdCount: tbdCounts.get(day) || 0
+      });
       lastDay = day;
     }
     rows.push({ type: 'match', key: m.id, m });
