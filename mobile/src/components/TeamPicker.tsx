@@ -59,6 +59,7 @@ export function TeamPicker({ selected, onChange, autoFocus = false }: Props) {
           autoCapitalize="none"
           placeholder={`搜索 ${teams.length} 支球队（中文 / 英文 / 缩写）`}
           placeholderTextColor={colors.textFaint}
+          accessibilityLabel="搜索球队"
           style={styles.searchInput}
           returnKeyType="search"
         />
@@ -200,9 +201,7 @@ const styles = StyleSheet.create({
   searchWrap: {
     height: 42,
     borderRadius: radius.control,
-    borderWidth: 1,
-    borderColor: colors.hairline,
-    backgroundColor: colors.panel,
+    backgroundColor: colors.raised,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
@@ -220,13 +219,10 @@ const styles = StyleSheet.create({
     height: 30,
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.hairline,
-    backgroundColor: colors.panel,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  activeTab: { borderColor: colors.accent, backgroundColor: colors.goldSoft },
+  activeTab: { backgroundColor: colors.goldSoft },
   tabText: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: weight.title },
   activeTabText: { color: colors.accent },
   summaryRow: {
@@ -244,8 +240,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.control,
     backgroundColor: colors.raised,
     paddingHorizontal: spacing.sm + 2,
   },
@@ -259,16 +253,13 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 106,
     borderRadius: radius.control,
-    borderWidth: 1,
-    borderColor: colors.hairline,
-    backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xs,
     gap: 5,
   },
-  activeTeam: { borderColor: colors.accent, backgroundColor: colors.goldSoft },
+  activeTeam: { backgroundColor: colors.goldSoft },
   pressed: { opacity: 0.8 },
   crestWrap: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   check: {

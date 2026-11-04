@@ -46,8 +46,6 @@ const styles = StyleSheet.create({
     padding: 3,
     gap: 3,
     borderRadius: radius.control,
-    borderWidth: 1,
-    borderColor: colors.hairline,
     backgroundColor: colors.panel,
   },
   item: {
@@ -59,8 +57,6 @@ const styles = StyleSheet.create({
   },
   activeItem: {
     backgroundColor: colors.raised,
-    borderWidth: 1,
-    borderColor: colors.control,
   },
   pressed: { opacity: 0.8 },
   label: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: weight.title },
