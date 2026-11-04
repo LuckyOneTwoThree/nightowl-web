@@ -110,12 +110,12 @@ export default function RecapTimeline({ match, spoilerFree = true, revealed = fa
       )}
 
       {status === 'error' && (
-        <div className="mt-1.5 flex items-center justify-between gap-2 rounded-md border border-line-hairline bg-surface-raised/30 px-2.5 py-2">
+        <div className="mt-1.5 flex items-center justify-between gap-2 rounded-md bg-surface-raised/30 px-2.5 py-2">
           <span className="inline-flex min-w-0 items-center gap-1.5 text-2xs text-text-muted">
             <IconWarn size={12} className="shrink-0 text-warn" />
             回顾数据暂不可用
           </span>
-          <Button variant="ghost" onClick={() => setNonce(v => v + 1)}>
+          <Button variant="text" onClick={() => setNonce(v => v + 1)}>
             重试
           </Button>
         </div>

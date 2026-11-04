@@ -190,7 +190,7 @@ function OfficialLinks({ sources, match, limit = 99, replay = false }) {
                 void openExternal(url, s.name);
               }
             }}
-            className="inline-flex items-center gap-1 rounded-lg border border-line-hairline bg-surface-raised/60 px-2.5 py-1 text-2xs text-text-secondary transition-colors hover:border-line-control hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-2xs text-text-secondary transition-colors hover:bg-surface-raised/60 hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
           >
             <IconExternal size={11} />
             {s.name}

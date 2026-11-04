@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { datePart, zhDate, weekdayOf } from '../core/format.js';
 import { narrativeOf } from '../core/narrative.js';
 import { evalOne, stateOf, heroTier, groupTonight } from '../core/owl.js';
@@ -26,12 +26,10 @@ export const INDEX_HINT =
  * 每行只给取舍需要的四项：双方 / 指数 / 档位 / 剩余睡眠；
  * 动作只有两个：「看这场」（切右栏预览，不改算法计划）与「明早看」（进补看队列）。
  */
-function SameKickoffPanel({ group, activeMatchId, prefs, onSelect, onWatchLater, watchLater = [] }) {
+function SameKickoffPanel({ group, expanded, onToggle, activeMatchId, prefs, onSelect, onWatchLater, watchLater = [] }) {
   const [hint, setHint] = useState(null);
-  // 同开球最多同时出现 7 场（欧冠整轮 04:00 一起开）。逐条铺开会吃掉近 500px，
-  // 把 Hero 和下面的赛程列表一起挤死 —— 默认只留一行摘要（场次 + 同组最高指数），
-  // 展开后才逐条对比。判断"要不要看别的"并不需要先看到七行。
-  const [expanded, setExpanded] = useState(false);
+  // 同开球最多同时出现 7 场（欧冠整轮 04:00 一起开）。展开后由左栏整体滚动，
+  // 不在面板内部再套一层滚动容器 —— 内层滚动会裁掉最后一行和 active 行描边。
   if (group.length < 2) return null;
   const kickoff = String(group[0].t || '').split('T')[1] || '';
   const indexed = group.map(m => ({ m, index: evalOne(m, prefs).index }));
@@ -41,23 +39,24 @@ function SameKickoffPanel({ group, activeMatchId, prefs, onSelect, onWatchLater,
   return (
     <section
       aria-label="同开球对比"
-      className="shrink-0 rounded-xl border border-line-hairline bg-surface-card/70 p-2.5"
+      className="shrink-0 rounded-xl bg-surface-panel/40 p-2.5"
     >
       <div className="flex items-center justify-between gap-2 px-0.5">
-        <span className="min-w-0 truncate text-2xs font-medium text-text-muted">
+        <span className="min-w-0 truncate text-xs font-medium text-text-secondary">
           {kickoff} 同开球 · {group.length} 场 · 最高 {topIndex.toFixed(1)}
         </span>
         <button
           type="button"
-          onClick={() => setExpanded(v => !v)}
+          onClick={onToggle}
           aria-expanded={expanded}
-          className="shrink-0 rounded px-1 py-0.5 text-2xs text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+          aria-controls={expanded ? 'same-kickoff-list' : undefined}
+          className="shrink-0 rounded-md px-1.5 py-0.5 text-2xs font-medium text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
         >
           {expanded ? '收起' : `展开 ${group.length}`}
         </button>
       </div>
       {expanded && (
-        <div className="scrollbar-thin -mr-1 mt-1.5 max-h-[260px] space-y-1.5 overflow-y-auto overscroll-contain pr-1">
+        <div id="same-kickoff-list" className="mt-2 space-y-1 rounded-lg bg-surface-panel/30 p-1">
           {visible.map(m => {
           const { index } = evalOne(m, prefs);
           const ledger = sleepLedgerFor(m, prefs);
@@ -66,12 +65,16 @@ function SameKickoffPanel({ group, activeMatchId, prefs, onSelect, onWatchLater,
           return (
             <div
               key={m.id}
-              className={`rounded-lg px-2 py-1.5 ${
-                active ? 'bg-surface-raised ring-1 ring-accent/40' : 'bg-surface-panel/60'
+              aria-current={active ? 'true' : undefined}
+              className={`rounded-md px-2 py-1.5 transition-colors ${
+                active ? 'bg-accent/10 ring-1 ring-inset ring-accent/30' : 'hover:bg-surface-raised/45'
               }`}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="min-w-0 truncate text-xs font-medium text-text-primary">
+                <span
+                  className="min-w-0 truncate text-xs font-medium text-text-primary"
+                  title={`${teamName(m.h)} vs ${teamName(m.a)}`}
+                >
                   {teamName(m.h)} vs {teamName(m.a)}
                 </span>
                 <IndexTag value={index} />
@@ -81,13 +84,17 @@ function SameKickoffPanel({ group, activeMatchId, prefs, onSelect, onWatchLater,
                   <SleepBadge match={m} compact />
                   {ledger && !ledger.overWake && <Meta num>剩 {formatSleepHours(ledger.remainingHours)}</Meta>}
                 </span>
-                <span className="flex shrink-0 items-center gap-1">
-                  <Button variant="ghost" size="xs" onClick={() => onSelect(m.id)} disabled={active}>
-                    {active ? '展示中' : '看这场'}
-                  </Button>
+                <span className="flex shrink-0 items-center gap-2">
+                  {active ? (
+                    <span className="text-2xs text-text-muted">展示中</span>
+                  ) : (
+                    <Button variant="text" size="xs" onClick={() => onSelect(m.id)}>
+                      看这场
+                    </Button>
+                  )}
                   {onWatchLater && (
                     <Button
-                      variant="ghost"
+                      variant="text"
                       size="xs"
                       onClick={() => {
                         const r = onWatchLater(m);
@@ -209,8 +216,16 @@ export default function TonightView({
     return slice.filter(m => !m.tbd && m.t === focus.t && stateOf(m, now) === 'sched');
   }, [slice, activeMatchId, hero, now]);
 
+  const sameKickoffKey = useMemo(() => sameKickoff.map(m => m.id).join(','), [sameKickoff]);
+  const [sameKickoffExpanded, setSameKickoffExpanded] = useState(false);
+  useEffect(() => {
+    setSameKickoffExpanded(false);
+  }, [sameKickoffKey]);
+
+  const rootRef = useRef(null);
+
   const jumpToReplay = () => {
-    const el = listRef.current;
+    const el = sameKickoffExpanded ? rootRef.current : listRef.current;
     if (!el) return;
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
     el.scrollTo({ top: el.scrollHeight, behavior: reduce ? 'auto' : 'smooth' });
@@ -273,7 +288,12 @@ export default function TonightView({
   const liveCount = groups.live.length + (heroLive ? 1 : 0);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div
+      ref={rootRef}
+      className={`flex h-full min-h-0 flex-col gap-3 ${
+        sameKickoffExpanded ? 'scrollbar-thin overflow-y-auto pr-1' : ''
+      }`}
+    >
       {hero ? (
         <HeroCard
           hero={hero}
@@ -284,7 +304,6 @@ export default function TonightView({
           now={now}
           onWatch={onSelect}
           indexHint={INDEX_HINT}
-          prefs={prefs}
           decision={decision?.strip || null}
           alternative={decision?.alternative || null}
           onSelectAlternative={onSelect}
@@ -299,6 +318,8 @@ export default function TonightView({
       {sameKickoff.length >= 2 && (
         <SameKickoffPanel
           group={sameKickoff}
+          expanded={sameKickoffExpanded}
+          onToggle={() => setSameKickoffExpanded(v => !v)}
           activeMatchId={activeMatchId}
           prefs={prefs}
           onSelect={onSelect}
@@ -307,44 +328,51 @@ export default function TonightView({
         />
       )}
 
-      <SectionLabel
-        hint="06:00 前开球的凌晨场次归入今晚观赛"
-        right={
-          <span className="inline-flex items-center gap-2">
-            {replayPicks.length > 0 && (
-              <button
-                type="button"
-                onClick={jumpToReplay}
-                aria-label="跳到最近值得补看"
-                className="text-xs text-text-secondary underline-offset-2 hover:text-text-primary hover:underline"
-              >
-                补看 {replayPicks.length}
-              </button>
-            )}
-            {replayPicks.length > 0 && (liveCount > 0 || listed > 0) && (
-              <span className="text-text-faint" aria-hidden="true">·</span>
-            )}
-            {liveCount > 0 ? (
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-live">
-                <LiveDot />
-                {liveCount} 场进行中
-              </span>
-            ) : listed > 0 ? (
-              <span className="font-num text-xs tabular-nums text-text-faint">
-                {hero ? `其余 ${listed} 场` : `${listed} 场`}
-              </span>
-            ) : null}
-          </span>
-        }
-      >
-        今晚赛程 · {zhDate(night)} {weekdayOf(night)}
-      </SectionLabel>
+      <div className="shrink-0">
+        <SectionLabel
+          as="h2"
+          hint="06:00 前开球的凌晨场次归入今晚观赛"
+          right={
+            <span className="inline-flex items-center gap-2">
+              {replayPicks.length > 0 && (
+                <button
+                  type="button"
+                  onClick={jumpToReplay}
+                  aria-label="跳到最近值得补看"
+                  className="text-xs text-text-secondary underline-offset-2 hover:text-text-primary hover:underline"
+                >
+                  补看 {replayPicks.length}
+                </button>
+              )}
+              {replayPicks.length > 0 && (liveCount > 0 || listed > 0) && (
+                <span className="text-text-faint" aria-hidden="true">·</span>
+              )}
+              {liveCount > 0 ? (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-live">
+                  <LiveDot />
+                  {liveCount} 场进行中
+                </span>
+              ) : listed > 0 ? (
+                <span className="font-num text-xs tabular-nums text-text-faint">
+                  {hero ? `其余 ${listed} 场` : `${listed} 场`}
+                </span>
+              ) : null}
+            </span>
+          }
+        >
+          今晚赛程 · {zhDate(night)} {weekdayOf(night)}
+        </SectionLabel>
+      </div>
 
       <div
         ref={listRef}
-        className={`scrollbar-thin -mr-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1 ${
-          listed > 0 || replayPicks.length > 0 ? 'min-h-[180px]' : ''
-        }`}
+        className={
+          sameKickoffExpanded
+            ? 'shrink-0 space-y-0.5'
+            : `scrollbar-thin -mr-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1 ${
+                listed > 0 || replayPicks.length > 0 ? 'min-h-[180px]' : ''
+              }`
+        }
       >
         {listed === 0 && hero && (
           <p className="rounded-lg border border-line-hairline bg-surface-card px-3 py-3 text-center text-xs text-text-muted">

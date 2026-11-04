@@ -96,10 +96,10 @@
   --stage-bg-rgb: 7 10 16;
 
   /* ---- 描边：两档。hairline 分隔，control 给可交互控件 ---- */
-  --line-hairline: #1c2331;
-  --line-hairline-rgb: 28 35 49;
-  --line-control: #2a3444;
-  --line-control-rgb: 42 52 68;
+  --line-hairline: #19202b;
+  --line-hairline-rgb: 25 32 43;
+  --line-control: #252e3d;
+  --line-control-rgb: 37 46 61;
 
   /* ---- 文本：四档 ---- */
   --text-primary: #f2f5f9;

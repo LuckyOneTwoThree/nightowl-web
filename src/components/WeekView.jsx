@@ -38,7 +38,7 @@ const BUCKET_CLASS = ['bg-tier-0', 'bg-tier-1', 'bg-tier-2', 'bg-tier-3', 'bg-ti
  * `tbd` 场次同样不画：占位时间（04:00 / 02:00）不是结论，画上去等于编一个时间出来。
  */
 function WeekTimeline({ risk, matchById, bestIds, selectedDay, onToggleDay }) {
-  const { domain, floor, bands, tbdCount } = risk;
+  const { domain, floor, bands } = risk;
   const pct = min => ((min - domain.startMin) / (domain.endMin - domain.startMin)) * 100;
   const floorInRange = floor != null;
 
@@ -66,7 +66,7 @@ function WeekTimeline({ risk, matchById, bestIds, selectedDay, onToggleDay }) {
       {/* 刻度行：与下方轨道列对齐（左侧留出周标签宽度、右侧留出场次数宽度） */}
       <div className="flex items-center gap-1.5 pl-0.5">
         <span className="w-6 shrink-0" aria-hidden="true" />
-        <span className="relative flex-1 font-num text-[10px] leading-none tabular-nums text-text-faint">
+        <span className="relative flex-1 font-num text-2xs leading-none tabular-nums text-text-faint">
           {domain.ticks.map(tick => (
             <span
               key={tick.min}
@@ -180,7 +180,7 @@ function WeekTimeline({ risk, matchById, bestIds, selectedDay, onToggleDay }) {
               </span>
 
               <span
-                className={`w-4 shrink-0 text-right font-num text-[10px] leading-none tabular-nums ${
+                className={`w-4 shrink-0 text-right font-num text-2xs leading-none tabular-nums ${
                   band.belowFloor ? 'text-warn' : 'text-text-faint'
                 }`}
               >
@@ -190,14 +190,6 @@ function WeekTimeline({ risk, matchById, bestIds, selectedDay, onToggleDay }) {
           );
         })}
       </div>
-
-      <p className="mt-1 px-0.5 text-[10px] leading-relaxed text-text-faint">
-        亮色 = 本周精选 · 虚线 = {floor ? `${floor.clock} 底线` : '睡眠底线'}
-        {floor?.assumed ? '（未设作息，按默认起床 / 睡眠画的）' : ''} ·
-        {risk.riskNights > 0 ? ` ${risk.riskNights} 晚越过底线` : ' 没有越线'}
-        {risk.worst ? ` · 最晚到 ${risk.worst.latestEndClock}（周${WEEKDAY_SHORT[risk.worst.weekday]}）` : ''}
-        {tbdCount > 0 ? ` · 另有 ${tbdCount} 场开球时间待定，没有画进来` : ''}
-      </p>
     </div>
   );
 }
@@ -349,6 +341,7 @@ export default function WeekView({
       {/* 夜猫周口径标题行：左标题 + 右周导航（上一周 / 本周 / 下一周） */}
       <div className="flex items-center justify-between gap-2 px-0.5">
         <SectionLabel
+          as="h2"
           hint="周一格从周一 06:00 起，含周二凌晨；周日格含周一凌晨（06:00 前归前一夜）。"
           right={<Meta num>{weekRange} 夜</Meta>}
           className="min-w-0 flex-1"
@@ -404,7 +397,7 @@ export default function WeekView({
       )}
 
       {/* ---- 顶部仪表盘卡片：睡眠预算 + 7 晚熬夜负荷柱 ---- */}
-      <section className="shrink-0 overflow-hidden rounded-xl border border-line-hairline bg-surface-card shadow-card">
+      <section className="shrink-0 overflow-hidden rounded-xl bg-surface-card shadow-card">
         <button
           type="button"
           onClick={() => setExpanded(v => !v)}
@@ -502,7 +495,7 @@ export default function WeekView({
       <div
         role="tablist"
         aria-label="本周列表切换"
-        className="flex shrink-0 items-center justify-between gap-1 rounded-lg border border-line-hairline bg-surface-card p-1"
+        className="flex shrink-0 items-center justify-between gap-1 rounded-lg bg-surface-panel/60 p-1"
       >
         {[
           { id: 'best', label: '本周精选', count: tabCounts.best },

@@ -208,7 +208,7 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
           </p>
         </div>
 
-        <div className="relative min-h-0 flex-1">
+        <div className="min-h-0 flex-1 overflow-hidden">
           <div ref={scrollRef} className="scrollbar-thin h-full overflow-auto border-t border-line-hairline">
             {rows.length === 0 ? (
               <div className="flex h-40 items-center justify-center text-xs text-text-muted">
@@ -300,23 +300,16 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
                   })}
                 </tbody>
               </table>
-              {/* 给底部「共 N 队 · 滚动查看」浮层留出空间，避免遮住最后一行 */}
-              <div className="h-10" aria-hidden="true" />
               </>
             )}
           </div>
-          {rows.length > 0 && (
-            <>
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-surface-card via-surface-card/80 to-transparent"
-              />
-              <div className="pointer-events-none absolute bottom-2 right-3 text-2xs text-text-faint">
-                共 {rows.length} 队 · 滚动查看
-              </div>
-            </>
-          )}
         </div>
+        {rows.length > 0 && (
+          <div className="flex shrink-0 items-center justify-between border-t border-line-hairline px-5 py-2 text-2xs text-text-faint">
+            <span>共 {rows.length} 队</span>
+            <span>滚动查看</span>
+          </div>
+        )}
       </div>
     </div>
   );

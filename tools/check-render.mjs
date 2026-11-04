@@ -104,7 +104,7 @@ app.whenReady().then(async () => {
       localStorage.setItem('spoilerFree','false');
       true
     `);
-    await win.webContents.reload();
+    await waitLoad(win, `${base}/?view=tonight`);
     await sleep(1800);
 
     const initial = await win.webContents.executeJavaScript(`
@@ -115,6 +115,11 @@ app.whenReady().then(async () => {
     `);
     ok('★ #root 已渲染', initial.rootChildren >= 1, JSON.stringify(initial));
     ok('★ 首屏含「今晚观赛」', initial.text.includes('今晚观赛'));
+    const headings = await win.webContents.executeJavaScript(`(() => ({
+      h1: document.querySelectorAll('h1').length,
+      h2: document.querySelectorAll('h2').length
+    }))()`);
+    ok('★ 页面有唯一 h1 与主视图 h2', headings.h1 === 1 && headings.h2 >= 1, JSON.stringify(headings));
     ok(
       '★ 无运行时致命错误',
       !errors.some(m => /Uncaught|ReferenceError|TypeError|is not defined|Cannot read/i.test(m)),
@@ -176,6 +181,7 @@ app.whenReady().then(async () => {
         return {
           exists: true,
           h: Math.round(panel.getBoundingClientRect().height),
+          heroH: Math.round(document.querySelector('[data-hero-card]')?.getBoundingClientRect().height || 0),
           expanded: btn ? btn.getAttribute('aria-expanded') : null
         };
       })()
@@ -201,8 +207,17 @@ app.whenReady().then(async () => {
       (() => {
         const panel = document.querySelector('[aria-label="同开球对比"]');
         if (!panel) return null;
+        const hero = document.querySelector('[data-hero-card]');
         return {
           h: Math.round(panel.getBoundingClientRect().height),
+          heroH: Math.round(hero?.getBoundingClientRect().height || 0),
+          heroScroll: hero?.scrollHeight || 0,
+          heroClient: hero?.clientHeight || 0,
+          panelScroll: panel.scrollHeight,
+          panelClient: panel.clientHeight,
+          ariaControls: panel.querySelector('button[aria-expanded="true"]')?.getAttribute('aria-controls') || null,
+          listId: document.getElementById('same-kickoff-list')?.id || null,
+          activeCurrent: panel.querySelector('[aria-current="true"]') !== null,
           expanded: panel.querySelector('button[aria-expanded]')?.getAttribute('aria-expanded') ?? null
         };
       })()
@@ -211,6 +226,26 @@ app.whenReady().then(async () => {
       '★ 展开后同开球逐条可比',
       !kickoffOpen || (kickoffAfter.h > 42 && kickoffAfter.expanded === 'true'),
       JSON.stringify(kickoffAfter)
+    );
+    ok(
+      '★ 展开同开球不压缩/截断 Hero',
+      !kickoffOpen ||
+        (Math.abs((kickoffAfter.heroH || 0) - (kickoffPanel.heroH || 0)) <= 2 &&
+          kickoffAfter.heroScroll <= kickoffAfter.heroClient + 1),
+      JSON.stringify({ before: kickoffPanel.heroH, after: kickoffAfter.heroH, scroll: kickoffAfter.heroScroll, client: kickoffAfter.heroClient })
+    );
+    ok(
+      '★ 同开球展开列表由左栏整体滚动，面板自身不裁切',
+      !kickoffOpen || kickoffAfter.panelScroll <= kickoffAfter.panelClient + 1,
+      JSON.stringify({ scroll: kickoffAfter.panelScroll, client: kickoffAfter.panelClient })
+    );
+    ok(
+      '★ 同开球展开按钮关联列表且 active 行有 aria-current',
+      !kickoffOpen ||
+        (kickoffAfter.ariaControls === 'same-kickoff-list' &&
+          kickoffAfter.listId === 'same-kickoff-list' &&
+          kickoffAfter.activeCurrent),
+      JSON.stringify({ controls: kickoffAfter.ariaControls, id: kickoffAfter.listId, current: kickoffAfter.activeCurrent })
     );
 
     // 收回来，避免影响后续左栏高度相关的断言

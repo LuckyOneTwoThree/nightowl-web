@@ -64,7 +64,7 @@ export default function TeamPicker({
           ))}
         </div>
       ) : (
-        <div className="mb-2 flex items-center justify-between rounded-md border border-dashed border-line-hairline bg-surface-panel/60 px-2.5 py-1.5 text-2xs text-text-muted">
+        <div className="mb-2 flex items-center justify-between rounded-md bg-surface-panel/55 px-2.5 py-1.5 text-2xs text-text-muted">
           <span>暂未关注主队（主队比赛将获得夜猫指数加成与专属标记）</span>
           <span className="text-text-faint">点击下方添加</span>
         </div>
@@ -79,7 +79,8 @@ export default function TeamPicker({
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder={placeholder}
-          className="w-full rounded-md border border-line-hairline bg-surface-panel py-1.5 pl-8 pr-7 text-xs text-text-primary placeholder:text-text-faint focus:border-accent/50 focus:outline-none"
+          aria-label="搜索球队"
+          className="w-full rounded-md bg-surface-raised/50 py-1.5 pl-8 pr-7 text-xs text-text-primary placeholder:text-text-faint focus:ring-1 focus:ring-accent/50 focus:outline-none"
         />
         {query && (
           <button
@@ -116,7 +117,7 @@ export default function TeamPicker({
 
       {/* 网格 */}
       <div
-        className={`scrollbar-thin mt-2 overflow-y-auto rounded-lg bg-surface-panel p-1.5 ${listClass}`}
+        className={`scrollbar-thin mt-2 overflow-y-auto rounded-lg bg-surface-panel/35 p-1 ${listClass}`}
       >
         {visible.length === 0 ? (
           <p className="py-8 text-center text-xs text-text-muted">
@@ -132,7 +133,7 @@ export default function TeamPicker({
             )}
           </p>
         ) : (
-          <div className={`grid ${gridClass} gap-1.5`}>
+          <div className={`grid ${gridClass} gap-1`}>
             {visible.map(t => {
               const on = selected.includes(t.id);
               return (
@@ -144,8 +145,8 @@ export default function TeamPicker({
                   title={`${t.zh} (${t.en}) · ${LEAGUE_NAMES[t.league] || t.league}${t.tag ? ` · ${t.tag}` : ''}`}
                   className={`relative flex flex-col items-center gap-1 rounded-md px-1 py-1.5 transition-all ${
                     on
-                      ? 'border border-accent/50 bg-surface-accent text-accent font-medium shadow-sm'
-                      : 'border border-transparent bg-surface-card text-text-secondary hover:border-line-hairline hover:bg-surface-raised hover:text-text-primary'
+                      ? 'bg-surface-accent font-medium text-accent ring-1 ring-inset ring-accent/35'
+                      : 'text-text-secondary hover:bg-surface-raised/55 hover:text-text-primary'
                   }`}
                 >
                   {on && (

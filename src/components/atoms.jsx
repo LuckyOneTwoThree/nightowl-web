@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { forwardRef, useEffect, useId, useState } from 'react';
 import { crestUrl, teamColor, leagueColor, leagueName } from '../data/index.js';
 import { shouldHideScore } from '../core/reveal.js';
 import { sleepTier } from '../core/engine.js';
@@ -268,6 +268,10 @@ export function Button({
       'bg-surface-raised border border-line-control text-text-primary shadow-card hover:border-line-control hover:bg-surface-press disabled:hover:bg-surface-raised',
     ghost:
       'border border-line-hairline bg-surface-card text-text-secondary transition-all hover:border-line-control hover:bg-surface-raised hover:text-text-primary disabled:hover:bg-surface-card disabled:hover:text-text-secondary',
+    surface:
+      'bg-surface-raised text-text-primary hover:bg-surface-press disabled:hover:bg-surface-raised',
+    text:
+      'text-text-secondary hover:text-text-primary hover:underline underline-offset-2 disabled:hover:text-text-secondary disabled:hover:no-underline',
     danger:
       'border border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 disabled:hover:bg-danger/10'
   };
@@ -393,7 +397,7 @@ export function SwitchField({
 export function Segmented({ items, value, onChange, className = '' }) {
   return (
     <div
-      className={`inline-flex items-center gap-1 rounded-lg border border-line-hairline bg-surface-panel p-0.5 ${className}`}
+      className={`inline-flex items-center gap-1 rounded-lg bg-surface-panel/70 p-0.5 ${className}`}
       role="tablist"
     >
       {items.map(it => {
@@ -408,8 +412,8 @@ export function Segmented({ items, value, onChange, className = '' }) {
             onClick={() => !it.disabled && onChange(it.id)}
             className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs transition-all active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 ${
               active
-                ? 'border border-line-control bg-surface-raised font-semibold text-text-primary shadow-card'
-                : 'border border-transparent text-text-muted hover:border-line-hairline hover:bg-surface-raised hover:text-text-primary'
+                ? 'bg-surface-raised font-semibold text-text-primary shadow-card'
+                : 'text-text-muted hover:bg-surface-raised/60 hover:text-text-primary'
             }`}
           >
             {it.icon}
@@ -426,7 +430,7 @@ export function Segmented({ items, value, onChange, className = '' }) {
 /**
  * 筛选条 / 多选条（联赛筛选、球队分类、关注联赛共用）
  */
-export function TogglePill({
+export const TogglePill = forwardRef(function TogglePill({
   on,
   onClick,
   label,
@@ -436,18 +440,19 @@ export function TogglePill({
   disabled = false,
   className = '',
   ...rest
-}) {
+}, ref) {
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       disabled={disabled}
       aria-pressed={on}
       title={hint || undefined}
-      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-text-muted ${
+      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-text-muted ${
         on
-          ? 'border-accent/40 bg-accent/12 font-semibold text-accent'
-          : 'border-line-hairline bg-surface-card text-text-secondary hover:border-line-control hover:bg-surface-raised hover:text-text-primary'
+          ? 'bg-accent/12 font-semibold text-accent ring-1 ring-inset ring-accent/30'
+          : 'text-text-secondary hover:bg-surface-raised/60 hover:text-text-primary'
       } ${className}`}
       {...rest}
     >
@@ -466,7 +471,7 @@ export function TogglePill({
       )}
     </button>
   );
-}
+});
 
 /**
  * 口径说明（Hint）
@@ -554,15 +559,15 @@ export function Hint({
 /* ------------------------------------------------------------------ */
 
 /** 栏目标题：清晰分组（12px），不抢内容 */
-export function SectionLabel({ children, right = null, hint = null, className = '' }) {
+export function SectionLabel({ children, right = null, hint = null, className = '', as: Tag = 'div' }) {
   return (
-    <div className={`flex items-center justify-between gap-2 ${className}`}>
-      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-secondary">
+    <Tag className={`flex items-center justify-between gap-2 ${className}`}>
+      <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-primary">
         {children}
         {hint ? <Hint content={hint} align="start" /> : null}
       </span>
       {right}
-    </div>
+    </Tag>
   );
 }
 
@@ -570,7 +575,7 @@ export function SectionLabel({ children, right = null, hint = null, className = 
 export function Fieldset({ title, right, hint, children, className = '' }) {
   return (
     <section className={`border-t border-line-hairline pt-3 first:border-t-0 first:pt-0 ${className}`}>
-      <SectionLabel right={right} hint={hint} className="mb-2">
+      <SectionLabel as="h3" right={right} hint={hint} className="mb-2">
         {title}
       </SectionLabel>
       {children}

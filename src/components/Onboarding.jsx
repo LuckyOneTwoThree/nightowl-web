@@ -121,7 +121,7 @@ export default function Onboarding({ open, prefs, onPrefsChange, onClose }) {
               <TeamPicker
                 selected={prefs.followedTeams}
                 onChange={v => patch({ followedTeams: v })}
-                gridClass="grid-cols-6"
+                gridClass="grid-cols-5"
                 listClass="max-h-72"
                 autoFocus
               />
@@ -176,12 +176,12 @@ export default function Onboarding({ open, prefs, onPrefsChange, onClose }) {
 
         {/* 底部：一屏只有一个 primary */}
         <div className="flex items-center justify-between border-t border-line-hairline px-6 py-3.5">
-          <Button variant="ghost" onClick={skip}>
+          <Button variant="text" onClick={skip}>
             跳过
           </Button>
           <div className="flex items-center gap-2">
             {step === 2 && (
-              <Button variant="default" onClick={() => setStep(1)}>
+              <Button variant="text" onClick={() => setStep(1)}>
                 上一步
               </Button>
             )}

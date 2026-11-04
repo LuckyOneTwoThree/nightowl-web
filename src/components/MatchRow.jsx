@@ -2,7 +2,7 @@ import { shouldHideScore } from '../core/reveal.js';
 import { hm, liveMinute } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { ts, MATCH_DURATION_MS } from '../core/engine.js';
-import { Crest, Chip, IndexTag, LiveDot, ScoreText, SleepBadge } from './atoms.jsx';
+import { Crest, IndexTag, LiveDot, ScoreText, SleepBadge } from './atoms.jsx';
 import { IconDerby, IconWarn } from './icons.jsx';
 
 /**
@@ -64,11 +64,9 @@ export default function MatchRow({
   const primaryTag =
     badge ||
     (minefield ? (
-      <span title="凌晨低性价比场次，建议优先休息">
-        <Chip tone="warn">
-          <IconWarn size={11} />
-          雷区
-        </Chip>
+      <span className="inline-flex min-w-0 items-center gap-1 text-2xs font-medium text-warn" title="凌晨低性价比场次，建议优先休息">
+        <IconWarn size={11} />
+        雷区
       </span>
     ) : rivalry ? (
       <span className="inline-flex min-w-0 items-center gap-1 text-2xs font-medium text-warn" title={rivalry}>

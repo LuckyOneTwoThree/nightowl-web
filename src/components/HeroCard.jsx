@@ -1,10 +1,9 @@
 import { hm, zhDate, weekdayOf, datePart, liveMinute, humanCountdownShort } from '../core/format.js';
 import { teamName, leagueName, teamColor } from '../data/index.js';
-import { ts, sleepTier, countdown as engineCountdown } from '../core/engine.js';
+import { ts, countdown as engineCountdown } from '../core/engine.js';
 import { Button, Chip, Crest, Hint, LiveDot, Meta, SleepBadge, Stars } from './atoms.jsx';
-import { IconCalendar, IconInfo, IconPlay, IconSignal, IconWarn } from './icons.jsx';
+import { IconCalendar, IconInfo, IconPlay, IconSignal } from './icons.jsx';
 import { locateSection } from './locate.js';
-import SleepNote from './SleepNote.jsx';
 import DecisionStrip from './DecisionStrip.jsx';
 
 /**
@@ -14,7 +13,7 @@ import DecisionStrip from './DecisionStrip.jsx';
 const TIER_COPY = {
   highlight: { label: '今晚焦点', cta: '开始观赛', ctaVariant: 'primary' },
   standard: { label: '今晚可看', cta: '开始观赛', ctaVariant: 'default' },
-  weak: { label: '今夜无必看', cta: '仍要观看', ctaVariant: 'ghost' }
+  weak: { label: '今夜无必看', cta: '仍要观看', ctaVariant: 'surface' }
 };
 
 /** 主队色环境光：极低透明度径向光晕，仅作微弱氛围烘托 */
@@ -45,7 +44,6 @@ export default function HeroCard({
   now,
   onWatch,
   indexHint,
-  prefs,
   decision = null,
   alternative = null,
   onSelectAlternative,
@@ -58,13 +56,9 @@ export default function HeroCard({
   const copy = TIER_COPY[tier] || TIER_COPY.standard;
   const isHighlight = tier === 'highlight';
   const isWeak = tier === 'weak';
-  const energyFill = Math.max(1, Math.min(5, Math.ceil(hero.index / 6)));
-
   const live = state === 'live';
   const minute = live ? liveMinute(ts(m.t), now) : 0;
   const finished = state === 'finished' || state === 'ended_pending';
-  const tierInfo = sleepTier(m.t);
-  const tierCost = tierInfo.cost;
   const homeColor = teamColor(m.h);
   const awayColor = teamColor(m.a);
 
@@ -102,15 +96,14 @@ export default function HeroCard({
   if (isWeak && !live) {
     return (
       <article
-        className={`no-drag card-lift relative overflow-hidden rounded-xl border bg-surface-card p-3 shadow-card transition-all ${
-          active ? 'border-line-control' : 'border-line-hairline'
-        }`}
+        data-hero-card
+        className="no-drag card-lift relative shrink-0 overflow-hidden rounded-xl bg-surface-card p-3 shadow-card transition-all"
       >
         <TeamAura color={homeColor} side="home" />
         <TeamAura color={awayColor} side="away" />
         <div className="relative flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="text-xs font-semibold text-text-secondary">{copy.label}</span>
+            <span className="text-sm font-semibold text-text-secondary">{copy.label}</span>
             <Stars star={ev.star} />
             {ev.isFollowed && <Chip tone="neutral">主队</Chip>}
           </div>
@@ -126,7 +119,7 @@ export default function HeroCard({
         <div className="relative mt-2.5 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
           <div className="flex min-w-0 flex-col items-center gap-1">
             <Crest id={m.h} size={30} />
-            <span className="w-full truncate text-center text-sm font-semibold text-text-primary" title={teamName(m.h)}>
+            <span className="line-clamp-2 w-full text-center text-sm font-semibold leading-tight text-text-primary" title={teamName(m.h)}>
               {teamName(m.h)}
             </span>
           </div>
@@ -140,22 +133,12 @@ export default function HeroCard({
           </div>
           <div className="flex min-w-0 flex-col items-center gap-1">
             <Crest id={m.a} size={30} />
-            <span className="w-full truncate text-center text-sm font-semibold text-text-primary" title={teamName(m.a)}>
+            <span className="line-clamp-2 w-full text-center text-sm font-semibold leading-tight text-text-primary" title={teamName(m.a)}>
               {teamName(m.a)}
             </span>
           </div>
         </div>
 
-        <div className="relative mt-2 flex items-center justify-between gap-2 border-t border-line-hairline pt-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <SleepBadge match={m} />
-            <SleepNote match={m} prefs={prefs} />
-            <span className="text-xs text-text-muted">指数低于 5.0 推荐线 · 仅供顺带参考</span>
-          </div>
-          {active && (
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" title="右侧展示中" aria-hidden="true" />
-          )}
-        </div>
         <div className="relative mt-2">
           <DecisionStrip
             decision={decision}
@@ -167,7 +150,7 @@ export default function HeroCard({
         </div>
         <div className="relative mt-2 flex items-center gap-2">
           <Button
-            variant="ghost"
+            variant="surface"
             size="md"
             icon={active ? activeAction.icon : <IconPlay />}
             onClick={() => (active ? locateSection(activeAction.target, { focus: true }) : onWatch(m.id))}
@@ -177,7 +160,7 @@ export default function HeroCard({
           </Button>
           {!live && onWatchLater && (
             <Button
-              variant="ghost"
+              variant="text"
               size="md"
               onClick={() => onWatchLater(m)}
               data-watch-later-action="toggle"
@@ -193,14 +176,11 @@ export default function HeroCard({
 
   return (
     <article
-      className={`no-drag card-lift relative overflow-hidden rounded-xl border p-3.5 shadow-card transition-all ${
+      data-hero-card
+      className={`no-drag card-lift relative shrink-0 overflow-hidden rounded-xl p-3.5 shadow-card transition-all ${
         isHighlight
-          ? `bg-gradient-to-br from-accent/[0.08] via-surface-card to-surface-panel ${
-              active ? 'border-accent/55' : 'border-accent/25'
-            }`
-          : `bg-surface-card ${
-              active ? 'border-line-control' : 'border-line-hairline'
-            }`
+          ? 'bg-gradient-to-br from-accent/[0.08] via-surface-card to-surface-panel'
+          : 'bg-surface-card'
       }`}
     >
       {/* 主客环境光 */}
@@ -216,9 +196,7 @@ export default function HeroCard({
       {/* 顶部：档位 + 星级 + 主队 + 指数仪表 */}
       <div className="relative flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <span className={`text-xs font-semibold tracking-wide ${isHighlight ? 'text-accent' : 'text-text-secondary'}`}>
-            {copy.label}
-          </span>
+          <span className="text-sm font-semibold tracking-wide text-text-secondary">{copy.label}</span>
           <Stars star={ev.star} />
           <span className="text-xs text-text-muted">· {leagueName(m.l)} 第 {m.r} 轮</span>
           {ev.isFollowed && <Chip tone="neutral">主队</Chip>}
@@ -230,33 +208,17 @@ export default function HeroCard({
           )}
         </div>
 
-        {/* 夜猫指数 · 数字 + 5 格微型能量刻度 */}
-        <div className="flex shrink-0 flex-col items-end">
-          <div className="flex items-baseline gap-1">
-            <span className="text-2xs text-text-faint">指数</span>
-            <span
-              // 供「同屏去重」回归脚本定位决策卡上的唯一指数，不参与样式与布局
-              data-hero-index
-              className={`font-num text-2xl font-bold leading-none tracking-tight tabular-nums ${isWeak ? 'text-text-secondary' : 'text-accent'}`}
-            >
-              {hero.index.toFixed(1)}
-            </span>
-            <Hint title="夜猫指数说明" content={indexHint} side="bottom" align="end" />
-          </div>
-          <div className="mt-1 flex items-center gap-0.5" aria-hidden="true">
-            {[1, 2, 3, 4, 5].map(step => (
-              <span
-                key={step}
-                className={`h-1 w-2.5 rounded-full ${
-                  step <= energyFill
-                    ? isWeak
-                      ? 'bg-text-secondary'
-                      : 'bg-accent'
-                    : 'bg-line-control'
-                }`}
-              />
-            ))}
-          </div>
+        {/* 夜猫指数 */}
+        <div className="flex shrink-0 items-baseline gap-1">
+          <span className="text-2xs text-text-faint">指数</span>
+          <span
+            // 供「同屏去重」回归脚本定位决策卡上的唯一指数，不参与样式与布局
+            data-hero-index
+            className={`font-num text-2xl font-bold leading-none tracking-tight tabular-nums ${isWeak ? 'text-text-secondary' : 'text-accent'}`}
+          >
+            {hero.index.toFixed(1)}
+          </span>
+          <Hint title="夜猫指数说明" content={indexHint} side="bottom" align="end" />
         </div>
       </div>
 
@@ -265,7 +227,7 @@ export default function HeroCard({
         {/* 主队 */}
         <div className="flex min-w-0 flex-col items-center gap-1.5">
           <Crest id={m.h} size={40} />
-          <span className="w-full truncate text-center text-base font-semibold tracking-tight text-text-primary" title={teamName(m.h)}>
+          <span className="line-clamp-2 w-full text-center text-base font-semibold leading-tight tracking-tight text-text-primary" title={teamName(m.h)}>
             {teamName(m.h)}
           </span>
         </div>
@@ -296,21 +258,21 @@ export default function HeroCard({
         {/* 客队 */}
         <div className="flex min-w-0 flex-col items-center gap-1.5">
           <Crest id={m.a} size={40} />
-          <span className="w-full truncate text-center text-base font-semibold tracking-tight text-text-primary" title={teamName(m.a)}>
+          <span className="line-clamp-2 w-full text-center text-base font-semibold leading-tight tracking-tight text-text-primary" title={teamName(m.a)}>
             {teamName(m.a)}
           </span>
         </div>
       </div>
 
       {/* 主看点（单句短结论） */}
-      <div className="relative mt-3 border-t border-line-hairline pt-2.5">
+      <div className="relative mt-2.5">
         <p className="line-clamp-2 text-xs font-medium leading-relaxed text-text-secondary">
           {narrative.headline}
         </p>
       </div>
 
-      {/* 底部：结论条 + 睡眠代价 + 全宽主行动 */}
-      <div className="relative mt-3 space-y-2">
+      {/* 底部：结论条 + 全宽主行动 */}
+      <div className="relative mt-2.5 space-y-2">
         <DecisionStrip
           decision={decision}
           match={m}
@@ -318,22 +280,6 @@ export default function HeroCard({
           onSelectAlternative={onSelectAlternative}
           onOpenSettings={onOpenSettings}
         />
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <SleepBadge match={m} />
-          <SleepNote match={m} prefs={prefs} warn={tierCost >= 3.5} />
-          {tierCost >= 3.5 && (
-            <span className="inline-flex items-center gap-1 text-xs text-danger">
-              <IconWarn size={12} />
-              熬夜代价高
-            </span>
-          )}
-          {active && (
-            <span className="ml-auto inline-flex items-center gap-1 text-xs text-text-muted">
-              <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
-              右侧展示中
-            </span>
-          )}
-        </div>
         <div className="flex items-center gap-2">
           <Button
             variant={copy.ctaVariant}
@@ -352,7 +298,7 @@ export default function HeroCard({
           </Button>
           {!live && onWatchLater && (
             <Button
-              variant="ghost"
+              variant="text"
               size="md"
               onClick={() => onWatchLater(m)}
               data-watch-later-action="toggle"

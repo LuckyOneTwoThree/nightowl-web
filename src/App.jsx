@@ -913,6 +913,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden stage-atmosphere text-text-primary">
+      <h1 className="sr-only">夜猫看台 · 今晚观赛决策台</h1>
       <div className="flex min-h-0 flex-1 flex-col" inert={overlayOpen || undefined}>
         {/* TopBar 的时钟、PlayerStage 的倒计时各自内部按秒刷新，不走这里 */}
         <TopBar

@@ -1,4 +1,5 @@
 import { bjClock, hm } from '../core/format.js';
+import { sleepTier } from '../core/engine.js';
 import { teamName } from '../data/index.js';
 
 /**
@@ -66,30 +67,24 @@ export default function DecisionStrip({ decision, match, alternative, onSelectAl
   const verdict = VERDICT_COPY[decision.verdict] || VERDICT_COPY.unknown;
   const reason = reasonTextOf(decision);
 
-  const endLabel = match.tbd || decision.endAt == null ? '待定' : `${bjClock(decision.endAt, false)} 结束`;
+  const endLabel = match.tbd || decision.endAt == null ? '待定' : bjClock(decision.endAt, false);
+  const tierLabel = match.tbd ? null : sleepTier(match.t).label;
 
   const costLabel = (() => {
     if (!decision.sleepKnown) return '未开睡眠账本';
-    if (decision.costMinutes > 0) return `欠 ${hoursOf(decision.costMinutes)}`;
+    if (decision.costMinutes > 0) return `欠 ${hoursOf(decision.costMinutes)}${tierLabel ? ` · ${tierLabel}` : ''}`;
     return '不欠睡眠';
   })();
 
   return (
-    <section
-      aria-label="今晚决策结论"
-      className="rounded-lg border border-line-hairline bg-surface-panel/55 px-2.5 py-2"
-    >
-      {/* 列数按容器宽度决定，不按视口：这一条放在 330px 的左栏里，
-          视口断点（sm:grid-cols-4）会让四段各挤成 70px 换行，把 Hero 撑高一截。 */}
-      <div className="grid gap-x-3 gap-y-1.5 [grid-template-columns:repeat(auto-fit,minmax(118px,1fr))]">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-2xs text-text-faint">结论</span>
-          <span className={`truncate text-xs font-bold ${verdict.tone}`}>
-            {verdict.label}
-            {reason && <span className="ml-1 font-normal text-text-faint">· {reason}</span>}
-          </span>
-        </div>
+    <section aria-label="今晚决策结论" className="px-0.5 pt-1.5">
+      <div className="flex min-w-0 items-baseline gap-2">
+        <span className="sr-only">结论</span>
+        <span className={`shrink-0 text-sm font-semibold ${verdict.tone}`}>{verdict.label}</span>
+        {reason && <span className="min-w-0 truncate text-2xs text-text-faint">{reason}</span>}
+      </div>
 
+      <div className="mt-1.5 grid grid-cols-3 gap-2">
         <Segment label="结束" muted={match.tbd}>
           {endLabel}
         </Segment>
@@ -108,9 +103,10 @@ export default function DecisionStrip({ decision, match, alternative, onSelectAl
             <button
               type="button"
               onClick={onOpenSettings}
+              title="点击开启个人睡眠账本"
               className="truncate text-left text-xs font-semibold text-accent underline-offset-2 hover:underline"
             >
-              {costLabel} → 去开启
+              未开睡眠账本
             </button>
           )}
         </div>

@@ -185,6 +185,7 @@ export default function ScheduleView({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
+      <h2 className="sr-only">赛程日历</h2>
       {/* Row 1：紧凑搜索框 + 积分榜按钮 */}
       <div className="flex items-center gap-1.5">
         <div className="relative flex min-w-0 flex-1 items-center">
@@ -195,7 +196,7 @@ export default function ScheduleView({
             onChange={e => set({ query: e.target.value })}
             placeholder="搜索球队 / 联赛 / ID"
             aria-label="搜索球队、联赛或场次 ID"
-            className="h-8 w-full rounded-lg border border-line-control bg-surface-card pl-8 pr-7 text-xs text-text-primary placeholder:text-text-faint transition-all focus:border-accent/60 focus:bg-surface-raised focus:outline-none shadow-card"
+            className="h-8 w-full rounded-lg bg-surface-raised/50 pl-8 pr-7 text-xs text-text-primary placeholder:text-text-faint transition-all focus:ring-1 focus:ring-accent/50 focus:outline-none"
           />
           {filters.query && (
             <button
@@ -214,7 +215,7 @@ export default function ScheduleView({
           onClick={() => standingsLeague && onOpenStandings?.(standingsLeague)}
           disabled={!standingsLeague}
           title={standingsLeague ? '查看联赛积分榜' : '当前筛选联赛暂无积分榜'}
-          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-line-control bg-surface-card px-2.5 text-xs font-medium text-text-secondary shadow-card transition-colors hover:border-line-control hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface-card disabled:hover:text-text-secondary cursor-pointer"
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-surface-raised/60 px-2.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface-raised/60 disabled:hover:text-text-secondary cursor-pointer"
         >
           <IconStandings size={13} />
           <span>积分榜</span>
@@ -229,7 +230,7 @@ export default function ScheduleView({
             onClick={() => stepDate(-1)}
             title="前一天"
             aria-label="前一天"
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line-control bg-surface-raised text-text-secondary shadow-card transition-all hover:border-accent/40 hover:bg-surface-press hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-raised/60 text-text-secondary transition-all hover:bg-surface-press hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
           >
             <IconChevronLeft size={12} />
           </button>
@@ -252,7 +253,7 @@ export default function ScheduleView({
             }}
             title="点击按日历选择日期"
             aria-label="按日历选择日期"
-            className="inline-flex h-7 min-w-0 items-center gap-1 rounded-md border border-line-control bg-surface-card px-2 font-body text-2xs font-semibold text-text-primary shadow-card transition-colors hover:border-accent/40 hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
+            className="inline-flex h-7 min-w-0 items-center gap-1 rounded-md bg-surface-raised/60 px-2 font-body text-2xs font-semibold text-text-primary transition-colors hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
           >
             <IconCalendar size={11} className="shrink-0 text-text-faint" />
             <span className="truncate font-num tabular-nums">
@@ -264,7 +265,7 @@ export default function ScheduleView({
             onClick={() => stepDate(1)}
             title="后一天"
             aria-label="后一天"
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line-control bg-surface-raised text-text-secondary shadow-card transition-all hover:border-accent/40 hover:bg-surface-press hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-raised/60 text-text-secondary transition-all hover:bg-surface-press hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
           >
             <IconChevronRight size={12} />
           </button>
@@ -272,7 +273,7 @@ export default function ScheduleView({
             <button
               type="button"
               onClick={() => setDate(todayDate)}
-              className="inline-flex h-7 shrink-0 items-center rounded-md border border-line-control bg-surface-raised px-2 text-2xs font-medium text-text-secondary shadow-card transition-all hover:bg-surface-press hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
+              className="inline-flex h-7 shrink-0 items-center rounded-md bg-surface-raised/60 px-2 text-2xs font-medium text-text-secondary transition-all hover:bg-surface-press hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
             >
               今天
             </button>
@@ -281,10 +282,10 @@ export default function ScheduleView({
             type="button"
             onClick={() => setDate(showAll ? todayDate : 'all')}
             aria-pressed={showAll}
-            className={`inline-flex h-7 shrink-0 items-center rounded-md border px-2 text-2xs font-medium transition-all focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
+            className={`inline-flex h-7 shrink-0 items-center rounded-md px-2 text-2xs font-medium transition-all focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
               showAll
-                ? 'border-accent/50 bg-surface-accent font-semibold text-accent shadow-card'
-                : 'border-line-control bg-surface-card text-text-secondary hover:bg-surface-raised hover:text-text-primary'
+                ? 'bg-surface-accent font-semibold text-accent ring-1 ring-inset ring-accent/30'
+                : 'text-text-secondary hover:bg-surface-raised/60 hover:text-text-primary'
             }`}
           >
             全部
@@ -297,10 +298,10 @@ export default function ScheduleView({
           onClick={() => setFilterOpen(v => !v)}
           aria-expanded={filterOpen}
           aria-label={filterOpen ? '关闭赛程筛选面板' : '打开赛程筛选面板'}
-          className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-2xs font-medium transition-all focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
+          className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-2xs font-medium transition-all focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
             filterOpen || activeFilterCount > 0
-              ? 'border-accent/50 bg-surface-accent text-accent shadow-card'
-              : 'border-line-control bg-surface-card text-text-secondary hover:bg-surface-raised hover:text-text-primary'
+              ? 'bg-surface-accent text-accent ring-1 ring-inset ring-accent/30'
+              : 'text-text-secondary hover:bg-surface-raised/60 hover:text-text-primary'
           }`}
         >
           <IconFilter size={11} />
@@ -317,17 +318,11 @@ export default function ScheduleView({
       <div className="relative shrink-0">
         <div
           ref={stripRef}
-          className="date-strip-mask scrollbar-thin flex items-stretch gap-1 overflow-x-auto rounded-lg border border-line-hairline bg-surface-panel/80 p-1 shadow-card backdrop-blur-sm"
+          className="date-strip-mask scrollbar-thin flex items-stretch gap-1 overflow-x-auto rounded-lg bg-surface-panel/45 p-1"
         >
           {dayStrip.map(item => {
             const active = !showAll && item.date === selDate;
-            const label = item.isToday
-              ? '今天'
-              : item.isYesterday
-                ? '昨天'
-                : item.isBeforeYesterday
-                  ? '前天'
-                  : item.date.slice(5).replace('-', '/');
+            const label = item.date.slice(5).replace('-', '/');
             return (
               <button
                 key={item.date}
@@ -335,12 +330,12 @@ export default function ScheduleView({
                 type="button"
                 onClick={() => setDate(item.date)}
                 aria-pressed={active}
-                className={`relative shrink-0 rounded-md border px-2 py-1 text-center transition-all focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
+                className={`relative shrink-0 rounded-md px-2 py-1 text-center transition-all focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
                   active
-                    ? 'border-accent/50 bg-surface-raised shadow-card'
+                    ? 'bg-surface-raised shadow-card ring-1 ring-inset ring-accent/30'
                     : item.isToday
-                      ? 'border-line-control/70 bg-surface-raised/40 hover:border-line-control'
-                      : 'border-line-hairline bg-surface-card hover:border-line-control hover:bg-surface-raised'
+                      ? 'bg-surface-raised/40 hover:bg-surface-raised/70'
+                      : 'hover:bg-surface-raised/60'
                 }`}
               >
                 {item.hasFollowed && (
@@ -351,8 +346,8 @@ export default function ScheduleView({
                   />
                 )}
                 <div
-                  className={`font-num text-2xs font-semibold tabular-nums ${
-                    active ? 'text-accent' : 'text-text-secondary'
+                  className={`font-num text-xs font-semibold tabular-nums ${
+                    active ? 'text-accent' : item.isToday ? 'text-text-primary' : 'text-text-secondary'
                   }`}
                 >
                   {label}

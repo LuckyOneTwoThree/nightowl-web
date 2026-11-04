@@ -58,12 +58,12 @@ export default function HighlightsPanel({
     return (
       <div className="mt-2.5 shrink-0 border-t border-line-hairline pt-2.5">
         <SectionLabel>官方集锦</SectionLabel>
-        <div className="mt-1.5 flex items-center justify-between gap-2 rounded-md border border-line-hairline bg-surface-raised/40 px-2.5 py-2">
+        <div className="mt-1.5 flex items-center justify-between gap-2 rounded-md bg-surface-raised/40 px-2.5 py-2">
           <span className="inline-flex min-w-0 items-center gap-1.5 text-2xs text-text-muted">
             <IconReveal size={12} />
             揭晓比分后可查看
           </span>
-          <Button variant="ghost" onClick={onReveal}>
+          <Button variant="text" onClick={onReveal}>
             揭晓比分
           </Button>
         </div>
@@ -97,7 +97,7 @@ export default function HighlightsPanel({
                       void openExternal(url, s.name);
                     }
                   }}
-                  className="inline-flex items-center gap-1 rounded-md border border-line-control bg-surface-raised px-2.5 py-1 text-2xs text-text-secondary transition-colors hover:border-line-control hover:bg-surface-accent hover:text-text-primary focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none"
+                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-2xs text-text-secondary transition-colors hover:bg-surface-raised/60 hover:text-text-primary focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none"
                 >
                   <IconExternal size={10} />
                   {s.name}
@@ -143,7 +143,7 @@ export default function HighlightsPanel({
                 type="button"
                 onClick={() => openVideo(v.url)}
                 title={v.eventName || '官方集锦'}
-                className="flex w-full items-center gap-2 rounded-md border border-line-hairline bg-surface-raised/50 px-2.5 py-2 text-left transition-colors hover:border-line-control hover:bg-surface-accent/60 focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none"
+                className="flex w-full items-center gap-2 rounded-md bg-surface-raised/40 px-2.5 py-2 text-left transition-colors hover:bg-surface-raised/70 focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:outline-none"
               >
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
                   <IconPlay size={12} />
@@ -166,7 +166,7 @@ export default function HighlightsPanel({
         )}
 
         {status === 'empty' && (
-          <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-dashed border-line-hairline bg-surface-raised/30 px-2.5 py-2 text-2xs leading-relaxed text-text-muted">
+          <div className="mt-1.5 flex items-start gap-1.5 rounded-md bg-surface-raised/30 px-2.5 py-2 text-2xs leading-relaxed text-text-muted">
             <IconWarn size={12} className="mt-0.5 shrink-0 text-text-faint" />
             <span>
               {domestic.length > 0
@@ -177,12 +177,12 @@ export default function HighlightsPanel({
         )}
 
         {status === 'error' && (
-          <div className="mt-1.5 flex items-center justify-between gap-2 rounded-md border border-line-hairline bg-surface-raised/30 px-2.5 py-2">
+          <div className="mt-1.5 flex items-center justify-between gap-2 rounded-md bg-surface-raised/30 px-2.5 py-2">
             <span className="inline-flex min-w-0 items-center gap-1.5 text-2xs text-text-muted">
               <IconWarn size={12} className="shrink-0 text-warn" />
               国际集锦索引暂不可用
             </span>
-            <Button variant="ghost" onClick={() => setNonce(v => v + 1)}>
+            <Button variant="text" onClick={() => setNonce(v => v + 1)}>
               重试
             </Button>
           </div>

@@ -577,11 +577,14 @@ function IdentitySection({ match, identity, fold = false }) {
 function AttributionSection({ ev, tier, index, storyB, followedB, leagueB, tbd = false }) {
   const tierStyle = TIER_MAP[tier.label] || TIER_MAP.S0;
   const starPart = ev.star * 10;
-  const rows = [
-    ['基础看点', starPart, Math.min(100, (starPart / 30) * 100), 'bg-text-secondary'],
+  const bonusRows = [
     ['故事线加成', storyB, Math.min(100, (storyB / 16) * 100), 'bg-text-secondary'],
     ['主队加成', followedB, Math.min(100, (followedB / 16) * 100), 'bg-text-secondary'],
-    ['联赛加成', leagueB, Math.min(100, (leagueB / 16) * 100), 'bg-text-secondary'],
+    ['联赛加成', leagueB, Math.min(100, (leagueB / 16) * 100), 'bg-text-secondary']
+  ].filter(([, value]) => Number(value) > 0);
+  const rows = [
+    ['基础看点', starPart, Math.min(100, (starPart / 30) * 100), 'bg-text-secondary'],
+    ...bonusRows,
     tbd
       ? ['睡眠代价', '时间待定', 0, 'bg-line-control']
       : ['睡眠代价', `${tier.cost}h (${tier.label} ${tier.zh})`, Math.min(100, (tier.cost / 4.5) * 100), tierStyle.solid],

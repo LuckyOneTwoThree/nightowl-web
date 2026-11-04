@@ -48,7 +48,7 @@ export default function LiveMatchPanel({
   const minuteLabel = ok ? data.minuteLabel : '';
 
   return (
-    <div className="mb-2.5 shrink-0 rounded-lg border border-line-hairline bg-surface-raised/35 p-2.5">
+    <div className="mb-2.5 shrink-0 rounded-lg bg-surface-raised/35 p-2.5">
       <div className="flex items-center justify-between gap-2">
         <span className="inline-flex min-w-0 items-center gap-1.5">
           <LiveDot />
