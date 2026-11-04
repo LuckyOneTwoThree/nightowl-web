@@ -161,6 +161,19 @@ export function activeSyncTargets(fixtures = [], nowTs = Date.now(), opts = {}) 
       if (!m.tbd && t + MATCH_DURATION_MS < nowTs && nowTs - t <= 14 * 86400000) {
         add(t - 86400000);
         add(t + 86400000);
+
+        // 积压：完赛超过 1 天仍没有比分。这类场次最可能是被上游改期或被源记到了
+        // 另一天 —— 实测 FL-9-LOR-BRT 本地记 11-01 03:45，ESPN 实际 11-02 19:45Z
+        // 已完赛 0-2，而 ±1 天只覆盖 10-31/11-01/11-02(UTC) 的边界，永远命中不了。
+        // 所以对积压场次放宽到匹配窗口（MATCH_WINDOW_DAYS = 4，与 planPatches 同口径）。
+        // 当天刚完赛的场次仍只查 ±1：不会把所有场次一律放大成 9 个日期请求。
+        const backlogDays = (nowTs - (t + MATCH_DURATION_MS)) / 86400000;
+        if (backlogDays >= 1) {
+          for (let i = 2; i <= MATCH_WINDOW_DAYS; i++) {
+            add(t - i * 86400000);
+            add(t + i * 86400000);
+          }
+        }
       }
       // tbd：占位日可能不是真实比赛日，向前后展开覆盖整轮。
       // 只对「占位日仍可能覆盖真实比赛日」的场次展开 —— ESPN 在开球前数日就公布真实时间，
@@ -380,9 +393,11 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
     /**
      * 单场重查：只查这一场所属联赛的那几天（±1 天）。
      *
-     * ±1 天的理由与 activeSyncTargets 对「已开球缺分」的处理一致：上游对同一场比赛
-     * 的日期口径可能差一天（实测 PSG–OL：本地 10-26、ESPN 记 10-27），
-     * 只查本地日期会永远查不到。匹配仍走 planPatches 的 4 天窗口，不会误配。
+     * 窗口与 activeSyncTargets 对「已开球缺分」的处理对齐：常规 ±1 天，但只要这场
+     * 已经积压（完赛超过 1 天仍未拿到比分），就按匹配窗口 MATCH_WINDOW_DAYS 展开。
+     * 上游对同一场比赛的日期口径实测可达 2–3 天（FL-9-LOR-BRT 本地 11-01、ESPN 11-02），
+     * 只查 ±1 天会让「重查该场」这个按钮永远救不回改期场次。
+     * 单场重查是用户主动触发，9 个日期请求的代价可以接受。
      */
     const set = new Set(onlyMatchIds);
     targets = new Map();
@@ -390,8 +405,10 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
       if (!set.has(m.id)) continue;
       const t = ts(m.t);
       if (!Number.isFinite(t)) continue;
-      for (const offset of [-86400000, 0, 86400000]) {
-        const d = new Date(t + offset);
+      const backlogDays = (Date.now() - (t + MATCH_DURATION_MS)) / 86400000;
+      const span = backlogDays >= 1 ? MATCH_WINDOW_DAYS : 1;
+      for (let i = -span; i <= span; i++) {
+        const d = new Date(t + i * 86400000);
         const ymd = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
         if (!targets.has(m.l)) targets.set(m.l, new Set());
         targets.get(m.l).add(ymd);
@@ -436,7 +453,8 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
   }
 
   const { events, bySource, errors } = await fetchAllEvents({
-    leagues, months: list, targets, order, log, season, timeoutMs: cfg.timeoutMs
+    leagues, months: list, targets, order, log, season, timeoutMs: cfg.timeoutMs,
+    delayMs: Number.isFinite(cfg.requestDelayMs) ? cfg.requestDelayMs : 200
   });
 
   const { merged, conflicts } = mergeEvents(events, order);

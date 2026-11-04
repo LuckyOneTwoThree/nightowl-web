@@ -60,9 +60,57 @@ export function activeFixturesPath() {
   return p && existsSync(p) ? p : BUILT_IN;
 }
 
+/**
+ * 内置快照 + 用户数据按 id 合并。
+ *
+ * 旧实现是「用户文件存在就完全替代内置」，后果不是丢比分，而是**永久锁住出厂赛程**：
+ * 老用户同步过一次之后，之后任何新版本带进内置快照的新场次（UCL 淘汰赛对阵、
+ * 新赛季、官方更正）都永远送不到他机器上 —— 用户文件把内置文件挡住了。
+ *
+ * 规则：
+ *   · id 并集 —— 内置新增的场次追加进来，用户侧独有的也保留；
+ *   · 同 id 字段以用户侧为准 —— 用户文件是「上一次同步的结果」，比分/改期通常比
+ *     出厂快照新。代价是：如果用户很久没同步而过内置已更正，会沿用旧值，
+ *     但下一次同步就会纠正（这与「完全遮蔽」是量级不同的两种故障）。
+ */
+export function mergeFixtures(builtin, user) {
+  if (!Array.isArray(user) || user.length === 0) return builtin || [];
+  if (!Array.isArray(builtin) || builtin.length === 0) return user;
+  const byId = new Map();
+  for (const m of builtin) {
+    if (m && m.id) byId.set(m.id, m);
+  }
+  for (const m of user) {
+    if (!m || !m.id) continue;
+    const base = byId.get(m.id);
+    byId.set(m.id, base ? { ...base, ...m } : m);
+  }
+  return [...byId.values()];
+}
+
+function parseFixtures(raw) {
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function loadFixtures() {
-  const raw = await readFile(activeFixturesPath(), 'utf8');
-  return JSON.parse(raw);
+  const userPath = userFixturesPath();
+  if (!userPath || !existsSync(userPath)) {
+    return parseFixtures(await readFile(BUILT_IN, 'utf8'));
+  }
+  // 内置读不到（打包异常）时退回用户数据，而不是把界面清空
+  const [builtinRaw, userRaw] = await Promise.all([
+    readFile(BUILT_IN, 'utf8').catch(() => '[]'),
+    readFile(userPath, 'utf8')
+  ]);
+  const merged = mergeFixtures(parseFixtures(builtinRaw), parseFixtures(userRaw));
+  // 合并结果为空说明两侧都坏了：宁可抛错让上层报「数据不可用」，也不要静默返回空数组
+  if (!merged.length) throw new Error('赛程数据为空（内置与用户数据都无法解析）');
+  return merged;
 }
 
 /**
@@ -112,7 +160,14 @@ export function freshness(fixtures, nowTs = Date.now(), opts = {}) {
   return {
     source: usingUser ? 'user' : 'builtin',
     lastScoreAt: lastScoreTs ? new Date(lastScoreTs).toISOString() : null,
-    staleHours: lastScoreTs ? +((nowTs - lastScoreTs) / 3600000).toFixed(1) : null,
+    // 最近赛果的**完赛**时刻。之前只有开球时间，于是「最新赛果」的年龄被高估了
+    // 整整一场比赛的时长（真实数据里 04:00 开球的场次在 11:10 显示 7.2 小时前，
+    // 实际约 2 小时前才完赛）。
+    lastScoreEndAt: lastScoreTs ? new Date(lastScoreTs + MATCH_DURATION_MS).toISOString() : null,
+    // staleHours 的口径是「距最近赛果完赛多久」，不是「距开球多久」。
+    // ⚠️ 它回答的是「赛果有多旧」，不能单独用来判断「数据要不要更新」——
+    //    休赛日没有新赛果是正常的，那件事看 pendingCount（见 useDataHealth）。
+    staleHours: lastScoreTs ? +((nowTs - lastScoreTs - MATCH_DURATION_MS) / 3600000).toFixed(1) : null,
     pendingCount: stale,
     stalePendingCount: staleMissing,
     liveCount: live,
