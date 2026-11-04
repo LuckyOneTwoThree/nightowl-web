@@ -8,7 +8,7 @@
 
 ## 零、修复落地状态（2026-11-04 当日完成）
 
-所有 P0/P1、P2 主体与 P3 高价值项已在本轮落地，门禁从 1110 → **1127 断言 / 38 脚本全绿**，
+所有 P0/P1、P2 主体与 P3 高价值项已在本轮落地，门禁从 1110 → **1130 断言 / 38 脚本全绿**，
 `check:render` 81 → **82 项**（新增「切剧场不重建播放器」），`check:layout` 三档 × 两种边框无横向溢出，mobile `check` 全过。
 
 | 项 | 状态 | 关键改动 |
@@ -19,19 +19,19 @@
 | P1-3 用户数据遮蔽内置 | ✅ | `mergeFixtures` 按 id 并集合并；端到端验证 1898 = 1897 + 1 |
 | P1-4 播放器卸载重建 | ✅ | 三布局共用一套 DOM；`check:render` 新增结构性断言（负向验证：加 key 后 `kept:false` 变红） |
 | P1-5 手机只跑快检 | ✅ | 24h 一次完整同步（失败不写时间戳） |
-| P1-6 止损提示被消费 | ✅ | 桌面抽 `anyOverlayOpen` 单一变量；手机待补 |
+| P1-6 止损提示被消费 | ✅ | 桌面抽 `anyOverlayOpen` 单一变量；手机补 `blocked`（播放器 panelOpen / 详情 WatchSheet） |
 | P2-1 deadline 截断 | ✅ | `truncated/skipped` 上报，不推进 `lastCheckedAt`，判定 `partial_failure` |
 | P2-2 单条脏数据打掉整页 | ✅ | `setFixtures` 结构校验（真实 1897 条 0 误伤，脏数据 7→5） |
 | P2-3 Host 校验 / SSRF | ✅ | Host 白名单（用 `server.address().port`）+ `isPrivateHost` 拒绝 IP/localhost/内网名；`new URL` 移进 try |
 | P2-4 数据落后误报 | ✅ | `staleHours` 以完赛时刻为基准；「落后」需同时满足 `pendingCount > 0` |
 | P2-5 检查记录作用域 | ✅ | 单场重查只记该场；后台按失败联赛排除 |
-| P2-6 设置页时间冻结 | ⏳ 待办 | 需把 `clockTs` 接进 `useMemo` 依赖 |
-| P2-7 赛程页 tbd 计数 | ⏳ 待办 | 需产品确认表头是否分开计「已定 / 待定」 |
+| P2-6 设置页时间冻结 | ✅ | 内部 30s `nowTs` 进依赖；`freshText` 用 `freshAt` 向后推算；补看 7 天过期改用它 |
+| P2-7 赛程页 tbd 计数 | ✅ | `computeScheduleRows` 新增 `tbdCount`；表头「20 场（待定 20）」，芯片全待定时写「待定 20」；57/136 组受影响 |
 | P2-8 播放失败记两次 | ✅ | 同线路 800ms 内合并，切场重置 |
 | P2-9 proxy/allow 当成功 | ✅ | 检查 `res.ok` 与 `body.ok`，失败回退 `activeLineId` |
 | P2-10 手机文案与事实相反 | ✅ | `dataStateHint` 加 `canRecheck`；首页错误条改用真实 `syncError` |
 | P2-11 预算 +1 落到 7 | ✅ | 改为落到下一个合法档位 |
-| P2-12 Electron 过支持期 | ⏳ 待办 | 单独一批（牵动打包与渲染回归） |
+| P2-12 Electron 过支持期 | 🟡 部分 | patch/minor 已升（audit high 16→14）；Electron 33→45、builder 25→26、Tailwind 3→4 属 major，需单独一批 + Windows CI 回归；剩 1 critical（tar，构建期） |
 | P3-1..15 | 部分 | 已修：`tbd` 分支、`live-sources` 失败归因、`will-navigate` 协议、缓存头、`requestDelayMs` 接线；其余见第七章批次 5 |
 | G1 反向断言 | ✅ | `test-owl:98` 改为按 `stateOf` 判定，另补「tbd 归 upcoming」正向断言 |
 | G2 改期测试覆盖 | ✅ | 新增「积压覆盖 20261102」「当天刚完赛仍 ±1」两条 |
