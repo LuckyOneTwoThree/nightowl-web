@@ -1,24 +1,24 @@
 {
   "_readme": "手机端数据管道是桌面端的手抄分支（存在有意差异）。本清单让差异可见：任一侧改动都会让 verify:pipeline 失败；确认两端仍等价后运行 npm run sync:pipeline -- --write 更新哈希。",
-  "generatedAt": "2026-11-03T08:29:16.070Z",
+  "generatedAt": "2026-11-04T04:07:37.094Z",
   "pairs": [
     {
       "desktop": "server/scores.js",
       "mobile": "mobile/src/data/sync/scores.js",
       "reason": "手机多 quickSyncTargets（72h 下拉快检）；共享函数应保持同口径",
-      "desktopSha": "3511ede9bbf2316ee469d4447b0ee59849e3b9cc83804796c6b5fe04632e0bd0",
-      "mobileSha": "0242af017fa7bccfb72d88eceab64bcb3b09d32d41c5fbd7d8d649e5b00d15de",
-      "desktopLines": 505,
-      "mobileLines": 551
+      "desktopSha": "1b1a8e9a1e9d9148bcdea5ac8026e7da0d43625ad423b6bb29e96d81ef7b65c0",
+      "mobileSha": "e0e63b738d909874d349bee6ae0de2fb6b4d37709057f42b12888af42899b5b8",
+      "desktopLines": 523,
+      "mobileLines": 570
     },
     {
       "desktop": "server/sources/index.js",
       "mobile": "mobile/src/data/sync/sources.js",
       "reason": "端侧取数入口不同（桌面本地服务 / 手机直连 ESPN）",
-      "desktopSha": "a6bb5cd31a94b303119c6478b7348daafc098a393a3e2d8ce84758e40014c9ff",
-      "mobileSha": "01ad1ea646f565f09869bcee55cee22bd955c66a1e16daf6d13330f657469bbb",
-      "desktopLines": 205,
-      "mobileLines": 201
+      "desktopSha": "76e9859c310fa629fc4778589d11a694b45fadef9c103497d2eb0b8349fe7ac6",
+      "mobileSha": "0afb147fcc577604ca6a3b9ddfa9010554aa173fadbc3dbc0b43253d4de005fb",
+      "desktopLines": 208,
+      "mobileLines": 211
     },
     {
       "desktop": "server/sources/espn.js",

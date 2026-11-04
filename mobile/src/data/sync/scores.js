@@ -158,6 +158,19 @@ export function activeSyncTargets(fixtures = [], nowTs = Date.now(), opts = {}) 
       if (!m.tbd && t + MATCH_DURATION_MS < nowTs && nowTs - t <= 14 * 86400000) {
         add(t - 86400000);
         add(t + 86400000);
+
+        // 积压（完赛超过 1 天仍无比分）：最可能是被上游改期或源记到了另一天。
+        // 实测 FL-9-LOR-BRT 本地记 11-01 03:45，ESPN 实际 11-02 19:45Z 已完赛 0-2，
+        // ±1 天永远命中不了。积压场次放宽到匹配窗口（与 planPatches 同口径）；
+        // 当天刚完赛的仍只 ±1，不把所有场次一律放大成 9 个日期。
+        // ⚠️ 与 desktop server/scores.js 的 activeSyncTargets 保持同逻辑。
+        const backlogDays = (nowTs - (t + MATCH_DURATION_MS)) / 86400000;
+        if (backlogDays >= 1) {
+          for (let i = 2; i <= MATCH_WINDOW_DAYS; i++) {
+            add(t - i * 86400000);
+            add(t + i * 86400000);
+          }
+        }
       }
       // tbd：占位日可能不是真实比赛日，向前后展开覆盖整轮。
       // 只对「占位日仍可能覆盖真实比赛日」的场次展开 —— ESPN 在开球前数日就公布真实时间，
@@ -474,7 +487,7 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
     };
   }
 
-  const { events, bySource, errors } = await fetchAllEvents({
+  const { events, bySource, errors, truncated, skipped } = await fetchAllEvents({
     leagues, months: list, targets, order, log, season,
     // 下拉快检不能让单次超时占住手势：6s / 单次尝试；完整同步用 rules.scores.timeoutMs
     // （默认 30s，与桌面同口径），未配置时交给各源默认。
@@ -496,7 +509,13 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
     targets,
     sources: order,
     quick,
-    attempted: true
+    // attempted 表示「真的发出过请求」，不是「函数跑完了」。恒 true 会让
+    // 「一个请求都没发出去」也被判成查过。桌面侧早就按 requests 计算，这里对齐。
+    attempted: Object.values(bySource || {}).some(info => (info.requests || 0) > 0),
+    // 到 deadline 被截断：还有 skipped 个请求没发。上层据此判 partial_failure，
+    // 不要写「已是最新」，也不要推进 lastCheckedAt。
+    truncated: !!truncated,
+    skipped: skipped || 0
   };
 }
 

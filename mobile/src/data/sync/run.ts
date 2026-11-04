@@ -125,12 +125,20 @@ export function syncNow(options: SyncOptions = {}): Promise<SyncOutcome> {
     const checkedAt = Date.now();
     const attempted = result.attempted !== false;
     const errors = result.errors ?? [];
-    const fullySuccessful = attempted && errors.length === 0;
-    const status = classifySyncOutcome({
+    // 被 deadline 截断 = 还有请求没发出去。它不是「完整成功」：
+    // 既不能推进 lastCheckedAt（否则要等 3~10 分钟才重试，而漏掉的总是同一批），
+    // 也不能判成 up_to_date 让用户以为「已是最新」。
+    const truncated = result.truncated === true;
+    const skipped = Number(result.skipped || 0);
+    const fullySuccessful = attempted && errors.length === 0 && !truncated;
+    let status = classifySyncOutcome({
       attempted,
       changed,
       errors: errors.length,
     }) as SyncStatus;
+    if (truncated && (status === 'up_to_date' || status === 'updated')) {
+      status = 'partial_failure';
+    }
 
     if (changed > 0) {
       // 部分失败时补丁已经落盘，必须刷新界面，但不要把 lastCheckedAt
@@ -149,7 +157,10 @@ export function syncNow(options: SyncOptions = {}): Promise<SyncOutcome> {
     if (status === 'failed' || status === 'partial_failure') {
       const message =
         status === 'partial_failure'
-          ? `部分来源失败（${errors.length} 个），已保留成功补丁`
+          ? truncated
+            // 说清「是没查完，不是没查到」——否则用户会以为上游没有这场比分
+            ? `本轮未查完（网络较慢），还有 ${skipped} 处，稍后自动继续`
+            : `部分来源失败（${errors.length} 个），已保留成功补丁`
           : `同步失败（${errors.length} 个来源未返回有效数据）`;
       // 后台静默补扫失败不劫持首页错误条；用户没有发起这次同步。
       if (!silent) {

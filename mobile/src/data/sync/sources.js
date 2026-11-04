@@ -87,10 +87,20 @@ export async function fetchAllEvents({ leagues, months, targets, targetDates, se
   }
 
   // 串行 + 间隔：避免打爆上游（旧项目因并发过高被封过 IP）
-  for (const r of requests) {
+  let skipped = 0;
+  for (let i = 0; i < requests.length; i++) {
+    const r = requests[i];
     // 总时长上限：慢网下 30+ 个串行请求会把「正在更新」拖成几分钟。
     // 到点就保留已完成的结果，剩余请求下个周期再补，不阻塞 UI 状态归还。
-    if (deadlineMs > 0 && Date.now() - startedAt > deadlineMs) break;
+    //
+    // ⚠️ 到点 ≠ 查完了。必须把「还有多少请求没发出去」上报给上层：
+    //    否则 run.ts 会把「只查了前几个联赛」判成 up_to_date，还推进 lastCheckedAt，
+    //    把它压到 3~10 分钟后才重试 —— 而请求按联赛顺序排列，每次漏的都是同一批
+    //    （实测快检 20s 预算下稳定漏掉后段联赛）。
+    if (deadlineMs > 0 && Date.now() - startedAt > deadlineMs) {
+      skipped = requests.length - i;
+      break;
+    }
     bySource[r.sid].requests++;
     try {
       const evs = await r.strat.fetch(r.league, r.unit, { log, season, ...fetchOptions });
@@ -106,7 +116,7 @@ export async function fetchAllEvents({ leagues, months, targets, targetDates, se
     await new Promise(res => setTimeout(res, 200));
   }
 
-  return { events, bySource, errors };
+  return { events, bySource, errors, truncated: skipped > 0, skipped };
 }
 
 /** 跨源同一场比赛允许的开球时间偏差（实测最多约 24h，留一倍余量） */

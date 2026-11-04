@@ -278,7 +278,10 @@ export default function TonightScreen() {
         <View style={styles.errorBanner}>
           <TriangleAlert size={14} color={colors.warn} />
           <Text style={styles.errorText} numberOfLines={2}>
-            比分同步失败，沿用本地数据
+            {/* 用真实消息，不要硬编码「沿用本地数据」：
+                partial_failure 时补丁其实已经落盘，「我的」页显示的也是真话，
+                同一件事在一个 App 里不该有三种说法。 */}
+            {syncError}
           </Text>
           <Pressable onPress={refresh} hitSlop={16}>
             <Text style={styles.errorAction}>重试</Text>

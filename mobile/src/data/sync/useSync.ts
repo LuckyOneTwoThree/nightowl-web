@@ -18,6 +18,9 @@ const BACKFILL_COOLDOWN_MS = 30 * 60 * 1000;
 const BACKFILL_SAME_GAP_RETRY_MS = 6 * 60 * 60 * 1000;
 const BACKFILL_WINDOW_MS = 14 * 86400000;
 const BACKFILL_META_KEY = 'nightowl:sync:backfill:v3';
+// 每日至少一次完整同步（快检覆盖不到 TBD 与未来 48h，见 refresh 里的说明）
+const FULL_SYNC_INTERVAL_MS = 24 * 3600000;
+const FULL_SYNC_KEY = 'nightowl:sync:full:v1';
 
 /**
  * 快检只覆盖 72h；更早但仍属于近期的待录比分需要一次完整补扫。
@@ -81,8 +84,30 @@ export function useSyncOnLaunch() {
 
   const refresh = useCallback(async () => {
     let outcome: Awaited<ReturnType<typeof syncNow>> | null = null;
+
+    // 每日至少一次完整同步。
+    //
+    // 快检（quickSyncTargets）只覆盖「72h 内已开球、且非 tbd」的场次。而 TBD 的
+    // 开球时间公布、改期、未来 48h 内的变动都不在这个范围内 —— 当前 fixtures 里
+    // 有 940 场（49.6%）是 tbd，所以「ESPN 公布了开球时间」这件事手机永远不会知道。
+    // 桌面端每 30 分钟跑一次 activeSyncTargets（含未来 48h + tbd ±3 天），
+    // 手机此前只有手动点「我的 → 立即同步」才走得到。
+    //
+    // 24h 一次是折中：完整同步约 20–30s，不能每次回前台都跑；也不能不跑。
+    let needFull = false;
     try {
-      outcome = await syncNow({ quick: true });
+      const last = Number(await AsyncStorage.getItem(FULL_SYNC_KEY));
+      needFull = !Number.isFinite(last) || Date.now() - last > FULL_SYNC_INTERVAL_MS;
+    } catch {
+      needFull = false;
+    }
+
+    try {
+      outcome = needFull ? await syncNow({ silent: true }) : await syncNow({ quick: true });
+      // 失败不写时间戳，否则一次弱网会把完整同步锁掉 24 小时
+      if (needFull && outcome && !outcome.busy && outcome.status !== 'failed') {
+        void AsyncStorage.setItem(FULL_SYNC_KEY, String(Date.now())).catch(() => {});
+      }
     } catch {
       // 快检失败仍可能靠副源完整补扫成功；继续检查积压。
     }

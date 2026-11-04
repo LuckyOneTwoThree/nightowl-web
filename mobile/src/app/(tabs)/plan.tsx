@@ -350,7 +350,13 @@ export default function PlanScreen() {
               <Button
                 label="预算增加 1 小时"
                 variant="secondary"
-                onPress={() => setBudget(Math.min(8, plan.budget + 1))}
+                onPress={() => {
+                  // 落到「下一个合法档位」，而不是 budget + 1：
+                  // 档位是 [0,1,2,3,4,5,6,8]，从 6 加 1 会得到 7 —— 三个选择器
+                  // 全部 selected=false，用户以为没生效，得再点一次才到 8。
+                  const next = BUDGETS.find(h => h > plan.budget);
+                  if (next != null) setBudget(next);
+                }}
                 style={styles.addBudget}
               />
             ) : null}

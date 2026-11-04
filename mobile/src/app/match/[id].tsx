@@ -815,8 +815,9 @@ function IntelTab({
             </Text>
           </View>
         </View>
+        {/* 手机端没有「重查该场」入口：第四个参数传 false，别让文案指向不存在的按钮 */}
         {trustTone !== 'muted' ? (
-          <Text style={styles.l1Hint}>{dataStateHint(dataState, 0, now)}</Text>
+          <Text style={styles.l1Hint}>{dataStateHint(dataState, 0, now, false)}</Text>
         ) : null}
       </Card>
 
