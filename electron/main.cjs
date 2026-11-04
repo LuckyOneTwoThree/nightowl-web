@@ -243,7 +243,12 @@ function createWindow({ hidden = false } = {}) {
     }
     if (targetOrigin !== appOrigin) {
       event.preventDefault();
-      shell.openExternal(url);
+      // 与 win:open-external 保持同一条协议白名单。
+      // 少了这一层，`file:`、`ms-msdt:`、`search-ms:`、`smb://` 之类会被原样交给
+      // 系统协议处理器 —— Windows 上自定义协议处理器是已知的代码执行入口。
+      if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
+        shell.openExternal(url).catch(() => {});
+      }
     }
   });
 

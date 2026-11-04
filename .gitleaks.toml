@@ -1,0 +1,52 @@
+# gitleaks 配置 · 夜猫看台
+#
+# 背景：2026-11-04 复核发现 `23e47a3` / `ce883ca` / `79f3aa4` 的 `server/scraper.js`
+# 曾内联第三方直播直链，参数含 SecurityKey / encrypt / timestamp / userid（个人会话签名）。
+# `56f0c0d` 已把直链外置到 gitignore 的 `server/tv-channels.local.json`，但历史仍可读。
+#
+# 本配置的职责：不再让同类内容进仓库。历史清洗是另一件事（需 force-push，单独执行）。
+
+title = "nightowl-web"
+
+[extend]
+# 保留 gitleaks 内置规则（AWS / GitHub PAT / 私钥 等）
+useDefault = true
+
+[[rules]]
+id = "nightowl-signed-live-url"
+description = "带会话签名的直播直链（SecurityKey / encrypt 参数）"
+# 形如 https://host/path?channel=x&timestamp=...&SecurityKey=<32 hex>&encrypt=<32 hex>
+regex = '''https?://[^\s"'`<>]{10,}?[?&](?:SecurityKey|securityKey|encrypt|Encrypt)=[A-Za-z0-9%._-]{8,}'''
+tags = ["secret", "signed-url"]
+
+[[rules]]
+id = "nightowl-userid-in-url"
+description = "URL 内嵌 userid / deviceid 等个人标识"
+regex = '''https?://[^\s"'`<>]{10,}?[?&](?:userid|userId|deviceid|deviceId|uid)=[A-Za-z0-9%._-]{6,}'''
+tags = ["pii"]
+
+[[rules]]
+id = "nightowl-tv-channels-inline"
+description = "保底频道直链被写回源码（应放 tv-channels.local.json）"
+# 命中 scraper.js / rules.json 里出现的长直链 + m3u8/playlist 特征
+regex = '''https?://[^\s"'`<>]{20,}/(?:live|playlist|hls)[^\s"'`<>]*\.m3u8'''
+path = '''(?:^|/)server/(?!tv-channels\.example\.json)[^/]*\.(?:js|json|mjs)$'''
+tags = ["secret", "signed-url"]
+
+[allowlist]
+description = "允许出现的公开地址与模板"
+paths = [
+  # 模板文件（只有占位符，不含真实签名）
+  '''server/tv-channels\.example\.json''',
+  # 公开上游与官方平台首页 / 搜索模板
+  '''server/watch-sources\.json''',
+  # 测试固件里刻意构造的假 URL
+  '''tools/test-.*\.mjs''',
+  '''spike/.*'''
+]
+regexes = [
+  # 文档里说明背景时引用的特征词（不带真实值）
+  '''SecurityKey=\<[^>]*\>''',
+  # 公开 CDN / 官方域名，不带签名
+  '''https?://(?:www\.)?(?:miguvideo|qq|youku|iqiyi|bilibili)\.com'''
+]

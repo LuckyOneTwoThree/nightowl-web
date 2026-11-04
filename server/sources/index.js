@@ -65,7 +65,7 @@ const STRATEGY = {
  * 拉取所有源的事件
  * @returns {{ events: object[], bySource: object, errors: object[] }}
  */
-export async function fetchAllEvents({ leagues, months, targets, targetDates, season, order = DEFAULT_ORDER, log = console, timeoutMs }) {
+export async function fetchAllEvents({ leagues, months, targets, targetDates, season, order = DEFAULT_ORDER, log = console, timeoutMs, delayMs = 200 }) {
   const events = [];
   const bySource = {};
   const errors = [];
@@ -101,7 +101,10 @@ export async function fetchAllEvents({ leagues, months, targets, targetDates, se
       errors.push({ source: r.sid, league: r.league, unit: unitLabel, message: err.message });
       log.warn?.(`[sources] ${r.sid} ${r.league} ${unitLabel} 拉取失败：${err.message}`);
     }
-    await new Promise(res => setTimeout(res, 200));
+    // 串行 + 间隔：避免打爆上游（旧项目因并发过高被封过 IP）。
+    // 间隔可配（rules.scores.requestDelayMs），此前硬编码 200 而配置项写 400 从不生效 ——
+    // 「有旋钮但不接线」比没有旋钮更糟：调了没反应，还以为自己调过。
+    await new Promise(res => setTimeout(res, Math.max(0, delayMs)));
   }
 
   return { events, bySource, errors };

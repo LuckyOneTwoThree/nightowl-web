@@ -54,9 +54,42 @@ export function isHostAllowed(hostname, rules, sessionAllowed = null) {
   );
 }
 
-/** 是否为合法主机名（防止把整段 URL 或路径塞进来） */
-export function isValidHost(h) {
-  return typeof h === 'string' && h.length > 0 && h.length <= 253 && /^[a-z0-9.-]+$/i.test(h) && !h.startsWith('.');
+/**
+ * 内网 / 回环 / IP 字面量。
+ *
+ * 为什么要拒：`/api/live-sources` 会把抓取结果里的每个域名**自动**写进会话白名单，
+ * 比赛中还会自动选中第一条直链起播 —— 等于「上游聚合站返回什么，本机代理就连什么」。
+ * 如果聚合站被投毒或镜像被篡改，返回 `http://127.0.0.1:6379/`、
+ * `http://192.168.1.1/`、`http://169.254.169.254/latest/meta-data/`，
+ * 就成了一条**盲 SSRF**（响应拿不到，但足以探测内网、驱动 GET 型副作用）。
+ *
+ * 合法直播源都是公网域名，没有理由用 IP 字面量、localhost 或单标签内网名。
+ */
+export function isPrivateHost(h) {
+  if (typeof h !== 'string') return true;
+  const host = h.toLowerCase().replace(/^\[|\]$/g, '').trim();
+  if (!host) return true;
+  // IPv4 字面量：无法可靠区分私网/公网，且合法源不用 IP，一律拒绝
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true;
+  // IPv6 字面量
+  if (host.includes(':')) return true;
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+  if (host.endsWith('.local') || host.endsWith('.internal') || host.endsWith('.lan')) return true;
+  // 单标签主机名（router / intranet / metadata）只在私网里解析得到
+  if (!host.includes('.')) return true;
+  return false;
+}
+
+/**
+ * 是否为合法主机名（防止把整段 URL 或路径塞进来，也挡掉内网地址）。
+ *
+ * `allowLoopback` 仅供测试/本地调试显式开启（rules.proxy.allowLoopbackHosts）。
+ * 生产默认关闭 —— 这条默认值就是 SSRF 防护本身。
+ */
+export function isValidHost(h, allowLoopback = false) {
+  if (typeof h !== 'string' || h.length === 0 || h.length > 253) return false;
+  if (!/^[a-z0-9.-]+$/i.test(h) || h.startsWith('.')) return false;
+  return allowLoopback ? true : !isPrivateHost(h);
 }
 
 /**
@@ -234,7 +267,9 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
 
   const allowHost = (host, headers = null) => {
     pruneSessions();
-    if (!isValidHost(host)) return { ok: false, reason: '非法主机名' };
+    if (!isValidHost(host, !!(rules.proxy && rules.proxy.allowLoopbackHosts))) {
+      return { ok: false, reason: '非法主机名（IP 字面量 / localhost / 内网名一律拒绝）' };
+    }
     if (sessionAllowed.has(host) && !headers) {
       sessionGrantedAt.set(host, Date.now()); // 复用即续期
       return { ok: true, already: true };

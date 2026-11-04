@@ -97,6 +97,9 @@ const testRules = {
   proxy: {
     allowedHosts: [],
     allowedHostSuffixes: [],
+    // 测试专用：上游源站跑在 127.0.0.1。生产默认关闭（IP / localhost / 内网名一律拒绝，
+    // 见 proxy.js isPrivateHost），否则自动授权会被上游投毒利用成 SSRF。
+    allowLoopbackHosts: true,
     forwardHeaders: ['Range', 'Accept'],
     upstreamHeaders: { Referer: '', 'User-Agent': 'nightowl-test' },
     timeoutMs: 5000,

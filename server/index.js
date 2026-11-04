@@ -83,9 +83,15 @@ async function serveStatic(pathname, res) {
 
   try {
     const buf = await readFile(filePath);
+    const ext = extname(filePath).toLowerCase();
+    // Vite 产物带内容哈希 → 可长期缓存；index.html 必须每次校验，
+    // 否则界面更新后用户仍加载旧入口，指向已被替换的 assets。
+    const isHashedAsset = /^\/assets\//.test(rel) || /\.[0-9a-zA-Z_-]{8,}\./.test(rel);
     res.writeHead(200, {
-      'Content-Type': MIME[extname(filePath).toLowerCase()] || 'application/octet-stream',
-      'Content-Length': buf.length
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      'Content-Length': buf.length,
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': isHashedAsset ? 'public, max-age=31536000, immutable' : 'no-cache'
     });
     res.end(buf);
   } catch {
@@ -182,6 +188,23 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
     Object.values(result?.bySource || {}).some(info => (info.ok || 0) > 0);
 
   /**
+   * 本次「确实查过」的场次范围。
+   *
+   * 旧实现把 **全部** fixtures 交给 recordPendingChecks，于是：
+   *   · 单场重查 → 其它待录场次也被标成「刚检查过」；
+   *   · 某个联赛的请求失败 → 该联赛的场次同样被标成已检查。
+   * 结果是数据说明里的「最后一次检查在 HH:mm」在撒谎 —— 宁可显示「没查过」，
+   * 也不要谎报「查过且上游没有」，这是本产品数据诚实承诺的底线。
+   *
+   * errors 元素形如 { source, league, unit, message }，按 league 排除即可。
+   */
+  const checkedFixtures = (fixtures, result) => {
+    const failed = new Set((result?.errors || []).map(e => e?.league).filter(Boolean));
+    if (failed.size === 0) return fixtures;
+    return fixtures.filter(m => !failed.has(m.l));
+  };
+
+  /**
    * 来源校验：浏览器跨域请求不认「只绑 127.0.0.1」这个限制，
    * 任意外部网页原本可以驱动本服务的写接口（授权主机 / 触发同步）。
    * 只放行本机回环来源（见 proxy.js 的 allowedLocalOrigin）。
@@ -195,11 +218,39 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
     return false;
   };
 
-  const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url, `http://${req.headers.host || '127.0.0.1'}`);
-    const { pathname, searchParams } = url;
+  /**
+   * Host 校验（防 DNS rebinding）。
+   *
+   * 只做 Origin 校验是不够的：外部页面把 `evil.example` 解析到 127.0.0.1 后，
+   * 浏览器认为这是**同源** GET，根本不发 Origin 头，于是能直接读
+   * /api/fixtures、/api/live、/api/live-sources（后者还会触发外网抓取）。
+   * 只放行真正指向本机、且端口是本服务实际监听端口的 Host。
+   *
+   * 端口取 server.address()，不能用 rules.listen.port —— Electron 会回退到 3101–3104。
+   */
+  const isAllowedHost = host => {
+    if (!host) return true; // HTTP/1.0 或本机裸 socket 客户端可能不带 Host
+    const port = server.address()?.port;
+    if (!port) return true;
+    const h = String(host).toLowerCase();
+    // 允许省略端口的回环写法：HTTP/1.1 对默认端口可省，本机调试脚本常这么发。
+    // 这不削弱防护 —— rebinding 场景下浏览器填的 Host 是攻击者域名，改不了。
+    return h === `127.0.0.1:${port}` || h === `localhost:${port}` || h === `[::1]:${port}`
+      || h === '127.0.0.1' || h === 'localhost' || h === '[::1]';
+  };
 
+  const server = http.createServer(async (req, res) => {
+    if (!isAllowedHost(req.headers.host)) {
+      res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Forbidden host');
+      return;
+    }
     try {
+      // 放进 try：畸形 Host 头曾能让 new URL() 抛错并逃逸成 unhandled rejection，
+      // 而本服务与 Electron 主进程同进程 —— 那一下会直接把整个应用带走。
+      const url = new URL(req.url, 'http://127.0.0.1');
+      const { pathname, searchParams } = url;
+
       /* ---------------- 健康检查 ---------------- */
       if (pathname === '/api/health') {
         // 报「真实绑定端口」而不是配置端口：Electron 在 3100 被占用时会回退到
@@ -470,7 +521,10 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
             onlyMatchIds: matchId ? [matchId] : null,
             log
           });
-          if (hadSuccessfulRequest(result)) recordPendingChecks(fixtures);
+          // 单场重查只记这一场：别的待录场次这次根本没查，不能一起标成「已检查」。
+          if (hadSuccessfulRequest(result)) {
+            recordPendingChecks(matchId ? fixtures.filter(m => m.id === matchId) : fixtures);
+          }
 
           let written = null;
           let nextFixtures = null;
@@ -633,7 +687,8 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
     let written = { ok: true, changed: 0, note: '没有需要写入的补丁' };
     let applied = false;
     let nextFixtures = fixtures;
-    if (hadSuccessfulRequest(result)) recordPendingChecks(fixtures);
+    // 只记录「本次确实查到的联赛」的场次：某联赛请求失败时不该被标成已检查。
+    if (hadSuccessfulRequest(result)) recordPendingChecks(checkedFixtures(fixtures, result));
     if (result.patches.size > 0) {
       const { fixtures: next, changed } = applyPatches(fixtures, result.patches);
       const issues = validateFixtures(next);
