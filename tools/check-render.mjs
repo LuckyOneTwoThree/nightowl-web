@@ -1652,6 +1652,51 @@ app.whenReady().then(async () => {
       `!document.querySelector('[aria-label="连续补看"]')`
     );
     ok('★ 「结束补看」收掉会话条，回到常规浏览', barGone);
+
+    // 剧场切换不能重建播放器。
+    //
+    // 旧实现的三种布局根节点在 div / Fragment 之间切换、VideoScreen 的树层级也不同，
+    // React 会整棵卸载重建 —— 画面黑屏重连，还会重复触发一次 video:playing
+    // （同一场起播被记成两次成功，污染线路成功率）。同一问题在比赛第 120 分钟
+    // 由 live 转 ended_pending 时也会出现（加时赛必现）。
+    //
+    // 断言方式：给视频容器打一个自定义属性，切剧场后检查它还在。
+    // 只要子树被重建，新节点就不带这个属性 —— 这是结构性判断，不依赖动画/像素。
+    {
+      const before = await win.webContents.executeJavaScript(`
+        (() => {
+          const v = document.querySelector('.player-adaptive-video');
+          if (!v) return { found: false };
+          v.__noProbe = 'kept';
+          return { found: true, hasBtn: !!document.querySelector('[aria-label="切换为宽屏剧场"]') };
+        })()
+      `);
+      if (!before.found || !before.hasBtn) {
+        ok('★ 切宽屏剧场复用同一个视频容器（不卸载重建）', false,
+          `未进入比赛详情：${JSON.stringify(before)}`);
+      } else {
+        await win.webContents.executeJavaScript(
+          `document.querySelector('[aria-label="切换为宽屏剧场"]')?.click()`
+        );
+        await sleep(450);
+        const after = await win.webContents.executeJavaScript(`
+          (() => {
+            const v = document.querySelector('.player-adaptive-video');
+            return {
+              kept: v?.__noProbe === 'kept',
+              inTheater: !!document.querySelector('[aria-label="切换为协同模式"]')
+            };
+          })()
+        `);
+        ok('★ 切宽屏剧场复用同一个视频容器（不卸载重建）',
+          after.kept && after.inTheater, JSON.stringify(after));
+        // 切回协同模式，避免影响后续断言
+        await win.webContents.executeJavaScript(
+          `document.querySelector('[aria-label="切换为协同模式"]')?.click()`
+        );
+        await sleep(300);
+      }
+    }
   } catch (err) {
     ok('渲染冒烟执行完成', false, String(err?.stack || err));
   } finally {

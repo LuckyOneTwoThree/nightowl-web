@@ -212,7 +212,7 @@ function OfficialLinks({ sources, match, limit = 99, replay = false }) {
  *   · 临近开赛（距开球 ≤ 30m）：雷达待命中，提供「立即检测」按钮；
  *   · 进行中无源：明确告知源站状态，提供「重新检索」按钮。
  */
-function LineEmptyState({ loading, state, isNearKickoff, scrapeError, onRefresh }) {
+function LineEmptyState({ loading, state, isNearKickoff, scrapeError, serviceDown, onRefresh }) {
   if (loading) {
     return (
       <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline bg-surface-raised/30 p-3 text-center">
@@ -221,6 +221,23 @@ function LineEmptyState({ loading, state, isNearKickoff, scrapeError, onRefresh 
         </span>
         <p className="text-xs font-medium text-text-primary">正在检索直播线路…</p>
         <p className="mt-1 text-2xs text-text-muted">正在连接聚合源与广播信号</p>
+      </div>
+    );
+  }
+
+  if (state === 'tbd') {
+    // 940 场待定比赛此前会落到 live 分支，显示「源站推流可能受限，可重试检索」——
+    // 承诺一个连开球时间都还没定的场次能靠重试解决。而且它确实会拿着占位时间
+    // 去请求直播源，既慢又误导。
+    return (
+      <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline bg-surface-raised/30 p-3 text-center">
+        <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-surface-raised text-text-muted">
+          <IconCalendar size={14} />
+        </span>
+        <p className="text-xs font-medium text-text-primary">开球时间待定</p>
+        <p className="mt-1 text-2xs leading-relaxed text-text-muted max-w-[215px]">
+          这场还没确定开球时间，确定后会自动同步；可先在官方平台关注
+        </p>
       </div>
     );
   }
@@ -283,19 +300,21 @@ function LineEmptyState({ loading, state, isNearKickoff, scrapeError, onRefresh 
   return (
     <div className="my-2 flex flex-1 min-h-[115px] flex-col items-center justify-center rounded-lg border border-dashed border-line-hairline bg-surface-raised/30 p-3 text-center">
       <span className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-surface-raised text-text-muted">
-        {scrapeError ? <IconWarn className="text-warn" size={14} /> : <IconSignal size={14} />}
+        {serviceDown || scrapeError ? <IconWarn className="text-warn" size={14} /> : <IconSignal size={14} />}
       </span>
       <p className="text-xs font-medium text-text-primary">
-        {scrapeError ? '聚合信号暂未响应' : '暂未检索到可用线路'}
+        {serviceDown ? '本地服务未连接' : scrapeError ? '聚合信号暂未响应' : '暂未检索到可用线路'}
       </p>
       <p className="mt-1 text-2xs leading-relaxed text-text-muted max-w-[215px]">
-        {scrapeError
-          ? '第三方信号站网络异常，建议使用下方官方平台'
-          : '源站推流可能受限，可重试检索或使用下方官方平台'}
+        {serviceDown
+          ? '比分与线路都来自本地服务，重启应用即可恢复'
+          : scrapeError
+            ? '第三方信号站网络异常，建议使用下方官方平台'
+            : '源站推流可能受限，可重试检索或使用下方官方平台'}
       </p>
       <div className="mt-2.5">
         <Button variant="ghost" size="sm" icon={<IconReset size={11} />} onClick={onRefresh}>
-          重新检索
+          {serviceDown ? '重新连接' : '重新检索'}
         </Button>
       </div>
     </div>
@@ -423,6 +442,8 @@ export default function PlayerStage({
   const [loadingLines, setLoadingLines] = useState(false);
   const [activeLineId, setActiveLineId] = useState(null);
   const [liveInfo, setLiveInfo] = useState(null);
+  /** 本地服务不可达（fetch 本身失败），要区别于「上游没返回线路」 */
+  const [serviceDown, setServiceDown] = useState(false);
 
   // 实时快照（比分 / 分钟 / 事件）连轮询与竞态保护一起收进 hook
   const {
@@ -529,7 +550,7 @@ export default function PlayerStage({
     if (line.isDirect && line.url) {
       try {
         const u = new URL(line.url);
-        await fetch('/api/proxy/allow', {
+        const res = await fetch('/api/proxy/allow', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ host: u.hostname })
@@ -537,11 +558,28 @@ export default function PlayerStage({
         // 慢 allow 返回时用户可能已换线或切场：后到的旧请求不能覆盖新选择
         if (seq !== selectSeqRef.current) return;
         if ((matchRef.current?.id || null) !== currentMatchId) return;
+
+        // 服务端在白名单满 / 主机非法时回 HTTP 200 + {ok:false}。
+        // 只看 fetch 是否 throw 会把这种情况当成授权成功 —— 起播后代理回 403，
+        // 播放器归因为「线路失败」并白白消耗自动换线额度，用户永远看不到真实原因。
+        const body = await res.json().catch(() => null);
+        const failedItem = Array.isArray(body?.results) ? body.results.find(r => r && r.ok === false) : null;
+        if (!res.ok || body?.ok === false) {
+          setActiveLineId(null); // 没起播成功就不该高亮成「正在使用」
+          setError(
+            failedItem?.reason
+              || body?.reason
+              || (res.ok ? '本地代理未授权该线路' : `本地代理不可用（${res.status}）`)
+          );
+          return;
+        }
+
         setStreamUrl(line.url);
         setStreamKind(line.kind || null);
       } catch (e) {
         if (seq !== selectSeqRef.current) return;
         if ((matchRef.current?.id || null) !== currentMatchId) return;
+        setActiveLineId(null);
         setError(`起播失败：${e.message}`);
       }
     } else if (line.url) {
@@ -562,6 +600,8 @@ export default function PlayerStage({
   linesRef.current = orderedLines;
 
   const autoSwitchRef = useRef({ matchId: null, count: 0 });
+  /** 最近一次已处理的播放错误：用于合并 hls.js 与 <video> 的重复上报 */
+  const lastErrorRef = useRef(null);
 
   // 切场后的第一帧 state 里可能还留着上一场的快照：按 matchId 过滤后再对外暴露，
   // 避免用上一场比分渲染新队名，也避免通知基线把旧事件当成新比赛的历史。
@@ -587,6 +627,16 @@ export default function PlayerStage({
       const msg = String(message || '播放失败');
       const currentMatch = matchRef.current;
       const expectedLineId = activeLineIdRef.current;
+
+      // 同一次起播失败会从两条通道到达：hls.js 的 fatal error，以及 <video> 的
+      // media error（artplayer 转成 art.on('error')）。两条都记一次的话，
+      // 「最多自动尝试 2 次」会在一次故障里被吃掉一半，提示还会写成「已切换（2/2）」
+      // 而实际只切了 1 条。这里按「同一线路 + 800ms 内」合并。
+      const now = Date.now();
+      const last = lastErrorRef.current;
+      if (last && last.line === expectedLineId && now - last.at < 800) return;
+      lastErrorRef.current = { line: expectedLineId, at: now };
+
       // 记下这条线路失败过：当天它会沉到列表后面（不禁用、不隐藏）
       rememberLine(linesRef.current.find(l => l.id === expectedLineId), false, msg);
       const decision = autoSwitchDecision({
@@ -619,6 +669,8 @@ export default function PlayerStage({
   // 切场时重置自动换线计数与提示
   useEffect(() => {
     autoSwitchRef.current = { matchId: match?.id || null, count: 0 };
+    // 不同场次可能命中同一条线路 id：上一个场的错误记录不能吞掉新场的上报
+    lastErrorRef.current = null;
     setLineNotice(null);
   }, [match?.id]);
 
@@ -725,6 +777,7 @@ export default function PlayerStage({
         if (matchRef.current?.id !== currentMatch.id) return;
 
         setLiveInfo(data);
+        setServiceDown(false);
         const available = data.lines || [];
         setLines(available);
 
@@ -735,6 +788,10 @@ export default function PlayerStage({
         }
       } catch (err) {
         if (matchRef.current?.id !== currentMatch.id) return;
+        // fetch 本身失败 = 本地服务没起来，不是「源站推流受限」。
+        // 归因错了会让用户一直点「重新检索」，而真正该做的是重启应用。
+        // 设置页对同一现象的口径是「本地服务未启动」，这里必须一致。
+        setServiceDown(true);
         console.warn('[PlayerStage] 获取直播线路失败:', err.message);
       } finally {
         if (matchRef.current?.id === currentMatch.id) {
@@ -761,8 +818,19 @@ export default function PlayerStage({
       setTheaterLinesExpanded(false);
       return;
     }
+    // 待定场次：t 是整轮的占位时间，拿它去抓源既查不到也不该查
+    // （940 场会走到这里）。等真实开球时间公布后，match 更新会重新触发本 effect。
+    if (match.tbd) {
+      stopPlayback();
+      setLines([]);
+      setLiveInfo(null);
+      setServiceDown(false);
+      return;
+    }
     fetchLines({ reset: true, autoPlay: true });
-  }, [match?.id, fetchLines, stopPlayback]);
+    // match.tbd 进依赖（原始布尔值，不是推导值）：开球时间公布后 tbd 由 true 变 false，
+    // 只有 id 不变，不加这一项就永远不会去抓源。
+  }, [match?.id, match?.tbd, fetchLines, stopPlayback]);
 
   // 开球瞬间（由 sched 转换为 live 时）自动探测最新推流并起播
   const prevStateRef = useRef(state);
@@ -1232,6 +1300,7 @@ export default function PlayerStage({
                 state={state}
                 isNearKickoff={isNearKickoff}
                 scrapeError={liveInfo?.scrapeError}
+                serviceDown={serviceDown}
                 onRefresh={() => fetchLines({ reset: false, autoPlay: true })}
               />
             ))}
@@ -1301,33 +1370,31 @@ export default function PlayerStage({
           这样右侧回顾比画面高时，画面下方由情报填满，不再留下大块空白。
           堆叠分支用默认 stretch：右栏卡片拉伸到与主列等高，页脚钉在卡片底部，
           右下不再露出页面底色；赛前分支保持 items-start（侧栏通常比画面高）。 */}
-      {!theaterMode ? (
-        stackIntel ? (
-          <div className="flex w-full flex-col gap-3 xl:flex-row">
-            <div className="flex min-w-0 flex-1 flex-col gap-3">
-              <div className="player-adaptive-video flex min-w-0">
-                {VideoScreen}
-              </div>
-              {underVideo}
-            </div>
-            {ControlSidebar}
-          </div>
-        ) : (
-          <>
-            <div className="flex w-full flex-col gap-3 xl:flex-row">
-              <div className="player-adaptive-video flex min-w-0 flex-1">
-                {VideoScreen}
-              </div>
-              {ControlSidebar}
-            </div>
-            {underVideo}
-          </>
-        )
-      ) : (
-        <div className="flex w-full flex-col gap-2.5">
-          <div className="w-full">
+      {/* 三种布局共用同一套 DOM，只在 className 上不同。
+          此前根节点在 div / Fragment 之间切换、VideoScreen 的树层级也不同，
+          React 会把整棵子树卸载重建 —— 点「宽屏剧场」、或加时赛到第 120 分钟
+          （matchState 由 live 变 ended_pending，stackIntel 翻转）都会黑屏重连一次，
+          重建后还会再触发一次 video:playing，把同一场起播记成两次成功。 */}
+      <div className={theaterMode ? 'flex w-full flex-col gap-2.5' : 'flex w-full flex-col gap-3 xl:flex-row'}>
+        <div
+          className={
+            theaterMode
+              ? 'w-full'
+              : stackIntel
+                ? 'flex min-w-0 flex-1 flex-col gap-3'
+                : 'flex min-w-0 flex-1 flex-col'
+          }
+        >
+          <div className="player-adaptive-video flex min-w-0">
             {VideoScreen}
           </div>
+          {!theaterMode && stackIntel ? underVideo : null}
+        </div>
+        {!theaterMode ? ControlSidebar : null}
+      </div>
+
+      {theaterMode && (
+        <>
 
           {!theaterLinesExpanded ? (
             <div
@@ -1472,8 +1539,11 @@ export default function PlayerStage({
               </div>
             </div>
           )}
-        </div>
+        </>
       )}
+
+      {/* 非剧场且非堆叠：情报在主行下方（堆叠时它在视频正下方，见上面的左列） */}
+      {!theaterMode && !stackIntel ? underVideo : null}
     </div>
   );
 }
