@@ -208,7 +208,9 @@ export default function MatchScreen() {
     () => getFixtures().find((item: Match) => item.id === id) as Match | undefined,
     [id, rev]
   );
-  const stopLoss = useStopLossPrompt(match ?? null, prefs, now, focused);
+  // watchOpen 是原生 Modal（永远盖在最上层）：打开期间横幅完全不可见，
+  // 此时不能消费「今晚已提示」的状态，否则这条一夜只有一次的提醒会凭空消失。
+  const stopLoss = useStopLossPrompt(match ?? null, prefs, now, focused, watchOpen);
 
   const spoilerExcludedIds = useMemo(
     () => unrevealedTonightIds(getFixtures(), now, prefs.spoilerFree, revealedIds),

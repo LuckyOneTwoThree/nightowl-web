@@ -33,7 +33,16 @@ export function useStopLossPrompt(
   match: Match | null,
   prefs: SleepPrefs,
   now: number,
-  enabled = true
+  enabled = true,
+  /**
+   * 视线被浮层挡住时为 true：既不弹、也不消费「今晚已提示」的状态。
+   *
+   * 桌面端此前只在消费侧漏了早晨摘要一项，横幅就再也没出现过 —— 因为
+   * `markStopLossPrompted` 是不可逆的终态，而一夜只有一次提醒。
+   * 手机上「观看入口」是原生 Modal（永远盖在上面）、播放器面板展开时也不渲染横幅，
+   * 这两种情况都必须先拦住，否则用户在完全没看见的情况下就把今晚的止损额度用掉了。
+   */
+  blocked = false
 ) {
   const [states, setStates] = useState<Record<string, NightState>>({});
   const statesRef = useRef(states);
@@ -102,7 +111,7 @@ export function useStopLossPrompt(
   }, [enabled]);
 
   useEffect(() => {
-    if (!enabled || !loaded || !match || !prefs.sleepEnabled || context) return;
+    if (!enabled || blocked || !loaded || !match || !prefs.sleepEnabled || context) return;
     const night = stopLossNightKey(match);
     if (!night) return;
     const profile = {
@@ -115,7 +124,7 @@ export function useStopLossPrompt(
     setContext({ ...prompt, match } as StopLossContext);
     setNotice(null);
     writeState(night, markStopLossPrompted(states[night] as any) as NightState);
-  }, [enabled, loaded, match, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepMinHours, now, states, context, writeState]);
+  }, [enabled, blocked, loaded, match, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepMinHours, now, states, context, writeState]);
 
   useEffect(() => {
     if (!context) return;

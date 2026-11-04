@@ -82,8 +82,11 @@ function PlayerView({
   const insets = useSafeAreaInsets();
   const prefs = usePrefs();
   const now = useNow(30_000);
-  const stopLoss = useStopLossPrompt(match, prefs, now, true);
   const [panelOpen, setPanelOpen] = useState(false);
+  // panelOpen 要在 useStopLossPrompt 之前声明（TDZ）。面板展开时横幅不渲染（见下方
+  // `!panelOpen ? <StopLossBanner/>`），所以此时必须阻止消费「今晚已提示」的状态 ——
+  // 否则用户在全屏面板里根本看不到提醒，额度却被永久用掉了。
+  const stopLoss = useStopLossPrompt(match, prefs, now, true, panelOpen);
   const [notice, setNotice] = useState<string | null>(null);
   const [hudVisible, setHudVisible] = useState(true);
   const [muted, setMuted] = useState(true);
