@@ -1117,6 +1117,21 @@ FL-8-PSG-OL / FL-8-TOU-TRO / FL-9-NIC-REN  同类（21–25h）
 测试 +18 条：内置修订更新→内置胜 / 同步写入更新→用户胜 / 无时刻→保守信用户 /
 整份副本只信结果字段 / 差分落盘为空 / 只落变化字段 + `at` 不漂移 / 读回打底正确。
 
+### 12.8 阶段五：P2 工程项（C2 / C3 / C5）
+
+| 项 | 改动 | 实测 |
+| :-- | :-- | :-- |
+| **C2** 接口未压缩 | `sendJSON` 改紧凑序列化 + >1KB 且客户端支持时 gzip，带 `Vary: Accept-Encoding` | `/api/fixtures` 367KB → **220KB**（identity）→ **28KB**（gzip）；342B 的 status 不压 |
+| **C3** 图标占首屏 35% | 出 64 / 192 两档，BrandLogo 用 64、开屏用 192（96px×2x）；`index.html` 的 icon 指向 64 并补 apple-touch-icon；`favicon.png` 退居 512 母版 | 首屏图标 327KB → **69KB**；布局 0px 溢出、渲染 83 项全过 |
+| **C5** CI 不验证手机端 / 布局 | 新增 ubuntu job 跑 `mobile npm run check`；主 job 在 render smoke 后加 layout gate | YAML 解析通过（3 个 job）；本机 layout 6 个组合全 0px |
+
+**C5 的两个细节**：
+- 必须跑 `npm run check` 而不是 `typecheck`：mobile 的 `pretypecheck` 会先 `sync:shared`，
+  漂移被自动修好再检查 —— 只跑 typecheck 等于永远绿。
+- 顺带修 `measure-layout.mjs` 的门禁语义：此前测量异常只打印「!! 失败」不计数，
+  页面没渲染时「横向溢出 0px」会**静默通过**。现在异常与「找不到 header」都计入失败。
+
+
 ### 12.7 阶段四之五：B4 赛季维度（跨赛季不再撞车）
 
 | 改动 | 位置 |
