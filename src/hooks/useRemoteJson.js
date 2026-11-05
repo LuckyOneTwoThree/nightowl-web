@@ -21,6 +21,7 @@ export function useRemoteJson({ url = null, listKey = null, nonce = 0, debounceM
   const listKeyRef = useRef(listKey);
   listKeyRef.current = listKey;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: nonce 是调用方持有的「重试/刷新」计数器，纯触发器；body 不读它。
   useEffect(() => {
     if (!url) {
       setStatus('idle');

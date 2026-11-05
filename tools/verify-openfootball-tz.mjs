@@ -16,12 +16,6 @@ import { localToBeijingWall, isEuroDST } from '../server/sources/tz.mjs';
 
 const LEAGUES_TO_TEST = process.argv[2] ? [process.argv[2]] : ['PL', 'PD', 'SA', 'BL', 'FL'];
 
-function bench(label, fn) {
-  const t0 = Date.now();
-  const r = fn();
-  return { r, ms: Date.now() - t0 };
-}
-
 async function main() {
   let totalMatched = 0;
   let totalMismatched = 0;

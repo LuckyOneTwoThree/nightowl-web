@@ -66,7 +66,6 @@ for (const f of FILES) {
 
   // fixtures：剥离烘焙档位字段 s
   if (f.key === 'fixtures') {
-    const before = Object.keys(data[0]).join(',');
     let stripped = 0;
     out = data.map(m => {
       if ('s' in m) stripped++;

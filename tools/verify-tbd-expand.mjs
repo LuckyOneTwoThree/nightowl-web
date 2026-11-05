@@ -12,7 +12,6 @@ import * as espn from '../server/sources/espn.js';
 import { ts } from '../src/core/engine.js';
 import fixtures from '../src/data/fixtures.json' with { type: 'json' };
 
-const DAY = 86400000;
 
 async function main() {
   // 取一个完整的 tbd 轮：BL 第 5 轮（占位 2026-10-11T02:00）

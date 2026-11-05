@@ -119,7 +119,6 @@ export function sleepLedger(matchTime, profile, options = {}) {
       ? options.durationMs
       : MATCH_DURATION_MS;
   const endTs = kickoffTs + durationMs;
-  const wakeMinutes = parseClockTime(p.wakeTime);
   let wakeTs = ts(`${bjDate(endTs)}T${p.wakeTime}`);
   let overWake = false;
 

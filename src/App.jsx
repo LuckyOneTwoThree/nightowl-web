@@ -353,6 +353,7 @@ export default function App() {
   }, []);
 
   // 防剧透开关变化时清空已揭晓状态，避免"关掉又打开还留着旧揭晓"
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 开关变化即清空已揭晓状态；body 只调 setState
   useEffect(() => {
     setRevealed(new Set());
   }, [prefs.spoilerFree]);
@@ -473,11 +474,11 @@ export default function App() {
   }, [triggerSync]);
 
   // ---- 派生数据（分钟粒度重算，故意不依赖秒级 now）----
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // biome-ignore lint/correctness/useExhaustiveDependencies: minuteKey/dataRev 是缓存失效触发器，body 读的是模块级 getFixtures() 与 Date.now()
   const tonight = useMemo(() => computeTonight(Date.now(), prefs), [minuteKey, prefs, dataRev]);
 
   // 最近值得补看：只扫描最近 96h（REPLAY_WINDOW_MS），排除今晚已在赛程里的场次；不新增数据源
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 同上：靠 minuteKey/dataRev 失效，不把它们读进 body
   const replayPicks = useMemo(() => computeReplayPicks(Date.now(), prefs, 3), [minuteKey, prefs, dataRev]);
 
   /**
@@ -503,6 +504,7 @@ export default function App() {
 
   // 赛前 15 分钟提醒：关注球队 + 今晚之选；同一场只提醒一次
   const notifiedPrematchRef = useRef(new Set());
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 每分钟/每次数据更新都检查一次赛前提醒；clockTs 是心跳，不是数据
   useEffect(() => {
     if (!prefs.notifyBefore15 || !window.desktop?.notify) return;
     const now = Date.now();
@@ -538,7 +540,7 @@ export default function App() {
     });
   }, []);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 靠 minuteKey/dataRev 失效；body 读 Date.now() 与模块级 fixtures
   const week = useMemo(
     () => (view === 'week' ? computeWeek(Date.now(), prefs, { weekOffset }) : null),
     [view, minuteKey, prefs, dataRev, weekOffset]
@@ -549,27 +551,27 @@ export default function App() {
    * 只在设置抽屉打开时才算：用户不导出就不该为它多跑一次背包规划。
    * 已经在「本周规划」视图时直接复用，避免同一份数据算两遍。
    */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 同 week：靠 dataRev/minuteKey 失效
   const weekBestIds = useMemo(() => {
     if (!settingsOpen) return null;
     const w = view === 'week' && week ? week : computeWeek(Date.now(), prefs);
     return new Set(w.plan.best.map(e => e.m.id));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsOpen, view, week, prefs, dataRev, minuteKey]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 靠 dataRev 失效；body 读模块级 fixtures
   const scheduleRows = useMemo(
     () => (view === 'schedule' ? computeScheduleRows(Date.now(), prefs, filters) : []),
     [view, prefs, filters, dataRev]
   );
 
   // ---- 顶栏「进行中」计数（随 30 秒时钟刷新）----
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // biome-ignore lint/correctness/useExhaustiveDependencies: clockTs 是刻度触发器；liveCountAt 内部读 Date.now()
   const liveCount = useMemo(() => liveCountAt(Date.now()), [clockTs]);
 
   // 按 dataRev 重建：保鲜同步后右栏也要拿到新记录（含比分），不能停在构建期快照
   // ⚠️ 必须在下面的「首屏锁定」effect 之前声明 —— 该 effect 的依赖数组里含 matchMap，
   //    const 的 TDZ 会让「先使用、后声明」在渲染期直接抛 ReferenceError。
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 数据版本变化即重建索引；buildMatchMap 读模块级 fixtures
   const matchMap = useMemo(buildMatchMap, [dataRev]);
   const activeMatch = activeMatchId ? matchMap[activeMatchId] || null : null;
 
@@ -689,10 +691,12 @@ export default function App() {
 
   // 今晚已完赛但未揭晓的场次：积分榜、近况、赛季统计和比赛详情共用同一集合。
   // 必须由 App 统一计算，不能每个面板各自判断（旧实现正是这样漏掉积分榜和球队页的）。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 靠 dataRev/clockTs 失效；body 读 getFixtures()
   const morningDigestAuto = useMemo(
     () => getMorningDigest(watchLater, getFixtures(), clockTs, prefs.sleepWakeTime),
     [watchLater, dataRev, clockTs, prefs.sleepWakeTime]
   );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 同上（强制版）
   const morningDigestAll = useMemo(
     () => getMorningDigest(watchLater, getFixtures(), clockTs, prefs.sleepWakeTime, { force: true }),
     [watchLater, dataRev, clockTs, prefs.sleepWakeTime]
@@ -792,9 +796,9 @@ export default function App() {
     if (id && id !== activeMatchId) setActiveMatchId(id);
   }, [digestSession, digestPositionInfo.id, queueWatchedIds, markWatchLaterWatched, activeMatchId]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dataRev/clockTs 是失效触发器；body 读 getFixtures()
   const spoilerExcludedIds = useMemo(
     () => unrevealedTonightIds(getFixtures(), clockTs, prefs.spoilerFree, revealed),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [clockTs, prefs.spoilerFree, revealed, dataRev]
   );
 
@@ -826,6 +830,7 @@ export default function App() {
    * 新比赛的画面会被留在视口上方看不到 —— 看起来像"点了没反应"。
    */
   const rightPaneRef = useRef(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 切换比赛时右栏回到顶部；body 只碰 ref
   useEffect(() => {
     const el = rightPaneRef.current;
     if (el) el.scrollTop = 0;
@@ -851,7 +856,7 @@ export default function App() {
   }, [view, activeMatchId]);
 
   // 命令面板：视图/操作 + 全量比赛；列表数据只随 dataRev 重建
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 打开面板/数据更新时重建命令列表；body 读 getFixtures()
   const paletteItems = useMemo(
     () => [...VIEW_COMMANDS, ...ACTION_COMMANDS, ...buildMatchCommands(getFixtures())],
     [dataRev, paletteOpen]

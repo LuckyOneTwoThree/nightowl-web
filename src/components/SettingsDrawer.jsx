@@ -216,6 +216,7 @@ export default function SettingsDrawer({
   // ⚠️ 不能用模块级 import { fixtures }：setFixtures 换的是 data/index.js 内部的
   // _fixtures，那个绑定永远停在构建期快照。这里取 getFixtures()，并在新鲜度
   // 刷新后（抽屉打开 / 同步完成）重算，保证与列表的「命中 N 场」口径一致。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fresh 是「数据已刷新」的触发器；body 读 getFixtures()
   const snapshotInfo = useMemo(() => {
     const list = getFixtures();
     const days = list.map(m => m.t.slice(0, 10)).sort();
@@ -801,6 +802,7 @@ export default function SettingsDrawer({
 function useServiceHealth(open) {
   const [health, setHealth] = useState(null);
   const [tick, setTick] = useState(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tick 是「手动刷新健康」的计数器，纯触发器
   useEffect(() => {
     if (!open) return undefined;
     let alive = true;

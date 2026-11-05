@@ -45,10 +45,12 @@ export default function CommandPalette({ items = [], onClose, onRun }) {
   // 面板整体挂载即代表打开：进场聚焦搜索框，卸载时把焦点还回触发它的按钮。
   useDialogFocus(true, inputRef);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: query 是「变化即重置高亮」的触发器，body 不读它；删掉会让高亮停在旧位置
   useEffect(() => {
     setActiveIndex(0);
   }, [query]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 滚到当前高亮项由 activeIndex 驱动；body 只碰 ref，不读 activeIndex。
   useEffect(() => {
     const node = listRef.current?.querySelector('[data-active="true"]');
     node?.scrollIntoView({ block: 'nearest' });

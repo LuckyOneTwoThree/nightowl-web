@@ -50,6 +50,7 @@ export function useStopLoss({
   }, []);
 
   // 切换比赛时收起上一场的提示，避免旧止损卡停留在新场次上。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 切换比赛即收起上一场的止损卡片；body 只调 setState，activeMatchId 是触发器。
   useEffect(() => {
     setStopLossContext(null);
     setStopLossNotice(null);

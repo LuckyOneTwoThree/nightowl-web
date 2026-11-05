@@ -64,7 +64,6 @@ ok('★ 有可排场次但全为零成本 → zero-only',
 console.log('\n二、与真实赛程对账（防回归到「同屏矛盾」）');
 
 // 用真实 fixtures 复算：任何「精选为空」的周，都不能同时被判成 no-match 而又有零成本场次
-const { getFixtures } = await import('../src/data/index.js');
 const { computeWeek } = await import('../src/core/owl.js');
 const E = await import('../src/core/engine.js');
 

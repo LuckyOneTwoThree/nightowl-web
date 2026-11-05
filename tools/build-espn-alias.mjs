@@ -113,7 +113,7 @@ const byLeague = {};
 const matched = [];
 const unresolved = [];
 
-for (const [key, c] of uniq) {
+for (const [, c] of uniq) {
   const { league, abbr } = c;
   let ourId = null;
   let how = '';

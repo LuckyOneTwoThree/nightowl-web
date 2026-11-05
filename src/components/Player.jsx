@@ -209,7 +209,7 @@ export default function Player({
     // ⚠️ 回调必须进依赖数组：effect 内部读了 onError / onLoadStart / onAspectRatio。
     //    当前 PlayerStage 传入的是稳定的 setState 引用，故不会引发重建；
     //    但一旦传入内联函数，缺依赖会让回调读到首次渲染的过期闭包。
-  }, [src, kind, onError, onLoadStart, onAspectRatio, onReady, onFirstPlay]);
+  }, [src, kind, theme, onError, onLoadStart, onAspectRatio, onReady, onFirstPlay]);
 
   /** 中央「开启声音」：解除静音并持久化，让下次起播沿用 */
   const enableSound = () => {

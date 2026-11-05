@@ -80,7 +80,9 @@ export default function IntelPanel({
   }, [propIntel, match, prefs]);
   const ev = evalResult?.ev || null;
   const index = evalResult?.index ?? propIntel?.index ?? 0;
-  const tier = useMemo(() => propIntel?.tier || (match ? sleepTier(match.t) : null), [propIntel?.tier, match?.t]);
+  // 只用到 match.t：先取出来再做依赖，避免把整个 match 放进依赖（父组件每次渲染都传新对象）
+  const kickoffWall = match ? match.t : null;
+  const tier = useMemo(() => propIntel?.tier || (kickoffWall ? sleepTier(kickoffWall) : null), [propIntel?.tier, kickoffWall]);
   const narrative = useMemo(
     () => propIntel?.narrative || (match && ev ? narrativeOf(match, ev, storylines) : null),
     [propIntel?.narrative, match, ev]
@@ -345,6 +347,7 @@ function DataTrustCell({ match, checkedAt = 0, onRecheck, rechecking = false, re
 
 function SleepCostSection({ tier, match, prefs, watchLaterState = 'none', onWatchLater, hidePersonal = false }) {
   const [queueMsg, setQueueMsg] = useState(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 换场清掉「已加入补看」提示；body 只调 setState
   useEffect(() => setQueueMsg(null), [match?.id]);
   const style = TIER_MAP[tier.label] || TIER_MAP.S0;
   const queued = watchLaterState === 'pending';

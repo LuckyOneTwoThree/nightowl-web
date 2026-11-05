@@ -61,6 +61,7 @@ export function Crest({ id, size = 28, className = '' }) {
    * （例：切换比赛后右栏队徽位置不变）—— 于是一张加载失败的队徽会让后续
    * 所有球队都退化成纯色圆标，直到组件被卸载。
    */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 换队要清失败标记（见上）。body 不读 id —— 它就是「队变了」这一事件的唯一触发器。
   useEffect(() => {
     setFailed(false);
   }, [id]);

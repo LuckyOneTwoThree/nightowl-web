@@ -38,6 +38,7 @@ export function useOverlayStack({ flags, closers, splashOpen = false }) {
 
   const signature = ORDER.map(id => (openMap[id] ? '1' : '0')).join('');
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: openMap 每次渲染都是新对象，直接进依赖会无限重跑；signature 是它的稳定等价物
   useEffect(() => {
     const prev = prevRef.current;
     const next = openMap;
@@ -47,8 +48,6 @@ export function useOverlayStack({ flags, closers, splashOpen = false }) {
       return added.length ? [...kept, ...added] : kept;
     });
     prevRef.current = next;
-    // 只在「哪些浮层开/关」变化时更新栈顺序；openMap 每次渲染重建，不能用它做依赖
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature]);
 
   useEffect(() => {

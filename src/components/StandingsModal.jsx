@@ -59,12 +59,13 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
 
   // 今晚已完赛、未「揭晓」的场次 → 从积分计算中排除（防剧透）。
   // revealed 是会话级 Set；dataRev 变化时 fixtures 可能新增完赛场次，需重算。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dataRev 是失效触发器；body 读 getFixtures()
   const hiddenIds = useMemo(() => {
     const ids = unrevealedTonightIds(getFixtures(), nowTs, spoilerFree, revealed);
     return ids.size ? ids : null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spoilerFree, revealed, nowTs, dataRev]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 同上：dataRev 触发重算，body 用 getFixtures()
   const table = useMemo(() => {
     const asOfTs = historical ? standingsCutoff(match, nowTs) : nowTs;
     return computeStandings(activeLeague, getFixtures(), { asOfTs, excludeIds: hiddenIds });
@@ -81,6 +82,7 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
    *     上面还有表头与分区标签要读，居中会把「前四参考线 / 附加赛区」推到屏幕外。
    *
    * 用 getBoundingClientRect 求差而不是 offsetTop —— 行在 table 里，offsetParent 不一定是滚动容器。 */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: match 整体进依赖会反复重锚，故只取 h/a；activeLeague 切 tab 时是触发器
   useEffect(() => {
     const el = scrollRef.current;
     if (!open || !el) return;
@@ -102,7 +104,6 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
         : first - el.clientHeight * 0.28;
     el.scrollTop = Math.max(0, el.scrollTop + target);
     // 依赖只取两个 id：App 每次重渲染都会传新对象，把 match 整个放进依赖会反复重锚
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, activeLeague, isMatchLeague, match?.h, match?.a]);
 
   if (!open) return null;

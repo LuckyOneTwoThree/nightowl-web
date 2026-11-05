@@ -363,6 +363,7 @@ export default function PlayerStage({
   const [theaterMode, setTheaterMode] = useState(false);
   const [theaterLinesExpanded, setTheaterLinesExpanded] = useState(false);
   const [aspectRatio, setAspectRatio] = useState(16 / 9);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 换场把画面比例复位；body 只调 setState
   useEffect(() => {
     setAspectRatio(16 / 9);
   }, [match?.id]);
@@ -413,6 +414,7 @@ export default function PlayerStage({
   // 内容短于画面时拉伸补齐，长于画面时栏内滚动，避免任一侧露出大片空白。
   const videoCardRef = useRef(null);
   const [videoCardH, setVideoCardH] = useState(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 换场要重新量一次画面卡片高度（同一节点会被复用）；body 只用 ResizeObserver
   useEffect(() => {
     const stacked = state === 'finished' || state === 'ended_pending' || (state === 'live' && !streamUrl);
     if (theaterMode || stacked) {
@@ -804,6 +806,7 @@ export default function PlayerStage({
 
   // 切换场次时全量重置并拉取；已完赛场次不再抓直播源，避免把回放/下一场当成直播。
   // 只依赖 match.id：比赛进行中同步为 done 时不要重跑本 effect，否则会中断正在看的画面。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 故意不依赖 match.st —— 直播中同步为 done 时重跑会中断播放（见上）
   useEffect(() => {
     if (!match?.id) return;
     // 切场必须同时清空上一场的实时快照与通知基线：
@@ -847,6 +850,7 @@ export default function PlayerStage({
    * 第一次快照只做基线，不补发历史事件；之后只对新增事件提醒。
    * 防剧透未揭晓时全部静默；窗口在前台时由主进程再抑制一次。
    */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 按场次重置通知基线；body 读 match 的多个字段，node 身份变化不该重跑
   useEffect(() => {
     if (!liveSnapshot?.ok || !match) return;
     const ref = liveNotifyRef.current;
@@ -947,7 +951,7 @@ export default function PlayerStage({
       if (pollInterval) clearInterval(pollInterval);
       if (enterTimer) clearTimeout(enterTimer);
     };
-  }, [match?.id, match?.t, state, lines.length, fetchLines]);
+  }, [match?.t, state, lines.length, fetchLines]);
 
   const proxyUrl = streamUrl ? `/api/proxy?url=${encodeURIComponent(streamUrl)}` : null;
 

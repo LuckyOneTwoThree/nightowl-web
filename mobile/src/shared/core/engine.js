@@ -496,7 +496,9 @@ export function intervalSchedule(entries, w = DEFAULT_WEIGHTS) {
 export function planWeek(matches, recMap, rivalries, storylines, followed, budget, followedLeagues, opts = {}) {
   const w = opts.weights || DEFAULT_WEIGHTS;
   const capRatio = opts.knapsackCapRatio == null ? 1 : opts.knapsackCapRatio;
-  const softGuarantee = !!opts.followedSoftGuarantee;
+  // ⚠️ opts.followedSoftGuarantee 从未接线：原设计是「关注球队软保底」（预算再紧也塞一场主队），
+  //    本仓没有实现。保留这条注释是为了让下一个读到这里的人知道它不是「实现漏了读」，
+  //    而是**产品上还没决定要不要**——spike 的 A/B 对照里那一列实际只差 knapsackCapRatio。
   const maxPicks = opts.maxPicks == null ? Infinity : opts.maxPicks;   // D8：数量上限
   const separateZero = !!opts.separateZeroCost;                        // D8：S0 场次分离
   const nowTs = opts.nowTs === null ? null

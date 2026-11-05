@@ -58,6 +58,7 @@ export default function ScheduleView({
   }, [filters.leagues]);
 
   // rows 由父组件按 dataRev 重建，数据变化时随之重算，与列表口径保持一致
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 借 rows 触发重算，body 读的是 getFixtures()，不读 rows 本身
   const { leagueTotals, total } = useMemo(() => {
     const list = getFixtures();
     const totals = list.reduce((acc, m) => {
@@ -79,6 +80,7 @@ export default function ScheduleView({
   const stripRef = useRef(null);
 
   // 滚动聚焦当前选中或今天
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 日期切换后把选中按钮滚进视野；body 只碰 ref，这两个值是触发器
   useEffect(() => {
     if (activeBtnRef.current) {
       activeBtnRef.current.scrollIntoView({
