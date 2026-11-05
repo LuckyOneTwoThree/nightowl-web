@@ -19,15 +19,18 @@ import {
   stateOf,
   liveCountAt,
   groupTonight,
+  nightStateOf,
+  nightHeadline,
   sameNightPicks,
   sameNightLighterPicks,
   upcomingForTeams,
   rankReplayPicks
 } from '../src/core/owl.js';
-import { getFixtures } from '../src/data/index.js';
+import { getFixtures, REC_MAP, rivalries, storylines } from '../src/data/index.js';
 import { compareSemver, isNewerVersion } from '../src/core/semver.js';
 import { datePart, zhDate } from '../src/core/format.js';
-import { weekDistributionAdvice } from '../src/core/narrative.js';
+import { weekDistributionAdvice, narrativeOf, LEVEL } from '../src/core/narrative.js';
+import { isActionable } from '../src/core/actionable.js';
 
 /** 运行时数据源（与界面一致：保鲜同步后可替换） */
 const fixtures = getFixtures();
@@ -388,7 +391,6 @@ console.log('八、周计划时间模型（P0：精选 = 可执行计划）');
   // 合成数据：同开球 / 区间重叠 / 关注强塞 / 已结束混入，全部不依赖真实赛程
   const mk = (id, t, h, a, extra = {}) => ({ id, l: 'PL', r: 1, t, tbd: false, st: 'sched', h, a, ...extra });
   const OPTS = { ...E.PRODUCT_PLAN_OPTS, nowTs: E.ts('2026-11-01T12:00') };
-  const noFollow = [[], []];
   const planOf = (list, followed = [], budget = 8.0, fl = ['PL']) =>
     E.planWeek(list, {}, [], [], followed, budget, fl, OPTS);
   const overlap = (a, b) => {
@@ -594,7 +596,6 @@ console.log('九、周窗口与未来周（P0：夜猫周锚点）');
     const monEarly = E.ts('2026-10-26T00:10');
     const night = E.nightOf(monEarly); // 周日夜 10-25
     const w = computeWeek(monEarly, prefs);
-    const dayDates = w.days.map(d => d.date);
     ok('★ 周一凌晨看「本周」仍是上一夜猫周', w.weekStartStr === E.mondayOfWall(night),
       `weekStartStr=${w.weekStartStr} 期望 ${E.mondayOfWall(night)}（nightOf=${night}）`);
     const tonightCount = fixtures.filter(m => E.owlDay(m.t) === night).length;
@@ -640,6 +641,137 @@ console.log('九、周窗口与未来周（P0：夜猫周锚点）');
         wronglyDropped.slice(0, 3).map(m => `${m.id} ${m.t}`).join('、'));
     }
   }
+}
+
+/* ================================================================== */
+console.log('');
+console.log('十、★ 星级与叙事必须同源（star>=2 的同屏文案不得是「看点有限」）');
+{
+  const now = Date.now();
+  const actionables = fixtures.filter(m => isActionable(m, now));
+
+  /** 按配置统计「2 星以上却落到 L3」的场次 */
+  const scan = followedTeams => {
+    let star2 = 0;
+    let star2L3 = 0;
+    let star3 = 0;
+    let star3L3 = 0;
+    let bigSixLines = 0;
+    let followedLines = 0;
+    const offenders = [];
+    for (const m of actionables) {
+      const ev = E.evaluate(m, REC_MAP, rivalries, storylines, followedTeams, ['PL']);
+      const n = narrativeOf(m, ev, storylines);
+      if (n.headline.includes('六强内战')) bigSixLines++;
+      if (n.headline === '关注球队出战' || n.lines.includes('关注球队出战')) followedLines++;
+      if (ev.star >= 2) {
+        star2++;
+        if (n.level === LEVEL.L3) {
+          star2L3++;
+          if (offenders.length < 5) offenders.push(`${m.id}(★${ev.star})`);
+        }
+      }
+      if (ev.star >= 3) {
+        star3++;
+        if (n.level === LEVEL.L3) star3L3++;
+      }
+    }
+    return { star2, star2L3, star3, star3L3, bigSixLines, followedLines, offenders };
+  };
+
+  const plain = scan([]);
+  const withArs = scan(['ARS']);
+
+  ok('样本量足够（未来可行动场次）', actionables.length > 300, `实际 ${actionables.length}`);
+
+  ok('★ 无关注配置：2 星以上无一落 L3',
+    plain.star2L3 === 0, `${plain.star2L3}/${plain.star2}：${plain.offenders.join('、')}`);
+  ok('★ 无关注配置：3 星无一落 L3',
+    plain.star3L3 === 0, `${plain.star3L3}/${plain.star3}`);
+
+  ok('★ 关注 ARS：2 星以上无一落 L3（此前 39/56 落 L3）',
+    withArs.star2L3 === 0, `${withArs.star2L3}/${withArs.star2}：${withArs.offenders.join('、')}`);
+  ok('★ 关注 ARS：3 星无一落 L3',
+    withArs.star3L3 === 0, `${withArs.star3L3}/${withArs.star3}`);
+
+  // 新增的两条 L2 规则必须真的能命中，否则「修好了」是假的
+  ok('六强内战能被叙事命中', withArs.bigSixLines > 0, `命中 ${withArs.bigSixLines}`);
+  ok('关注球队能被叙事命中', withArs.followedLines > 0, `命中 ${withArs.followedLines}`);
+  ok('无关注配置不产生「关注球队出战」',
+    plain.followedLines === 0, `命中 ${plain.followedLines}`);
+
+  // 关注球队确实抬高了星级，且抬高后不再有空白文案
+  ok('关注 ARS 会抬高 2 星以上场次数', withArs.star2 > plain.star2,
+    `${plain.star2} → ${withArs.star2}`);
+}
+
+/* ================================================================== */
+console.log('');
+console.log('十一、★ 今夜状态计数与无 Hero 文案（「今夜无赛」不得与列表同屏）');
+{
+  const NOW2 = E.ts('2026-11-01T05:00');   // 末场结束后：18 场全完赛、hero 为 null
+  const t = computeTonight(NOW2, prefs);
+  const s = t.nightState;
+
+  ok('computeTonight 返回 nightState', !!s && typeof s.total === 'number', JSON.stringify(s));
+  ok('计数守恒：live+upcoming+tbd+finished+pending === total',
+    s.live + s.upcoming + s.tbd + s.finished + s.pending === s.total,
+    `${s.live}+${s.upcoming}+${s.tbd}+${s.finished}+${s.pending} vs ${s.total}`);
+
+  // 与「下方列表」同一口径：计数必须等于分组结果，否则卡片数字与列表对不上
+  const g = groupTonight(t.slice, NOW2);
+  ok('live 计数与分组一致', s.live === g.live.length, `${s.live} vs ${g.live.length}`);
+  ok('finished+pending 与已结束分组一致', s.finished + s.pending === g.finished.length,
+    `${s.finished}+${s.pending} vs ${g.finished.length}`);
+
+  // 这一夜的典型形态：有 18 场、但一场都不可安排
+  ok('样本夜成立（有场次且无 Hero）', s.total > 0 && t.hero === null, `total=${s.total} hero=${t.hero && t.hero.m.id}`);
+
+  const head = nightHeadline(s);
+  ok('★ 全完赛夜不再说「今夜无赛」', !head.title.includes('今夜无赛'), head.title);
+  ok('★ 全完赛夜说明场次与结束状态',
+    head.title.includes(String(s.total)) && head.title.includes('已结束'), head.title);
+
+  // 真无赛：只有 total=0 才允许说「今夜无赛」
+  const empty = nightHeadline({ total: 0, live: 0, upcoming: 0, tbd: 0, finished: 0, pending: 0 });
+  ok('★ 真空夜才说「今夜无赛」', empty.title.includes('今夜无赛'), empty.title);
+  ok('nightHeadline 对缺参容错', nightHeadline(null).title.includes('今夜无赛'), nightHeadline(null).title);
+
+  // ---- 合成切片：覆盖真实数据里可能采不到的形态 ----
+  const kick = E.ts('2026-11-01T21:00');
+  const at = kick + 200 * 60000;   // 已过完赛时间 80 分钟
+  const mkSched = (id, extra = {}) => ({ id, l: 'PL', t: '2026-11-01T21:00', st: 'sched', h: 'H' + id, a: 'A' + id, ...extra });
+
+  const pending3 = nightStateOf([mkSched('P1'), mkSched('P2'), mkSched('P3')], at);
+  ok('比分未到的场次计入 pending（不是 finished）',
+    pending3.pending === 3 && pending3.finished === 0, JSON.stringify(pending3));
+  ok('★ 比分未到的文案是「比分待录」，不是「已结束」',
+    nightHeadline(pending3).title.includes('比分待录'), nightHeadline(pending3).title);
+
+  const tbdOnly = nightStateOf([
+    mkSched('T1', { tbd: true, t: '2026-11-01T04:00' }),
+    mkSched('T2', { tbd: true, t: '2026-11-01T04:00' })
+  ], NOW2);
+  ok('全 tbd 计入 tbd 而非 upcoming', tbdOnly.tbd === 2 && tbdOnly.upcoming === 0, JSON.stringify(tbdOnly));
+  ok('★ 全 tbd 文案说「开球时间待定」', nightHeadline(tbdOnly).title.includes('待定'), nightHeadline(tbdOnly).title);
+
+  const mixed = nightStateOf([
+    { id: 'D1', l: 'PL', t: '2026-11-01T21:00', st: 'done', sc: '1-0', h: 'X1', a: 'Y1' },
+    { id: 'D2', l: 'PL', t: '2026-11-01T21:00', st: 'done', sc: '2-0', h: 'X2', a: 'Y2' },
+    mkSched('T3', { tbd: true, t: '2026-11-02T04:00' })
+  ], at);
+  ok('混合夜计数', mixed.finished === 2 && mixed.tbd === 1 && mixed.total === 3, JSON.stringify(mixed));
+  ok('★ 混合夜文案同时说清已结束与待定',
+    nightHeadline(mixed).title.includes('已结束') && nightHeadline(mixed).title.includes('待定'),
+    nightHeadline(mixed).title);
+
+  // 优先级：pending 优先于 tbd（比分未到是更紧急的信息）
+  const prio = nightStateOf([
+    { id: 'D3', l: 'PL', t: '2026-11-01T21:00', st: 'done', sc: '0-0', h: 'X3', a: 'Y3' },
+    mkSched('P4'),
+    mkSched('T4', { tbd: true, t: '2026-11-02T04:00' })
+  ], at);
+  ok('★ pending 优先于 tbd 出现在首行', nightHeadline(prio).title.includes('比分待录'), nightHeadline(prio).title);
 }
 
 console.log('');

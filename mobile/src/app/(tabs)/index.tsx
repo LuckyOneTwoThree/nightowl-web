@@ -24,6 +24,7 @@ import {
   computeTonight,
   groupTonight,
   heroTier,
+  nightHeadline,
   sameNightLighterPicks,
   stateOf,
 } from '@core/owl.js';
@@ -93,6 +94,15 @@ export default function TonightScreen() {
     extras: Entry[];
     focal: Entry | null;
     minefieldIds: Set<string>;
+    // 今夜状态计数（不是枚举）：hero 为 null 可能是全 tbd / 全完赛 / 比分未到 / 真无赛
+    nightState: {
+      total: number;
+      live: number;
+      upcoming: number;
+      tbd: number;
+      finished: number;
+      pending: number;
+    };
   };
 
   const hero = tonight.hero;
@@ -301,11 +311,18 @@ export default function TonightScreen() {
           onOpenMatch={openMatch}
         />
       ) : tonight.focal ? (
-        <FocalCard entry={tonight.focal} now={now} onPress={() => openMatch(tonight.focal!.m.id)} />
+        <FocalCard
+          entry={tonight.focal}
+          now={now}
+          headline={
+            tonight.nightState.total > 0 ? nightHeadline(tonight.nightState).title : null
+          }
+          onPress={() => openMatch(tonight.focal!.m.id)}
+        />
       ) : (
         <Card style={styles.emptyHero}>
-          <Text style={styles.emptyTitle}>今晚没有比赛</Text>
-          <Text style={styles.emptyText}>下一场焦点战会在赛程中出现。</Text>
+          <Text style={styles.emptyTitle}>{nightHeadline(tonight.nightState).title}</Text>
+          <Text style={styles.emptyText}>{nightHeadline(tonight.nightState).hint}</Text>
           <Button
             label="查看赛程"
             variant="secondary"
@@ -716,10 +733,13 @@ function HeroCard({
 function FocalCard({
   entry,
   now,
+  headline,
   onPress,
 }: {
   entry: Entry;
   now: number;
+  /** 今晚确实有场次（只是都已结束 / 待定）时的说明，避免把「有 18 场」说成「今晚没球」 */
+  headline?: string | null;
   onPress: () => void;
 }) {
   const countdown = engineCountdown(ts(entry.m.t), now);
@@ -731,6 +751,7 @@ function FocalCard({
       style={({ pressed }) => [pressed && styles.pressed]}
     >
       <Card style={styles.focal}>
+        {headline ? <Text style={styles.focalMeta}>{headline}</Text> : null}
         <Text style={styles.heroLeague}>下一场焦点战</Text>
         <Text style={styles.focalTitle}>
           {teamName(entry.m.h)} vs {teamName(entry.m.a)}

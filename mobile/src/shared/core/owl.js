@@ -73,7 +73,75 @@ export function computeTonight(nowTs, prefs) {
     E.minefield(pickable, REC_MAP, rivalries, storylines, prefs.followedTeams, prefs.followedLeagues).map(e => e.m.id)
   );
 
-  return { night, slice, hero, extras, focal, minefieldIds };
+  return { night, slice, hero, extras, focal, minefieldIds, nightState: nightStateOf(slice, nowTs) };
+}
+
+/**
+ * 今晚切片的**状态计数**（不是枚举）。
+ *
+ * 为什么必须是计数：`hero === null` 有 4 种完全不同的真实语义——
+ * 真无赛 / 全 tbd / 全已完赛 / 已过完赛时间但比分未到（`ended_pending`）。
+ * 视图层此前把它一律当成「今夜无赛」，于是首屏最大的一张卡在说「今晚没球」，
+ * 下方列表却列着 18 场已结束。**封闭枚举表达不了混合夜**（20 场里 18 场完赛 + 2 场待定），
+ * 所以这里只给数字，文案由 `nightHeadline()` 按固定优先级派生。
+ *
+ * 计数口径与 `groupTonight` 完全一致（同一份 matchState 判据），
+ * 保证「卡片上的数字」与「下方列表的分组」永远对得上。
+ */
+export function nightStateOf(slice, nowTs) {
+  const groups = groupTonight(slice, nowTs);
+  const finished = groups.finished.filter(m => E.matchState(m, nowTs) === 'finished').length;
+  const state = {
+    total: slice.length,
+    live: groups.live.length,
+    upcoming: groups.upcoming.filter(m => !m.tbd).length,
+    tbd: slice.filter(m => m.tbd).length,
+    finished,
+    pending: groups.finished.length - finished
+  };
+  return state;
+}
+
+/**
+ * 无 Hero 时的首屏文案（桌面 `NoMatchCard` 与手机空态共用同一套说法）。
+ *
+ * 优先级即顺序，写死是为了让混合夜的结果稳定、可测——不依赖 `slice.some()` 的遍历顺序。
+ * `total === 0` 时才允许说「今夜无赛」。
+ */
+export function nightHeadline(state) {
+  const s = state || {};
+  const total = Number(s.total) || 0;
+  if (total === 0) {
+    return { title: '今夜无赛 · 好好补觉', hint: '近期暂无已排期场次，可在「偏好与数据」中检查更新。' };
+  }
+  const finished = Number(s.finished) || 0;
+  const pending = Number(s.pending) || 0;
+  const tbd = Number(s.tbd) || 0;
+
+  // 1) 比分未到：踢完了但还没录进来，不能说「已结束」也不能说「无赛」
+  if (pending > 0) {
+    return {
+      title: `今晚 ${total} 场已结束 · ${pending} 场比分待录`,
+      hint: '比分同步稍有延迟，稍后会自动更新'
+    };
+  }
+  // 2) 全部待定：场次存在，只是开球时间没定
+  if (tbd === total) {
+    return { title: `今晚 ${total} 场 · 开球时间待定`, hint: '开球时间公布后会立刻更新' };
+  }
+  // 3) 全部已结束
+  if (finished === total) {
+    return { title: `今晚 ${total} 场已结束`, hint: '点下方列表可查看比分与赛后回顾' };
+  }
+  // 4) 混合：已结束 + 待定
+  if (finished + tbd === total) {
+    return {
+      title: `今晚 ${total} 场 · ${finished} 场已结束，${tbd} 场待定`,
+      hint: '待定场次的开球时间公布后会立刻更新'
+    };
+  }
+  // 5) 其它（含延期 pp 等）：给总数，不臆测原因
+  return { title: `今晚 ${total} 场`, hint: '当前没有可立即观看的场次' };
 }
 
 /** Hero 展示档位（D9：阈值 15 / 5） */

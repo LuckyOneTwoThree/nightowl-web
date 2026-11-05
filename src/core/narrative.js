@@ -16,6 +16,7 @@ import { REC_MAP, TEAM_MAP, leagueName } from '../data/index.js';
 import {
   PRODUCT_WEIGHTS,
   followedBonus,
+  isBigSixClash,
   leagueBonus,
   sleepTier,
   storyBonus
@@ -147,11 +148,24 @@ export function narrativeOf(match, ev, storylines) {
   }
 
   // ---- L2 规则合成 ----
+  //
+  // ⚠️ 这里必须覆盖 `evaluate` 的**全部**星级来源，否则会出现「★★★ + 看点有限」的自相矛盾：
+  //    星级来源：rec.star / rivalry / isBigSixClash / stories / keyNode(由 storylines 派生) / isFollowed
+  //    此前 L2 只认 rivalry + storylines —— 曼城 vs 切尔西（六强内战）、关注球队的比赛
+  //    都会拿到 2–3 星却没有一句正文，直接掉到 L3「看点有限」。
+  //    实测（未来可行动 451 场）：无关注配置 16/33 的 2 星以上场次落 L3；关注 ARS 后升至 39/56。
   const l2 = [];
   if (ev?.rivalry) l2.push(`${ev.rivalry} —— 宿敌对决`);
+  // 与宿敌重复时不叠加（曼市德比本身已是六强内战）
+  else if (isBigSixClash(match)) l2.push(`${leagueName(match.l)} 六强内战`);
+  // 关注球队只由调用方传入的 ev 决定；缺 ev 时不臆测（避免把「未配置」写成「关注」）
+  if (ev?.isFollowed) l2.push('关注球队出战');
   const stories = storylinesOf(match, storylines);
   stories.forEach(s => l2.push(`${s.name}：${s.desc}`));
   if (match.tbd) l2.push('开球时间待定，电视台尚未定档');
+  // 推荐条目存在但没有精修文案时，用「编辑推荐」承接 L1 星级——
+  // 否则 star>=2 会落到 L3，与「星级≥2 不得 L3」的不变式冲突。
+  if (rec && !(Array.isArray(rec.points) && rec.points.length) && !l2.length) l2.push('编辑推荐 · 本轮重点关注');
 
   if (l2.length) {
     return {

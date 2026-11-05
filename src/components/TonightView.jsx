@@ -154,7 +154,7 @@ export default function TonightView({
   watchLater = [],
   onOpenSettings
 }) {
-  const { night, slice, hero, focal, minefieldIds } = tonight;
+  const { night, slice, hero, focal, minefieldIds, nightState } = tonight;
 
   const narrative = useMemo(
     () => (hero ? narrativeOf(hero.m, hero.ev, storylines) : null),
@@ -218,6 +218,7 @@ export default function TonightView({
 
   const sameKickoffKey = useMemo(() => sameKickoff.map(m => m.id).join(','), [sameKickoff]);
   const [sameKickoffExpanded, setSameKickoffExpanded] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 同开球组换了一组就必须收起（展开状态不能跨组继承）；body 只调 setState。
   useEffect(() => {
     setSameKickoffExpanded(false);
   }, [sameKickoffKey]);
@@ -312,7 +313,7 @@ export default function TonightView({
           onWatchLater={onWatchLater}
         />
       ) : (
-        <NoMatchCard focal={focal} countdown={countdownText} onSelect={onSelect} />
+        <NoMatchCard focal={focal} countdown={countdownText} onSelect={onSelect} nightState={nightState} />
       )}
 
       {sameKickoff.length >= 2 && (

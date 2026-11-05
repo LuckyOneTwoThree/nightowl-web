@@ -1,6 +1,7 @@
 import { hm, zhDate, weekdayOf, datePart, liveMinute, humanCountdownShort } from '../core/format.js';
 import { teamName, leagueName, teamColor } from '../data/index.js';
 import { ts, countdown as engineCountdown } from '../core/engine.js';
+import { nightHeadline } from '../core/owl.js';
 import { Button, Chip, Crest, Hint, LiveDot, Meta, SleepBadge, Stars } from './atoms.jsx';
 import { IconCalendar, IconInfo, IconPlay, IconSignal } from './icons.jsx';
 import { locateSection } from './locate.js';
@@ -313,13 +314,24 @@ export default function HeroCard({
   );
 }
 
-/** 无球日 / 全部 tbd 降级卡：下一场焦点战倒计时 */
-export function NoMatchCard({ focal, countdown, onSelect }) {
+/**
+ * 无 Hero 时的降级卡。
+ *
+ * ⚠️ 这里的文案**不能**一律写「今夜无赛」：`hero === null` 有 4 种语义
+ * （真无赛 / 全 tbd / 全已完赛 / 比分未到）。实测 2026-11-01 05:00：
+ * 顶部说「今夜无赛」，下方列表却是「已结束 · 18」。
+ * 文案由 `nightHeadline(nightState)` 统一派生，手机端空态共用同一套说法。
+ */
+export function NoMatchCard({ focal, countdown, onSelect, nightState }) {
+  const counts = nightState && Number(nightState.total) > 0 ? nightHeadline(nightState) : null;
+
   if (!focal) {
     return (
       <article className="no-drag rounded-xl border border-line-hairline bg-surface-card p-4 text-center shadow-card">
-        <p className="text-sm font-semibold text-text-primary">今夜无赛 · 好好补觉</p>
-        <p className="mt-1 text-xs text-text-muted">近期暂无已排期场次，可在「偏好与数据」中检查更新。</p>
+        <p className="text-sm font-semibold text-text-primary">{counts ? counts.title : '今夜无赛 · 好好补觉'}</p>
+        <p className="mt-1 text-xs text-text-muted">
+          {counts ? counts.hint : '近期暂无已排期场次，可在「偏好与数据」中检查更新。'}
+        </p>
       </article>
     );
   }
@@ -329,9 +341,14 @@ export function NoMatchCard({ focal, countdown, onSelect }) {
     <article className="no-drag card-lift relative overflow-hidden rounded-xl border border-line-hairline bg-surface-card p-3.5 shadow-card">
       <TeamAura color={teamColor(m.h)} side="home" />
       <div className="relative flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold tracking-wide text-text-secondary">今夜无赛 · 下一场焦点</span>
+        <span className="truncate text-xs font-semibold tracking-wide text-text-secondary" title={counts ? counts.title : undefined}>
+          {counts ? counts.title : '今夜无赛 · 下一场焦点'}
+        </span>
         <Stars star={focal.ev.star} />
       </div>
+      <p className="relative mt-1 text-xs text-text-muted">
+        {counts ? '下一场焦点' : '距离开球还有一段时间'}
+      </p>
 
       <div className="relative mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
         <div className="flex min-w-0 flex-col items-center gap-1.5">
