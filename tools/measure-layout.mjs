@@ -71,10 +71,14 @@ app.whenReady().then(async () => {
         })()`);
         const overflow = m.scrollW - m.docW;
         console.log(`[${f.label}] ${w}×${h}  innerH=${m.innerH} docH=${m.docH} header=${m.headerH} 横向溢出=${overflow}px`);
+        // 页面没渲出来时 header 为 null：此时「溢出 0px」毫无意义，必须判失败而不是静默通过
+        if (m.headerH == null) failures.push(`${f.label} ${w}×${h} 页面未渲染（找不到 header）`);
         if (overflow > 1) failures.push(`${f.label} ${w}×${h} 横向溢出 ${overflow}px`);
         m.scrollables.forEach(s => console.log(`    滚动容器 h=${s.h} scrollH=${s.sh}  ${s.cls}`));
       } catch (e) {
         console.log('  !! 失败:', e.message);
+        // 门禁的意义是「坏了要红」：测不出来算失败，不算跳过
+        failures.push(`${f.label} 测量异常：${e.message}`);
       }
       await sleep(200);
     }

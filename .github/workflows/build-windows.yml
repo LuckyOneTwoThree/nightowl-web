@@ -67,6 +67,12 @@ jobs:
         shell: bash
         run: npm run check:render
 
+      # 1120 / 1366 / 1440 × macOS·Windows 两套边框的横向溢出。
+      # 此前只在本地手动跑，于是「某个断点溢出了」要等用户截图才发现。
+      - name: Layout gate (no horizontal overflow)
+        shell: bash
+        run: npm run check:layout
+
       # 注入 tag 版本到包元数据：exe 文件名（artifactName 的 ${version}）随 tag 对齐，
       # 否则 package.json 里的 version 不动，文件名会一直停在旧版本号
       # 注入 tag 版本到包元数据：exe 文件名（artifactName 的 ${version}）随 tag 对齐。
@@ -230,3 +236,31 @@ jobs:
             release/*.zip.blockmap \
             release/latest-mac.yml \
             --clobber
+
+  # 手机端门禁：桌面 src/core + src/data 是共享层的**唯一来源**（scripts/sync-shared.mjs 复制），
+  # 改完不同步，CI 全绿、直到有人本地 `cd mobile && npm run check` 才发现漂移。
+  #
+  # ⚠️ 必须跑 `npm run check`，不能只跑 `typecheck`：mobile 的 pretypecheck 会先执行
+  #    sync:shared，漂移被自动"修好"再检查，等于永远绿。check 的第一道是 verify:shared。
+  #    也不需要 Android/iOS 工具链 —— 这四道（共享层一致性、管道差异、44dp 触控、类型）
+  #    纯 Node + tsc。
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Mobile gate (shared drift / pipeline / 44dp / types)
+        working-directory: mobile
+        run: npm run check
