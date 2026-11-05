@@ -37,6 +37,80 @@ export function userFixturesPath() {
 }
 
 /**
+ * 赛季元数据 —— 解决「跨赛季 id 撞车」。
+ *
+ * fixtures 的 id 形如 `PL-1-ARS-COV`，**不含赛季**；JSON 顶层是裸数组，没有 season 字段。
+ * 于是每年夏天都会撞一次：
+ *
+ *   新赛季内置: PL-1-ARS-COV  2027-08-15  sched
+ *   上季用户文件: PL-1-ARS-COV  2026-08-16  done 3-0
+ *   合并结果:    上季比分污染新赛季，且 activeSyncTargets 对 done+sc 硬跳过 → 永不纠正，
+ *                还会一起污染积分榜（按联赛聚合，不看赛季）。
+ *
+ * 为什么单独一个文件而不是改进 fixtures.json：后者是**裸数组**契约，全仓 12+ 个消费点
+ * （src/data/index.js、tools/*.mjs、手机共享层）直接按数组用；改成对象要处处解包，
+ * 老用户机器上的 userData 也是数组。独立 meta 文件零改动、且天然向后兼容——
+ * 读不到 meta 就当「同一赛季」，老用户行为不变。
+ */
+const BUILT_IN_META = resolve(ROOT, 'src/data/fixtures-meta.json');
+
+export function userMetaPath() {
+  const d = userDataDir();
+  return d ? resolve(d, 'fixtures-meta.json') : null;
+}
+
+/** 内置快照的赛季（由 `npm run sync:scores:apply` 写盘时盖章；读不到返回 null） */
+export function builtinSeason() {
+  try {
+    const meta = JSON.parse(readFileSync(BUILT_IN_META, 'utf8'));
+    return typeof meta?.season === 'string' && meta.season ? meta.season : null;
+  } catch {
+    return null;
+  }
+}
+
+export function loadUserMeta() {
+  const p = userMetaPath();
+  if (!p || !existsSync(p)) return null;
+  try {
+    const meta = JSON.parse(readFileSync(p, 'utf8'));
+    return meta && typeof meta === 'object' ? meta : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveUserMeta(season) {
+  const p = userMetaPath();
+  if (!p) return false;
+  try {
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, JSON.stringify({ season, savedAt: new Date().toISOString() }), 'utf8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** 停用旧赛季用户数据：改名归档（不删除），返回归档路径或 null */
+function archiveUserFixtures(oldSeason) {
+  const p = userFixturesPath();
+  if (!p || !existsSync(p)) return null;
+  const safe = String(oldSeason || 'unknown').replace(/[^\w.-]/g, '_');
+  let target = resolve(dirname(p), `fixtures-${safe}.bak.json`);
+  if (existsSync(target)) {
+    // 同赛季多次归档：加时间戳，绝不覆盖上一次的备份
+    target = resolve(dirname(p), `fixtures-${safe}-${Date.now()}.bak.json`);
+  }
+  try {
+    renameSync(p, target);
+    return target;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 数据目录是否真的可写。
  *
  * 只看「路径存在」会恒为 true（本地开发总会回落 server/cache/user-data），
@@ -102,6 +176,19 @@ export async function loadFixtures() {
   if (!userPath || !existsSync(userPath)) {
     return parseFixtures(await readFile(BUILT_IN, 'utf8'));
   }
+  /**
+   * 跨赛季：**绝不合并**。
+   *
+   * 两侧赛季都已知且不同 → 以内置为准，并把上季用户文件改名归档
+   * （`fixtures-2026-27.bak.json`，不删除——里面是用户真金白银同步来的数据）。
+   * 任一未知（老用户没有 meta、或内置 meta 读不到）→ 按同一赛季处理，保持旧行为。
+   */
+  const builtinS = builtinSeason();
+  const userS = loadUserMeta()?.season ?? null;
+  if (builtinS && userS && builtinS !== userS) {
+    archiveUserFixtures(userS);
+    return parseFixtures(await readFile(BUILT_IN, 'utf8'));
+  }
   // 内置读不到（打包异常）时退回用户数据，而不是把界面清空
   const [builtinRaw, userRaw] = await Promise.all([
     readFile(BUILT_IN, 'utf8').catch(() => '[]'),
@@ -142,6 +229,8 @@ export function saveFixtures(next) {
     mkdirSync(dirname(p), { recursive: true });
     writeFileSync(tmp, body, 'utf8');
     renameSync(tmp, p);
+    // 盖章：这份用户数据属于哪个赛季。缺了它，下赛季启动时会把它当同赛季合并进新赛程。
+    saveUserMeta(builtinSeason() || 'unknown');
     return { ok: true, path: p, bytes: Buffer.byteLength(body) };
   } catch (err) {
     return { ok: false, reason: err.message, path: p };

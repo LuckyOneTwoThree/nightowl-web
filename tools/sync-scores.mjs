@@ -131,6 +131,20 @@ if (APPLY) {
   }
 
   writeFileSync(fixturesPath, JSON.stringify(next), 'utf8');
+  // 给内置快照盖赛季章：data-store 靠它判断「用户数据属于哪个赛季」，
+  // 不同赛季绝不合并（id 不含赛季，混起来会把上季比分灌进新赛季）。
+  const metaPath = resolve(ROOT, 'src/data/fixtures-meta.json');
+  let schemaVersion = 1;
+  try {
+    schemaVersion = JSON.parse(readFileSync(metaPath, 'utf8')).schemaVersion ?? 1;
+  } catch {
+    /* 首次写：用默认值 */
+  }
+  writeFileSync(
+    metaPath,
+    `${JSON.stringify({ season: rules.scores?.season || 'unknown', schemaVersion }, null, 2)}\n`,
+    'utf8'
+  );
 
   const done = next.filter(m => m.st === 'done').length;
   const stillTbd = next.filter(m => m.tbd).length;

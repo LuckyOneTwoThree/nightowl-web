@@ -105,6 +105,7 @@ for (const f of [
   'src/core/engine.js',      // scores.js（保鲜）运行时依赖算法引擎 —— 曾整个目录漏打包
   'src/core/media.js',
   'src/data/fixtures.json',
+  'src/data/fixtures-meta.json', // 赛季章：缺了它，跨赛季合并退化成"当同赛季"，上季比分灌进新赛季
   'src/data/teams.json',
   'server/rules.json',
   'server/scraper-alias.json',

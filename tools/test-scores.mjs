@@ -9,7 +9,8 @@
  * 运行：node tools/test-scores.mjs
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { planPatches, applyPatches, validateFixtures, ALLOWED_ST, activeSyncTargets, uclWeeklyTargets, seasonMonths, staleTbdMatches, autoBackfillDays } from '../server/scores.js';
@@ -17,7 +18,7 @@ import { createServer, checkedPendingIds, pendingMatchIds } from '../server/inde
 import { mergeEvents } from '../server/sources/index.js';
 import { parseRound } from '../server/sources/openfootball.js';
 import { loadRules } from '../server/proxy.js';
-import { freshness, mergeFixtures } from '../server/data-store.js';
+import { freshness, mergeFixtures, loadFixtures, saveFixtures, builtinSeason } from '../server/data-store.js';
 import { ts } from '../src/core/engine.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -801,6 +802,71 @@ console.log('十三、★ 已确认的开球时间不接受大位移（副源不
   const r4 = planPatches([{ ...evBase, state: 'pp', homeScore: null, awayScore: null, kickoff: '2026-11-10T20:00' }], [upcoming]);
   ok('★ 延期（pp）改期照常放行', r4.patches.get(upcoming.id)?.t === '2026-11-10T20:00',
     `rescheduled=${r4.stats.rescheduled} ${JSON.stringify([...r4.patches])}`);
+}
+
+/* ================================================================== */
+console.log('');
+console.log('十四、★ 跨赛季隔离（id 不含赛季，不同赛季绝不合并且旧文件要归档）');
+{
+  const tmpDir = mkdtempSync(resolve(tmpdir(), 'nightowl-season-'));
+  const prevEnv = process.env.NIGHTOWL_USER_DATA;
+  process.env.NIGHTOWL_USER_DATA = tmpDir;
+  const userFx = resolve(tmpDir, 'fixtures.json');
+  const userMeta = resolve(tmpDir, 'fixtures-meta.json');
+  const seasonNow = builtinSeason();
+
+  // 用内置里不存在的 id：这样"上季数据有没有混进来"可以用存在性直接判定，
+  // 不能拿真实场次比 sc —— 内置自己的赛季首战就是 3-0，会假红。
+  const sample = [{ id: 'PL-99-OLD-SEASON', l: 'PL', r: 99, t: '2026-05-20T03:00', st: 'done', sc: '9-9', h: 'ARS', a: 'TOT' }];
+  const writeUser = (season) => {
+    writeFileSync(userFx, JSON.stringify(sample), 'utf8');
+    if (season === undefined) rmSync(userMeta, { force: true });
+    else writeFileSync(userMeta, JSON.stringify({ season }), 'utf8');
+  };
+
+  try {
+    ok('内置快照带赛季章', typeof seasonNow === 'string' && seasonNow.length > 0, String(seasonNow));
+
+    // ① 同赛季（显式盖章）：正常合并，不归档
+    writeUser(seasonNow);
+    const same = await loadFixtures();
+    ok('★ 同赛季：正常合并', same.length === fixtures.length + 1 && same.some(m => m.id === 'PL-99-OLD-SEASON'),
+      `${same.length} vs ${fixtures.length + 1}`);
+    ok('同赛季不产生归档文件', readdirSync(tmpDir).every(f => !f.includes('.bak.json')));
+
+    // ② 老用户没有 meta：按同赛季处理（向后兼容，不轻易丢数据）
+    writeUser(undefined);
+    const legacy = await loadFixtures();
+    ok('★ 无 meta 的老用户：按同赛季合并（不归档）', legacy.length === fixtures.length + 1,
+      `${legacy.length}`);
+    ok('老用户不产生归档文件', readdirSync(tmpDir).every(f => !f.includes('.bak.json')));
+
+    // ③ 跨赛季：以内置为准，用户文件改名归档（不删除）
+    writeUser('2025-26');
+    const crossed = await loadFixtures();
+    ok('★ 跨赛季：只用内置快照', crossed.length === fixtures.length, `${crossed.length}`);
+    ok('★ 跨赛季：旧赛季用户文件被归档而非删除',
+      readdirSync(tmpDir).some(f => f === 'fixtures-2025-26.bak.json'),
+      readdirSync(tmpDir).join(','));
+    ok('跨赛季：归档内容原样保留',
+      JSON.parse(readFileSync(resolve(tmpDir, 'fixtures-2025-26.bak.json'), 'utf8'))[0]?.id === 'PL-99-OLD-SEASON');
+    ok('★ 跨赛季：生效数据里没有上季场次（不会污染新赛季）',
+      !crossed.some(m => m.id === 'PL-99-OLD-SEASON'),
+      crossed.filter(m => m.id === 'PL-99-OLD-SEASON').map(m => m.id).join(','));
+    ok('跨赛季：生效数据规模回到内置快照', crossed.length === fixtures.length, `${crossed.length}`);
+
+    // ④ 写盘会盖章：下次启动能认出这是本赛季的数据
+    const saved = saveFixtures(sample);
+    ok('写盘成功', saved.ok === true, JSON.stringify(saved));
+    ok('★ 写盘时盖上本赛季章', JSON.parse(readFileSync(userMeta, 'utf8')).season === seasonNow,
+      readFileSync(userMeta, 'utf8'));
+    const afterSave = await loadFixtures();
+    ok('盖章后合并正常（不再被判成跨赛季）', afterSave.length === fixtures.length + 1, `${afterSave.length}`);
+  } finally {
+    if (prevEnv === undefined) delete process.env.NIGHTOWL_USER_DATA;
+    else process.env.NIGHTOWL_USER_DATA = prevEnv;
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
 }
 
 console.log('');
