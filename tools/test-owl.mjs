@@ -24,8 +24,7 @@ import {
   sameNightPicks,
   sameNightLighterPicks,
   upcomingForTeams,
-  rankReplayPicks
-} from '../src/core/owl.js';
+  rankReplayPicks, heroDisplayTier } from '../src/core/owl.js';
 import { getFixtures, REC_MAP, rivalries, storylines } from '../src/data/index.js';
 import { compareSemver, isNewerVersion } from '../src/core/semver.js';
 import { datePart, zhDate } from '../src/core/format.js';
@@ -761,6 +760,19 @@ console.log('十一、★ 今夜状态计数与无 Hero 文案（「今夜无赛
   ok('待录 + 已结束 + 待定 三件事并列',
     pendTbd.title.includes('已结束') && pendTbd.title.includes('比分待录') && pendTbd.title.includes('待定'),
     pendTbd.title);
+
+  // ---- 越线降档（A1）：金色「今晚焦点」与「可看可不看」不能同屏 ----
+  const heroGold = { index: 22 };   // >= 15 → highlight
+  const heroMid = { index: 9 };     // 5–15 → standard
+  const heroLow = { index: 3 };     // < 5 → weak
+  ok('★ 越线时 highlight 降为 standard', heroDisplayTier(heroGold, { belowFloor: true }) === 'standard',
+    heroDisplayTier(heroGold, { belowFloor: true }));
+  ok('未越线时保持 highlight', heroDisplayTier(heroGold, { belowFloor: false }) === 'highlight');
+  ok('★ 越线只降一档，不把 standard 打到 weak',
+    heroDisplayTier(heroMid, { belowFloor: true }) === 'standard');
+  ok('弱档不会因越线再降一档', heroDisplayTier(heroLow, { belowFloor: true }) === 'weak');
+  ok('没有决策条时不臆测（沿用指数档位）', heroDisplayTier(heroGold, null) === 'highlight');
+  ok('无 Hero 返回 none', heroDisplayTier(null, { belowFloor: true }) === 'none');
 
   const pending3 = nightStateOf([mkSched('P1'), mkSched('P2'), mkSched('P3')], at);
   ok('比分未到的场次计入 pending（不是 finished）',

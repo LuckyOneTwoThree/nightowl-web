@@ -7,7 +7,7 @@
  *
  * 用法：node tools/audit-hero-sleep.mjs [--days=120] [--team=ARS] [--wake=07:30] [--min=7]
  */
-import { computeTonight, heroTier } from '../src/core/owl.js';
+import { computeTonight, heroTier, heroDisplayTier } from '../src/core/owl.js';
 import { sleepLedger } from '../src/core/sleep.js';
 import * as E from '../src/core/engine.js';
 
@@ -32,7 +32,7 @@ const profile = { enabled: true, wakeTime: WAKE, minSleep: MIN };
 
 const now = Date.now();
 const seen = new Set();
-let heroNights = 0, below = 0, belowGold = 0, goldOk = 0;
+let heroNights = 0, below = 0, belowGold = 0, goldOk = 0, shownBelowGold = 0;
 const samples = [];
 
 for (let d = 0; d < DAYS; d++) {
@@ -46,10 +46,12 @@ for (let d = 0; d < DAYS; d++) {
 
   const m = t.hero.m;
   const ledger = sleepLedger(m.t, profile);
-  const tier = heroTier(t.hero);
+  const tier = heroTier(t.hero);                 // 修复前：只看指数
+  const shown = heroDisplayTier(t.hero, { belowFloor: ledger.belowFloor === true }); // 修复后
   const isBelow = ledger.valid === true && ledger.ready === true && ledger.belowFloor === true;
   if (isBelow) {
     below++;
+    if (shown === 'highlight') shownBelowGold++;
     if (tier === 'highlight') {
       belowGold++;
       if (samples.length < 8) {
@@ -71,6 +73,9 @@ console.log(`有 Hero 的夜        ${heroNights}`);
 console.log(`看完低于底线        ${below}`);
 console.log(`其中仍是金色 highlight ${belowGold}  ${belowGold ? '← 首屏会同时出现「今晚焦点」与「可看可不看」' : '✅ 一致'}`);
 console.log(`金色且未越线        ${goldOk}`);
+// 修复后的口径：越线时前端拿到的是 standard，所以「越线仍金色」必须为 0
+const shownGold = shownBelowGold;
+console.log(`修复后越线仍金色     ${shownGold}（越线统一降为 standard）`);
 if (samples.length) {
   console.log('\n样例（低于底线却给金色档）:');
   samples.forEach(s => console.log(`  ${s.night} ${s.id.padEnd(16)} index=${s.index} ★${s.star} 剩 ${s.remainH}h（差 ${s.gapH}h）`));

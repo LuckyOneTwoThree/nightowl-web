@@ -117,11 +117,19 @@ export function nightHeadline(state) {
   const finished = Number(s.finished) || 0;
   const pending = Number(s.pending) || 0;
   const tbd = Number(s.tbd) || 0;
+  const upcoming = Number(s.upcoming) || 0;
 
-  // 1) 比分未到：踢完了但还没录进来，不能说「已结束」也不能说「无赛」
+  // 1) 比分未到：踢完了但还没录进来，不能说「已结束」也不能说「无赛」。
+  //    ⚠️ 只有 finished + pending === total 时才算「全部踢完」。
+  //    混合夜（1 场待录 + 3 场未开赛）说成「4 场已结束」是把没踢的也算进去了。
   if (pending > 0) {
+    const parts = [];
+    if (finished > 0) parts.push(`${finished} 场已结束`);
+    parts.push(`${pending} 场比分待录`);
+    if (upcoming > 0) parts.push(`${upcoming} 场未开赛`);
+    if (tbd > 0) parts.push(`${tbd} 场待定`);
     return {
-      title: `今晚 ${total} 场已结束 · ${pending} 场比分待录`,
+      title: `今晚 ${total} 场 · ${parts.join(' · ')}`,
       hint: '比分同步稍有延迟，稍后会自动更新'
     };
   }
@@ -148,6 +156,26 @@ export function nightHeadline(state) {
 export function heroTier(hero) {
   if (!hero) return 'none';
   return E.heroTierOf(hero.index);
+}
+
+/**
+ * Hero 的**最终展示档位**：指数算出来的档位，压过决策条的结论。
+ *
+ * 为什么需要这一层：`pickToday` 按星级/指数选 Hero，而「看完会不会低于个人睡眠底线」
+ * 是 decisionStrip 另算的。两者各自成立，但同屏时会打架 —— 实测 42 个有 Hero 的夜，
+ * 38 夜看完越线，其中 **14 夜仍是金色「今晚焦点」**，而决策条只能给「可看可不看」。
+ *
+ * 规则（A1）：越线时把 highlight 降为 standard，**不降到 weak** ——
+ * 它仍然是今晚最值得看的一场（这个事实没变），只是不值得给金色「值得熬」。
+ * 降一档而不是两级，是为了不制造第二个极端：金色只属真正熬得起的那一夜。
+ *
+ * @param {object|null} hero pickToday 的 hero
+ * @param {{belowFloor?: boolean}|null} strip decisionStrip 的结果
+ */
+export function heroDisplayTier(hero, strip) {
+  const base = heroTier(hero);
+  if (!hero || !strip) return base;
+  return strip.belowFloor === true && base === 'highlight' ? 'standard' : base;
 }
 
 /* ------------------------------------------------------------------ */

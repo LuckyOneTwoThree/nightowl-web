@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { datePart, zhDate, weekdayOf } from '../core/format.js';
 import { narrativeOf } from '../core/narrative.js';
-import { evalOne, stateOf, heroTier, groupTonight } from '../core/owl.js';
+import { evalOne, stateOf, heroDisplayTier, groupTonight } from '../core/owl.js';
 import { decisionStrip } from '../core/decision-strip.js';
 import { storylines, teamName } from '../data/index.js';
 import HeroCard, { NoMatchCard } from './HeroCard.jsx';
@@ -161,8 +161,6 @@ export default function TonightView({
     [hero]
   );
 
-  const tier = heroTier(hero);
-
   /**
    * 决策条（P1-1）：同一屏只出现一次，只给结论，不重算算法。
    * 替代场次用“同夜且更早结束”的候选池，而不是同夜推荐的前 4 ——
@@ -189,6 +187,9 @@ export default function TonightView({
       : null;
     return { strip, alternative: picked };
   }, [hero, prefs, now, watchLater, revealed]);
+
+  // 档位由决策条裁决：看完会低于睡眠底线时不再给金色「今晚焦点」。
+  const tier = heroDisplayTier(hero, decision?.strip || null);
 
   const heroQueueState = hero ? queueStatusOf(watchLater, hero.m.id) : 'none';
 
