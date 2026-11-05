@@ -38,7 +38,7 @@ export function BrandLogo({ size = 26, rounded = 'md', className = '', withGlow 
       } ${className}`}
     >
       <img
-        src="/favicon.png"
+        src="/logo-64.png"
         alt="夜猫看台"
         width={size}
         height={size}

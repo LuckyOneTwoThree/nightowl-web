@@ -144,7 +144,7 @@ export default function SplashScreen({
           {/* 发光主体圆角底座 */}
           <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border border-line-control bg-surface-card shadow-[0_0_40px_rgba(245,185,66,0.28),0_16px_36px_rgba(0,0,0,0.8),inset_0_1px_0_0_rgba(255,255,255,0.25)] transition-transform duration-700 hover:scale-105">
             <img
-              src="/favicon.png"
+              src="/logo-192.png"
               alt="夜猫看台"
               width="96"
               height="96"

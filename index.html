@@ -5,8 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>夜猫看台 · 纯净观赛工作台</title>
+    <!-- 图标分档：页签用 64px（原 512×512 的 327KB 单图被 26px 的 Logo 直接引用，
+         图标占了首屏字节的 35%）。public/favicon.png 保留为 512 母版，不再被页面引用。 -->
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/logo-64.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/logo-192.png" />
     <!-- 字体已自托管（public/fonts/ + src/index.css @font-face）：
          移除 Google Fonts 外链 —— 实测它让首屏 FCP 从 136ms 涨到 636ms，
          且桌面端离线启动时必然请求失败 -->
