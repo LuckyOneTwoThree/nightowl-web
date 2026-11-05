@@ -7,6 +7,7 @@
  */
 
 import http from 'node:http';
+import zlib from 'node:zlib';
 import { readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -80,13 +81,30 @@ export function checkedPendingIds(fixtures, result, { matchId = null, now = Date
   return pendingMatchIds(checked, now);
 }
 
+/**
+ * JSON 响应：默认紧凑序列化，超过阈值且客户端支持时 gzip。
+ *
+ * 为什么不能再 pretty-print：`/api/fixtures` 有 1897 场，缩进两格后是 367KB，
+ * 而前端每次窗口聚焦都会 refreshData 一次 —— 切一次窗口就多传 367KB。
+ * 紧凑序列化 220KB，gzip 后 29KB（实测）。小响应不压：几十字节的头部开销不值当。
+ */
+const GZIP_THRESHOLD = 1024;
+
 function sendJSON(res, status, obj) {
-  const body = JSON.stringify(obj, null, 2);
-  res.writeHead(status, {
+  let body = Buffer.from(JSON.stringify(obj), 'utf8');
+  const headers = {
     'Content-Type': 'application/json; charset=utf-8',
-    'Cache-Control': 'no-store',
-    'Content-Length': Buffer.byteLength(body)
-  });
+    'Cache-Control': 'no-store'
+  };
+  const acceptsGzip = String(res.req?.headers?.['accept-encoding'] || '').includes('gzip');
+  if (acceptsGzip && body.length > GZIP_THRESHOLD) {
+    body = zlib.gzipSync(body);
+    headers['Content-Encoding'] = 'gzip';
+    // 同一 URL 的响应会因 Accept-Encoding 而不同，缓存要带上这个维度
+    headers.Vary = 'Accept-Encoding';
+  }
+  headers['Content-Length'] = body.length;
+  res.writeHead(status, headers);
   res.end(body);
 }
 
