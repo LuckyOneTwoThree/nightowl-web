@@ -117,11 +117,19 @@ export function nightHeadline(state) {
   const finished = Number(s.finished) || 0;
   const pending = Number(s.pending) || 0;
   const tbd = Number(s.tbd) || 0;
+  const upcoming = Number(s.upcoming) || 0;
 
-  // 1) 比分未到：踢完了但还没录进来，不能说「已结束」也不能说「无赛」
+  // 1) 比分未到：踢完了但还没录进来，不能说「已结束」也不能说「无赛」。
+  //    ⚠️ 只有 finished + pending === total 时才算「全部踢完」。
+  //    混合夜（1 场待录 + 3 场未开赛）说成「4 场已结束」是把没踢的也算进去了。
   if (pending > 0) {
+    const parts = [];
+    if (finished > 0) parts.push(`${finished} 场已结束`);
+    parts.push(`${pending} 场比分待录`);
+    if (upcoming > 0) parts.push(`${upcoming} 场未开赛`);
+    if (tbd > 0) parts.push(`${tbd} 场待定`);
     return {
-      title: `今晚 ${total} 场已结束 · ${pending} 场比分待录`,
+      title: `今晚 ${total} 场 · ${parts.join(' · ')}`,
       hint: '比分同步稍有延迟，稍后会自动更新'
     };
   }

@@ -12,10 +12,18 @@ import DecisionStrip from './DecisionStrip.jsx';
  * `ctaVariant: primary` 意味着它是本屏唯一的实心强调按钮。
  */
 const TIER_COPY = {
-  highlight: { label: '今晚焦点', cta: '开始观赛', ctaVariant: 'primary' },
-  standard: { label: '今晚可看', cta: '开始观赛', ctaVariant: 'default' },
-  weak: { label: '今夜无必看', cta: '仍要观看', ctaVariant: 'surface' }
+  highlight: { label: '今晚焦点', ctaVariant: 'primary' },
+  standard: { label: '今晚可看', ctaVariant: 'default' },
+  weak: { label: '今夜无必看', ctaVariant: 'surface' }
 };
+
+/**
+ * 主按钮文案按**状态**给，不按档位给。
+ *
+ * 赛前点它实际只是选中并切右栏预览（onWatch → onSelect），说「开始观赛」是过头了；
+ * 直播中才叫观赛；已完赛则是回看。文案必须和点击后真实发生的事一致。
+ */
+const PRIMARY_CTA = { sched: '查看赛前情报', live: '进入直播间', finished: '查看赛后回顾' };
 
 /** 主队色环境光：极低透明度径向光晕，仅作微弱氛围烘托 */
 function TeamAura({ color, side }) {
@@ -60,6 +68,7 @@ export default function HeroCard({
   const live = state === 'live';
   const minute = live ? liveMinute(ts(m.t), now) : 0;
   const finished = state === 'finished' || state === 'ended_pending';
+  const primaryCta = PRIMARY_CTA[live ? 'live' : finished ? 'finished' : 'sched'];
   const homeColor = teamColor(m.h);
   const awayColor = teamColor(m.a);
 
@@ -157,7 +166,7 @@ export default function HeroCard({
             onClick={() => (active ? locateSection(activeAction.target, { focus: true }) : onWatch(m.id))}
             className="min-w-0 flex-1"
           >
-            {active ? activeAction.label : copy.cta}
+            {active ? activeAction.label : primaryCta}
           </Button>
           {!live && onWatchLater && (
             <Button
@@ -295,7 +304,7 @@ export default function HeroCard({
                 ? '进入直播间'
                 : finished
                   ? '查看赛后回顾'
-                  : copy.cta}
+                  : primaryCta}
           </Button>
           {!live && onWatchLater && (
             <Button

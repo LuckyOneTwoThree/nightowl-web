@@ -742,6 +742,26 @@ console.log('十一、★ 今夜状态计数与无 Hero 文案（「今夜无赛
   const at = kick + 200 * 60000;   // 已过完赛时间 80 分钟
   const mkSched = (id, extra = {}) => ({ id, l: 'PL', t: '2026-11-01T21:00', st: 'sched', h: 'H' + id, a: 'A' + id, ...extra });
 
+  // ---- 混合夜：只有「全部踢完」才能说「已结束」（此前把未开赛的也算进去）----
+  const mixedOps = nightHeadline({ total: 4, pending: 1, upcoming: 3, finished: 0, tbd: 0 });
+  ok('★ 混合夜（1 场待录 + 3 场未开赛）不说「已结束」',
+    !mixedOps.title.includes('已结束') && mixedOps.title.includes('未开赛'),
+    mixedOps.title);
+  ok('混合夜标题含总数与分项', mixedOps.title.includes('4 场') && mixedOps.title.includes('比分待录'), mixedOps.title);
+
+  const mixedDone = nightHeadline({ total: 5, pending: 1, upcoming: 0, finished: 4, tbd: 0 });
+  ok('「4 场已结束 + 1 场待录」两件事都说清',
+    mixedDone.title.includes('4 场已结束') && mixedDone.title.includes('1 场比分待录'),
+    mixedDone.title);
+
+  const allPending = nightHeadline({ total: 4, pending: 4, upcoming: 0, finished: 0, tbd: 0 });
+  ok('全待录不出现「已结束」', !allPending.title.includes('已结束'), allPending.title);
+
+  const pendTbd = nightHeadline({ total: 4, pending: 1, upcoming: 0, finished: 1, tbd: 2 });
+  ok('待录 + 已结束 + 待定 三件事并列',
+    pendTbd.title.includes('已结束') && pendTbd.title.includes('比分待录') && pendTbd.title.includes('待定'),
+    pendTbd.title);
+
   const pending3 = nightStateOf([mkSched('P1'), mkSched('P2'), mkSched('P3')], at);
   ok('比分未到的场次计入 pending（不是 finished）',
     pending3.pending === 3 && pending3.finished === 0, JSON.stringify(pending3));
