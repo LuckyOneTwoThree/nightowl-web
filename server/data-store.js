@@ -114,6 +114,18 @@ export async function loadFixtures() {
 }
 
 /**
+ * 增量同步的**扩窗**边界（天）。
+ *
+ * 注意它控制的是「要不要为一场缺分比赛多查前后几天」，不是「要不要查这场比赛」——
+ * activeSyncTargets 对任何过期未录的 sched 场次都会 `add(t)`，只是 14 天外的
+ * 那些只查本地日期、不再向 ±1 / ±MATH_WINDOW 展开（避免历史积压把请求放大数倍）。
+ *
+ * 因此**不能**用它来过滤「上游缺分」的统计：窗口外的场次确实被查过，
+ * 查不到就是真的没数据，报出来是诚实的。
+ */
+export const SYNC_WINDOW_DAYS = 14;
+
+/**
  * 写入用户数据目录。返回 { ok, path, bytes }；
  * 没有可写目录（如纯本地 server 模式未注入 userData）时返回 ok:false，
  * 由调用方降级为「只预览」而不是把应用搞崩。

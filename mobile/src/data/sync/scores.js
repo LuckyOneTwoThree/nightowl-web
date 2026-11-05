@@ -24,6 +24,13 @@ export const ALLOWED_ST = ['sched', 'done', 'pp'];
 export const MATCH_WINDOW_DAYS = 4;
 
 /**
+ * 增量查询的扩窗边界（天）。
+ * 与桌面 server/data-store.js 的 SYNC_WINDOW_DAYS 同义，改一处必须改两处
+ * （本文件是手抄分支，由 scripts/verify-pipeline.mjs 监视差异）。
+ */
+const SYNC_WINDOW_DAYS = 14;
+
+/**
  * 改期识别的最大跨度（天）
  *
  * 4 天窗口是为了防止「同对阵不同场次」被错配。但联赛确实存在整场改期
@@ -154,8 +161,12 @@ export function activeSyncTargets(fixtures = [], nowTs = Date.now(), opts = {}) 
       add(t);
       // 已开球但未录入的场次：同时查前后一天。上游改期或不同源对同一场比赛的
       // 日期口径可能差一天（实测 PSG–OL），只按本地日期查询会永远查不到。
-      // 只对 14 天内的缺分展开，避免历史积压放大请求量。
-      if (!m.tbd && t + MATCH_DURATION_MS < nowTs && nowTs - t <= 14 * 86400000) {
+      // 只对 SYNC_WINDOW_DAYS 内的缺分展开，避免历史积压放大请求量。
+      // ⚠️ 这个边界与桌面 server/data-store.js 的 SYNC_WINDOW_DAYS 同义：
+      //    窗口只控制「要不要扩 ±1 / ±MATCH_WINDOW」，不控制「要不要查这场比赛」
+      //    —— add(t) 是无条件的，所以窗口外的缺分仍会被查一次。
+      if (!m.tbd && t + MATCH_DURATION_MS < nowTs
+          && nowTs - (t + MATCH_DURATION_MS) <= SYNC_WINDOW_DAYS * 86400000) {
         add(t - 86400000);
         add(t + 86400000);
 

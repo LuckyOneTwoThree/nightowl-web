@@ -17,6 +17,7 @@
 
 import { ts, MATCH_DURATION_MS } from '../src/core/engine.js';
 import { fetchAllEvents, mergeEvents, DEFAULT_ORDER } from './sources/index.js';
+import { SYNC_WINDOW_DAYS } from './data-store.js';
 
 export const ALLOWED_ST = ['sched', 'done', 'pp'];
 
@@ -156,9 +157,12 @@ export function activeSyncTargets(fixtures = [], nowTs = Date.now(), opts = {}) 
       // 上游改期或不同源对同一场比赛的日期口径可能差一天（实测 PSG–OL：
       // 本地/openfootball 是 10-26 03:45，ESPN 记在 10-27 03:30），只按本地日期
       // 精确查询会永远查不到这场，界面就会一直显示「待录比分」。
-      // 只对 14 天内的缺分展开，避免历史积压把每个场次永久放大成 3 个请求。
+      // 只对同步窗口内的缺分展开，避免历史积压把每个场次永久放大成 3 个请求。
       // 匹配仍走 planPatches 的 4 天窗口 + 60 天唯一对阵改期保护，不会误配。
-      if (!m.tbd && t + MATCH_DURATION_MS < nowTs && nowTs - t <= 14 * 86400000) {
+      // 窗口常量与 freshness 的「上游缺分」统计同源（SYNC_WINDOW_DAYS）：两处各写
+      // 一份 14，迟早出现「系统不查、报表却说缺」的矛盾。
+      if (!m.tbd && t + MATCH_DURATION_MS < nowTs
+          && nowTs - (t + MATCH_DURATION_MS) <= SYNC_WINDOW_DAYS * 86400000) {
         add(t - 86400000);
         add(t + 86400000);
 

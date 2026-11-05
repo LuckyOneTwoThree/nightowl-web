@@ -1,15 +1,15 @@
 {
   "_readme": "手机端数据管道是桌面端的手抄分支（存在有意差异）。本清单让差异可见：任一侧改动都会让 verify:pipeline 失败；确认两端仍等价后运行 npm run sync:pipeline -- --write 更新哈希。",
-  "generatedAt": "2026-11-04T04:07:37.094Z",
+  "generatedAt": "2026-11-05T02:51:41.656Z",
   "pairs": [
     {
       "desktop": "server/scores.js",
       "mobile": "mobile/src/data/sync/scores.js",
       "reason": "手机多 quickSyncTargets（72h 下拉快检）；共享函数应保持同口径",
-      "desktopSha": "1b1a8e9a1e9d9148bcdea5ac8026e7da0d43625ad423b6bb29e96d81ef7b65c0",
-      "mobileSha": "e0e63b738d909874d349bee6ae0de2fb6b4d37709057f42b12888af42899b5b8",
-      "desktopLines": 523,
-      "mobileLines": 570
+      "desktopSha": "556e24aea9cc2935b2875906b8367dd450595fe9bef5c96833c664b1359b3ba0",
+      "mobileSha": "7f13256f7b4ddbb530c85ccfd693cacaaed9adbdf875dc9addb1dd75d3b37456",
+      "desktopLines": 527,
+      "mobileLines": 581
     },
     {
       "desktop": "server/sources/index.js",

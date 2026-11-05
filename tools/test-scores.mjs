@@ -504,6 +504,54 @@ console.log('七、数据新鲜度语义（lastScoreAt 是赛果时间，不是�
 
 /* ================================================================== */
 console.log('');
+console.log('七·二、★ 同步窗口只控制「扩窗」，不控制「是否查询」');
+{
+  // 这条曾被误解过（包括我自己）：以为 activeSyncTargets 的 14 天窗口意味着
+  // 「更早的场次根本不会查」。实际 add(t) 是无条件的，窗口只决定要不要向
+  // ±1 / ±MATCH_WINDOW 展开。所以窗口外的历史缺分也必须计入待录统计 ——
+  // 它们确实被查过，查不到就是真的没数据，过滤掉等于对用户隐瞒。
+  const DAY = 86400000;
+  const now = Date.now();
+  // 真实数据的 t 是 `YYYY-MM-DDTHH:mm`（北京墙钟、无后缀）。换成空格分隔会让
+  // ts() 解析失败，整条断言变成空断言（假绿）。
+  const mk = (id, daysAgo) => ({
+    id, l: 'PL', st: 'sched', sc: null, tbd: false,
+    t: new Date(now - daysAgo * DAY).toISOString().slice(0, 16)
+  });
+  const mkHours = (id, hours) => ({
+    id, l: 'PL', st: 'sched', sc: null, tbd: false,
+    t: new Date(now - hours * 3600000).toISOString().slice(0, 16)
+  });
+
+  // 三种情况各查一种，边界才不会被「一刀切」蒙混过去：
+  //   刚完赛（4 小时前开球，2 小时前完赛）→ 只扩 ±1，3 个日期
+  //   积压（5 天前）→ 放宽到 ±MATCH_WINDOW_DAYS，9 个日期
+  //   超出同步窗口（20 天前）→ 只查本地日期，1 个
+  const tFresh = activeSyncTargets([mkHours('f', 4)], now).get('PL');
+  const tBacklog = activeSyncTargets([mk('b', 5)], now).get('PL');
+  const tOld = activeSyncTargets([mk('o', 20)], now).get('PL');
+  ok('当天刚完赛的缺分只扩 ±1（3 个日期）', tFresh.size === 3, [...tFresh].join(','));
+  ok('积压（5 天前）的缺分扩到 ±MATCH_WINDOW_DAYS（9 个日期）', tBacklog.size === 9, [...tBacklog].join(','));
+  ok('★ 窗口外（20 天前）的缺分仍会被查询（本地日期 1 个）', tOld.size === 1, [...tOld].join(','));
+
+  // 因此统计口径不该按窗口切分：20 天前的缺分照样算「待录 / 上游缺分」
+  const fOld = freshness([mk('o2', 20)], now, { usingUser: true });
+  ok('★ 窗口外的历史缺分仍计入 pendingCount', fOld.pendingCount === 1, `实际 ${fOld.pendingCount}`);
+  ok('窗口外且超 24h 仍计入 stalePendingCount', fOld.stalePendingCount === 1, `实际 ${fOld.stalePendingCount}`);
+
+  // 内置快照（未同步过）不报「上游缺分」——那只是还没同步
+  const fBuiltin = freshness([mk('b', 5)], now, { usingUser: false });
+  ok('内置快照模式下不报「上游缺分」', fBuiltin.stalePendingCount === 0 && fBuiltin.pendingCount === 1,
+    `pending=${fBuiltin.pendingCount} stale=${fBuiltin.stalePendingCount}`);
+
+  // 有比分的完赛场次完全不参与任何计数
+  const fDone = freshness([{ ...mk('d', 5), st: 'done', sc: '1-0' }], now, { usingUser: true });
+  ok('有比分的完赛场次不计入任何待录计数',
+    fDone.pendingCount === 0 && fDone.stalePendingCount === 0);
+}
+
+/* ================================================================== */
+console.log('');
 console.log('八、赛季窗口配置化（不再硬编码 2027-05）');
 {
   const s2627 = seasonMonths('2026-27');
