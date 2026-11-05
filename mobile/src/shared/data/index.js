@@ -10,6 +10,14 @@
  *    少了它，本模块只能在打包器里工作，Node 直接 import 会抛
  *    ERR_IMPORT_ATTRIBUTE_MISSING —— 于是依赖它的 src/core/owl.js 整层
  *    都进不了 Node 测试，只能靠浏览器端验证，这是实打实的测试盲区。
+ *
+ * ⚠️ `id` 与 `r` 是**两件事**，不要「顺手改一致」：
+ *    · `id` 形如 `PD-4-RSO-CEL`，中间段是**快照生成时**的轮次，此后永不改动 ——
+ *      它是稳定主键，用户本地的补看清单（watchLater）、线路记忆（line-memory）、
+ *      ICS 日历、赛程变更通知全部以它为键，改 id 会让这些历史数据**全量孤立失效**。
+ *    · `r` 是**展示字段**，由保鲜同步按权威源（openfootball 的 `round`）校正。
+ *      2026-11-05 那次校正修了 26 场西甲，于是出现「id 段 4、r 为 6」的受控不一致 ——
+ *      这是**预期状态**，不是数据损坏。详见 docs/DEEP-REVIEW-2026-11-05-b.md 的 P1-1。
  */
 
 import fixtures from './fixtures.json' with { type: 'json' };
