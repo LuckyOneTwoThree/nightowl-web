@@ -22,7 +22,7 @@ export const VIEW_COMMANDS = [
     id: 'view:week',
     kind: '导航',
     title: '本周规划',
-    subtitle: '睡眠预算与背包推荐',
+    subtitle: '熬夜额度与背包推荐',
     keywords: ['本周', 'week', '预算', '规划'],
     action: { type: 'view', view: 'week' }
   },

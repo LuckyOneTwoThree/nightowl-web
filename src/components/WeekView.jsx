@@ -3,6 +3,7 @@ import { zhDate, hmCost, hm } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { stateOf } from '../core/owl.js';
 import { owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '../core/engine.js';
+import { sleepLedger } from '../core/sleep.js';
 import { weekRiskBands, weekBestEmptyState } from '../core/week-risk.js';
 import { Chip, Crest, Hint, IndexTag, Meta, SectionLabel, SleepBadge, Stars } from './atoms.jsx';
 import { IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronUp, IconClose, IconWarn } from './icons.jsx';
@@ -228,6 +229,27 @@ export default function WeekView({
   const { plan, minefield, days, advice } = week;
   const remaining = Math.max(0, plan.budget - plan.used);
 
+  /**
+   * 「额度」与「真实欠睡」是两个量纲：额度按 S0–S4 档位累加（23:00 记 1.0h、03:45 记 3.5h），
+   * 真实欠睡按个人起床时间与底线算（同两场分别是 0.5h / 5.25h）—— 一正一反，没有固定倍数。
+   * 所以这里不改权重（会打乱用户既有的计划），只在开启账本时把本周精选的真实欠睡**换算出来**，
+   * 让「额度」这个抽象数字有个可对账的落点。
+   */
+  const sleepGapHours = useMemo(() => {
+    if (prefs?.sleepEnabled !== true) return null;
+    const profile = { enabled: true, wakeTime: prefs.sleepWakeTime, minSleep: prefs.sleepMinHours };
+    let sum = 0;
+    let known = 0;
+    for (const e of plan.best) {
+      const ledger = sleepLedger(e.m.t, profile);
+      if (ledger.valid && ledger.ready === true) {
+        sum += ledger.gapHours || 0;
+        known++;
+      }
+    }
+    return known ? sum : null;
+  }, [plan.best, prefs?.sleepEnabled, prefs?.sleepWakeTime, prefs?.sleepMinHours]);
+
   /* 周切换：只平移锚点，可排性仍按真实 now（口径见 core/owl.js 的 weekOffset）。
      历史周没有「还要熬到几点」的风险语义，风险带与底线结论一律不显示。 */
   const weekTitle =
@@ -407,7 +429,7 @@ export default function WeekView({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 font-num text-xs tabular-nums">
               <span className="font-semibold text-text-primary">
-                预算 <span className="text-resource">{plan.budget.toFixed(1)}h</span>
+                额度 <span className="text-resource">{plan.budget.toFixed(1)}h</span>
               </span>
               <span className="text-text-faint">·</span>
               <span className="text-text-secondary">已排 {plan.used.toFixed(1)}h</span>
@@ -416,7 +438,7 @@ export default function WeekView({
             </div>
           </div>
           <span className="inline-flex shrink-0 items-center gap-1 text-2xs text-text-muted">
-            {expanded ? '收起' : '调整预算'}
+            {expanded ? '收起' : '调整额度'}
             {expanded ? <IconChevronUp size={13} /> : <IconChevronDown size={13} />}
           </span>
         </button>
@@ -426,7 +448,7 @@ export default function WeekView({
             <div
               className="flex h-1.5 w-full gap-0.5 overflow-hidden rounded-full bg-surface-panel"
               role="img"
-              aria-label={`预算已用 ${hmCost(plan.used)} / ${hmCost(plan.budget)}`}
+              aria-label={`额度已用 ${hmCost(plan.used)} / ${hmCost(plan.budget)}`}
             >
               {plan.best.map(e => {
                 const t = sleepTier(e.m.t);
@@ -448,7 +470,7 @@ export default function WeekView({
         {expanded && (
           <div className="border-t border-line-hairline bg-surface-raised/30 px-3 py-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-2xs text-text-secondary">每周熬夜预算上限</span>
+              <span className="text-2xs text-text-secondary">每周熬夜额度上限（按档位计）</span>
               <span className="font-num text-sm font-bold tabular-nums text-resource">
                 {plan.budget.toFixed(1)} 小时 / 周
               </span>
@@ -462,7 +484,7 @@ export default function WeekView({
               value={plan.budget}
               onChange={e => onBudgetChange(Number(e.target.value))}
               className="mt-2 w-full accent-[rgb(var(--resource-rgb))]"
-              aria-label="每周熬夜预算（小时）"
+              aria-label="每周熬夜额度（小时，按档位计）"
             />
 
             <div className="mt-1 flex justify-between font-num text-2xs tabular-nums text-text-faint">
@@ -470,6 +492,24 @@ export default function WeekView({
               <span>4h</span>
               <span>8h</span>
             </div>
+
+            {/* 额度是抽象量（按档位计），这里把本周精选换算成真实欠睡，避免两个量纲被当成一回事 */}
+            <p className="mt-2 text-2xs leading-relaxed text-text-faint">
+              {prefs?.sleepEnabled === true ? (
+                sleepGapHours == null ? (
+                  '账本资料不完整，暂时无法换算真实欠睡'
+                ) : (
+                  <>
+                    按你的作息（{prefs.sleepWakeTime || '07:30'} 起床 · 底线 {prefs.sleepMinHours ?? 7}h）换算，
+                    本周精选实际约欠{' '}
+                    <span className="font-num tabular-nums text-text-secondary">{sleepGapHours.toFixed(1)}h</span>{' '}
+                    睡眠
+                  </>
+                )
+              ) : (
+                '额度按熬夜档位累加（S0–S4）；开启睡眠账本后，这里会显示本周精选的真实欠睡时长'
+              )}
+            </p>
           </div>
         )}
 
