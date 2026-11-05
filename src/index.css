@@ -36,33 +36,24 @@
   font-display: swap;
   src: url('/fonts/hankengrotesk-600.woff2') format('woff2');
 }
+/*
+ * JetBrains Mono：只保留一份字重。
+ *
+ * 此前 400/500/600/700 是**同一个文件**（md5 全等，31KB × 4）—— 也就是说 600/700
+ * 一直渲染的是 regular 字形，标题与数字没有层级，还多打了 94KB。
+ *
+ * ⚠️ 这里刻意只声明 font-weight: 400，而**不是** 100 900 区间：
+ *    · 声明区间 = 告诉浏览器「这个字体覆盖全部字重」，600/700 会复用同一套字形，等于没改；
+ *    · 只声明 400 = 600/700 走浏览器合成粗体（stroke 加粗），视觉上真正变重，符合设计稿的字重层级。
+ * 代价：合成粗体比真 Bold 略糙，但 JetBrains Mono 只用于数字与代码片段，
+ * 且省下 94KB 首屏字节 —— 两者相比这个取舍是划算的。
+ */
 @font-face {
   font-family: 'JetBrains Mono';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
   src: url('/fonts/jetbrainsmono-400.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'JetBrains Mono';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('/fonts/jetbrainsmono-500.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'JetBrains Mono';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('/fonts/jetbrainsmono-600.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'JetBrains Mono';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('/fonts/jetbrainsmono-700.woff2') format('woff2');
 }
 
 /* ====================================================================
