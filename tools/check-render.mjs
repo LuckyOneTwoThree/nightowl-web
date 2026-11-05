@@ -21,10 +21,20 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from '../server/index.js';
 import { loadRules } from '../server/proxy.js';
-import { ts as fixtureTs } from '../src/core/engine.js';
+import { ts as fixtureTs, nightOf } from '../src/core/engine.js';
 import { morningDigestNight } from '../src/core/morning.js';
 
 app.disableHardwareAcceleration();
+
+/**
+ * ⚠️ 必须接管「所有窗口关闭」的默认行为。
+ *
+ * Electron 默认在最后一个窗口销毁时退出进程。主场景在 finally 里 destroy 窗口，
+ * 于是后面的人造数据场景（C7）会在第一行 await 之前就被掐掉 —— 表现为
+ * 「打印了标题就没了、exit 0」，没有任何报错，最难查的一类。
+ * 退出时机由脚本末尾的 app.exit() 显式决定。
+ */
+app.on('window-all-closed', () => {});
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const DIST = resolve(ROOT, 'dist');
@@ -33,6 +43,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /** 选择一个明确仍在未来的场次，避免赛后数据更新后把「指数」断言误判成完赛行。 */
 const repoFixtures = JSON.parse(readFileSync(resolve(ROOT, 'src/data/fixtures.json'), 'utf8'));
+/** 人造场景按联赛取队（不写死球队 id，赛季换血后不会静默失效） */
+const TEAMS = JSON.parse(readFileSync(resolve(ROOT, 'src/data/teams.json'), 'utf8'));
 const futureFixture = repoFixtures.find(
   m => m.st === 'sched' && !m.tbd && fixtureTs(m.t) > Date.now() + 2 * 3600000
 );
@@ -58,9 +70,27 @@ function ok(name, cond, detail = '') {
  * 门禁变成看日子过活 —— 而一旦养成「今天红了明天可能绿」的习惯，
  * 真回归就没人看了。跳过必须打印出来并在汇总里计数，不能被当成通过。
  */
-function skip(name, reason) {
-  skipped++;
-  console.log(`  ⏭ ${name} — 跳过：${reason}`);
+/**
+ * 明确跳过，而不是判失败。
+ *
+ * 有些断言依赖「今晚恰好有比赛 / 恰好有同开球场次」这类数据形态。真实快照
+ * 每天在变（11-05 上午刷新后，今晚没有场次），用失败表达「场景不存在」会让
+ * 门禁变成看日子过活 —— 而一旦养成「今天红了明天可能绿」的习惯，
+ * 真回归就没人看了。
+ *
+ * 但从 C7 起，这类断言不再走这里：主场景改调 deferToScenario()，
+ * 由「人造数据场景」真跑一遍。只有极端时序（本夜不足 20 分钟）才会累加 skipped。
+ */
+let deferred = 0;
+/**
+ * 主场景数据不满足 → 不跳过，转交「人造数据场景」（本轮 C7 新增）。
+ *
+ * 与 skip 的区别：skip 是「这条永远跑不到」，deferred 是「换个数据集再跑」。
+ * 后者必须真的在后面跑出结果，否则总数会对不上，一眼能看出来。
+ */
+function deferToScenario(name) {
+  deferred++;
+  console.log(`  ⏳ ${name} — 主场景无此形态，转由人造数据场景验证`);
 }
 
 function waitLoad(win, url) {
@@ -180,7 +210,7 @@ app.whenReady().then(async () => {
       })()
     `);
     if (indexTone.count === 0) {
-      skip('★ 列表行指数不用强调色', '当前视图没有带指数的列表行（今晚无场次）');
+      deferToScenario('★ 列表行指数不用强调色');
     } else {
       ok(
         '★ 列表行指数不用强调色',
@@ -205,7 +235,7 @@ app.whenReady().then(async () => {
       })()
     `);
     if (!kickoffPanel.exists) {
-      skip('★ 同开球默认收起为一行摘要', '今晚没有同开球场次');
+      deferToScenario('★ 同开球默认收起为一行摘要');
     } else {
       ok(
         '★ 同开球默认收起为一行摘要',
@@ -247,10 +277,10 @@ app.whenReady().then(async () => {
       // kickoffAfter 为 null 时（面板不存在）原代码在 detail 参数里直接读
       // kickoffAfter.heroH —— 未捕获的 TypeError 会把整轮渲染冒烟打成「执行失败」，
       // 后面 60 多项一条都跑不到。
-      skip('★ 展开后同开球逐条可比', '没有可展开的同开球面板');
-      skip('★ 展开同开球不压缩/截断 Hero', '没有可展开的同开球面板');
-      skip('★ 同开球展开列表由左栏整体滚动，面板自身不裁切', '没有可展开的同开球面板');
-      skip('★ 同开球展开按钮关联列表且 active 行有 aria-current', '没有可展开的同开球面板');
+      deferToScenario('★ 展开后同开球逐条可比');
+      deferToScenario('★ 展开同开球不压缩/截断 Hero');
+      deferToScenario('★ 同开球展开列表由左栏整体滚动，面板自身不裁切');
+      deferToScenario('★ 同开球展开按钮关联列表且 active 行有 aria-current');
     } else {
       ok(
         '★ 展开后同开球逐条可比',
@@ -410,8 +440,7 @@ app.whenReady().then(async () => {
     `);
     if (!heroAction.clicked || !heroActionFeedback.elExists) {
       // 区块没渲染（例如该场次没有情报区）不是交互失效 —— 但也不能静静通过。
-      skip('★ 已选中 Hero 的主按钮可直达当前状态对应区块',
-        `目标区块 ${heroAction.target} 未渲染`);
+      deferToScenario('★ 已选中 Hero 的主按钮可直达当前状态对应区块');
     } else {
       ok('★ 已选中 Hero 的主按钮可直达当前状态对应区块',
         heroActionFeedback.hasFlash && heroActionFeedback.focused,
@@ -1461,8 +1490,7 @@ app.whenReady().then(async () => {
     if (!scrollSet.ok) {
       // 列表不存在或内容不足一屏（今晚场次少时 max < 120）→ 没有可复位的滚动位置。
       // 这不是「切视图丢了滚动」，但也不该静静通过。
-      skip('★ 切走视图再切回保留左栏滚动位置',
-        scrollSet.max === undefined ? '左栏列表未渲染' : `列表可滚动量只有 ${scrollSet.max}px`);
+      deferToScenario('★ 切走视图再切回保留左栏滚动位置');
     } else {
     const scrollRestored = await win.webContents.executeJavaScript(`
       (() => {
@@ -1753,7 +1781,319 @@ app.whenReady().then(async () => {
     await new Promise(r => server.close(r));
   }
 
+  /* ==================================================================
+   * 人造数据场景（C7）
+   *
+   * 主场景的门禁依赖「今晚恰好有球 / 恰好有同开场次」。实测赛季 52.6% 的日子无赛，
+   * 于是 8 项断言长期处于「跳过」——跳过不是通过，它们实际上是没在跑。
+   * 这里用一份**只依赖当前时刻**的人造赛程（全在今晚、含 3 场同开球、含德比）
+   * 把同样的检查真跑一遍。
+   *
+   * 关键设计：时间相对 now 生成，写完仍然是「今晚」——不能用固定日期，
+   * 否则过几天就变成历史数据，「今晚」直接空掉。
+   * ================================================================ */
   console.log('');
-  console.log(`通过 ${pass} 项，失败 ${fail} 项${skipped ? `，跳过 ${skipped} 项（数据形态不满足）` : ''}`);
+  console.log('人造数据场景（补齐主场景因数据形态转交的断言）');
+
+  // ⚠️ 必须是 `YYYY-MM-DDTHH:MM`（带 T）：引擎的 ts()/owlDay() 按 'T' 切分，
+  // 换成空格会静默退化成「全天 00:00」，本夜直接查不到场次 —— 表现为「人造数据注入了但界面还是空的」。
+  const bjWall = ms => new Date(ms + 8 * 3600000).toISOString().slice(0, 16);
+  const plusDay = ds => {
+    const d = new Date(Date.parse(ds + 'T00:00:00Z') + 86400000);
+    return d.toISOString().slice(0, 10);
+  };
+
+  /** 只依赖 now 的人造赛程：14 场全在今晚，其中 3 场同开、含德比与六强内战 */
+  function buildSyntheticFixtures(now) {
+    const night = nightOf(now);
+    const nightEnd = Date.parse(`${plusDay(night)}T05:55:00+08:00`);
+    // 主展示组放在 now+60min；若已接近本夜尾声则前挪，保证仍有未来场次
+    let t0 = Math.min(now + 60 * 60000, nightEnd - 90 * 60000);
+    if (t0 < now + 10 * 60000) t0 = now + 10 * 60000;
+
+    const byLeague = lid => TEAMS.filter(t => t.league === lid).map(t => t.id);
+    const pl = byLeague('PL');
+    const pick = (arr, a, b) => (arr.includes(a) && arr.includes(b) ? [a, b] : null);
+
+    // 同开球组：德比 + 六强内战 + 默西塞德，保证 Hero 与面板同时成立
+    const groupA = [pick(pl, 'ARS', 'TOT'), pick(pl, 'MCI', 'MUN'), pick(pl, 'LIV', 'EVE')]
+      .filter(Boolean);
+    const used = new Set(groupA.flat());
+    const rest = pl.filter(id => !used.has(id));
+    const groupB = [];
+    for (let i = 0; i + 1 < rest.length && groupB.length < 4; i += 2) groupB.push([rest[i], rest[i + 1]]);
+
+    const pd = byLeague('PD');
+    const sa = byLeague('SA');
+    const groupC = [];
+    for (let i = 0; i + 1 < pd.length && groupC.length < 3; i += 2) groupC.push([pd[i], pd[i + 1]]);
+    for (let i = 0; i + 1 < sa.length && groupC.length < 5; i += 2) groupC.push([sa[i], sa[i + 1]]);
+
+    const out = [];
+    let r = 12;
+    const push = (pair, atMs, league) => {
+      const [h, a] = pair;
+      out.push({
+        id: `TEST-${r}-${h}-${a}`,
+        l: league,
+        r,
+        t: bjWall(atMs),
+        tbd: false,
+        st: 'sched',
+        h,
+        a
+      });
+      r++;
+    };
+    // 夜尾运行时（例如 05:30）没有 4 小时可用，必须压缩间隔，否则后几场会落到**下一夜**，
+    // 今晚切片直接少一半，滚动断言会假红。
+    const room = nightEnd - t0;
+    const step = room > 4 * 3600000 ? 30 * 60000 : 3 * 60000;
+    const at = off => Math.min(t0 + off, nightEnd - 2 * 60000);
+    groupA.forEach(p => push(p, at(0), 'PL'));                    // 同开球组
+    groupB.forEach((p, i) => push(p, at((i + 1) * step), 'PL'));
+    groupC.forEach((p, i) => push(p, at((i + 1) * step * 1.5), i < 3 ? 'PD' : 'SA'));
+    return out;
+  }
+
+  const synthetic = buildSyntheticFixtures(Date.now());
+  {
+    // 极端时序（05:40 之后）：本夜只剩几分钟，来不及造「未来场次」。
+    // 这种情况如实计为跳过，不假装通过 —— 全天占比 <2%。
+    const nightEndMs = Date.parse(`${plusDay(nightOf(Date.now()))}T05:55:00+08:00`);
+    if (nightEndMs - Date.now() < 20 * 60000) {
+      console.log(`  ⏭ 本夜仅剩 ${Math.max(0, Math.round((nightEndMs - Date.now()) / 60000))} 分钟，来不及造未来场次 → ${deferred} 项跳过`);
+      skipped += deferred;
+      deferred = 0;
+    }
+  }
+  if (deferred > 0) {
+    const srv = createServer(loadRules(), silent, {
+      backgroundSync: false,
+      loadFixtures: async () => synthetic,
+      saveFixtures: () => ({ ok: true, path: '/tmp/nightowl-synthetic.json', bytes: 1 }),
+      syncScores: async () => ({
+        patches: new Map(), errors: [], stats: {}, bySource: {},
+        conflicts: [], incompleteScore: [], unmatched: []
+      })
+    });
+    const port2 = await new Promise((res, rej) => {
+      srv.listen(0, '127.0.0.1', () => res(srv.address().port));
+      srv.on('error', rej);
+    });
+    const base2 = `http://127.0.0.1:${port2}`;
+    const win2 = new BrowserWindow({
+      width: 1440, height: 900, show: false, paintWhenInitiallyHidden: true,
+      backgroundColor: '#0b0e15',
+      webPreferences: {
+        preload: PRELOAD, contextIsolation: true, nodeIntegration: false,
+        sandbox: true, backgroundThrottling: false
+      }
+    });
+    win2.setContentSize(1440, 900);
+    const errs2 = [];
+    win2.webContents.on('console-message', (_e, level, message) => {
+      if (level >= 3) errs2.push(message);
+    });
+
+    try {
+      await waitLoad(win2, `${base2}/?view=tonight`);
+      await win2.webContents.executeJavaScript(`
+        localStorage.setItem('onboardingDone','1');
+        localStorage.setItem('nightowl:splash_shown','1');
+        localStorage.setItem('followedTeams','[]');
+        localStorage.setItem('spoilerFree','false');
+        true
+      `);
+      await waitLoad(win2, `${base2}/?view=tonight`);
+      await sleep(1600);
+      /* ① 列表行指数不用强调色 */
+      const tone = await win2.webContents.executeJavaScript(`
+        (() => {
+          const nodes = [...document.querySelectorAll('[title^="夜猫指数"]')];
+          const probe = document.createElement('span');
+          probe.className = 'text-text-muted';
+          document.body.appendChild(probe);
+          const mutedRgb = getComputedStyle(probe).color;
+          probe.remove();
+          const bad = nodes.filter(n => getComputedStyle(n).color !== mutedRgb);
+          return { count: nodes.length, bad: bad.length, mutedRgb };
+        })()
+      `);
+      ok('★ 列表行指数不用强调色（人造场景）',
+        tone.count > 0 && tone.bad === 0,
+        `弱化 ${tone.count} 处，异常 ${tone.bad} 处`);
+
+      /* ② 同开球面板：默认收起 */
+      const collapsed = await win2.webContents.executeJavaScript(`
+        (() => {
+          const panel = document.querySelector('[aria-label="同开球对比"]');
+          if (!panel) return { exists: false };
+          const btn = panel.querySelector('button[aria-expanded]');
+          return {
+            exists: true,
+            rows: panel.querySelectorAll('[aria-current], li, div[id="same-kickoff-list"] > div').length,
+            h: Math.round(panel.getBoundingClientRect().height),
+            heroH: Math.round(document.querySelector('[data-hero-card]')?.getBoundingClientRect().height || 0),
+            expanded: btn ? btn.getAttribute('aria-expanded') : null,
+            summary: (panel.innerText || '').trim().slice(0, 40)
+          };
+        })()
+      `);
+      ok('★ 同开球默认收起为一行摘要（人造场景）',
+        collapsed.exists && collapsed.h <= 80 && collapsed.expanded === 'false',
+        JSON.stringify(collapsed));
+
+      /* ③ 展开：逐条可比 / 面板不裁切 / aria 关联 */
+      const opened = await win2.webContents.executeJavaScript(`
+        (() => {
+          const btn = document.querySelector('[aria-label="同开球对比"] button[aria-expanded="false"]');
+          if (!btn) return false;
+          btn.click();
+          return true;
+        })()
+      `);
+      await sleep(320);
+      const expanded = await win2.webContents.executeJavaScript(`
+        (() => {
+          const panel = document.querySelector('[aria-label="同开球对比"]');
+          if (!panel) return null;
+          const hero = document.querySelector('[data-hero-card]');
+          const btn = panel.querySelector('button[aria-expanded="true"]');
+          return {
+            h: Math.round(panel.getBoundingClientRect().height),
+            heroH: Math.round(hero?.getBoundingClientRect().height || 0),
+            heroScroll: hero?.scrollHeight || 0,
+            heroClient: hero?.clientHeight || 0,
+            panelScroll: panel.scrollHeight,
+            panelClient: panel.clientHeight,
+            ariaControls: btn?.getAttribute('aria-controls') || null,
+            listId: document.getElementById('same-kickoff-list')?.id || null,
+            activeCurrent: panel.querySelector('[aria-current="true"]') !== null,
+            rows: panel.querySelectorAll('button[aria-pressed], [data-same-kickoff-row]').length
+          };
+        })()
+      `);
+      ok('★ 展开后同开球逐条可比（人造场景）',
+        !!opened && !!expanded && expanded.h > 42,
+        JSON.stringify({ opened, h: expanded?.h }));
+      // 展开后左栏出现滚动条 + pr-1，内容宽度少约 16px，文本重排会让 Hero 略**变高**。
+      // 这是重排不是压缩：真正的缺陷是「被压扁」与「内容被截断」，
+      // 所以下界卡死 -2px，截断交给 scrollHeight<=clientHeight+1 兜住。
+      ok('★ 展开同开球不压缩/截断 Hero（人造场景）',
+        !!expanded &&
+          (expanded.heroH || 0) >= (collapsed.heroH || 0) - 2 &&
+          expanded.heroScroll <= expanded.heroClient + 1,
+        JSON.stringify({ before: collapsed.heroH, after: expanded?.heroH, scroll: expanded?.heroScroll, client: expanded?.heroClient }));
+      ok('★ 同开球展开列表由左栏整体滚动，面板自身不裁切（人造场景）',
+        !!expanded && expanded.panelScroll <= expanded.panelClient + 1,
+        JSON.stringify({ scroll: expanded?.panelScroll, client: expanded?.panelClient }));
+      ok('★ 同开球展开按钮关联列表且 active 行有 aria-current（人造场景）',
+        !!expanded &&
+          expanded.ariaControls === expanded.listId &&
+          expanded.listId === 'same-kickoff-list' &&
+          expanded.activeCurrent,
+        JSON.stringify({ controls: expanded?.ariaControls, listId: expanded?.listId, active: expanded?.activeCurrent }));
+
+      /* ④ Hero 主按钮直达对应区块 */
+      const heroBtn = await win2.webContents.executeJavaScript(`
+        (() => {
+          const hero = document.querySelector('[data-hero-card]');
+          const btn = [...(hero?.querySelectorAll('button') || [])].find(b =>
+            ['查看赛前情报', '查看直播线路', '查看赛后回顾', '进入直播间'].includes((b.textContent || '').trim())
+          );
+          if (!btn) return { clicked: false };
+          const text = (btn.textContent || '').trim();
+          const target = text.includes('情报') ? 'intel-panel'
+            : text.includes('线路') ? 'match-lines' : 'match-recap';
+          btn.click();
+          return { clicked: true, target, text };
+        })()
+      `);
+      await sleep(220);
+      const targetId = JSON.stringify(heroBtn.target || '');
+      const heroFx = await win2.webContents.executeJavaScript(`
+        (() => {
+          const el = document.getElementById(${targetId});
+          return {
+            exists: !!el,
+            hasFlash: el?.classList.contains('locate-focus-flash') || false,
+            focused: document.activeElement === el
+          };
+        })()
+      `);
+      ok('★ 已选中 Hero 的主按钮可直达当前状态对应区块（人造场景）',
+        !!heroBtn.clicked && heroFx.exists && heroFx.hasFlash && heroFx.focused,
+        JSON.stringify({ action: heroBtn, feedback: heroFx }));
+
+      /* ⑤ 切走视图再切回：左栏滚动位置保留
+         ⚠️ 先收起面板：展开态下滚动交给左栏整体（by design），内层列表本身不再可滚，
+         直接在这里找可滚列表必然落空。 */
+      await win2.webContents.executeJavaScript(
+        `document.querySelector('[aria-label="同开球对比"] button[aria-expanded="true"]')?.click()`
+      );
+      await sleep(400);
+      const scrollSet = await win2.webContents.executeJavaScript(`
+        (() => {
+          const list = [...document.querySelectorAll('div')].find(
+            d => typeof d.className === 'string' && d.className.includes('overflow-y-auto')
+              && d.className.includes('space-y-0.5')
+          );
+          if (!list) return { ok: false };
+          const max = list.scrollHeight - list.clientHeight;
+          if (max < 120) return { ok: false, max };
+          list.scrollTop = Math.min(160, max);
+          list.dispatchEvent(new Event('scroll'));
+          return { ok: true, top: Math.round(list.scrollTop), max };
+        })()
+      `);
+      await sleep(260);
+      const switchView2 = async label => {
+        await win2.webContents.executeJavaScript(`
+          (() => {
+            const b = [...document.querySelectorAll('button')].find(x => (x.textContent || '').includes(${JSON.stringify(label)}));
+            b?.click();
+            return !!b;
+          })()
+        `);
+        await sleep(900);
+      };
+      await switchView2('本周规划');
+      await switchView2('今晚观赛');
+      const restored = await win2.webContents.executeJavaScript(`
+        (() => {
+          const list = [...document.querySelectorAll('div')].find(
+            d => typeof d.className === 'string' && d.className.includes('overflow-y-auto')
+              && d.className.includes('space-y-0.5')
+          );
+          return list ? Math.round(list.scrollTop) : null;
+        })()
+      `);
+      ok('★ 切走视图再切回保留左栏滚动位置（人造场景）',
+        scrollSet.ok && restored != null && Math.abs(restored - scrollSet.top) <= 2,
+        JSON.stringify({ set: scrollSet, restored }));
+
+      ok('人造场景无运行时报错', errs2.length === 0, errs2.slice(0, 2).join(' | '));
+    } catch (err) {
+      ok('人造数据场景执行完成', false, String(err?.stack || err));
+    } finally {
+      try {
+        win2.destroy();
+      } catch {}
+      srv.closeAllConnections?.();
+      await new Promise(r => srv.close(r));
+    }
+  }
+
+  console.log('');
+
+  console.log(
+    `通过 ${pass} 项，失败 ${fail} 项` +
+      (skipped ? `，跳过 ${skipped} 项（数据形态不满足）` : '') +
+      (deferred ? `（其中 ${deferred} 项由人造数据场景承接）` : '')
+  );
   app.exit(fail ? 1 : 0);
+}).catch(err => {
+  console.error('FATAL', err?.stack || err);
+  app.exit(1);
 });
