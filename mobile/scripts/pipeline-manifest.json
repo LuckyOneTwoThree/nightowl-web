@@ -1,24 +1,24 @@
 {
   "_readme": "手机端数据管道是桌面端的手抄分支（存在有意差异）。本清单让差异可见：任一侧改动都会让 verify:pipeline 失败；确认两端仍等价后运行 npm run sync:pipeline -- --write 更新哈希。",
-  "generatedAt": "2026-11-05T02:51:41.656Z",
+  "generatedAt": "2026-11-05T06:48:21.448Z",
   "pairs": [
     {
       "desktop": "server/scores.js",
       "mobile": "mobile/src/data/sync/scores.js",
       "reason": "手机多 quickSyncTargets（72h 下拉快检）；共享函数应保持同口径",
-      "desktopSha": "556e24aea9cc2935b2875906b8367dd450595fe9bef5c96833c664b1359b3ba0",
-      "mobileSha": "7f13256f7b4ddbb530c85ccfd693cacaaed9adbdf875dc9addb1dd75d3b37456",
-      "desktopLines": 527,
-      "mobileLines": 581
+      "desktopSha": "e6e95ee541b83642a0a3ea2e3eaa07eb13736de41bcb3f7ac6309f8e754bf7f7",
+      "mobileSha": "f7cb7afa29e06ca1d01f8193ab2da15af1a9c160b13a412b09caec527c006777",
+      "desktopLines": 623,
+      "mobileLines": 640
     },
     {
       "desktop": "server/sources/index.js",
       "mobile": "mobile/src/data/sync/sources.js",
       "reason": "端侧取数入口不同（桌面本地服务 / 手机直连 ESPN）",
-      "desktopSha": "76e9859c310fa629fc4778589d11a694b45fadef9c103497d2eb0b8349fe7ac6",
-      "mobileSha": "0afb147fcc577604ca6a3b9ddfa9010554aa173fadbc3dbc0b43253d4de005fb",
-      "desktopLines": 208,
-      "mobileLines": 211
+      "desktopSha": "95b2ed6ef7b3e30a84f0e523c15c311356825ebc5a390bbca281115a6e4d2c79",
+      "mobileSha": "de8881b4ba11301920237fd01fb623058b283c008d848f878221b93bfcc1ad45",
+      "desktopLines": 215,
+      "mobileLines": 216
     },
     {
       "desktop": "server/sources/espn.js",
@@ -33,10 +33,10 @@
       "desktop": "server/sources/openfootball.js",
       "mobile": "mobile/src/data/sync/openfootball.js",
       "reason": "副源适配；手机版传 retries",
-      "desktopSha": "baf9fc2fe21f96d870c5c5f3f87d22731f0dab60925a3dc3a075a69257254f3a",
-      "mobileSha": "083fc66d982822dd4c4005f3df2a6c19b8ae489079cc5176c58bd6663232761c",
-      "desktopLines": 96,
-      "mobileLines": 100
+      "desktopSha": "04c61cffc45bb1bcecb15b7872d782d32294947443d83a5f4c3eba5aa454ef85",
+      "mobileSha": "242eda5ebda17a63b6f2374e8665615eeaae6e01d392a7d56a6c5468b2d05e3a",
+      "desktopLines": 110,
+      "mobileLines": 113
     },
     {
       "desktop": "server/sources/normalize.js",

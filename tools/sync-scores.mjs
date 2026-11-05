@@ -57,13 +57,25 @@ console.log(`  统一事件          ${result.merged.length}`);
 console.log(`  完赛场次          ${result.stats.done}`);
 console.log(`  完赛比分写入      ${result.stats.done - result.stats.scoreFromSecondary > 0 ? result.stats.done : result.stats.done}（其中来自副源 ${result.stats.scoreFromSecondary}）`);
 console.log(`  开球时间回填      ${result.stats.timeUpdated}`);
+if (result.timeRejected?.length) {
+  console.log(`  ⚠️ 拒绝的时间改动  ${result.timeRejected.length}（已确认时间不容许 >6h 位移，除非真改期）`);
+  result.timeRejected.slice(0, 6).forEach(x =>
+    console.log(`      ${x.id}  ${x.from} → ${x.to}（${x.hours}h，源 ${x.source}）`)
+  );
+}
 console.log(`  跨轮次改期        ${result.stats.rescheduled}`);
+console.log(`  轮次修正          ${result.stats.roundFixed}（只改 r，id 不动）`);
 console.log(`  解除 tbd          ${result.stats.tbdCleared}`);
 console.log(`  标记改期(pp)      ${result.stats.pp}`);
 console.log(`  跳过进行中(不落库) ${result.stats.skippedLive}`);
 console.log(`  跳过比分不全的完赛事件 ${result.stats.skippedIncompleteScore}`);
 console.log(`  本地无对应场次    ${result.stats.noCounterpart}`);
 console.log(`  补丁总数          ${result.patches.size}`);
+// 有积压时本轮会自动放宽回看窗口（backfill），所以请求数会比平时多 —— 这里说清原因，
+// 否则看到「请求变多了」只会以为哪里跑漏了。
+if (result.staleTbd) {
+  console.log(`  ⚠️ 占位日已过仍 tbd ${result.staleTbd} 场 → 本轮自动放宽回看窗口（跑干净后自动归零）`);
+}
 
 // 这类事件此前会产出 { st:'done' } 的半套补丁 → 写盘校验失败 → 整批中止。
 // 现在改为单条跳过并在此列出，批量中止不再发生。

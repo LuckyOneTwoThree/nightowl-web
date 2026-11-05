@@ -38,6 +38,48 @@ const MIME = {
   '.m3u8': 'application/vnd.apple.mpegurl'
 };
 
+/**
+ * 「这场已经查过了」的判定：过了完赛时间且仍无比分的场次，本轮一定被查过
+ * （同步按联赛+日期拉取，这些日期都进了查询目标）。
+ * 记录它，是为了让单场详情能说出「最后一次检查在几点」。
+ */
+export function pendingMatchIds(list, now = Date.now()) {
+  const ids = [];
+  for (const m of list || []) {
+    if (!m || m.st !== 'sched' || m.tbd) continue;
+    const kick = ts(m.t);
+    if (!Number.isFinite(kick)) continue;
+    if (now > kick + MATCH_DURATION_MS) ids.push(m.id);
+  }
+  return ids;
+}
+
+/** 至少有一个上游请求成功才把待录场次记为「已检查」；零请求/全失败不动新鲜度。 */
+function hadSuccessfulRequest(result) {
+  return Object.values(result?.bySource || {}).some(info => (info.ok || 0) > 0);
+}
+
+/**
+ * 本轮「确实查过」的待录场次 id —— 唯一判定入口。
+ *
+ * 三个条件同时成立才算「查过」：
+ *   1. 本轮至少有一个上游请求成功（零请求 / 全失败 → 一条都不记）；
+ *   2. 该场次所属联赛**没有**报错（`result.errors[].league`）；
+ *   3. 作用域内：单场重查（`matchId`）只算那一场，绝不外溢到其它联赛的待录场次。
+ *
+ * 为什么抽成函数：这段判定此前在两条路径上各写一份，后台路径修好了、手动/前台路径没修，
+ * 于是「立即同步」与 `triggerSync` 会把请求失败的联赛也标成已检查 —— 数据说明里的
+ * 「最后一次检查在 HH:mm」在撒谎。宁可显示「没查过」，也不要谎报「查过且上游没有」，
+ * 这是本产品数据诚实承诺的底线。现在两条路径共用这一个入口，不会再分叉。
+ */
+export function checkedPendingIds(fixtures, result, { matchId = null, now = Date.now() } = {}) {
+  if (!hadSuccessfulRequest(result)) return [];
+  const failed = new Set((result?.errors || []).map(e => e?.league).filter(Boolean));
+  const scoped = matchId ? (fixtures || []).filter(m => m.id === matchId) : fixtures || [];
+  const checked = failed.size === 0 ? scoped : scoped.filter(m => !failed.has(m.l));
+  return pendingMatchIds(checked, now);
+}
+
 function sendJSON(res, status, obj) {
   const body = JSON.stringify(obj, null, 2);
   res.writeHead(status, {
@@ -78,6 +120,27 @@ async function serveStatic(pathname, res) {
     const st = await stat(filePath);
     if (st.isDirectory()) filePath = join(filePath, 'index.html');
   } catch {
+    // ⚠️ 带扩展名的请求**不能**回落 index.html。
+    //
+    // 旧 chunk 被替换后（升级 / 强制刷新前），浏览器请求 /assets/index-OLD.js 会拿到一段 HTML：
+    // <script type="module"> 解析 HTML 直接抛语法错误 → 白屏；而这个「HTML 当 JS」的错误响应
+    // 还会被上面 /assets/ 的 immutable 规则缓存**一年**，用户只能清缓存自救。
+    // 宁可 404，也不谎报 200。缓存头必须显式清掉（no-store），只换状态码不够 ——
+    // 部分 WebView / 本地代理仍会缓存这个错误响应。
+    const looksLikeFile =
+      /^\/(assets|crests|fonts)\//.test(rel) || extname(rel) !== '';
+    if (looksLikeFile) {
+      const body = JSON.stringify({ error: 'not found', path: pathname });
+      res.writeHead(404, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Length': Buffer.byteLength(body),
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'X-Content-Type-Options': 'nosniff'
+      });
+      res.end(body);
+      return;
+    }
+    // 无扩展名 → 前端路由，正常回落单页入口
     filePath = join(DIST, 'index.html');
   }
 
@@ -160,48 +223,12 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
     }
   };
 
-  /**
-   * 「这场已经查过了」的判定：过了完赛时间且仍无比分的场次，本轮一定被查过
-   * （同步按联赛+日期拉取，这些日期都进了查询目标）。
-   * 记录它，是为了让单场详情能说出「最后一次检查在几点」。
-   */
-  const pendingMatchIds = (list, now = Date.now()) => {
-    const ids = [];
-    for (const m of list || []) {
-      if (!m || m.st !== 'sched' || m.tbd) continue;
-      const kick = ts(m.t);
-      if (!Number.isFinite(kick)) continue;
-      if (now > kick + MATCH_DURATION_MS) ids.push(m.id);
-    }
-    return ids;
-  };
-  const recordPendingChecks = (list, now = Date.now()) => {
+  const recordPendingChecks = (ids, now = Date.now()) => {
     try {
-      const ids = pendingMatchIds(list, now);
-      if (ids.length) recordChecks(ids, now);
+      if (ids?.length) recordChecks(ids, now);
     } catch (err) {
       log.warn?.(`[checks] 记录失败（不影响同步）: ${err?.message || err}`);
     }
-  };
-  /** 至少有一个上游请求成功才把待录场次记为“已检查”；零请求/全失败不动新鲜度。 */
-  const hadSuccessfulRequest = result =>
-    Object.values(result?.bySource || {}).some(info => (info.ok || 0) > 0);
-
-  /**
-   * 本次「确实查过」的场次范围。
-   *
-   * 旧实现把 **全部** fixtures 交给 recordPendingChecks，于是：
-   *   · 单场重查 → 其它待录场次也被标成「刚检查过」；
-   *   · 某个联赛的请求失败 → 该联赛的场次同样被标成已检查。
-   * 结果是数据说明里的「最后一次检查在 HH:mm」在撒谎 —— 宁可显示「没查过」，
-   * 也不要谎报「查过且上游没有」，这是本产品数据诚实承诺的底线。
-   *
-   * errors 元素形如 { source, league, unit, message }，按 league 排除即可。
-   */
-  const checkedFixtures = (fixtures, result) => {
-    const failed = new Set((result?.errors || []).map(e => e?.league).filter(Boolean));
-    if (failed.size === 0) return fixtures;
-    return fixtures.filter(m => !failed.has(m.l));
   };
 
   /**
@@ -522,9 +549,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
             log
           });
           // 单场重查只记这一场：别的待录场次这次根本没查，不能一起标成「已检查」。
-          if (hadSuccessfulRequest(result)) {
-            recordPendingChecks(matchId ? fixtures.filter(m => m.id === matchId) : fixtures);
-          }
+          recordPendingChecks(checkedPendingIds(fixtures, result, { matchId }));
 
           let written = null;
           let nextFixtures = null;
@@ -688,7 +713,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
     let applied = false;
     let nextFixtures = fixtures;
     // 只记录「本次确实查到的联赛」的场次：某联赛请求失败时不该被标成已检查。
-    if (hadSuccessfulRequest(result)) recordPendingChecks(checkedFixtures(fixtures, result));
+    recordPendingChecks(checkedPendingIds(fixtures, result));
     if (result.patches.size > 0) {
       const { fixtures: next, changed } = applyPatches(fixtures, result.patches);
       const issues = validateFixtures(next);

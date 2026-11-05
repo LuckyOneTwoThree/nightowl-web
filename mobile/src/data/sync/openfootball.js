@@ -92,8 +92,21 @@ export async function fetchLeague(league, season = '2026-27', opts = {}) {
       homeScore: done ? String(ft[0]) : null,
       awayScore: done ? String(ft[1]) : null,
       source: id,
+      // round 提成一等字段：本源是唯一能给出权威轮次的源（格式固定 "Matchday N"），
+      // 留在 raw 里 planPatches 看不到，本地 26 场轮次错位就永远修不了。
+      round: parseRound(m.round),
       raw: { round: m.round, date: m.date, time: m.time }
     });
   }
   return out;
+}
+
+/** "Matchday 6" / 6 / "Round 6" → 6；无法解析返回 null（不猜） */
+export function parseRound(v) {
+  if (typeof v === 'number') return Number.isInteger(v) && v > 0 ? v : null;
+  if (typeof v !== 'string') return null;
+  const m = v.match(/(\d{1,3})\s*$/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isInteger(n) && n > 0 && n <= 60 ? n : null;
 }

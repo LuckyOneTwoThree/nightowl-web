@@ -119,6 +119,33 @@ export function activeSyncMonths(fixtures = [], nowTs = Date.now()) {
  */
 const TBD_EXPAND_DAYS = 3;
 
+/** 存在 stale tbd 时，自动把「tbd 展开闸门」放宽到这么多天（不直接加请求，只放开回看窗口） */
+const STALE_TBD_SWEEP_DAYS = 60;
+
+/**
+ * 占位日已过、却仍是 tbd 的场次 —— 「补查盲区」的判据。
+ *
+ * `activeSyncTargets` 里两条分支对这类场次**交集为空**：分支 A（已开球缺分）排除 tbd，
+ * 分支 B（tbd 展开）有 `t >= now - tbdFloorDays` 守卫，占位日一过就永不回看。
+ * 而外层 `add(t)` 无条件执行 —— 于是占位日照查、真实比赛日永不进 targets，
+ * 界面永远停在「待定」，而上游明明已经有比分。
+ */
+export function staleTbdMatches(fixtures = [], now = Date.now(), days = TBD_EXPAND_DAYS) {
+  const floor = now - Math.max(0, days) * 86400000;
+  return (fixtures || []).filter(m => {
+    if (!m || m.tbd !== true || m.st !== 'sched') return false;
+    const t = ts(m.t);
+    return Number.isFinite(t) && t < floor;
+  });
+}
+
+/** 只有存在 stale tbd 时才自动放宽回看窗口；干净时与旧行为完全一致（0 额外请求） */
+export function autoBackfillDays(fixtures = [], backfillDays = 0, now = Date.now()) {
+  const explicit = Math.max(0, Number(backfillDays) || 0);
+  if (explicit) return explicit;
+  return staleTbdMatches(fixtures, now).length ? STALE_TBD_SWEEP_DAYS : 0;
+}
+
 /**
  * 增量未同步精准目标：
  * 铁律：**已完赛（st === 'done' 且已有比分）的记录坚决不再重复同步**。
@@ -301,10 +328,12 @@ export function planPatches(merged, fixtures, conflicts = []) {
   const patches = new Map();
   const unmatched = [];
   const incompleteScore = [];
+  /** 被拒绝的大幅时间位移（副源想改已确认的时间）：暴露出来，不静默 */
+  const timeRejected = [];
   const stats = {
     done: 0, timeUpdated: 0, tbdCleared: 0, pp: 0,
     skippedLive: 0, noCounterpart: 0, scoreFromSecondary: 0,
-    skippedIncompleteScore: 0, rescheduled: 0
+    skippedIncompleteScore: 0, rescheduled: 0, roundFixed: 0, timeRejected: 0
   };
 
   // 按 (联赛, 主队-客队) 建索引，避免每次全表扫描
@@ -396,9 +425,27 @@ export function planPatches(merged, fixtures, conflicts = []) {
 
     /* 开球时间：**只信 kickoffTrusted 的源**（副源给的是当地墙钟，直接用会整体偏移） */
     if (e.kickoffTrusted && e.kickoff !== best.t) {
-      patch.t = e.kickoff;
-      stats.timeUpdated++;
-      if (best.tbd) stats.tbdCleared++;
+      /**
+       * 但「可信」不等于「可覆盖」：ESPN 当轮没查那一天时，簇里只剩 openfootball，
+       * 它的 date 会把**已由 ESPN 确认过**的时间改错（实测 FL-9-LOR-BRT 被推走 48h）。
+       * 规则：已确认（tbd !== true）的时间不接受 >6h 位移，除非真改期（canReschedule / pp）。
+       */
+      const CONFIRMED_TIME_SHIFT_MS = 6 * 3600000;
+      const confirmed = best.tbd !== true;
+      const shiftMs = Math.abs(ts(e.kickoff) - ts(best.t));
+      const bigShift = confirmed && Number.isFinite(shiftMs) && shiftMs > CONFIRMED_TIME_SHIFT_MS;
+      if (!bigShift || canReschedule || e.state === 'pp') {
+        patch.t = e.kickoff;
+        stats.timeUpdated++;
+        if (best.tbd) stats.tbdCleared++;
+      } else {
+        stats.timeRejected++;
+        timeRejected.push({
+          id: best.id, from: best.t, to: e.kickoff,
+          hours: Math.round(shiftMs / 3600000),
+          source: e.timeSource || e.sources?.[0] || 'unknown'
+        });
+      }
     }
 
     /* 状态 */
@@ -420,10 +467,19 @@ export function planPatches(merged, fixtures, conflicts = []) {
       if (!patch.t) stats.tbdCleared++;
     }
 
+    /**
+     * 轮次：只信给出合法轮次的源（openfootball 的 "Matchday N"）。
+     * 三条硬约束：唯一对阵、非改期匹配、**只改 r 绝不改 id**（id 是用户本地数据的主键）。
+     */
+    if (Number.isInteger(e.round) && e.round > 0 && e.round !== best.r && !canReschedule && cands.length === 1) {
+      patch.r = e.round;
+      stats.roundFixed++;
+    }
+
     if (Object.keys(patch).length) patches.set(best.id, patch);
   }
 
-  return { patches, stats, unmatched, conflicts, incompleteScore };
+  return { patches, stats, unmatched, conflicts, incompleteScore, timeRejected };
 }
 
 /* ------------------------------------------------------------------ */
@@ -481,8 +537,11 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
       targets.get(m.l).add(ymd);
     }
   } else {
-    // 默认常态增量同步：精准提取未同步完赛场次与近期 48 小时比赛的日期，已同步场次完全跳过
-    targets = activeSyncTargets(fixtures, Date.now(), { backfillDays });
+    // 默认常态增量同步：精准提取未同步完赛场次与近期 48 小时比赛的日期，已同步场次完全跳过。
+    // backfillDays 走 autoBackfillDays：只有存在「占位日已过仍 tbd」的积压时才自动放宽。
+    targets = activeSyncTargets(fixtures, Date.now(), {
+      backfillDays: autoBackfillDays(fixtures, backfillDays, Date.now())
+    });
     list = activeSyncMonths(fixtures);
     // UCL 淘汰赛接管：欧冠查询不依赖本地场次（抽签后才有对阵），直接扫本周比赛日
     if (leagues.includes('UCL')) {

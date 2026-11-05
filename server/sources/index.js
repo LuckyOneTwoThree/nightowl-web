@@ -135,6 +135,11 @@ function mergeCluster(list, rank, key, conflicts) {
   // 开球时间：只信 kickoffTrusted 的源
   const timePick = sorted.find(e => e.kickoffTrusted && e.kickoff) || null;
 
+  // 轮次：取**优先级最高且给出合法轮次**的源（目前只有 openfootball 提供）。
+  // 必须提到一等字段：planPatches 只遍历 merged，看不到适配器里的 raw.round ——
+  // 留在 raw 里等于永远修不了本地那 26 场轮次错位。
+  const roundPick = sorted.find(e => Number.isInteger(e.round) && e.round > 0) || null;
+
   // 状态：改期优先；其次取有比分依据的状态
   const postponed = sorted.some(e => e.state === 'pp');
   const live = sorted.some(e => e.state === 'live');
@@ -155,6 +160,8 @@ function mergeCluster(list, rank, key, conflicts) {
     awayScore: scorePick?.awayScore ?? null,
     scoreSource: scorePick?.source || null,
     timeSource: timePick?.source || null,
+    round: roundPick?.round ?? null,
+    roundSource: roundPick?.source || null,
     sources: sorted.map(e => e.source)
   };
 }

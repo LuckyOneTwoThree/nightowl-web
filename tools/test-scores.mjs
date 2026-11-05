@@ -12,8 +12,10 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { planPatches, applyPatches, validateFixtures, ALLOWED_ST, activeSyncTargets, uclWeeklyTargets, seasonMonths } from '../server/scores.js';
-import { createServer } from '../server/index.js';
+import { planPatches, applyPatches, validateFixtures, ALLOWED_ST, activeSyncTargets, uclWeeklyTargets, seasonMonths, staleTbdMatches, autoBackfillDays } from '../server/scores.js';
+import { createServer, checkedPendingIds, pendingMatchIds } from '../server/index.js';
+import { mergeEvents } from '../server/sources/index.js';
+import { parseRound } from '../server/sources/openfootball.js';
 import { loadRules } from '../server/proxy.js';
 import { freshness, mergeFixtures } from '../server/data-store.js';
 import { ts } from '../src/core/engine.js';
@@ -599,10 +601,211 @@ console.log('九、★ 内置快照与用户数据合并（升级后新场次必
   ok('脏条目（无 id）被丢弃', mergeFixtures(builtin, [{ id: null }, { foo: 1 }]).length === builtin.length);
 }
 
+/* ================================================================== */
+console.log('');
+console.log('十、★ 已检查场次的判定口径（两条同步路径必须共用同一入口）');
+{
+  // 固定时钟，不依赖当天快照：t 是北京墙钟无后缀，now 用 +08:00 显式给出
+  const NOW = Date.parse('2026-10-02T00:00:00+08:00');
+  const past = '2026-10-01T03:00';
+  const mk = (id, l, extra = {}) => ({ id, l, t: past, st: 'sched', h: 'H' + id, a: 'A' + id, ...extra });
+
+  const fx = [
+    mk('PL-P1', 'PL'),
+    mk('BL-P1', 'BL'),
+    mk('PL-P2', 'PL'),
+    mk('BL-TBD', 'BL', { tbd: true })   // 时间未定：不该被记为「查过」
+  ];
+
+  const allOk = { bySource: { espn: { ok: 3 } }, errors: [] };
+  const blFailed = {
+    bySource: { espn: { ok: 3 } },
+    errors: [{ source: 'espn', league: 'BL', unit: '20261001', message: '503' }]
+  };
+  const noRequest = { bySource: {}, errors: [] };
+  const allFailed = { bySource: { espn: { ok: 0 } }, errors: [] };
+
+  const ids = (fixtures, result, opts) => checkedPendingIds(fixtures, result, { now: NOW, ...opts }).sort();
+
+  // ① 无 matchId + 某联赛失败 → 该联赛场次不入账
+  ok('★ 联赛请求失败：该联赛场次不记为已检查',
+    JSON.stringify(ids(fx, blFailed)) === JSON.stringify(['PL-P1', 'PL-P2']),
+    JSON.stringify(ids(fx, blFailed)));
+
+  // ② 无 matchId + 全成功 → 全部待录场次入账（tbd 除外）
+  ok('全成功：待录场次全部入账', JSON.stringify(ids(fx, allOk)) === JSON.stringify(['BL-P1', 'PL-P1', 'PL-P2']),
+    JSON.stringify(ids(fx, allOk)));
+  ok('tbd 场次永不记为已检查', !ids(fx, allOk).includes('BL-TBD'), JSON.stringify(ids(fx, allOk)));
+
+  // ③ 有 matchId → 只记该场，不外溢到其它联赛
+  ok('★ 单场重查只记该场（不外溢）',
+    JSON.stringify(ids(fx, allOk, { matchId: 'PL-P1' })) === JSON.stringify(['PL-P1']),
+    JSON.stringify(ids(fx, allOk, { matchId: 'PL-P1' })));
+
+  // ④ 单场重查 + 该场联赛失败 → 一条都不记（确实没查到）
+  ok('单场重查但该联赛失败：不记为已检查',
+    ids(fx, blFailed, { matchId: 'BL-P1' }).length === 0,
+    JSON.stringify(ids(fx, blFailed, { matchId: 'BL-P1' })));
+
+  // ⑤ 零请求 / 全失败 → 不动新鲜度
+  ok('零请求：一条都不记', ids(fx, noRequest).length === 0, JSON.stringify(ids(fx, noRequest)));
+  ok('全部请求失败：一条都不记', ids(fx, allFailed).length === 0, JSON.stringify(ids(fx, allFailed)));
+
+  // ⑥ 时间边界：未到完赛时间的场次不算查过（NOW=10-02 00:00，本场 02:00 才结束）
+  const future = [{ id: 'PL-F', l: 'PL', t: '2026-10-01T23:30', st: 'sched', h: 'X', a: 'Y' }];
+  ok('未到完赛时间：不算查过', ids(future, allOk).length === 0, JSON.stringify(ids(future, allOk)));
+  ok('已完赛且有比分：不算待录（st=done）',
+    ids([{ id: 'PL-D', l: 'PL', t: past, st: 'done', sc: '1-0', h: 'X', a: 'Y' }], allOk).length === 0);
+
+  // ⑦ 与旧写法的对照：旧写法在「BL 失败 + 无 matchId」时会把 BL 也记进去
+  const legacy = pendingMatchIds(fx, NOW).sort();
+  ok('对照：旧口径确实会多记（本用例敏感度自检）',
+    legacy.includes('BL-P1') && !ids(fx, blFailed).includes('BL-P1'),
+    `legacy=${JSON.stringify(legacy)}`);
+}
+
+/* ================================================================== */
+console.log('');
+console.log('十一、★ stale tbd 补查盲区（占位日已过仍 tbd 必须能回看）');
+{
+  const NOW = Date.parse('2026-11-06T00:00:00+08:00');
+  const mk = (id, t, extra = {}) => ({ id, l: 'PD', t, st: 'sched', h: 'H' + id, a: 'A' + id, ...extra });
+
+  const fx = [
+    mk('FRESH', '2026-11-06T04:00', { tbd: true }),        // 占位日在未来：不算 stale
+    mk('STALE3', '2026-11-02T04:00', { tbd: true }),        // 已过 4 天
+    mk('STALE10', '2026-10-26T02:00', { tbd: true }),       // 已过 11 天
+    mk('DONE', '2026-11-02T04:00', { st: 'done', sc: '1-0' }), // 已完赛：不参与
+    mk('SCHED', '2026-10-26T02:00')                          // 非 tbd：不参与
+  ];
+
+  const stale = staleTbdMatches(fx, NOW).map(m => m.id).sort();
+  ok('★ 只挑出「占位日已过仍是 tbd」的场次',
+    JSON.stringify(stale) === JSON.stringify(['STALE10', 'STALE3']), JSON.stringify(stale));
+  // ⚠️ 不断言「恰好 12 场」——数据刷新后这个数字会变成 0，写死会让门禁无缘无故变红。
+  const realStale = staleTbdMatches(fixtures, Date.now());
+  ok('内置快照的命中项都确实是「tbd + 占位日已过」',
+    realStale.every(m => m.tbd === true && m.st === 'sched' && ts(m.t) < Date.now() - 3 * 86400000),
+    realStale.map(m => m.id).slice(0, 3).join('、'));
+  console.log(`     （当前内置快照 stale tbd：${realStale.length} 场，仅作观测，不作断言）`);
+
+  // 自动回填：有积压才放宽，干净时严格 0（与旧行为一致）
+  ok('★ 无积压时自动回填为 0（不加任何请求）', autoBackfillDays([fx[0], fx[3]], 0, NOW) === 0);
+  ok('★ 有积压时自动放宽窗口', autoBackfillDays(fx, 0, NOW) === 60, String(autoBackfillDays(fx, 0, NOW)));
+  ok('显式 backfill 优先于自动值', autoBackfillDays(fx, 7, NOW) === 7);
+  ok('内置快照按实际积压决定是否放宽',
+    autoBackfillDays(fixtures, 0, Date.now()) === (realStale.length ? 60 : 0),
+    `stale=${realStale.length}`);
+
+  // 真实效果：同一条 stale tbd，放宽后才能查到真实比赛日
+  const one = [mk('S1', '2026-10-26T02:00', { tbd: true })];
+  const tight = activeSyncTargets(one, NOW, { backfillDays: 0 });
+  const loose = activeSyncTargets(one, NOW, { backfillDays: autoBackfillDays(one, 0, NOW) });
+  const size = m => { let n = 0; for (const s of m.values()) n += s.size; return n; };
+  ok('★ 默认守卫只查占位日（盲区复现）', size(tight) === 1, `${size(tight)} 个日期`);
+  ok('★ 放宽后覆盖真实比赛日附近（盲区修复）', size(loose) === 7, `${size(loose)} 个日期`);
+  ok('放宽后仍包含占位日自身（不丢原有查询）', [...loose.get('PD')].length === size(loose));
+}
+
+/* ================================================================== */
+console.log('');
+console.log('十二、★ 轮次修正（patch.r 只能改 r，id 必须保持稳定主键）');
+{
+  const ev = {
+    league: 'PD',
+    homeId: 'RSO',
+    awayId: 'CEL',
+    kickoff: '2026-09-03T03:00',
+    kickoffTrusted: true,
+    state: 'done',
+    homeScore: '0',
+    awayScore: '0',
+    source: 'openfootball',
+    round: 6,
+    sources: ['openfootball']
+  };
+  const local = { id: 'PD-4-RSO-CEL', l: 'PD', r: 4, t: '2026-09-03T03:00', st: 'done', sc: '0-0', h: 'RSO', a: 'CEL' };
+
+  const r1 = planPatches([ev], [local]);
+  ok('★ 轮次不一致时写入 patch.r', r1.patches.get(local.id)?.r === 6,
+    JSON.stringify([...r1.patches]));
+  ok('轮次修正是独立统计项', r1.stats.roundFixed === 1, String(r1.stats.roundFixed));
+
+  // ⚠️ 核心：id 不能被改
+  const applied = applyPatches([local], r1.patches).fixtures[0];
+  ok('★ 修正后 id 原样保留（用户补看/线路记忆以 id 为键）',
+    applied.id === 'PD-4-RSO-CEL', applied.id);
+  ok('修正后 r 已是权威值', applied.r === 6, String(applied.r));
+
+  // 轮次一致时不产生多余补丁
+  const r2 = planPatches([ev], [{ ...local, r: 6 }]);
+  ok('轮次一致时不写补丁', !r2.patches.get(local.id)?.r, JSON.stringify([...r2.patches]));
+
+  // 同对阵多候选 → 分不清归属，不改
+  const r3 = planPatches([ev], [local, { ...local, id: 'PD-4-RSO-CEL-b', t: '2026-09-04T03:00' }]);
+  ok('★ 同对阵多候选：拒绝改轮次', !r3.patches.get(local.id)?.r, JSON.stringify([...r3.patches]));
+
+  // 改期匹配（超出正常窗口）→ 交人工，不改
+  const r4 = planPatches([{ ...ev, kickoff: '2026-10-21T18:00' }], [local]);
+  ok('★ 改期场次：拒绝改轮次', !r4.patches.get(local.id)?.r,
+    `rescheduled=${r4.stats.rescheduled} ${JSON.stringify([...r4.patches])}`);
+
+  // 解析器："Matchday 6" / 6 / 脏值
+  ok('parseRound 解析 "Matchday 6"', parseRound('Matchday 6') === 6, String(parseRound('Matchday 6')));
+  ok('parseRound 解析数字', parseRound(6) === 6);
+  ok('parseRound 拒绝脏值', parseRound('Matchday') === null && parseRound(0) === null && parseRound('x9') === 9,
+    `${parseRound('Matchday')} ${parseRound(0)} ${parseRound('x9')}`);
+
+  // 合并层必须把 round 提到一等字段（否则 planPatches 根本看不到）
+  const merged = mergeEvents([
+    { ...ev, source: 'espn', round: undefined, sources: ['espn'] },
+    ev
+  ]);
+  ok('★ mergeEvents 把 round 提到一等字段', merged.merged[0]?.round === 6,
+    JSON.stringify(merged.merged[0]?.round));
+  ok('mergeEvents 记下来源', merged.merged[0]?.roundSource === 'openfootball',
+    String(merged.merged[0]?.roundSource));
+}
+
+/* ================================================================== */
+console.log('');
+console.log('十三、★ 已确认的开球时间不接受大位移（副源不得改写 ESPN 已核实的日期）');
+{
+  const evBase = {
+    league: 'FL', homeId: 'LOR', awayId: 'BRT',
+    kickoffTrusted: true, state: 'done',
+    homeScore: '0', awayScore: '2', source: 'openfootball', sources: ['openfootball']
+  };
+  // ESPN 已确认：11-03 03:45（= 11-02 19:45Z）；副源错说 11-01 03:45
+  const confirmed = { id: 'FL-9-LOR-BRT', l: 'FL', r: 9, t: '2026-11-03T03:45', tbd: false, st: 'done', sc: '0-2', h: 'LOR', a: 'BRT' };
+
+  const r1 = planPatches([{ ...evBase, kickoff: '2026-11-01T03:45' }], [confirmed]);
+  ok('★ 已确认时间被副源拉走 2 天：拒绝改 t', !r1.patches.get(confirmed.id)?.t,
+    JSON.stringify([...r1.patches]));
+  ok('拒绝时计数并留证', r1.stats.timeRejected === 1 && r1.timeRejected[0]?.hours === 48,
+    JSON.stringify(r1.timeRejected));
+
+  // 同一天内的小幅修正（≤6h）应当被接受
+  const r2 = planPatches([{ ...evBase, kickoff: '2026-11-03T05:30' }], [confirmed]);
+  ok('小幅修正（2.5h）照常接受', r2.patches.get(confirmed.id)?.t === '2026-11-03T05:30',
+    JSON.stringify([...r2.patches]));
+
+  // 占位时间（tbd）本来就是假的，允许改到任何真实时间
+  const placeholder = { ...confirmed, tbd: true, t: '2026-11-02T04:00', r: 10 };
+  const r3 = planPatches([{ ...evBase, state: 'sched', homeScore: null, awayScore: null, kickoff: '2026-11-01T00:15' }], [placeholder]);
+  ok('★ tbd 占位时间可改任意幅度', r3.patches.get(placeholder.id)?.t === '2026-11-01T00:15',
+    JSON.stringify([...r3.patches]));
+
+  // 真改期（pp）：窗口内的改期必须放行（本地 sched 11-08 → 源说延期到 11-10，位移 >6h）
+  const upcoming = { ...confirmed, t: '2026-11-08T03:45', st: 'sched', sc: undefined, r: 12 };
+  const r4 = planPatches([{ ...evBase, state: 'pp', homeScore: null, awayScore: null, kickoff: '2026-11-10T20:00' }], [upcoming]);
+  ok('★ 延期（pp）改期照常放行', r4.patches.get(upcoming.id)?.t === '2026-11-10T20:00',
+    `rescheduled=${r4.stats.rescheduled} ${JSON.stringify([...r4.patches])}`);
+}
+
 console.log('');
 console.log('────────────────────────────────────────────────────');
-console.log(`通过 ${pass} 项，失败 ${fail} 项`);
-if (fail > 0) {
+console.log(`通过 ${pass} 项，失败 ${fail} 项`);if (fail > 0) {
   console.log('\n失败项：');
   failures.forEach(f => console.log(`  · ${f}`));
   process.exit(1);

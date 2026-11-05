@@ -140,6 +140,9 @@ function mergeCluster(list, rank, key, conflicts) {
   }
 
   const timePick = sorted.find(e => e.kickoffTrusted && e.kickoff) || null;
+  // 轮次：取优先级最高且给出合法轮次的源（目前只有 openfootball）。
+  // 必须提到一等字段 —— planPatches 只遍历 merged，看不到适配器里的 raw.round。
+  const roundPick = sorted.find(e => Number.isInteger(e.round) && e.round > 0) || null;
   const postponed = sorted.some(e => e.state === 'pp');
   const live = sorted.some(e => e.state === 'live');
   let state;
@@ -159,6 +162,8 @@ function mergeCluster(list, rank, key, conflicts) {
     awayScore: scorePick?.awayScore ?? null,
     scoreSource: scorePick?.source || null,
     timeSource: timePick?.source || null,
+    round: roundPick?.round ?? null,
+    roundSource: roundPick?.source || null,
     sources: sorted.map(e => e.source)
   };
 }

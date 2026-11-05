@@ -113,6 +113,44 @@ export function activeSyncMonths(fixtures = [], nowTs = Date.now()) {
  */
 const TBD_EXPAND_DAYS = 3;
 
+/** 存在 stale tbd 时，自动把「tbd 展开闸门」放宽到这么多天（不直接加请求，只放开回看窗口） */
+const STALE_TBD_SWEEP_DAYS = 60;
+
+/**
+ * 占位日已过、却仍是 tbd 的场次 —— 「补查盲区」的判据。
+ *
+ * 为什么需要单独一个函数：`activeSyncTargets` 里两条分支对这类场次**交集为空**：
+ *   · 分支 A（已开球缺分）显式排除 tbd；
+ *   · 分支 B（tbd 展开）有 `t >= now - tbdFloorDays` 守卫，占位日一过就永不回看。
+ * 而外层 `add(t)` 是无条件执行的，于是**占位日照查、真实比赛日永不进 targets** ——
+ * 界面就永远停在「待定」，而上游明明已经有比分。
+ *
+ * 实测（2026-11-05 快照）：PD-10 / PD-11 共 12 场，占位日已过 3–10 天，
+ * ESPN 早就有完赛比分；用户数据里它们已经是 done（同步是工作的），
+ * 只有**内置快照**还停在 tbd —— 全新安装的用户会看到 12 场「待定」。
+ */
+export function staleTbdMatches(fixtures = [], now = Date.now(), days = TBD_EXPAND_DAYS) {
+  const floor = now - Math.max(0, days) * 86400000;
+  return (fixtures || []).filter(m => {
+    if (!m || m.tbd !== true || m.st !== 'sched') return false;
+    const t = ts(m.t);
+    return Number.isFinite(t) && t < floor;
+  });
+}
+
+/**
+ * 本轮实际使用的回填天数。
+ *
+ * 只有**存在 stale tbd** 时才自动放宽：干净时额外开销为 0（与旧行为完全一致），
+ * 有积压时才付那 14 个日期请求。放宽本身不产生请求 —— 它只是放开
+ * 「哪些 tbd 轮次允许 ±3 展开」的闸门，多查几天由实际存在的 tbd 决定，清掉后自动归零。
+ */
+export function autoBackfillDays(fixtures = [], backfillDays = 0, now = Date.now()) {
+  const explicit = Math.max(0, Number(backfillDays) || 0);
+  if (explicit) return explicit;
+  return staleTbdMatches(fixtures, now).length ? STALE_TBD_SWEEP_DAYS : 0;
+}
+
 /**
  * 增量未同步精准目标：
  * 铁律：**已完赛（st === 'done' 且已有比分）的记录坚决不再重复同步**。
@@ -246,10 +284,12 @@ export function planPatches(merged, fixtures, conflicts = []) {
   const patches = new Map();
   const unmatched = [];
   const incompleteScore = [];
+  /** 被拒绝的大幅时间位移（副源想改已确认的时间）：暴露出来，不静默 */
+  const timeRejected = [];
   const stats = {
     done: 0, timeUpdated: 0, tbdCleared: 0, pp: 0,
     skippedLive: 0, noCounterpart: 0, scoreFromSecondary: 0,
-    skippedIncompleteScore: 0, rescheduled: 0
+    skippedIncompleteScore: 0, rescheduled: 0, roundFixed: 0, timeRejected: 0
   };
 
   // 按 (联赛, 主队-客队) 建索引，避免每次全表扫描
@@ -341,9 +381,40 @@ export function planPatches(merged, fixtures, conflicts = []) {
 
     /* 开球时间：**只信 kickoffTrusted 的源**（副源给的是当地墙钟，直接用会整体偏移） */
     if (e.kickoffTrusted && e.kickoff !== best.t) {
-      patch.t = e.kickoff;
-      stats.timeUpdated++;
-      if (best.tbd) stats.tbdCleared++;
+      /**
+       * 但「可信」不等于「可覆盖」。
+       *
+       * 实测（2026-11-05 写盘复现）：ESPN 当轮没查那一天时，簇里只剩 openfootball，
+       * 它的 date 会把**已经由 ESPN 确认过**的时间改掉，而且改错：
+       *   FL-9-LOR-BRT  11-03 03:45（ESPN: 11-02 19:45Z ✓）→ 11-01 03:45（副源，✗ 差 2 天）
+       *   FL-9-OL-ANG   11-02 00:15（ESPN: 11-01 16:15Z ✓）→ 11-01 03:45（副源，✗ 差 21 小时）
+       * 这两场都是 `tbd: false` 的已确认时间，被一次性推错两天 —— 而且 done 场次
+       * `activeSyncTargets` 直接跳过，错了也不会自愈。
+       *
+       * 规则：**已确认**（tbd !== true）的时间不接受超过 6 小时的位移，
+       * 除非这是真正的改期（canReschedule / state === 'pp'）—— 那些本来就要动日期。
+       * 占位时间（tbd === true）不受此限，因为它们本来就不是真实开球时间。
+       */
+      const CONFIRMED_TIME_SHIFT_MS = 6 * 3600000;
+      const confirmed = best.tbd !== true;
+      const shiftMs = Math.abs(ts(e.kickoff) - ts(best.t));
+      const bigShift = confirmed && Number.isFinite(shiftMs) && shiftMs > CONFIRMED_TIME_SHIFT_MS;
+      const allowed = !bigShift || canReschedule || e.state === 'pp';
+      if (allowed) {
+        patch.t = e.kickoff;
+        stats.timeUpdated++;
+        if (best.tbd) stats.tbdCleared++;
+      } else {
+        // 不静默：记数并留给日志，否则「时间没更新」永远查不出原因
+        stats.timeRejected++;
+        timeRejected.push({
+          id: best.id,
+          from: best.t,
+          to: e.kickoff,
+          hours: Math.round(shiftMs / 3600000),
+          source: e.timeSource || e.sources?.[0] || 'unknown'
+        });
+      }
     }
 
     /* 状态 */
@@ -365,10 +436,29 @@ export function planPatches(merged, fixtures, conflicts = []) {
       if (!patch.t) stats.tbdCleared++;
     }
 
+    /**
+     * 轮次：只信**给出合法轮次**的源（当前只有 openfootball，格式 "Matchday N"）。
+     *
+     * 为什么必须真修：本地 26 场 PD 的 r 与权威源不一致（全在 R4–R7，呈中段编号置换），
+     * 而 planPatches 此前从不写 r —— 所以这个错误**不会自愈**，同步跑多少次都还是错的。
+     *
+     * 三条硬约束（缺一不可）：
+     *   1. 唯一对阵：cands.length === 1 —— 同对阵多候选时分不清是哪一场的轮次；
+     *   2. 非改期匹配：canReschedule 为真说明两边日期差已超正常窗口，
+     *      此时「轮次不同」可能只是改期的副作用（PD-7-LEV-ATH 就是「合法改期 + 编号错位」叠加），
+     *      交给人工判断，脚本不擅自改；
+     *   3. **只改 r，绝不改 id** —— id 是稳定主键，用户本地的补看清单 / 线路记忆 / ICS
+     *      全以它为键，改 id 会让历史数据全量孤立失效。
+     */
+    if (Number.isInteger(e.round) && e.round > 0 && e.round !== best.r && !canReschedule && cands.length === 1) {
+      patch.r = e.round;
+      stats.roundFixed++;
+    }
+
     if (Object.keys(patch).length) patches.set(best.id, patch);
   }
 
-  return { patches, stats, unmatched, conflicts, incompleteScore };
+  return { patches, stats, unmatched, conflicts, incompleteScore, timeRejected };
 }
 
 /* ------------------------------------------------------------------ */
@@ -447,8 +537,12 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
       targets.get(m.l).add(ymd);
     }
   } else {
-    // 默认常态增量同步：精准提取未同步完赛场次与近期 48 小时比赛的日期，已同步场次完全跳过
-    targets = activeSyncTargets(fixtures, Date.now(), { backfillDays });
+    // 默认常态增量同步：精准提取未同步完赛场次与近期 48 小时比赛的日期，已同步场次完全跳过。
+    // backfillDays 走 autoBackfillDays：只有存在「占位日已过仍 tbd」的积压时才自动放宽，
+    // 否则与旧行为完全一致（0 额外请求）。
+    targets = activeSyncTargets(fixtures, Date.now(), {
+      backfillDays: autoBackfillDays(fixtures, backfillDays, Date.now())
+    });
     list = activeSyncMonths(fixtures);
     // UCL 淘汰赛接管：欧冠查询不依赖本地场次（抽签后才有对阵），直接扫本周比赛日
     if (leagues.includes('UCL')) {
@@ -462,16 +556,18 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
   });
 
   const { merged, conflicts } = mergeEvents(events, order);
-  const { patches, stats, unmatched, incompleteScore } = planPatches(merged, fixtures, conflicts);
+  const { patches, stats, unmatched, incompleteScore, timeRejected } = planPatches(merged, fixtures, conflicts);
   const attempted = Object.values(bySource || {}).some(info => (info.requests || 0) > 0);
 
   return {
-    patches, merged, conflicts, unmatched, incompleteScore,
+    patches, merged, conflicts, unmatched, incompleteScore, timeRejected,
     bySource, errors,
     attempted,
     stats,
     months: list,
     targets,
+    // 占位日已过仍是 tbd 的场次数：>0 说明本轮自动放宽了回看窗口（请求会变多）
+    staleTbd: staleTbdMatches(fixtures, Date.now()).length,
     sources: order
   };
 }
