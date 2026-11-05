@@ -25,6 +25,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          # Release 说明由 git log 生成，需要上一个 tag 才算得出区间 —— 浅克隆拿不到
+          fetch-depth: 0
 
       - name: Setup Node 20
         uses: actions/setup-node@v5
@@ -90,6 +93,32 @@ jobs:
             release/*.blockmap
           if-no-files-found: error
 
+      # ⚠️ 不能把版本号与更新内容硬编码在 body 里：v0.1.49 那次之后，
+      #    下一个 tag 发出去仍会写「本次更新（v0.1.49）」+ 上一版的功能列表，
+      #    发布页在撒谎（与 P0 是同一类问题）。版本取 tag，内容取上一个 tag 以来的提交。
+      - name: Collect release notes
+        if: startsWith(github.ref, 'refs/tags/')
+        id: notes
+        shell: bash
+        run: |
+          CUR="${GITHUB_REF_NAME}"
+          PREV="$(git describe --tags --abbrev=0 "${CUR}^" 2>/dev/null || true)"
+          if [ -n "$PREV" ]; then
+            RANGE="${PREV}..${CUR}"
+            HEAD_LINE="自 ${PREV} 起的变更："
+          else
+            RANGE="-20"
+            HEAD_LINE="近期变更："
+          fi
+          {
+            echo "notes<<__NOTES_EOF__"
+            echo "${HEAD_LINE}"
+            echo ""
+            git log --no-merges --pretty=format:'- %s' "${RANGE}" | head -40
+            echo ""
+            echo "__NOTES_EOF__"
+          } >> "$GITHUB_OUTPUT"
+
       # tag 触发时把安装包与自动更新元数据发布成 **GitHub Release**：
       # Artifact 只有登录且有权的人能下载，Release 附件任何人（免登录）都能下 ——
       # electron-updater 依赖 latest.yml 比对版本并拉取更新包与差量 blockmap。
@@ -102,33 +131,14 @@ jobs:
             release/latest.yml
             release/*.blockmap
           body: |
-            ## 夜猫看台 · Windows / macOS 安装包
+            ## 夜猫看台 · ${{ github.ref_name }} · Windows / macOS 安装包
 
-            ### 本次更新（v0.1.49）· 视觉与交互收敛
-            自 v0.1.48 起，围绕「少盒子、强层级、安静表面」做了一轮全界面 UI 审查与修复，不改变算法和数据口径。
+            ### 本次更新
 
-            - **今晚**
-              - 同开球展开后左栏整体滚动，Hero 不再被压缩或截断；展开列表自身不产生第二层滚动
-              - `展示中` 行改用 inset ring，描边不再被滚动容器裁掉
-              - Hero 去掉重复睡眠数字、空能量条与冗余提示；决策条收敛为「结论 + 结束 / 睡眠代价 / 同夜替代」
-              - 长队名最多两行完整显示，不再只剩省略号
-            - **设置 / 首次引导**
-              - 球队 Tile、联赛 Chip、Segmented 去边框，未选中不再满屏描边；选中只保留柔金底与 inset ring
-              - 设置与引导共用同一套选择器；引导第 2 步焦点落到首个联赛选项
-            - **本周 / 赛程 / 积分榜**
-              - 周预算卡与三段 Tab 去边框；赛程搜索、日期导航、筛选与日期条统一为无边框表面
-              - 积分榜「共 N 队」改为表格外 footer，不再遮住最后一行
-            - **右栏与终场**
-              - 官方平台、官方集锦、官方全场回放统一为轻量外链；终场回顾/错误态改安静表面
-            - **手机端**
-              - 同步暗色线框 token；Card/Chip/Segmented/Button/球队选择器完成代码层 parity
-            - **无障碍**
-              - 页面补唯一 `h1` 与主视图 `h2`；同开球展开按钮补 `aria-controls`，active 行补 `aria-current`
-            - **验证**
-              - 离线套件 1110/1110、真实 dist 渲染冒烟 81/81、对比度 32/32
-              - 布局 1120 / 1366 / 1440 × macOS/Windows 两套边框均无横向溢出
+            ${{ steps.notes.outputs.notes }}
 
             > 手机端 APK 不随桌面 Release 自动上传；如需 Android 安装包，请使用 EAS 预览构建。桌面与手机端各自保存本地数据，互不覆盖。
+
 
             ### 下载
             - **Windows x64**：`NightOwl-Terrace-Setup-*.exe`
