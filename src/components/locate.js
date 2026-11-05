@@ -22,19 +22,34 @@ export function locateSection(id, { focus = false } = {}) {
   const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
   target.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
 
-  if (flashEl && flashEl !== target) flashEl.classList.remove('locate-focus-flash');
-  target.classList.remove('locate-focus-flash');
-  // 强制回流，让连续点击也能重新触发高亮
-  void target.offsetWidth;
-  target.classList.add('locate-focus-flash');
-  window.clearTimeout(flashTimer);
-  flashEl = target;
-  flashTimer = window.setTimeout(() => {
-    target.classList.remove('locate-focus-flash');
-    if (flashEl === target) flashEl = null;
-  }, 1100);
+  /**
+   * 高亮与焦点放到下一个宏任务里做。
+   *
+   * 点击这些入口往往同时改 state（选中比赛、展开折叠区），同步执行时拿到的可能
+   * 是马上要被替换掉的节点。React 18 的状态更新是微任务，宏任务必然落在提交之后，
+   * 此时重新 getElementById 拿到的才是最终节点。
+   *
+   * 为什么不用 requestAnimationFrame：隐藏窗口（CI 的 check:render 就是）不跑 rAF，
+   * 反馈会彻底消失，且这种消失只会出现在 CI 里、本地看不见。
+   */
+  const applyFeedback = () => {
+    const node = document.getElementById(id);
+    if (!node) return;
+    if (flashEl && flashEl !== node) flashEl.classList.remove('locate-focus-flash');
+    node.classList.remove('locate-focus-flash');
+    // 强制回流，让连续点击也能重新触发高亮
+    void node.offsetWidth;
+    node.classList.add('locate-focus-flash');
+    window.clearTimeout(flashTimer);
+    flashEl = node;
+    flashTimer = window.setTimeout(() => {
+      node.classList.remove('locate-focus-flash');
+      if (flashEl === node) flashEl = null;
+    }, 1100);
 
-  if (focus && target.hasAttribute('tabindex') && target.getBoundingClientRect().height > 0) {
-    target.focus({ preventScroll: true });
-  }
+    if (focus && node.hasAttribute('tabindex') && node.getBoundingClientRect().height > 0) {
+      node.focus({ preventScroll: true });
+    }
+  };
+  window.setTimeout(applyFeedback, 0);
 }

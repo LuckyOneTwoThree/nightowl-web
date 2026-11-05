@@ -38,6 +38,7 @@ const futureFixture = repoFixtures.find(
 );
 let pass = 0;
 let fail = 0;
+let skipped = 0;
 
 function ok(name, cond, detail = '') {
   if (cond) {
@@ -47,6 +48,19 @@ function ok(name, cond, detail = '') {
     fail++;
     console.log(`  ❌ ${name}${detail ? ` — ${detail}` : ''}`);
   }
+}
+
+/**
+ * 明确跳过，而不是判失败。
+ *
+ * 有些断言依赖「今晚恰好有比赛 / 恰好有同开球场次」这类数据形态。真实快照
+ * 每天在变（11-05 上午刷新后，今晚没有场次），用失败表达「场景不存在」会让
+ * 门禁变成看日子过活 —— 而一旦养成「今天红了明天可能绿」的习惯，
+ * 真回归就没人看了。跳过必须打印出来并在汇总里计数，不能被当成通过。
+ */
+function skip(name, reason) {
+  skipped++;
+  console.log(`  ⏭ ${name} — 跳过：${reason}`);
 }
 
 function waitLoad(win, url) {
@@ -165,11 +179,15 @@ app.whenReady().then(async () => {
         return { count: nodes.length, bad: bad.length, mutedRgb, sample: bad[0] ? getComputedStyle(bad[0]).color : null };
       })()
     `);
-    ok(
-      '★ 列表行指数不用强调色',
-      indexTone.count >= 1 && indexTone.bad === 0,
-      `弱化 ${indexTone.count} 处，异常 ${indexTone.bad} 处（${indexTone.sample} ≠ ${indexTone.mutedRgb}）`
-    );
+    if (indexTone.count === 0) {
+      skip('★ 列表行指数不用强调色', '当前视图没有带指数的列表行（今晚无场次）');
+    } else {
+      ok(
+        '★ 列表行指数不用强调色',
+        indexTone.bad === 0,
+        `弱化 ${indexTone.count} 处，异常 ${indexTone.bad} 处（${indexTone.sample} ≠ ${indexTone.mutedRgb}）`
+      );
+    }
 
     /* 同开球面板（P1-3）：默认只留一行摘要，展开才逐条铺开。
        否则欧冠整轮 7 场同开时会吃掉近 500px，把 Hero 和赛程列表一起挤死。 */
@@ -186,12 +204,15 @@ app.whenReady().then(async () => {
         };
       })()
     `);
-    ok(
-      '★ 同开球默认收起为一行摘要',
-      !kickoffPanel.exists ||
-        (kickoffPanel.h <= 80 && kickoffPanel.expanded === 'false'),
-      JSON.stringify(kickoffPanel)
-    );
+    if (!kickoffPanel.exists) {
+      skip('★ 同开球默认收起为一行摘要', '今晚没有同开球场次');
+    } else {
+      ok(
+        '★ 同开球默认收起为一行摘要',
+        kickoffPanel.h <= 80 && kickoffPanel.expanded === 'false',
+        JSON.stringify(kickoffPanel)
+      );
+    }
 
     const kickoffOpen = await win.webContents.executeJavaScript(`
       (() => {
@@ -222,31 +243,39 @@ app.whenReady().then(async () => {
         };
       })()
     `);
-    ok(
-      '★ 展开后同开球逐条可比',
-      !kickoffOpen || (kickoffAfter.h > 42 && kickoffAfter.expanded === 'true'),
-      JSON.stringify(kickoffAfter)
-    );
-    ok(
-      '★ 展开同开球不压缩/截断 Hero',
-      !kickoffOpen ||
-        (Math.abs((kickoffAfter.heroH || 0) - (kickoffPanel.heroH || 0)) <= 2 &&
-          kickoffAfter.heroScroll <= kickoffAfter.heroClient + 1),
-      JSON.stringify({ before: kickoffPanel.heroH, after: kickoffAfter.heroH, scroll: kickoffAfter.heroScroll, client: kickoffAfter.heroClient })
-    );
-    ok(
-      '★ 同开球展开列表由左栏整体滚动，面板自身不裁切',
-      !kickoffOpen || kickoffAfter.panelScroll <= kickoffAfter.panelClient + 1,
-      JSON.stringify({ scroll: kickoffAfter.panelScroll, client: kickoffAfter.panelClient })
-    );
-    ok(
-      '★ 同开球展开按钮关联列表且 active 行有 aria-current',
-      !kickoffOpen ||
-        (kickoffAfter.ariaControls === 'same-kickoff-list' &&
+    if (!kickoffOpen || !kickoffAfter) {
+      // kickoffAfter 为 null 时（面板不存在）原代码在 detail 参数里直接读
+      // kickoffAfter.heroH —— 未捕获的 TypeError 会把整轮渲染冒烟打成「执行失败」，
+      // 后面 60 多项一条都跑不到。
+      skip('★ 展开后同开球逐条可比', '没有可展开的同开球面板');
+      skip('★ 展开同开球不压缩/截断 Hero', '没有可展开的同开球面板');
+      skip('★ 同开球展开列表由左栏整体滚动，面板自身不裁切', '没有可展开的同开球面板');
+      skip('★ 同开球展开按钮关联列表且 active 行有 aria-current', '没有可展开的同开球面板');
+    } else {
+      ok(
+        '★ 展开后同开球逐条可比',
+        kickoffAfter.h > 42 && kickoffAfter.expanded === 'true',
+        JSON.stringify(kickoffAfter)
+      );
+      ok(
+        '★ 展开同开球不压缩/截断 Hero',
+        Math.abs((kickoffAfter.heroH || 0) - (kickoffPanel.heroH || 0)) <= 2 &&
+          kickoffAfter.heroScroll <= kickoffAfter.heroClient + 1,
+        JSON.stringify({ before: kickoffPanel.heroH, after: kickoffAfter.heroH, scroll: kickoffAfter.heroScroll, client: kickoffAfter.heroClient })
+      );
+      ok(
+        '★ 同开球展开列表由左栏整体滚动，面板自身不裁切',
+        kickoffAfter.panelScroll <= kickoffAfter.panelClient + 1,
+        JSON.stringify({ scroll: kickoffAfter.panelScroll, client: kickoffAfter.panelClient })
+      );
+      ok(
+        '★ 同开球展开按钮关联列表且 active 行有 aria-current',
+        kickoffAfter.ariaControls === 'same-kickoff-list' &&
           kickoffAfter.listId === 'same-kickoff-list' &&
-          kickoffAfter.activeCurrent),
-      JSON.stringify({ controls: kickoffAfter.ariaControls, id: kickoffAfter.listId, current: kickoffAfter.activeCurrent })
-    );
+          kickoffAfter.activeCurrent,
+        JSON.stringify({ controls: kickoffAfter.ariaControls, id: kickoffAfter.listId, current: kickoffAfter.activeCurrent })
+      );
+    }
 
     // 收回来，避免影响后续左栏高度相关的断言
     await win.webContents.executeJavaScript(`
@@ -347,7 +376,10 @@ app.whenReady().then(async () => {
        scrollIntoView 不会产生位移 —— 必须靠高亮 + 焦点给出反馈。 */
     const heroAction = await win.webContents.executeJavaScript(`
       (() => {
-        const hero = document.querySelector('main > section');
+        // 必须限定到 HeroCard 本身。用 'main > section' 会先匹配到决策条，
+        // 而决策条里也有「查看赛前情报」——它只负责选中比赛、不做页内定位，
+        // 于是断言测的其实是一个不相干的按钮（实测 scrollIntoView 调用 0 次）。
+        const hero = document.querySelector('[data-hero-card]');
         const buttons = [...(hero?.querySelectorAll('button') || [])];
         const btn = buttons.find(b =>
           ['查看赛前情报', '查看直播线路', '查看赛后回顾', '进入直播间'].includes(
@@ -370,14 +402,21 @@ app.whenReady().then(async () => {
       (() => {
         const el = document.getElementById(${JSON.stringify(heroAction.target)});
         return {
+          elExists: !!el,
           hasFlash: el?.classList.contains('locate-focus-flash') || false,
           focused: document.activeElement === el
         };
       })()
     `);
-    ok('★ 已选中 Hero 的主按钮可直达当前状态对应区块',
-      heroAction.clicked && heroActionFeedback.hasFlash && heroActionFeedback.focused,
-      JSON.stringify({ action: heroAction, feedback: heroActionFeedback }));
+    if (!heroAction.clicked || !heroActionFeedback.elExists) {
+      // 区块没渲染（例如该场次没有情报区）不是交互失效 —— 但也不能静静通过。
+      skip('★ 已选中 Hero 的主按钮可直达当前状态对应区块',
+        `目标区块 ${heroAction.target} 未渲染`);
+    } else {
+      ok('★ 已选中 Hero 的主按钮可直达当前状态对应区块',
+        heroActionFeedback.hasFlash && heroActionFeedback.focused,
+        JSON.stringify({ action: heroAction, feedback: heroActionFeedback }));
+    }
     await sleep(1100);
 
     // 固定切到未来场次：当前时刻 Hero 可能正好是直播场，直播态没有“情报/查看线路”入口。
@@ -1419,6 +1458,12 @@ app.whenReady().then(async () => {
     };
     await switchView('本周规划');
     await switchView('今晚观赛');
+    if (!scrollSet.ok) {
+      // 列表不存在或内容不足一屏（今晚场次少时 max < 120）→ 没有可复位的滚动位置。
+      // 这不是「切视图丢了滚动」，但也不该静静通过。
+      skip('★ 切走视图再切回保留左栏滚动位置',
+        scrollSet.max === undefined ? '左栏列表未渲染' : `列表可滚动量只有 ${scrollSet.max}px`);
+    } else {
     const scrollRestored = await win.webContents.executeJavaScript(`
       (() => {
         // 左栏赛程列表：TonightView 里唯一的 space-y-0.5 + overflow-y-auto 容器
@@ -1432,9 +1477,10 @@ app.whenReady().then(async () => {
     `);
     ok(
       '★ 切走视图再切回保留左栏滚动位置',
-      scrollSet.ok && scrollRestored != null && Math.abs(scrollRestored - scrollSet.top) <= 2,
+      scrollRestored != null && Math.abs(scrollRestored - scrollSet.top) <= 2,
       JSON.stringify({ set: scrollSet, restored: scrollRestored })
     );
+    }
 
     /* 积分榜锚定（P1-6）：带本场上下文打开时，必须把交手双方滚进视野。
        欧冠联赛阶段 36 队、弹窗 86vh，排在第 20 名的球队本来在首屏之外。 */
@@ -1708,6 +1754,6 @@ app.whenReady().then(async () => {
   }
 
   console.log('');
-  console.log(`通过 ${pass} 项，失败 ${fail} 项`);
+  console.log(`通过 ${pass} 项，失败 ${fail} 项${skipped ? `，跳过 ${skipped} 项（数据形态不满足）` : ''}`);
   app.exit(fail ? 1 : 0);
 });
