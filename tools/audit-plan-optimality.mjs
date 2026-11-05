@@ -7,7 +7,10 @@
  * 用法：node tools/audit-plan-optimality.mjs [--weeks=12] [--top=14]
  *
  * 暴力上界说明：只对指数前 top 个候选做子集枚举（2^top）。
- * 若 planWeek 的价值低于某个**可行**子集，即证明确实次优（不必穷尽全池）。
+ * 若 planWeek 的目标值低于某个**可行**子集，即证明确实次优（不必穷尽全池）。
+ *
+ * ⚠️ 目标函数必须与 planWeek 对齐（B2 之后）：主队场次数优先，其次才比价值。
+ *    只比原始价值会得出假阳性 —— 少看一场主队换来更高指数和，在产品上不算更优。
  */
 import * as E from '../src/core/engine.js';
 import { getFixtures, REC_MAP, rivalries, storylines } from '../src/data/index.js';
@@ -24,7 +27,11 @@ const budgets = [2, 2.5, 3, 3.5, 4, 4.5, 5];
 
 const fixtures = getFixtures();
 const val = e => Math.round(e.index * 10);
-const sumVal = list => list.reduce((s, e) => s + val(e), 0);
+const score = list => [
+  list.reduce((n, e) => n + (e.ev.isFollowed ? 1 : 0), 0),
+  list.reduce((s2, e) => s2 + val(e), 0)
+];
+const better = (a, b) => a[0] > b[0] || (a[0] === b[0] && a[1] > b[1]);
 const start = E.weekStartBJ(Date.now());
 const now = Date.now();
 
@@ -54,13 +61,12 @@ for (let wk = 0; wk < WEEKS; wk++) {
   for (const budget of budgets) {
     checked++;
     const plan = E.planWeek(week, REC_MAP, rivalries, storylines, followed, budget, leagues);
-    const pv = sumVal(plan.best);
+    const pv = score(plan.best);
     const cap = Math.round(budget * 2);
-    let bv = -1;
+    let bv = [-1, -1];
     let bset = [];
     for (let mask = 0; mask < (1 << pool.length); mask++) {
       let w = 0;
-      let v = 0;
       const set = [];
       let bad2 = false;
       for (let i = 0; i < pool.length; i++) {
@@ -69,19 +75,19 @@ for (let wk = 0; wk < WEEKS; wk++) {
         w += Math.round(e.cost * 2);
         if (w > cap) { bad2 = true; break; }
         if (set.some(x => E.exclusiveMatches(x.m, e.m))) { bad2 = true; break; }
-        v += val(e);
         set.push(e);
       }
       if (bad2) continue;
-      if (v > bv) { bv = v; bset = set; }
+      const sv = score(set);
+      if (better(sv, bv)) { bv = sv; bset = set; }
     }
-    if (bv > pv) {
+    if (better(bv, pv)) {
       bad.push({
         week: wk,
         budget,
         plan: plan.best.map(e => `${e.m.id}(${e.index.toFixed(1)})`).join(' + '),
-        planVal: pv,
-        bruteVal: bv,
+        planVal: `${pv[0]}主队/${pv[1]}`,
+        bruteVal: `${bv[0]}主队/${bv[1]}`,
         brute: bset.map(e => `${e.m.id}(${e.index.toFixed(1)})`).join(' + ')
       });
     }

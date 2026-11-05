@@ -368,7 +368,20 @@ export function exclusiveMatches(a, b) {
  * 这里把「预算」与「场次数量」作为两个独立约束；再加第三条约束：
  * 入选场次的观看区间两两不重叠（加权区间调度，DP[i][c][x] 按结束时间转移）。
  */
-export function knapsackLimited(entries, budgetHours, w = DEFAULT_WEIGHTS, maxCount = 5) {
+export function knapsackLimited(entries, budgetHours, w = DEFAULT_WEIGHTS, maxCount = 5, opts = {}) {
+  /**
+   * `followedBonusVal`：字典序择优化。
+   *
+   * planWeek 的产品承诺是「先保住关注球队，再在剩下的额度里取最优」。
+   * 旧实现用「先贪心塞followed、再对中立场次背包」来表达这条承诺，代价是
+   * **两段各自最优 ≠ 全局最优**（实测 84 个「周×预算」组合里 6 个次优，
+   * 其中两例的最优解同样是关注球队的场次，只是更便宜、指数更高）。
+   *
+   * 改成「价值 + 常数加成」的单次 DP：只要加成大于任何可行解的价值总和，
+   * 最大化价值就等价于「先最大化关注场次数、再最大化价值」—— 数学上是同一个解，
+   * 但只跑一次 DP，不会再出现两段拼接的次优。
+   */
+  const followedBonusVal = Number(opts.followedBonusVal) || 0;
   const cap = Math.round(budgetHours * 2);
   const n = entries.length;
   const K = Math.min(maxCount, n);
@@ -379,7 +392,7 @@ export function knapsackLimited(entries, budgetHours, w = DEFAULT_WEIGHTS, maxCo
     e,
     s: ts(e.m.t),
     f: ts(e.m.t) + MATCH_DURATION_MS,
-    val: Math.round(e.index * 10),
+    val: Math.round(e.index * 10) + (followedBonusVal && e.ev?.isFollowed ? followedBonusVal : 0),
     wt: Math.round(tierOf(e.m).cost * 2)
   })).sort((a, b) => (a.f - b.f) || (a.s - b.s) || String(a.e.m.id).localeCompare(String(b.e.m.id)));
 
@@ -544,43 +557,21 @@ export function planWeek(matches, recMap, rivalries, storylines, followed, budge
     return String(a.m.id).localeCompare(String(b.m.id));
   };
 
-  const followedEvs = evs.filter(e => e.ev.isFollowed).sort(cmpPref);
-  const followedLeagueNeutralEvs = evs.filter(e => !e.ev.isFollowed && e.ev.isLeagueFollowed);
-  const otherNeutralEvs = evs.filter(e => !e.ev.isFollowed && !e.ev.isLeagueFollowed);
+  /**
+   * 单次字典序 DP（B2）。
+   *
+   * 旧实现：先把关注球队贪心塞满，再对中立场次背包 —— 两段各自最优不等于全局最优，
+   * 而且预填充按「星级 > 故事线 > 指数」排序，会让名气大的挤掉指数更高的（实测有）。
+   * 现在把「关注球队」编码成价值加成交给同一次 DP，承诺不变（主队仍优先），
+   * 但解是全局最优的：先最大化主队场次数，再在剩余额度里最大化价值。
+   */
+  const FOLLOWED_BONUS_VAL = 1e6; // 远大于任何可行解的价值总和（5 项 × 数百）
+  const candidates = capRatio >= 1 ? evs : evs.filter(e => tierOf(e.m).cost <= capRatio * budget);
+  const pickCap = Number.isFinite(maxPicks) ? maxPicks : candidates.length;
 
-  // 无论是否限制数量，都必须走互斥版内核：旧 knapsack 只约束预算，
-  // 会在 maxPicks 未传时把同开球 / 区间重叠的场次重新装进来。
-  // 不限数量时把名额上限设为候选数，语义等价于「只受预算与时间约束」。
-  const fill = (list, bud, remaining) =>
-    knapsackLimited(list, bud, w, Number.isFinite(remaining) ? remaining : list.length);
-
-  let best = [];
-  let curBudget = budget;
-  const room = () => (Number.isFinite(maxPicks) ? maxPicks - best.length : Infinity);
-  const conflicts = (m) => best.some(e => exclusiveMatches(e.m, m));
-
-  // 主队比赛：预算内必保（原版行为）；与已入选场次互斥时按二选一判据让位（不重复计成本）
-  followedEvs.forEach(e => {
-    if (room() <= 0) return;
-    const cost = tierOf(e.m).cost;
-    const underCap = capRatio >= 1 || cost <= capRatio * budget;
-    if (cost <= curBudget && underCap && !conflicts(e.m)) {
-      best.push(e);
-      curBudget -= cost;
-    }
-  });
-
-  if (curBudget >= 0 && room() > 0 && followedLeagueNeutralEvs.length > 0) {
-    const filled = fill(followedLeagueNeutralEvs.filter(e => !conflicts(e.m)), Math.max(0, curBudget), room());
-    best = best.concat(filled);
-    filled.forEach(e => { curBudget -= tierOf(e.m).cost; });
-  }
-
-  if (curBudget >= 0 && room() > 0 && otherNeutralEvs.length > 0) {
-    const filled = fill(otherNeutralEvs.filter(e => !conflicts(e.m)), Math.max(0, curBudget), room());
-    best = best.concat(filled);
-    curBudget -= filled.reduce((s, e) => s + tierOf(e.m).cost, 0);
-  }
+  let best = candidates.length
+    ? knapsackLimited(candidates, budget, w, pickCap, { followedBonusVal: FOLLOWED_BONUS_VAL })
+    : [];
 
   // 「本周精选」是观赛计划，按开球时间排序；关注球队优先只影响入选，不改变计划顺序。
   // （否则周一凌晨场会排在周六晚场之前，用户会把计划读成倒序。）
