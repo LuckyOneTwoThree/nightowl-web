@@ -869,6 +869,84 @@ console.log('十四、★ 跨赛季隔离（id 不含赛季，不同赛季绝不
   }
 }
 
+/* ================================================================== */
+console.log('');
+console.log('十五、★ 字段级来源（内置更正能压过用户副本，同步值能压过旧快照）');
+{
+  const builtin = [
+    { id: 'B1', l: 'PL', r: 1, t: '2026-09-01T22:00', st: 'sched', tbd: false, h: 'A', a: 'B' }
+  ];
+  const REV = '2026-09-03T00:00:00.000Z';
+
+  // ① 用户侧写于内置修订**之前** → 内置胜（这就是「内置更正被遮蔽」的根治点）
+  const older = [{ id: 'B1', t: '2026-09-01T23:00', at: { t: '2026-09-02T00:00:00.000Z' } }];
+  const m1 = mergeFixtures(builtin, older, { writer: 'sparse', builtinRev: REV });
+  ok('★ 内置修订更新：内置值胜出', m1[0].t === '2026-09-01T22:00', m1[0].t);
+
+  // ② 用户侧写于内置修订**之后** → 用户胜（同步拿到的新时间不能被旧快照覆盖）
+  const newer = [{ id: 'B1', t: '2026-09-01T23:00', at: { t: '2026-09-04T00:00:00.000Z' } }];
+  const m2 = mergeFixtures(builtin, newer, { writer: 'sparse', builtinRev: REV });
+  ok('★ 同步写入更新：用户值胜出', m2[0].t === '2026-09-01T23:00', m2[0].t);
+
+  // ③ 没记时刻的字段：保守地信用户（老数据，无法判定）
+  const noAt = [{ id: 'B1', t: '2026-09-01T23:00' }];
+  ok('无可比时刻时保留用户值', mergeFixtures(builtin, noAt, { writer: 'sparse', builtinRev: REV })[0].t === '2026-09-01T23:00');
+
+  // ④ 旧式整份副本：只信结果字段，t/r 用内置（抄来的旧值不能反压内置）
+  const dense = [{ id: 'B1', t: '2026-09-01T23:00', r: 9, st: 'done', sc: '2-1' }];
+  const m4 = mergeFixtures(builtin, dense, { writer: 'dense', builtinRev: REV });
+  ok('★ 整份副本：t 用内置', m4[0].t === '2026-09-01T22:00', m4[0].t);
+  ok('★ 整份副本：r 用内置', m4[0].r === 1, String(m4[0].r));
+  ok('整份副本：比分仍以用户侧为准', m4[0].sc === '2-1' && m4[0].st === 'done');
+  ok('合并结果不把内部 at 漏给消费方', !('at' in m4[0]), JSON.stringify(m4[0]));
+
+  // ⑤ 端到端：写盘只落差分
+  const tmpDir = mkdtempSync(resolve(tmpdir(), 'nightowl-diff-'));
+  const prevEnv = process.env.NIGHTOWL_USER_DATA;
+  process.env.NIGHTOWL_USER_DATA = tmpDir;
+  try {
+    // 把内置原样写回 → 差异为空
+    const same = saveFixtures(fixtures);
+    ok('写盘成功', same.ok === true, JSON.stringify(same));
+    ok('★ 与内置完全一致时落盘为空（不再复制整份快照）',
+      JSON.parse(readFileSync(resolve(tmpDir, 'fixtures.json'), 'utf8')).length === 0);
+
+    // 改一场的比分 → 只该落这一场的 diff
+    const target = fixtures.find(m => m.st === 'sched' && !m.tbd);
+    const changed = fixtures.map(m => (m.id === target.id ? { ...m, st: 'done', sc: '3-2' } : m));
+    const r2 = saveFixtures(changed);
+    const rows = JSON.parse(readFileSync(resolve(tmpDir, 'fixtures.json'), 'utf8'));
+    ok('★ 只落变化的场次', rows.length === 1 && rows[0].id === target.id, JSON.stringify(rows).slice(0, 120));
+    ok('★ 只落变化的字段', Object.keys(rows[0]).sort().join(',') === 'at,id,sc,st',
+      Object.keys(rows[0]).join(','));
+    ok('变化字段记下写入时刻', Date.parse(rows[0].at.sc) > 0 && rows[0].at.st === rows[0].at.sc);
+    ok('返回变更字段清单', (r2.changedFields || []).includes(`${target.id}.sc`), String(r2.changedFields));
+
+    // 再存一次同样的内容 → 时刻不能漂移（否则内置永远更正不动）
+    const before = rows[0].at.sc;
+    await new Promise(r => setTimeout(r, 5));
+    saveFixtures(changed);
+    const rows2 = JSON.parse(readFileSync(resolve(tmpDir, 'fixtures.json'), 'utf8'));
+    ok('★ 值未变时写入时刻不刷新', rows2[0].at.sc === before, `${before} → ${rows2[0].at.sc}`);
+
+    // 读回来：内置打底 + 差分覆盖
+    const loaded = await loadFixtures();
+    const got = loaded.find(m => m.id === target.id);
+    ok('★ 读回：差分的比分生效', got.sc === '3-2' && got.st === 'done', JSON.stringify(got));
+    ok('读回：未变动字段仍取内置', got.h === target.h && got.t === target.t);
+    ok('读回：条目数与内置一致', loaded.length === fixtures.length, `${loaded.length}`);
+
+    // meta 记录写盘方式，供下次合并选策略
+    const meta = JSON.parse(readFileSync(resolve(tmpDir, 'fixtures-meta.json'), 'utf8'));
+    ok('★ meta 记下 writer=sparse 与内置 rev', meta.writer === 'sparse' && !!meta.builtinRev,
+      JSON.stringify(meta));
+  } finally {
+    if (prevEnv === undefined) delete process.env.NIGHTOWL_USER_DATA;
+    else process.env.NIGHTOWL_USER_DATA = prevEnv;
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
 console.log('');
 console.log('────────────────────────────────────────────────────');
 console.log(`通过 ${pass} 项，失败 ${fail} 项`);if (fail > 0) {

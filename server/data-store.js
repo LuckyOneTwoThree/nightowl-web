@@ -69,6 +69,16 @@ export function builtinSeason() {
   }
 }
 
+/** 内置快照的修订时刻（sync-scores --apply 盖章）；读不到返回 null */
+export function builtinRev() {
+  try {
+    const meta = JSON.parse(readFileSync(BUILT_IN_META, 'utf8'));
+    return typeof meta?.rev === 'string' && meta.rev ? meta.rev : null;
+  } catch {
+    return null;
+  }
+}
+
 export function loadUserMeta() {
   const p = userMetaPath();
   if (!p || !existsSync(p)) return null;
@@ -80,12 +90,16 @@ export function loadUserMeta() {
   }
 }
 
-function saveUserMeta(season) {
+function saveUserMeta(season, extra = {}) {
   const p = userMetaPath();
   if (!p) return false;
   try {
     mkdirSync(dirname(p), { recursive: true });
-    writeFileSync(p, JSON.stringify({ season, savedAt: new Date().toISOString() }), 'utf8');
+    writeFileSync(
+      p,
+      JSON.stringify({ season, savedAt: new Date().toISOString(), ...extra }),
+      'utf8'
+    );
     return true;
   } catch {
     return false;
@@ -144,12 +158,36 @@ export function activeFixturesPath() {
  * 规则：
  *   · id 并集 —— 内置新增的场次追加进来，用户侧独有的也保留；
  *   · 同 id 字段以用户侧为准 —— 用户文件是「上一次同步的结果」，比分/改期通常比
- *     出厂快照新。代价是：如果用户很久没同步而过内置已更正，会沿用旧值，
- *     但下一次同步就会纠正（这与「完全遮蔽」是量级不同的两种故障）。
+ *     出厂快照新。
+ *
+ * ⚠️ 但「用户侧优先」有一个致命的例外：内置的**人工更正**（开球时间、轮次）
+ *    会被用户文件里那条上个版本抄下来的旧值挡住，且同步从不写这两个字段 → 永不纠正。
+ *    所以从 schemaVersion 2 起，用户文件只存**差分**（writer='sparse'），
+ *    并对每个字段记写入时刻；合并时用内置 rev 与之比较，谁新听谁的。
+ *    见 mergeFixtures 的 opts。
  */
-export function mergeFixtures(builtin, user) {
+/** 旧式「整份副本」用户文件里可以信任的字段（都是同步真正会写的结果字段） */
+const DENSE_TRUSTED_FIELDS = ['sc', 'st', 'tbd'];
+
+/** 去掉内部的 at 映射，别让它漏给消费方（界面/测试都不认识这个字段） */
+function stripMeta(m) {
+  if (!m || !m.at) return m;
+  const { at, ...rest } = m;
+  return rest;
+}
+
+/**
+ * @param {object[]} builtin 内置快照
+ * @param {object[]} user    用户数据（sparse 差分或旧式整份副本）
+ * @param {object}   [opts]
+ * @param {'sparse'|'dense'} [opts.writer='dense'] 用户文件的写盘方式
+ * @param {string|null} [opts.builtinRev=null] 内置快照的修订时刻（ISO）
+ */
+export function mergeFixtures(builtin, user, opts = {}) {
   if (!Array.isArray(user) || user.length === 0) return builtin || [];
-  if (!Array.isArray(builtin) || builtin.length === 0) return user;
+  if (!Array.isArray(builtin) || builtin.length === 0) return user.map(stripMeta);
+  const { writer = 'dense', builtinRev = null } = opts;
+  const revTs = builtinRev ? Date.parse(builtinRev) : NaN;
   const byId = new Map();
   for (const m of builtin) {
     if (m && m.id) byId.set(m.id, m);
@@ -157,7 +195,28 @@ export function mergeFixtures(builtin, user) {
   for (const m of user) {
     if (!m || !m.id) continue;
     const base = byId.get(m.id);
-    byId.set(m.id, base ? { ...base, ...m } : m);
+    if (!base) {
+      byId.set(m.id, stripMeta(m));
+      continue;
+    }
+    const at = m.at || {};
+    const next = { ...base };
+    for (const [k, v] of Object.entries(m)) {
+      if (k === 'id' || k === 'at') continue;
+      // 旧式整份副本：t/r 分不清「同步写的」还是「抄内置的」，只信结果字段
+      if (writer !== 'sparse' && !DENSE_TRUSTED_FIELDS.includes(k)) continue;
+      /**
+       * 时间戳裁决（sparse）：内置这次修订比该字段的写入时刻**更新** → 内置胜。
+       * 这是「内置人工更正被用户副本遮蔽」的根治点：
+       * 用户文件里那条 23:00 是上个版本同步留下的，内置已改成 20:00 时应当以新为准。
+       */
+      if (writer === 'sparse' && Number.isFinite(revTs)) {
+        const fieldTs = at[k] ? Date.parse(at[k]) : NaN;
+        if (Number.isFinite(fieldTs) && revTs > fieldTs) continue;
+      }
+      next[k] = v;
+    }
+    byId.set(m.id, next);
   }
   return [...byId.values()];
 }
@@ -194,7 +253,11 @@ export async function loadFixtures() {
     readFile(BUILT_IN, 'utf8').catch(() => '[]'),
     readFile(userPath, 'utf8')
   ]);
-  const merged = mergeFixtures(parseFixtures(builtinRaw), parseFixtures(userRaw));
+  const meta = loadUserMeta();
+  const merged = mergeFixtures(parseFixtures(builtinRaw), parseFixtures(userRaw), {
+    writer: meta?.writer === 'sparse' ? 'sparse' : 'dense',
+    builtinRev: builtinRev()
+  });
   // 合并结果为空说明两侧都坏了：宁可抛错让上层报「数据不可用」，也不要静默返回空数组
   if (!merged.length) throw new Error('赛程数据为空（内置与用户数据都无法解析）');
   return merged;
@@ -213,25 +276,79 @@ export async function loadFixtures() {
 export const SYNC_WINDOW_DAYS = 14;
 
 /**
- * 写入用户数据目录。返回 { ok, path, bytes }；
+ * 写入用户数据目录。返回 { ok, path, bytes, changedFields }；
  * 没有可写目录（如纯本地 server 模式未注入 userData）时返回 ok:false，
  * 由调用方降级为「只预览」而不是把应用搞崩。
+ *
+ * ⚠️ 只写**差分**（schemaVersion 2 起）。
+ *
+ * 旧实现把合并结果整份落盘，于是用户文件变成内置的完整副本 —— 之后每次升级，
+ * 内置的人工更正（开球时间、轮次）都会被这份「上个版本的复印件」挡住，
+ * 而这些字段同步从不写，错了永远不纠正。
+ *
+ * 现在逐字段与内置比对，只落真正不同的字段，并记下该字段最后一次**变化**的时刻：
+ *   { "id": "PD-10-ALA-MAL", "sc": "1-1", "st": "done", "at": { "sc": "...", "st": "..." } }
+ * 合并时拿内置 rev 与 at 比大小，谁新听谁的。写入时刻只在值真的变了才刷新，
+ * 否则每次同步都会把 at 推到最新，内置就更正不动了。
  */
 export function saveFixtures(next) {
   const p = userFixturesPath();
   if (!p) {
     return { ok: false, reason: '未配置可写的数据目录（NIGHTOWL_USER_DATA 未注入）' };
   }
-  const body = JSON.stringify(next);
+  const now = new Date().toISOString();
+  let out;
+  const changedFields = [];
+  try {
+    const builtin = parseFixtures(readFileSync(BUILT_IN, 'utf8'));
+    const builtinById = new Map(builtin.filter(m => m && m.id).map(m => [m.id, m]));
+    const prevById = new Map();
+    if (existsSync(p)) {
+      for (const row of parseFixtures(readFileSync(p, 'utf8'))) {
+        if (row && row.id) prevById.set(row.id, row);
+      }
+    }
+    out = [];
+    for (const m of next || []) {
+      if (!m || !m.id) continue;
+      const base = builtinById.get(m.id);
+      // 内置没有这条（历史遗留/人为导入）：整条保留，否则读回来就丢了
+      if (!base) {
+        out.push(m);
+        continue;
+      }
+      const prev = prevById.get(m.id);
+      const diff = { id: m.id };
+      const at = {};
+      let dirty = 0;
+      for (const k of Object.keys(m)) {
+        if (k === 'id' || k === 'at') continue;
+        if (m[k] === base[k]) continue;
+        diff[k] = m[k];
+        dirty++;
+        // 值没变过的字段沿用上一次的写入时刻
+        at[k] = prev && prev[k] === m[k] && prev.at?.[k] ? prev.at[k] : now;
+        changedFields.push(`${m.id}.${k}`);
+      }
+      if (dirty) {
+        diff.at = at;
+        out.push(diff);
+      }
+    }
+  } catch (err) {
+    return { ok: false, reason: `计算差分失败：${err.message}`, path: p };
+  }
+
+  const body = JSON.stringify(out);
   try {
     // 原子写：先写临时文件再重命名，避免写一半崩溃导致数据损坏
     const tmp = `${p}.tmp`;
     mkdirSync(dirname(p), { recursive: true });
     writeFileSync(tmp, body, 'utf8');
     renameSync(tmp, p);
-    // 盖章：这份用户数据属于哪个赛季。缺了它，下赛季启动时会把它当同赛季合并进新赛程。
-    saveUserMeta(builtinSeason() || 'unknown');
-    return { ok: true, path: p, bytes: Buffer.byteLength(body) };
+    // 盖章：这份用户数据属于哪个赛季、以什么方式写、对应哪个内置修订
+    saveUserMeta(builtinSeason() || 'unknown', { writer: 'sparse', builtinRev: builtinRev() });
+    return { ok: true, path: p, bytes: Buffer.byteLength(body), changedFields };
   } catch (err) {
     return { ok: false, reason: err.message, path: p };
   }

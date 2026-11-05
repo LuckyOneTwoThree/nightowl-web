@@ -154,9 +154,19 @@ node tools/sync-scores.mjs --backfill=14 --apply # 回填最近 14 天的 tbd / 
 | 落点 | 路径 | 用途 |
 | :--- | :--- | :--- |
 | 内置快照 | `src/data/fixtures.json` | 出厂数据，随包分发（只读） |
+| 内置元数据 | `src/data/fixtures-meta.json` | 赛季章 + 修订时刻 `rev`（`sync:scores:apply` 盖章） |
 | 用户数据 | `NIGHTOWL_USER_DATA/fixtures.json` | 运行时保鲜写入（桌面端为 `app.getPath('userData')`；未注入时回落 `server/cache/user-data`，已 gitignore） |
+| 用户元数据 | `NIGHTOWL_USER_DATA/fixtures-meta.json` | 赛季、写入方式 `writer`、对应内置 `builtinRev` |
 
-读取优先级：用户数据 > 内置快照。**前端通过 `/api/fixtures` 热替换内存数据**，同步完成后无需重启。
+**用户文件只存差分**（`writer: 'sparse'`）：逐字段与内置比对，只落真正变化的字段，并记下该字段最后一次变化的时刻
+（`{ id, sc, st, at: { sc, st } }`）。合并时内置打底、差分覆盖，字段级用「内置 `rev` vs 字段 `at`」比大小——谁新听谁的。
+这一层是为了根治两个历史故障：内置的人工更正（开球时间、轮次）被用户文件里上个版本的旧值挡住，而同步从不写这两个字段，错了永不纠正。
+
+- **旧式整份副本**（升级前写出的用户文件）仍能读：只信任 `sc/st/tbd`，`t/r` 以内置为准，避免「复印件反压原件」；下一次写盘自动转成差分。
+- **跨赛季**：两侧赛季都已知且不同 → 只用内置，并把上季用户文件改名归档为 `fixtures-{赛季}.bak.json`（不删除）。
+- 读不到 meta（更老的用户）一律按同赛季 + 整份副本处理，行为与升级前完全一致。
+
+**前端通过 `/api/fixtures` 热替换内存数据**，同步完成后无需重启。
 
 > ⚠️ 新增依赖数据源的模块时，记得走 `src/data/index.js` 的 `getFixtures()`，不要直接 `import fixtures.json` —— 否则会锁在构建期快照上（曾因此出现「左栏有比分、右栏说等待录入」的自相矛盾）。
 

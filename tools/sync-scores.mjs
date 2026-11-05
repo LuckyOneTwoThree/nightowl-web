@@ -142,7 +142,17 @@ if (APPLY) {
   }
   writeFileSync(
     metaPath,
-    `${JSON.stringify({ season: rules.scores?.season || 'unknown', schemaVersion }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        season: rules.scores?.season || 'unknown',
+        schemaVersion,
+        // 修订时刻：用户侧合并时用它和「该字段的写入时刻」比大小，
+        // 谁新听谁的 —— 这是内置人工更正能压过用户副本的前提
+        rev: new Date().toISOString()
+      },
+      null,
+      2
+    )}\n`,
     'utf8'
   );
 
