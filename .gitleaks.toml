@@ -30,10 +30,17 @@ id = "nightowl-tv-channels-inline"
 description = "保底频道直链被写回源码（应放 tv-channels.local.json）"
 # 命中 scraper.js / rules.json 里出现的长直链 + m3u8/playlist 特征
 regex = '''https?://[^\s"'`<>]{20,}/(?:live|playlist|hls)[^\s"'`<>]*\.m3u8'''
-path = '''(?:^|/)server/(?!tv-channels\.example\.json)[^/]*\.(?:js|json|mjs)$'''
+# ⚠️ 路径正则走 RE2，不支持负向前瞻 (?!...) —— 写了会让 gitleaks 配置加载直接 panic，
+#    表现为「workflow 9 秒失败、没有 results.sarif」。排除模板文件交给下方 allowlist.paths。
+path = '''(?:^|/)server/[^/]*\.(?:js|json|mjs)$'''
 tags = ["secret", "signed-url"]
 
 [allowlist]
+# 已知历史泄漏：23e47a3 的 server/scraper.js 内联过带签名的直播直链（2 处）。
+# 56f0c0d 已外置到 gitignore 的文件，但历史仍可读 —— 清洗需要 force-push，属未完成项（H1）。
+# 这里显式豁免该提交，让门禁只对「新发生的泄漏」报警，而不是长期红着没人看。
+commits = ["23e47a3d3d17b2b2eca8cb3e9a126bc50369a136"]
+
 description = "允许出现的公开地址与模板"
 paths = [
   # 模板文件（只有占位符，不含真实签名）
