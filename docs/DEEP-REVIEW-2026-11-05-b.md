@@ -1094,6 +1094,21 @@ FL-8-PSG-OL / FL-8-TOU-TRO / FL-9-NIC-REN  同类（21–25h）
 **关键收益**：那 12 处**装饰性 `eslint-disable`**（本项目从无 ESLint，写了等于没写）已全部清零，
 换成 33 条 **`biome-ignore` + 明确原因**——格式被工具识别、原因写给人看，不是「注释掉就算过」。
 
+
+### 12.6 阶段四之四：B4 赛季维度（跨赛季不再撞车）
+
+| 改动 | 位置 |
+| :-- | :-- |
+| 新增赛季章 `{season, schemaVersion}`，不改 fixtures.json 的裸数组契约 | `src/data/fixtures-meta.json` |
+| 两侧赛季都已知且不同 → 只用内置，上季用户文件改名归档（不删除） | `server/data-store.js: loadFixtures` |
+| 写盘时盖本赛季章，赛季取自 `rules.scores.season`（单一来源） | `saveFixtures` / `tools/sync-scores.mjs` |
+| 读不到 meta（老用户）按同赛季处理，行为与升级前一致 | `loadFixtures` |
+| 打包校验增加 meta 文件 —— 漏打包会静默退化成「当同赛季」 | `tools/verify-package.mjs` |
+
+测试 +13 条：同赛季合并 / 无 meta 兼容 / 跨赛季只用内置 / 旧文件归档且内容保留 /
+生效数据不含上季场次 / 盖章后恢复正常合并。**断言用内置里不存在的 id 判存在性**——
+第一版拿真实场次比 sc，结果内置自己的赛季首战就是 3-0，直接假红。
+
 **施工坑**：`noUnusedVariables` 的自动清理会按「同名行」误删 —— `test-owl.mjs` 里有两处
 `const dayDates = w.days.map(...)`，一处被使用、一处是死码，直接按字符串替换删错了那一处，
 `test:owl` 立刻报 `ReferenceError`。**批量清理未使用变量后必须跑测试**，不能只看 lint 变绿。
