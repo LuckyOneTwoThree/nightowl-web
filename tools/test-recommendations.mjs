@@ -161,6 +161,24 @@ console.log('四、与 A3 同批验收：生成条目必须真的产出 L1（且
   ok('★ 生成条目在界面上走 L1 分支', badLevel.length === 0, badLevel.join('、'));
   ok('★ 生成条目 star>=2 时不会落 L3', l3.length === 0, l3.join('、'));
 
+  /**
+   * 供给不能过期（D）：生成器只看未来 6 周，且 build:recs 不在日常链路里。
+   * 没有这条断言，L1 会在某个周二悄悄归零，然后只有用户发现 Hero 退回 L3。
+   */
+  const genKicks = gen
+    .map(r => fixtures.find(m => m.id === r.m))
+    .filter(Boolean)
+    .map(m => E.ts(m.t))
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+  const lastKick = genKicks[genKicks.length - 1] || 0;
+  const daysAhead = (lastKick - Date.now()) / 86400000;
+  ok('★ L1 池未过期（最晚一条仍在 7 周内）', daysAhead > 0 && daysAhead <= 49,
+    `最晚一条还有 ${daysAhead.toFixed(1)} 天（跑 npm run build:recs 可续期）`);
+  const within3w = genKicks.filter(t => t > Date.now() && t < Date.now() + 21 * 86400000).length;
+  ok('★ 未来 3 周至少有一条 L1', within3w > 0,
+    `未来 3 周 ${within3w} 条（0 条说明池子快断了，跑 npm run build:recs）`);
+
   // 供给不再断粮：未来可行动场次里至少有一条 L1
   const now = Date.now();
   const actionable = fixtures.filter(m => m.st === 'sched' && !m.tbd && E.ts(m.t) > now);

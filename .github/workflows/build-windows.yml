@@ -52,6 +52,12 @@ jobs:
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
+      # L1 推荐池按「未来 6 周」生成：不重跑就会在某个周二归零（Hero 退回 L3）。
+      # 必须排在 build 之前 —— 推荐数据会被打进 dist，晚于构建等于没生成。
+      - name: Rebuild L1 recommendations
+        shell: bash
+        run: npm run build:recs
+
       - name: Build frontend
         run: npm run build
 
