@@ -34,7 +34,9 @@ type LiveResult = LiveData | { ok: false; reason?: string; message?: string };
 export function useLiveMatch(
   match: Match | null,
   enabled: boolean,
-  intervalMs = 30_000
+  intervalMs = 30_000,
+  /** 页面失焦时为 true：暂停轮询但保留上一次快照，回来立即续查。 */
+  paused = false
 ) {
   const [data, setData] = useState<LiveData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +62,13 @@ export function useLiveMatch(
       setData(null);
       setError(null);
       setLastSuccessAt(null);
+    }
+
+    // 失焦只停轮询，不清快照：从播放器返回时应立刻看到离开前的比分，
+    // 而不是先闪回赛程静态值再等一次请求。
+    if (paused) {
+      setLoading(false);
+      return;
     }
 
     let cancelled = false;
@@ -108,7 +117,7 @@ export function useLiveMatch(
       if (timer) clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matchId, kickoff, enabled, intervalMs]);
+  }, [matchId, kickoff, enabled, intervalMs, paused]);
 
   return {
     // 即使 effect 还没跑完，也不能把上一场的快照交给新比赛渲染。

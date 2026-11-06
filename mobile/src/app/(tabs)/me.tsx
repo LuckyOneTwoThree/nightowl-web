@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Alert,
+  AppState,
   Linking,
   Pressable,
   StyleSheet,
@@ -84,16 +85,24 @@ export default function MeScreen() {
   useEffect(() => {
     if (!notificationsAvailable()) return undefined;
     let cancelled = false;
-    import('expo-notifications')
-      .then(N => N.getPermissionsAsync())
-      .then(permission => {
-        if (!cancelled) {
-          setNotificationPermission(permission.granted ? 'granted' : 'denied');
-        }
-      })
-      .catch(() => {});
+    const check = () => {
+      import('expo-notifications')
+        .then(N => N.getPermissionsAsync())
+        .then(permission => {
+          if (!cancelled) {
+            setNotificationPermission(permission.granted ? 'granted' : 'denied');
+          }
+        })
+        .catch(() => {});
+    };
+    check();
+    // 从系统设置授权后返回，权限事实已经变化；只在挂载时查一次会一直停在旧的「被拒绝」。
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') check();
+    });
     return () => {
       cancelled = true;
+      subscription.remove();
     };
   }, []);
 
@@ -380,14 +389,26 @@ export default function MeScreen() {
               ) : (
                 pendingQueueEntries.map(({ item, match }) => (
                   <View key={item.id} style={styles.queueRow}>
-                    <View style={styles.queueText}>
+                    <Pressable
+                      onPress={() =>
+                        match &&
+                        router.push({ pathname: '/match/[id]', params: { id: match.id } })
+                      }
+                      disabled={!match}
+                      hitSlop={{ top: 10, bottom: 10 }}
+                      accessibilityRole={match ? 'button' : undefined}
+                      accessibilityLabel={
+                        match ? `查看 ${teamName(match.h)} 对 ${teamName(match.a)}` : undefined
+                      }
+                      style={({ pressed }) => [styles.queueText, pressed && styles.pressed]}
+                    >
                       <Text style={styles.queueTitle} numberOfLines={1}>
                         {match ? `${teamName(match.h)} vs ${teamName(match.a)}` : '比赛数据已移除'}
                       </Text>
                       <Text style={styles.queueMeta}>
                         {match ? `${leagueName(match.l)} · ${hm(match.t)}` : item.id}
                       </Text>
-                    </View>
+                    </Pressable>
                     {match ? (
                       <Pressable
                         onPress={() => markWatchLaterWatched(item.id)}
@@ -414,14 +435,26 @@ export default function MeScreen() {
                   <Text style={styles.queueSectionLabel}>已看过 {watchedQueueEntries.length} 场</Text>
                   {watchedQueueEntries.map(({ item, match }) => (
                     <View key={item.id} style={styles.queueRow}>
-                      <View style={styles.queueText}>
+                      <Pressable
+                        onPress={() =>
+                          match &&
+                          router.push({ pathname: '/match/[id]', params: { id: match.id } })
+                        }
+                        disabled={!match}
+                        hitSlop={{ top: 10, bottom: 10 }}
+                        accessibilityRole={match ? 'button' : undefined}
+                        accessibilityLabel={
+                          match ? `查看 ${teamName(match.h)} 对 ${teamName(match.a)}` : undefined
+                        }
+                        style={({ pressed }) => [styles.queueText, pressed && styles.pressed]}
+                      >
                         <Text style={styles.queueTitle} numberOfLines={1}>
                           {match ? `${teamName(match.h)} vs ${teamName(match.a)}` : '比赛数据已移除'}
                         </Text>
                         <Text style={styles.queueMeta}>
                           {match ? `${leagueName(match.l)} · ${hm(match.t)} · 已看过` : `${item.id} · 已看过`}
                         </Text>
-                      </View>
+                      </Pressable>
                       {match ? (
                         <Pressable
                           onPress={() => toggleWatchLater(match)}

@@ -1,5 +1,6 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 import { ExternalLink, Play, Radio, RefreshCw, WifiOff } from 'lucide-react-native';
 
 import { leagueName, teamName } from '@data/index.js';
@@ -125,6 +126,27 @@ export function WatchSheet({
   const countdown = engineCountdown(ts(match.t), now);
   const minute = liveMinute(ts(match.t), now);
 
+  /**
+   * 弹层是原生 Modal，根布局的 toast 会被盖住 —— 外部链接失败必须用原生
+   * Alert 就地反馈，否则用户点了「官方入口」没有任何回应。
+   */
+  const showLinkFailure = (url: string, label: string) => {
+    Alert.alert(`打不开「${label}」`, '链接可能已失效，或系统没有可打开它的应用。', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '复制链接',
+        onPress: () => {
+          void Clipboard.setStringAsync(url)
+            .then(() => Alert.alert('链接已复制', '可以粘贴到浏览器打开。'))
+            .catch(() => Alert.alert('复制失败', '请稍后重试。'));
+        },
+      },
+    ]);
+  };
+  const openLink = (url: string, label: string) => {
+    void openExternal(url, label, { onError: () => showLinkFailure(url, label) });
+  };
+
   return (
     <Sheet visible={visible} onClose={onClose} title={title} scroll>
       <View style={styles.matchup}>
@@ -249,9 +271,15 @@ export function WatchSheet({
             title="官方回放"
             links={replayLinks}
             emptyText="暂无官方回放入口"
+            onOpenLink={openLink}
           />
           {highlightLinks.length > 0 ? (
-            <SourceSection title="官方集锦" links={highlightLinks} emptyText="" />
+            <SourceSection
+              title="官方集锦"
+              links={highlightLinks}
+              emptyText=""
+              onOpenLink={openLink}
+            />
           ) : null}
         </>
       ) : null}
@@ -261,6 +289,7 @@ export function WatchSheet({
           title={isLive ? '官方直播入口' : '官方平台'}
           links={liveLinks}
           emptyText="暂无可用官方入口，稍后再试。"
+          onOpenLink={openLink}
         />
       ) : null}
 
@@ -288,7 +317,7 @@ export function WatchSheet({
             highlights.videos.map(video => (
               <Pressable
                 key={video.id}
-                onPress={() => void openExternal(video.url, 'YouTube 集锦')}
+                onPress={() => openLink(video.url, 'YouTube 集锦')}
                 style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
                 accessibilityRole="link"
                 accessibilityLabel={video.eventName || '打开 YouTube 官方集锦'}
@@ -325,10 +354,12 @@ function SourceSection({
   title,
   links,
   emptyText,
+  onOpenLink,
 }: {
   title: string;
   links: Array<{ source: Source; url: string }>;
   emptyText: string;
+  onOpenLink: (url: string, label: string) => void;
 }) {
   return (
     <View style={styles.section}>
@@ -337,7 +368,7 @@ function SourceSection({
         links.map(({ source, url }) => (
           <Pressable
             key={`${title}-${source.id}`}
-            onPress={() => void openExternal(url, source.name)}
+            onPress={() => onOpenLink(url, source.name)}
             style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
             accessibilityRole="link"
             accessibilityLabel={`打开 ${source.name}`}

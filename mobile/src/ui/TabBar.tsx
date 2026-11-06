@@ -128,5 +128,5 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.panel,
   },
-  badgeText: { color: '#FFFFFF', fontSize: fontSize.xs, fontWeight: weight.title },
+  badgeText: { color: colors.resultInk, fontSize: fontSize.xs, fontWeight: weight.title },
 });

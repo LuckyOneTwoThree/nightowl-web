@@ -40,27 +40,34 @@ export function Screen({
 
   useEffect(() => {
     let alive = true;
-    void AccessibilityInfo.isReduceMotionEnabled().then(reduce => {
-      if (!alive || reduce) {
+    void AccessibilityInfo.isReduceMotionEnabled()
+      .then(reduce => {
+        if (!alive || reduce) {
+          opacity.setValue(1);
+          translateY.setValue(0);
+          return;
+        }
+        Animated.parallel([
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: durations.base,
+            easing: easeOut,
+            useNativeDriver: true,
+          }),
+          Animated.timing(translateY, {
+            toValue: 0,
+            duration: durations.base,
+            easing: easeOut,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      })
+      // 查询系统偏好失败时不能让页面停在 opacity 0：宁可跳过入场动效。
+      .catch(() => {
+        if (!alive) return;
         opacity.setValue(1);
         translateY.setValue(0);
-        return;
-      }
-      Animated.parallel([
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: durations.base,
-          easing: easeOut,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateY, {
-          toValue: 0,
-          duration: durations.base,
-          easing: easeOut,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    });
+      });
     return () => {
       alive = false;
     };

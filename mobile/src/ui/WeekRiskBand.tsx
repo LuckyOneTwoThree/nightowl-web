@@ -56,6 +56,32 @@ export type WeekRisk = {
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
 const ROW_HEIGHT = 34;
 const TRACK_HEIGHT = 10;
+const MAX_LANES = 2;
+
+/**
+ * 同开球的多场比赛不能完全叠在一条线上：后画的色块会盖住先画的，
+ * 那晚的睡眠档位就只剩最后一个可见。按开始时间装箱到最多两条泳道，
+ * 让「同一时段有两场」这件事在图上说得出来。
+ */
+function placeSegments(segments: RiskSegment[]): { placed: Array<{ seg: RiskSegment; lane: number }>; lanes: number } {
+  const laneEnds: number[] = [];
+  const placed = segments.map(seg => {
+    let lane = laneEnds.findIndex(end => end <= seg.startMin);
+    if (lane === -1) {
+      if (laneEnds.length < MAX_LANES) {
+        lane = laneEnds.length;
+        laneEnds.push(seg.endMin);
+      } else {
+        lane = MAX_LANES - 1;
+        laneEnds[lane] = Math.max(laneEnds[lane], seg.endMin);
+      }
+    } else {
+      laneEnds[lane] = seg.endMin;
+    }
+    return { seg, lane };
+  });
+  return { placed, lanes: Math.max(1, Math.min(MAX_LANES, laneEnds.length)) };
+}
 
 function weekdayOf(index: number) {
   return `周${WEEKDAYS[Math.max(0, Math.min(6, index))]}`;
@@ -146,6 +172,9 @@ export function WeekRiskBand({
 
       {bands.map(band => {
         const selected = selectedDate === band.date;
+        const { placed, lanes } = placeSegments(band.segments);
+        const laneHeight = lanes > 1 ? (TRACK_HEIGHT - 2) / lanes : TRACK_HEIGHT;
+        const laneTop = (lane: number) => (lanes > 1 ? lane * (laneHeight + 2) : 0);
         const label = band.empty
           ? `${weekdayOf(band.weekday)}，暂无已定开球时间的场次`
           : [
@@ -179,7 +208,7 @@ export function WeekRiskBand({
 
             <View style={styles.trackCol}>
               <View style={styles.track}>
-                {band.segments.map(seg => {
+                {placed.map(({ seg, lane }) => {
                   const tier = sleepTier(seg.t);
                   const tailStart = floor ? Math.max(seg.startMin, floor.nightMin) : null;
                   const hasTail = tailStart != null && seg.endMin > tailStart;
@@ -189,6 +218,8 @@ export function WeekRiskBand({
                         style={[
                           styles.segment,
                           {
+                            top: laneTop(lane),
+                            height: laneHeight,
                             left: pct(seg.startMin),
                             width: pct(seg.endMin - seg.startMin),
                             backgroundColor: tierColor(tier.tier),
@@ -201,6 +232,8 @@ export function WeekRiskBand({
                             styles.segment,
                             styles.segmentOver,
                             {
+                              top: laneTop(lane),
+                              height: laneHeight,
                               left: pct(tailStart as number),
                               width: pct(seg.endMin - (tailStart as number)),
                             },
@@ -309,8 +342,6 @@ const styles = StyleSheet.create({
   track: { height: TRACK_HEIGHT, justifyContent: 'center' },
   segment: {
     position: 'absolute',
-    top: 0,
-    height: TRACK_HEIGHT,
     borderRadius: 3,
   },
   segmentOver: {

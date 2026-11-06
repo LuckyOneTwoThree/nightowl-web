@@ -38,13 +38,15 @@ export default function OnboardingScreen() {
   const toggleLeague = usePrefsStore(state => state.toggleLeague);
   const finishOnboarding = usePrefsStore(state => state.finishOnboarding);
   const [step, setStep] = useState(0);
+  // 默认偏好是「开启」，但没碰过开关不代表用户此刻愿意授权；权限只在本人主动操作后请求。
+  const [notifyTouched, setNotifyTouched] = useState(false);
 
   const finish = (requestPermissions = true) => {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const wantsNotifications = prefs.notifyBefore15;
     finishOnboarding();
     router.replace('/');
-    if (requestPermissions && wantsNotifications && notificationsAvailable()) {
+    if (requestPermissions && wantsNotifications && notifyTouched && notificationsAvailable()) {
       void (async () => {
         const granted = await requestNotificationPermission();
         if (granted) {
@@ -219,7 +221,10 @@ export default function OnboardingScreen() {
             </View>
             <Switch
               value={prefs.notifyBefore15}
-              onValueChange={value => setPrefs({ notifyBefore15: value })}
+              onValueChange={value => {
+                setNotifyTouched(true);
+                setPrefs({ notifyBefore15: value });
+              }}
               accessibilityLabel="赛前 15 分钟提醒"
               trackColor={{ false: colors.control, true: colors.accent }}
               thumbColor={prefs.notifyBefore15 ? colors.accentInk : colors.textMuted}

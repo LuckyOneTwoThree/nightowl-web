@@ -1037,8 +1037,8 @@ const styles = StyleSheet.create({
   sleepHint: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 16 },
   sleepWarn: { color: colors.warn, fontSize: fontSize.xs, lineHeight: 16, fontWeight: weight.title },
   sleepActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
-  sleepPrimary: { flex: 1, height: 40 },
-  sleepGhost: { height: 40, paddingHorizontal: spacing.md },
+  sleepPrimary: { flex: 1, height: 44 },
+  sleepGhost: { height: 44, paddingHorizontal: spacing.md },
   section: { gap: spacing.sm },
   list: {
     borderRadius: radius.card,

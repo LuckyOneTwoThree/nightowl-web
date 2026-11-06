@@ -41,6 +41,20 @@ export function TeamPicker({ selected, onChange, autoFocus = false }: Props) {
     });
   }, [league, query]);
 
+  /**
+   * 三列网格补空位：PL/PD/SA 各 20 支，筛选后最后一行只有 2 个时，
+   * `flex: 1` 会把它们拉成各占一半；补一个不可见占位块保持 1/3 宽度。
+   */
+  const listData = useMemo(() => {
+    const rows = filtered.map(team => ({ team }));
+    const remainder = rows.length % 3;
+    if (!remainder) return rows;
+    return [
+      ...rows,
+      ...Array.from({ length: 3 - remainder }, (_, index) => ({ pad: `pad-${index}` })),
+    ];
+  }, [filtered]);
+
   const toggle = (id: string) => {
     onChange(
       selected.includes(id) ? selected.filter(team => team !== id) : [...selected, id]
@@ -140,8 +154,8 @@ export function TeamPicker({ selected, onChange, autoFocus = false }: Props) {
       ) : null}
 
       <FlatList
-        data={filtered}
-        keyExtractor={team => team.id}
+        data={listData}
+        keyExtractor={item => ('pad' in item ? item.pad : item.team.id)}
         numColumns={3}
         style={styles.list}
         keyboardShouldPersistTaps="handled"
@@ -161,10 +175,12 @@ export function TeamPicker({ selected, onChange, autoFocus = false }: Props) {
           ) : undefined
         }
         renderItem={({ item }) => {
-          const active = selected.includes(item.id);
+          if ('pad' in item) return <View style={styles.team} />;
+          const team = item.team;
+          const active = selected.includes(team.id);
           return (
             <Pressable
-              onPress={() => toggle(item.id)}
+              onPress={() => toggle(team.id)}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: active }}
               style={({ pressed }) => [
@@ -174,7 +190,7 @@ export function TeamPicker({ selected, onChange, autoFocus = false }: Props) {
               ]}
             >
               <View style={styles.crestWrap}>
-                <Crest id={item.id} size={42} />
+                <Crest id={team.id} size={42} />
                 {active ? (
                   <View style={styles.check}>
                     <Check size={10} color={colors.accentInk} strokeWidth={3} />
@@ -182,11 +198,11 @@ export function TeamPicker({ selected, onChange, autoFocus = false }: Props) {
                 ) : null}
               </View>
               <Text style={styles.teamName} numberOfLines={1}>
-                {item.zh}
+                {team.zh}
               </Text>
               <View style={styles.teamMeta}>
-                <View style={[styles.leagueDot, { backgroundColor: leagueColor(item.league) }]} />
-                <Text style={styles.teamId}>{item.id}</Text>
+                <View style={[styles.leagueDot, { backgroundColor: leagueColor(team.league) }]} />
+                <Text style={styles.teamId}>{team.id}</Text>
               </View>
             </Pressable>
           );

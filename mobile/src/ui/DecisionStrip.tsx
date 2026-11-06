@@ -155,6 +155,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: spacing.md },
   cell: { flex: 1, minWidth: 0, gap: 1 },
   label: { color: colors.textFaint, fontSize: fontSize.xs },
-  value: { fontSize: fontSize.sm, fontWeight: weight.title, fontVariant: ['tabular-nums'] },
+  // 深色主题下 RN 的默认字色仍是黑色：任何没传 tone 的单元格都会糊成黑字，
+  // 所以这里必须给出兜底色，而不是指望每个调用方都显式传。
+  value: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.title, fontVariant: ['tabular-nums'] },
   pressed: { opacity: 0.7 }
 });

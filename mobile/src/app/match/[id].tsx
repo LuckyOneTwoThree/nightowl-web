@@ -237,7 +237,13 @@ export default function MatchScreen() {
     ? state === 'finished' || state === 'ended_pending' || match.st === 'done'
     : false;
   const isLive = state === 'live';
-  const live = useLiveMatch(match ?? null, !!match && (isLive || isDone), isLive ? 30_000 : 0);
+  const live = useLiveMatch(
+    match ?? null,
+    !!match && (isLive || isDone),
+    isLive ? 30_000 : 0,
+    // 栈里被播放器/另一场比赛盖住时暂停轮询：否则旧详情页在后台每 30s 继续请求。
+    !focused
+  );
   const liveEvents = live.data?.events;
   const prevLiveEvents = useRef(new Set<string>());
   const liveInitFor = useRef<string | null>(null);
