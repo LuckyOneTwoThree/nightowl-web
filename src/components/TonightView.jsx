@@ -6,7 +6,7 @@ import { decisionStrip } from '../core/decision-strip.js';
 import { storylines, teamName } from '../data/index.js';
 import HeroCard, { NoMatchCard } from './HeroCard.jsx';
 import MatchRow from './MatchRow.jsx';
-import { Button, Chip, IndexTag, LiveDot, Meta, SectionLabel, SleepBadge } from './atoms.jsx';
+import { Button, Chip, EmptyState, IndexTag, LiveDot, Meta, SectionLabel, SleepBadge } from './atoms.jsx';
 import { formatSleepHours } from '../core/sleep.js';
 import { queueStatusOf } from '../core/queue.js';
 import { sameNightLighterPicks } from '../core/owl.js';
@@ -288,6 +288,9 @@ export default function TonightView({
   const listed = groups.live.length + groups.upcoming.length + groups.finished.length;
   const heroLive = !!hero && stateOf(hero.m, now) === 'live';
   const liveCount = groups.live.length + (heroLive ? 1 : 0);
+  // 列表没有任何场次时不能只留标题：空容器会把剩余高度整个撑开，
+  // 看起来像加载失败。没有补看条目时用居中空态填满，有补看时用一行说明衔接。
+  const centeredEmpty = listed === 0 && replayPicks.length === 0;
 
   return (
     <div
@@ -373,56 +376,71 @@ export default function TonightView({
             ? 'shrink-0 space-y-0.5'
             : `scrollbar-thin -mr-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1 ${
                 listed > 0 || replayPicks.length > 0 ? 'min-h-[180px]' : ''
-              }`
+              } ${centeredEmpty ? 'flex flex-col' : ''}`
         }
       >
-        {listed === 0 && hero && (
-          <p className="rounded-lg border border-line-hairline bg-surface-card px-3 py-3 text-center text-xs text-text-muted">
-            今晚仅此一场焦点战。
-          </p>
-        )}
-        {listed > 0 && (
+        {centeredEmpty ? (
+          <EmptyState
+            title={hero ? '今晚仅此一场焦点战' : '今晚没有已排期的比赛'}
+            desc={
+              hero
+                ? '其余场次暂无排期，后续赛程可以在下方「接下来」里查看。'
+                : focal
+                  ? '下一场焦点已在上方展示，后续赛程可以在下方「接下来」里查看。'
+                  : '近期暂无已排期场次，可在「偏好与数据」中检查更新。'
+            }
+          />
+        ) : (
           <>
-            {groups.live.length > 0 && (
+            {listed === 0 && (
+              <p className="rounded-lg border border-line-hairline bg-surface-card px-3 py-3 text-center text-xs text-text-muted">
+                {hero ? '今晚仅此一场焦点战。' : '今晚没有已排期的比赛。'}
+              </p>
+            )}
+            {listed > 0 && (
               <>
-                <SectionHead label="进行中" count={groups.live.length} live />
-                {groups.live.map(renderRow)}
+                {groups.live.length > 0 && (
+                  <>
+                    <SectionHead label="进行中" count={groups.live.length} live />
+                    {groups.live.map(renderRow)}
+                  </>
+                )}
+                {groups.upcoming.length > 0 && (
+                  <>
+                    <SectionHead label="未开赛" count={groups.upcoming.length} />
+                    {groups.upcoming.map(renderRow)}
+                  </>
+                )}
+                {groups.finished.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setShowFinished(v => !v)}
+                      className="flex w-full items-center gap-1.5 rounded-md pt-2 pb-1 text-left transition-colors hover:text-text-secondary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+                      aria-expanded={showFinished}
+                    >
+                      <span className="text-xs font-semibold tracking-wide text-text-muted">
+                        已结束
+                      </span>
+                      <span className="font-num text-xs tabular-nums text-text-faint">
+                        · {groups.finished.length}
+                      </span>
+                      <span className="text-xs text-text-faint underline underline-offset-2">
+                        {showFinished ? '收起' : '展开'}
+                      </span>
+                    </button>
+                    {showFinished && groups.finished.map(renderRow)}
+                  </>
+                )}
               </>
             )}
-            {groups.upcoming.length > 0 && (
-              <>
-                <SectionHead label="未开赛" count={groups.upcoming.length} />
-                {groups.upcoming.map(renderRow)}
-              </>
-            )}
-            {groups.finished.length > 0 && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setShowFinished(v => !v)}
-                  className="flex w-full items-center gap-1.5 rounded-md pt-2 pb-1 text-left transition-colors hover:text-text-secondary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
-                  aria-expanded={showFinished}
-                >
-                  <span className="text-xs font-semibold tracking-wide text-text-muted">
-                    已结束
-                  </span>
-                  <span className="font-num text-xs tabular-nums text-text-faint">
-                    · {groups.finished.length}
-                  </span>
-                  <span className="text-xs text-text-faint underline underline-offset-2">
-                    {showFinished ? '收起' : '展开'}
-                  </span>
-                </button>
-                {showFinished && groups.finished.map(renderRow)}
-              </>
-            )}
-          </>
-        )}
 
-        {replayPicks.length > 0 && (
-          <>
-            <SectionHead label="最近值得补看 · 近 4 天" count={replayPicks.length} />
-            {replayPicks.map(renderReplayRow)}
+            {replayPicks.length > 0 && (
+              <>
+                <SectionHead label="最近值得补看 · 近 4 天" count={replayPicks.length} />
+                {replayPicks.map(renderReplayRow)}
+              </>
+            )}
           </>
         )}
       </div>
