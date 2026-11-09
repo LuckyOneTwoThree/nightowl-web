@@ -154,18 +154,18 @@ jobs:
 
             ### 下载
             - **Windows x64**：`NightOwl-Terrace-Setup-*.exe`
-            - **macOS Apple Silicon (arm64)**：`NightOwl-Terrace-<version>-arm64.dmg`（安装包）或 `.zip`（自动更新包）
+            - **macOS Apple Silicon (arm64)**：`NightOwl-Terrace-<version>-arm64.dmg`（安装包，覆盖安装即更新）
 
             ### Windows 安装
             1. 下载 `NightOwl-Terrace-Setup-*.exe`，双击安装（可自选目录）
             2. 首次运行如出现 SmartScreen「已保护你的电脑」：点 **更多信息 → 仍要运行**（未做代码签名，属预期行为）
 
             ### macOS 安装
-            1. 打开 `.dmg`，把 **NightOwl Terrace** 拖入「应用程序」
-            2. 首次启动若提示「无法验证开发者」：右键 App → **打开**；或到 **系统设置 → 隐私与安全性** 点「仍要打开」
-            3. 若仍被拦截，可在终端执行 `xattr -dr com.apple.quarantine "/Applications/NightOwl Terrace.app"` 后再打开
+            1. 先退出正在运行的旧版本，打开 `.dmg`，把 **NightOwl Terrace** 拖入「应用程序」，提示时选择「替换」
+            2. 首次启动若被拦截（「无法验证开发者」或「Apple 无法验证…」）：打开 **系统设置 → 隐私与安全性**，在「安全性」区域点「仍要打开」，按提示输入密码 / 触控 ID。macOS 15 起已取消「右键 → 打开」的放行方式
+            3. 若提示「已损坏，无法打开」或仍被拦截：在终端执行 `xattr -dr com.apple.quarantine "/Applications/NightOwl Terrace.app"` 后再打开
 
-            > macOS 构建使用 ad-hoc 临时签名、未做 Apple 公证；当前仅提供 Apple Silicon (arm64)，Intel Mac 暂未出包。
+            > macOS 构建使用 ad-hoc 临时签名、未做 Apple 公证；当前仅提供 Apple Silicon (arm64)，Intel Mac 暂未出包。ad-hoc 签名无法通过 Squirrel 的更新校验，因此 macOS 不支持应用内自动更新，请下载 DMG 覆盖安装（数据与偏好会保留）。
 
             ### 内置能力
             - 观赛决策（今晚之选 / 本周规划 / 睡眠档位 / 雷区预警，内置赛季快照）

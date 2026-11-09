@@ -28,6 +28,9 @@ export default function UpdateModal({
   onInstall
 }) {
   const isDesktop = !!window.desktop?.isDesktop;
+  // ad-hoc 签名的 designated requirement 是 cdhash，Squirrel 校验必然拒绝新包，
+  // 所以 macOS 不提供应用内下载/安装，只能走 DMG 覆盖安装。
+  const isMac = isDesktop && window.desktop?.platform === 'darwin';
   const closeBtnRef = useRef(null);
 
   // 弹窗打开时背景已 inert，焦点必须进入对话框；关闭时还回原处（hook 内统一处理）。
@@ -185,6 +188,12 @@ export default function UpdateModal({
                   {releaseNotes}
                 </div>
               </div>
+
+              {isMac && (
+                <p className="text-2xs leading-relaxed text-text-faint">
+                  macOS 版请下载 DMG 覆盖安装，数据与偏好会保留；ad-hoc 签名下应用内自动更新不可用。
+                </p>
+              )}
             </div>
           )}
 
@@ -254,15 +263,15 @@ export default function UpdateModal({
           </button>
 
           <div className="flex items-center gap-2">
-            {status === 'available' && isDesktop && (
+            {status === 'available' && isDesktop && !isMac && (
               <Button variant="primary" onClick={onDownload}>
                 立即下载更新
               </Button>
             )}
 
-            {status === 'available' && !isDesktop && (
+            {status === 'available' && (isMac || !isDesktop) && (
               <Button variant="primary" onClick={handleOpenReleasePage}>
-                下载最新安装包
+                {isMac ? '下载 DMG 安装包' : '下载最新安装包'}
               </Button>
             )}
 

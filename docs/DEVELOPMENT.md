@@ -225,7 +225,7 @@ node tools/verify-package.mjs "release/mac-arm64/NightOwl Terrace.app/Contents/R
 
 自检做三件事：扫描产物内 `server/` 与 `electron/` 的**相对 import 是否都可解析**、断言关键运行时文件（`src/core`、`src/data`、`dist`）与打包输入（`build/icon.ico`）存在、**断言本地敏感文件未进入产物**（`server/*.local.json`、`server/cache`）。
 
-> macOS 包在 `afterPack` 阶段做 ad-hoc 签名（`build/after-pack.cjs`）：项目没有 Apple Developer ID，而 Apple Silicon 上未签名的 `.app` 无法启动。ad-hoc 只解决「能启动」，不解决 Gatekeeper 的「无法验证开发者」；Release 说明里给出右键打开 / `xattr` 的绕过方式。当前仅打 arm64，Intel Mac 未支持。
+> macOS 包在 `afterPack` 阶段做 ad-hoc 签名（`build/after-pack.cjs`）：项目没有 Apple Developer ID，而 Apple Silicon 上未签名的 `.app` 无法启动。ad-hoc 只解决「能启动」，不解决 Gatekeeper 的「无法验证开发者」；Release 说明里给出系统设置放行 / `xattr` 的绕过方式（macOS 15 起 Apple 已取消右键 →「打开」）。另外，ad-hoc 签名的 designated requirement 是 cdhash，Squirrel.Mac 会用它校验新包，新版本 cdhash 必然不同，因此 **macOS 应用内自动更新不可用**，更新弹窗在 macOS 上只提供 DMG 下载入口。当前仅打 arm64，Intel Mac 未支持。
 
 > 这三类检查各自抓到过真问题：一次是 `package.json` 的 `files` 漏了 `src/core`（安装版启动即报 `ERR_MODULE_NOT_FOUND`），一次是自检自己把打包输入写进了产物断言，一次是 `server/**/*` 把本地签名直链与用户缓存打进了安装包。
 

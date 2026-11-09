@@ -183,9 +183,9 @@ npm run eas:preview        # EAS 云构建 arm64 内测 APK
 
 系统要求：Windows 10 / 11（x64）；macOS 11+（Apple Silicon，Intel Mac 暂未出包）。首次安装启动会播放一次开屏动画（可跳过，设置中可回放）。
 
-- macOS 首次打开若提示「无法验证开发者」：右键 App → **打开**，或到 **系统设置 → 隐私与安全性** 点「仍要打开」；也可执行 `xattr -dr com.apple.quarantine "/Applications/NightOwl Terrace.app"` 后重试
+- macOS 首次打开若被拦截（「无法验证开发者」/「Apple 无法验证…」）：打开 **系统设置 → 隐私与安全性**，在「安全性」区域点「仍要打开」，按提示输入密码 / 触控 ID（macOS 15 起已取消「右键 → 打开」的放行方式）；若提示「已损坏，无法打开」或仍被拦截，执行 `xattr -dr com.apple.quarantine "/Applications/NightOwl Terrace.app"` 后重试
 - **比分自动保鲜**：启动后会自动拉取最新比分，无需手动操作；数据更新时间与待录场次可在「设置 → 数据与服务」查看
-- 应用内更新：Windows 从 v0.1.8 起支持应用内提示与一键更新；macOS 当前为 ad-hoc 签名、未做 Apple 公证，更新不保证可用，建议下载最新 DMG 覆盖安装
+- 应用内更新：Windows 从 v0.1.8 起支持应用内提示与一键更新；macOS 为 ad-hoc 签名、未做 Apple 公证，Squirrel 更新校验不通过，应用内入口改为直接下载 DMG 覆盖安装（数据与偏好会保留）
 
 ### 桌面端 · 从源码运行
 
