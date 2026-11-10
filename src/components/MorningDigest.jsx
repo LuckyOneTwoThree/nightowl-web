@@ -97,7 +97,9 @@ export default function MorningDigest({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <Meta num>
-                        {match ? `${leagueName(match.l)} · ${hm(match.t)}` : item.id}
+                        {match
+                          ? `${leagueName(match.l)} · ${match.tbd ? '时间待定' : hm(match.t)}`
+                          : item.id}
                       </Meta>
                       <Meta>{item.status === 'watched' ? '已看' : '待补看'}</Meta>
                     </div>

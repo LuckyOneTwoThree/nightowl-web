@@ -123,6 +123,8 @@ export function WatchSheet({
     : [];
 
   const title = isDone ? '回放与集锦' : isLive ? '观看直播' : '官方观赛入口';
+  const isPostponed = match.st === 'pp';
+  const isTbd = !!match.tbd && !isDone && !isLive && !isPostponed;
   const countdown = engineCountdown(ts(match.t), now);
   const minute = liveMinute(ts(match.t), now);
 
@@ -161,7 +163,7 @@ export function WatchSheet({
         </Text>
       </View>
       <Text style={styles.matchMeta}>
-        {leagueName(match.l)} · {hm(match.t)}
+        {leagueName(match.l)} · {isPostponed ? '延期' : isTbd ? '时间待定' : hm(match.t)}
       </Text>
 
       <View style={[styles.status, isLive && styles.statusLive]}>
@@ -184,6 +186,16 @@ export function WatchSheet({
           <>
             <Text style={styles.statusText}>已结束</Text>
             <Text style={styles.statusHint}>官方回放 / 集锦</Text>
+          </>
+        ) : isPostponed ? (
+          <>
+            <Text style={styles.statusText}>比赛已延期</Text>
+            <Text style={styles.statusHint}>待官方重排时间</Text>
+          </>
+        ) : isTbd ? (
+          <>
+            <Text style={styles.statusText}>开球时间待定</Text>
+            <Text style={styles.statusHint}>赛前 2–4 周公布</Text>
           </>
         ) : (
           <>

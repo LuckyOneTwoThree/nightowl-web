@@ -19,6 +19,7 @@ import { FOLLOWABLE_LEAGUES, leagueColor, leagueName } from '@data/index.js';
 
 import { TeamPicker } from '@/components/TeamPicker';
 import {
+  getNotificationPermissionStatus,
   notificationsAvailable,
   requestNotificationPermission,
   syncPrematchReminders,
@@ -38,15 +39,13 @@ export default function OnboardingScreen() {
   const toggleLeague = usePrefsStore(state => state.toggleLeague);
   const finishOnboarding = usePrefsStore(state => state.finishOnboarding);
   const [step, setStep] = useState(0);
-  // 默认偏好是「开启」，但没碰过开关不代表用户此刻愿意授权；权限只在本人主动操作后请求。
-  const [notifyTouched, setNotifyTouched] = useState(false);
 
   const finish = (requestPermissions = true) => {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const wantsNotifications = prefs.notifyBefore15;
     finishOnboarding();
     router.replace('/');
-    if (requestPermissions && wantsNotifications && notifyTouched && notificationsAvailable()) {
+    if (requestPermissions && wantsNotifications && notificationsAvailable()) {
       void (async () => {
         const granted = await requestNotificationPermission();
         if (granted) {
@@ -59,10 +58,17 @@ export default function OnboardingScreen() {
   };
 
   const skip = () => {
-    // 跳过引导不能静默索取系统通知权限；权限只在用户明确完成提醒设置后请求。
+    // 跳过引导不能静默索取系统通知权限；若尚未获授系统权限，同步将提醒偏好归位为关闭，避免出现「开关开着却无权限」的假象。
     void Haptics.selectionAsync();
     finishOnboarding();
     router.replace('/');
+    if (notificationsAvailable()) {
+      void getNotificationPermissionStatus().then(status => {
+        if (status !== 'granted') {
+          usePrefsStore.getState().setPrefs({ notifyBefore15: false });
+        }
+      });
+    }
   };
 
   const next = () => {
@@ -216,13 +222,12 @@ export default function OnboardingScreen() {
             <View style={styles.switchText}>
               <Text style={styles.switchTitle}>赛前 15 分钟提醒</Text>
               <Text style={styles.switchHint}>
-                安装版会请求通知权限；Expo Go 不支持通知原生模块。
+                开启后点击「开始看球」将请求系统通知权限；Expo Go 不支持通知原生模块。
               </Text>
             </View>
             <Switch
               value={prefs.notifyBefore15}
               onValueChange={value => {
-                setNotifyTouched(true);
                 setPrefs({ notifyBefore15: value });
               }}
               accessibilityLabel="赛前 15 分钟提醒"

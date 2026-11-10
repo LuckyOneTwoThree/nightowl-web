@@ -68,7 +68,7 @@ export function addToQueue(items, match, now = Date.now()) {
     base = base.filter(item => item.id !== oldestWatched.id);
   }
   const night =
-    typeof match.t === 'string' && match.t.includes('T') ? owlDay(match.t) : '';
+    !match.tbd && typeof match.t === 'string' && match.t.includes('T') ? owlDay(match.t) : '';
   return {
     ok: true,
     reason: 'added',
@@ -138,14 +138,19 @@ export function toggleQueue(items, match, now = Date.now()) {
 
   if (status === WATCH_LATER_STATUS.WATCHED) {
     const night =
-      typeof match.t === 'string' && match.t.includes('T') ? owlDay(match.t) : '';
+      !match.tbd && typeof match.t === 'string' && match.t.includes('T') ? owlDay(match.t) : '';
     return {
       ok: true,
       action: 'restored',
       state: 'pending',
       queue: queue.map(item =>
         item.id === match.id
-          ? { ...item, status: WATCH_LATER_STATUS.PENDING, addedAt: now, night: night || item.night }
+          ? {
+              ...item,
+              status: WATCH_LATER_STATUS.PENDING,
+              addedAt: now,
+              night: match.tbd ? '' : night || item.night
+            }
           : item
       )
     };
@@ -168,8 +173,17 @@ export function queueWithMatches(items, fixtures, now = Date.now(), options = {}
     ? normalizeQueue(items, now).sort((a, b) => a.addedAt - b.addedAt)
     : pendingQueue(items, now);
   const map = new Map((fixtures || []).map(m => [m.id, m]));
-  return source.map(item => ({
-    item,
-    match: map.get(item.id) || null
-  }));
+  return source.map(item => {
+    const match = map.get(item.id) || null;
+    const liveNight =
+      match && !match.tbd && typeof match.t === 'string' && match.t.includes('T')
+        ? owlDay(match.t)
+        : match?.tbd
+          ? ''
+          : item.night;
+    return {
+      item: liveNight !== item.night ? { ...item, night: liveNight } : item,
+      match
+    };
+  });
 }

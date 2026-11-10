@@ -433,7 +433,9 @@ export default function SettingsDrawer({
                     <Meta>
                       {pending.length} 场待看
                       {watched.length > 0 ? ` · ${watched.length} 场已看` : ''}
-                      {pending[0]?.match ? ` · 最早 ${hm(pending[0].match.t)}` : ''}
+                      {pending[0]?.match && !pending[0].match.tbd
+                        ? ` · 最早 ${hm(pending[0].match.t)}`
+                        : ''}
                     </Meta>
                     {onOpenMorningDigest && (
                       <Button variant="ghost" size="xs" onClick={onOpenMorningDigest}>
@@ -454,7 +456,9 @@ export default function SettingsDrawer({
                           {match ? `${teamName(match.h)} vs ${teamName(match.a)}` : '比赛数据已移除'}
                         </p>
                         <Meta className="mt-0.5">
-                          {match ? `${leagueName(match.l)} · ${hm(match.t)}` : item.id}
+                          {match
+                            ? `${leagueName(match.l)} · ${match.tbd ? '时间待定' : hm(match.t)}`
+                            : item.id}
                         </Meta>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
@@ -484,7 +488,9 @@ export default function SettingsDrawer({
                               {match ? `${teamName(match.h)} vs ${teamName(match.a)}` : '比赛数据已移除'}
                             </p>
                             <Meta className="mt-0.5">
-                              {match ? `${leagueName(match.l)} · ${hm(match.t)} · 已看过` : `${item.id} · 已看过`}
+                              {match
+                                ? `${leagueName(match.l)} · ${match.tbd ? '时间待定' : hm(match.t)} · 已看过`
+                                : `${item.id} · 已看过`}
                             </Meta>
                           </div>
                           <div className="flex shrink-0 items-center gap-1">

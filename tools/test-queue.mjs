@@ -123,6 +123,15 @@ const toggleFull = toggleQueue(full, other, now);
 ok('队列满时三态切换不静默丢条目',
   !toggleFull.ok && toggleFull.reason === 'full' && toggleFull.queue.length === 10);
 
+const tbdMatch = { id: 'PD-13-ALA-DEP', t: '2026-11-23T04:00', tbd: true, h: 'ALA', a: 'DEP', l: 'PD' };
+const tbdAdded = addToQueue([], tbdMatch, now);
+ok('TBD 比赛加入时不把占位夜写入 night', tbdAdded.queue[0].night === '', tbdAdded.queue[0].night);
+const announcedMatch = { ...tbdMatch, t: '2026-11-22T23:15', tbd: false };
+const joinedAfterAnnounce = queueWithMatches(tbdAdded.queue, [announcedMatch], now);
+ok('TBD 公布正式开球时间后自动校准所属夜猫日',
+  joinedAfterAnnounce[0].item.night === '2026-11-22',
+  joinedAfterAnnounce[0].item.night);
+
 console.log('');
 console.log('────────────────────────────────────────────────────');
 if (fail) {

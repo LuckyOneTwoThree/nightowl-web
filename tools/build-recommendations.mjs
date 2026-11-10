@@ -22,7 +22,7 @@
  *   node tools/build-recommendations.mjs --now=2026-11-05T12:00   # 固定时钟（测试/复现）
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { getFixtures, REC_MAP, rivalries, storylines, leagueName } from '../src/data/index.js';
@@ -32,6 +32,7 @@ import * as E from '../src/core/engine.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const REC_PATH = resolve(ROOT, 'src/data/recommendations.json');
+const MOBILE_REC_PATH = resolve(ROOT, 'mobile/src/shared/data/recommendations.json');
 
 /** 每个自然周最多生成几条（稀缺性是 L1 的定义，不是可调参数） */
 export const WEEKLY_CAP = 2;
@@ -182,10 +183,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 
   if (APPLY) {
     const next = [...manual, ...entries];
-    writeFileSync(REC_PATH, JSON.stringify(next), 'utf8');
+    const serialized = JSON.stringify(next);
+    writeFileSync(REC_PATH, serialized, 'utf8');
+    if (existsSync(dirname(MOBILE_REC_PATH))) {
+      writeFileSync(MOBILE_REC_PATH, serialized, 'utf8');
+    }
     const futureHit = entries.length;
     console.log('');
-    console.log(`✅ 已写回 ${REC_PATH.replace(ROOT + '/', '')}：人工 ${manual.length} + 生成 ${entries.length} = ${next.length} 条`);
+    console.log(`✅ 已写回 ${REC_PATH.replace(ROOT + '/', '')}（并同步 mobile 共享副本）：人工 ${manual.length} + 生成 ${entries.length} = ${next.length} 条`);
     console.log(`   未来可行动的 L1 条目：${futureHit}（此前 0）`);
   } else {
     console.log('');

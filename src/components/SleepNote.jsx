@@ -9,7 +9,7 @@ export function sleepProfileFromPrefs(prefs) {
 }
 
 export function sleepLedgerFor(match, prefs) {
-  if (!match?.t || match.st === 'done') return null;
+  if (!match?.t || match.tbd || match.st === 'done' || match.st === 'pp') return null;
   const ledger = sleepLedger(match.t, sleepProfileFromPrefs(prefs));
   // 已经过去的场次不再显示“看完还剩多少睡眠”，避免把历史赛程当成今晚决策。
   if (!ledger.valid || !ledger.ready || ledger.endTs < Date.now()) return null;

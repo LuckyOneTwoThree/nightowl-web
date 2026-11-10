@@ -11,7 +11,7 @@ const STALE_MS = 10 * 60 * 1000;
 const LIVE_STALE_MS = 90 * 1000;
 const RECENT_PENDING_STALE_MS = 3 * 60 * 1000;
 // 只对仍落在快检窗口内的近期待录场次加速；更早的积压交给显式完整同步。
-const RECENT_PENDING_WINDOW_MS = 72 * 60 * 1000;
+const RECENT_PENDING_WINDOW_MS = 72 * 3600 * 1000;
 const FAILED_RETRY_MS = 2 * 60 * 1000;
 const CHECK_TICK_MS = 60 * 1000;
 const BACKFILL_COOLDOWN_MS = 30 * 60 * 1000;

@@ -34,12 +34,13 @@ import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 import type { Match } from '@/types';
 
 type Row =
-  | { type: 'date'; key: string; date: string; count: number }
+  | { type: 'date'; key: string; date: string; count: number; tbdCount?: number }
   | { type: 'match'; key: string; m: Match };
 
 type DateSection = {
   date: string;
   count: number;
+  tbdCount: number;
   data: Match[];
 };
 
@@ -104,9 +105,11 @@ export default function ScheduleScreen() {
   // 日期条计数必须与当前筛选后的列表同口径：
   // 只看意甲时，日期卡不应继续显示全季 23 场。
   const counts = useMemo(() => {
-    const map: Record<string, number> = {};
+    const map: Record<string, { count: number; tbdCount: number }> = {};
     for (const row of rows) {
-      if (row.type === 'date') map[row.date] = row.count;
+      if (row.type === 'date') {
+        map[row.date] = { count: row.count, tbdCount: row.tbdCount ?? 0 };
+      }
     }
     return map;
   }, [rows]);
@@ -147,7 +150,12 @@ export default function ScheduleScreen() {
     let current: DateSection | null = null;
     for (const row of visibleRows) {
       if (row.type === 'date') {
-        current = { date: row.date, count: row.count, data: [] };
+        current = {
+          date: row.date,
+          count: row.count,
+          tbdCount: row.tbdCount ?? 0,
+          data: [],
+        };
         result.push(current);
       } else if (current) {
         current.data.push(row.m);
@@ -287,7 +295,9 @@ export default function ScheduleScreen() {
         {dates.map(date => {
           const active = activeDate === date;
           const isToday = date === today;
-          const count = counts[date] ?? 0;
+          const dateInfo = counts[date];
+          const count = dateInfo?.count ?? 0;
+          const tbdCount = dateInfo?.tbdCount ?? 0;
           const hasFollowed = followedDates.has(date);
           return (
             <Pressable
@@ -295,7 +305,9 @@ export default function ScheduleScreen() {
               onPress={() => setSelectedDate(date)}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
-              accessibilityLabel={`${zhDate(date)} ${weekdayOf(date)}，${count} 场`}
+              accessibilityLabel={`${zhDate(date)} ${weekdayOf(date)}，${
+                count > 0 && tbdCount === count ? `待定 ${count} 场` : `${count} 场`
+              }`}
               style={[
                 styles.dateCard,
                 isToday && !active && styles.dateCardToday,
@@ -310,7 +322,7 @@ export default function ScheduleScreen() {
                 {date.slice(8)}
               </Text>
               <Text style={[styles.dateCount, active && styles.dateActiveCount]}>
-                {count > 0 ? `${count} 场` : '—'}
+                {count > 0 ? (tbdCount === count ? `待定 ${count}` : `${count} 场`) : '—'}
               </Text>
             </Pressable>
           );
@@ -382,7 +394,11 @@ export default function ScheduleScreen() {
             <View style={styles.dateHeader}>
               <Text style={styles.dateHeaderText}>{zhDate(section.date)}</Text>
               <Text style={styles.dateHeaderWeek}>{weekdayOf(section.date)}</Text>
-              <Text style={styles.dateHeaderCount}>{section.count} 场</Text>
+              <Text style={styles.dateHeaderCount}>
+                {section.tbdCount > 0
+                  ? `${section.count} 场（待定 ${section.tbdCount}）`
+                  : `${section.count} 场`}
+              </Text>
             </View>
           )}
           renderItem={({ item }) => (

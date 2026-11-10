@@ -201,6 +201,12 @@ jobs:
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
+      # 与 Windows 构建同口径重跑 L1 推荐池，保证双端同一 tag 产物内嵌一致的推荐数据，
+      # 且避免仓库快照跨周后 macOS 在 test:all 因窗口过期而中断发布。
+      - name: Rebuild L1 recommendations
+        shell: bash
+        run: npm run build:recs
+
       - name: Build frontend
         run: npm run build
 

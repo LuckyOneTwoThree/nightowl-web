@@ -23,11 +23,13 @@ import {
   computeReplayPicks,
   computeTonight,
   groupTonight,
+  heroDisplayTier,
   heroTier,
   nightHeadline,
   sameNightLighterPicks,
   stateOf,
 } from '@core/owl.js';
+import { queueStatusOf } from '@core/queue.js';
 import { countdown as engineCountdown, sleepTier, ts } from '@core/engine.js';
 import { decisionStrip } from '@core/decision-strip.js';
 import { formatSleepHours, sleepLedger } from '@core/sleep.js';
@@ -48,6 +50,7 @@ import { animateLayout } from '@/lib/layoutAnimation';
 import { useNow } from '@/lib/useNow';
 import { useAppStore, useDataRev, useMatchRevealed } from '@/state/app';
 import { usePrefs, usePrefsStore } from '@/state/prefs';
+import { useWatchLaterStore } from '@/state/queue';
 import { SleepNote } from '@/ui/SleepNote';
 import { StopLossBanner } from '@/components/StopLossBanner';
 import { useStopLossPrompt } from '@/lib/useStopLoss';
@@ -523,13 +526,16 @@ function HeroCard({
   const isLive = stateOf(hero.m, now) === 'live';
   // 防剧透开启且未揭晓时不泄露比分；已揭晓但上游还没回填时如实说待更新。
   const scoreVisible = useMatchRevealed(hero.m.id, prefs.spoilerFree);
+  const watchLater = useWatchLaterStore(state => state.items);
   const hasScore = /^\d+-\d+$/.test(hero.m.sc || '');
   const liveScore = isLive && scoreVisible && hasScore ? hero.m.sc : null;
   const liveScoreNote = isLive && !liveScore ? (scoreVisible ? '比分待更新' : '比分未揭晓') : null;
 
   // 决策条：与桌面同一份语义，移动端折成 2×2；同一屏只出现一次。
   const decision = useMemo(() => {
-    const alternatives = sameNightLighterPicks(hero.m, prefs, 50, now);
+    const alternatives = sameNightLighterPicks(hero.m, prefs, 50, now).filter(
+      alt => queueStatusOf(watchLater, alt.m.id) !== 'watched'
+    );
     const strip = decisionStrip({
       match: hero.m,
       index: hero.index,
@@ -544,9 +550,14 @@ function HeroCard({
       ? alternatives.find(item => item.m.id === strip.alternativeId) ?? null
       : null;
     return { strip, alt };
-  }, [hero, prefs, now, scoreVisible]);
-  const weak = level === 'weak';
-  const isHighlight = level === 'highlight';
+  }, [hero, prefs, now, watchLater, scoreVisible]);
+  // 档位由决策条裁决：看完会低于睡眠底线时不再给金色「今晚之选 · 焦点夜」（与桌面端同源 A1）
+  const effectiveLevel = (heroDisplayTier(hero, decision.strip) || level) as
+    | 'highlight'
+    | 'standard'
+    | 'weak';
+  const weak = effectiveLevel === 'weak';
+  const isHighlight = effectiveLevel === 'highlight';
   const energyFill = Math.max(1, Math.min(5, Math.ceil(hero.index / 6)));
 
   return (

@@ -9,7 +9,7 @@ import { colors, fontSize, weight } from './theme';
 type SleepPrefs = Pick<Prefs, 'sleepEnabled' | 'sleepWakeTime' | 'sleepMinHours'>;
 
 export function sleepLedgerFor(match: Match | null | undefined, prefs: SleepPrefs) {
-  if (!match?.t || !prefs.sleepEnabled || match.st === 'done') return null;
+  if (!match?.t || match.tbd || !prefs.sleepEnabled || match.st === 'done' || match.st === 'pp') return null;
   const ledger = sleepLedger(match.t, {
     enabled: prefs.sleepEnabled,
     wakeTime: prefs.sleepWakeTime,

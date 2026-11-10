@@ -1053,7 +1053,10 @@ export default function App() {
                   <span className="min-w-0 truncate text-xs text-text-secondary">
                     正在查看：{teamName(activeMatch.h)} vs {teamName(activeMatch.a)}
                     <span className="text-text-faint">
-                      {' '}· {activeMatch.t.slice(5, 10).replace('-', '/')} {activeMatch.t.split('T')[1]}
+                      {' '}·{' '}
+                      {activeMatch.tbd
+                        ? '时间待定'
+                        : `${activeMatch.t.slice(5, 10).replace('-', '/')} ${activeMatch.t.split('T')[1]}`}
                     </span>
                   </span>
                   <button

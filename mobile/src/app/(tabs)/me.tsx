@@ -38,6 +38,9 @@ import { openExternal } from '@/lib/openExternal';
 import { useNow } from '@/lib/useNow';
 import { useAppStore, useDataRev } from '@/state/app';
 import {
+  cancelAllMatchReminders,
+  getNotificationPermissionStatus,
+  type NotificationPermissionState,
   notificationsAvailable,
   requestNotificationPermission,
   scheduleTestNotification,
@@ -76,9 +79,8 @@ export default function MeScreen() {
   const toggleLeague = usePrefsStore(state => state.toggleLeague);
   const setBudget = usePrefsStore(state => state.setBudget);
   const restartOnboarding = usePrefsStore(state => state.restartOnboarding);
-  const [notificationPermission, setNotificationPermission] = useState<
-    'unknown' | 'granted' | 'denied'
-  >('unknown');
+  const [notificationPermission, setNotificationPermission] =
+    useState<NotificationPermissionState>('unavailable');
   const [showMore, setShowMore] = useState(false);
   const [quickPulling, setQuickPulling] = useState(false);
 
@@ -86,14 +88,11 @@ export default function MeScreen() {
     if (!notificationsAvailable()) return undefined;
     let cancelled = false;
     const check = () => {
-      import('expo-notifications')
-        .then(N => N.getPermissionsAsync())
-        .then(permission => {
-          if (!cancelled) {
-            setNotificationPermission(permission.granted ? 'granted' : 'denied');
-          }
-        })
-        .catch(() => {});
+      void getNotificationPermissionStatus().then(status => {
+        if (!cancelled) {
+          setNotificationPermission(status);
+        }
+      });
     };
     check();
     // 从系统设置授权后返回，权限事实已经变化；只在挂载时查一次会一直停在旧的「被拒绝」。
@@ -281,6 +280,7 @@ export default function MeScreen() {
             onValueChange={value => {
               if (!value) {
                 setPrefs({ notifyBefore15: false });
+                void cancelAllMatchReminders();
                 return;
               }
               if (!notificationsAvailable()) {
@@ -289,7 +289,8 @@ export default function MeScreen() {
               }
               void (async () => {
                 const granted = await requestNotificationPermission();
-                setNotificationPermission(granted ? 'granted' : 'denied');
+                const status = await getNotificationPermissionStatus();
+                setNotificationPermission(granted ? 'granted' : status);
                 setPrefs({ notifyBefore15: granted });
                 if (granted) {
                   await syncPrematchReminders(usePrefsStore.getState().prefs);
@@ -297,11 +298,31 @@ export default function MeScreen() {
               })();
             }}
           />
-          {notificationPermission === 'denied' ? (
+          {prefs.notifyBefore15 && notificationPermission === 'denied' ? (
             <View style={styles.permissionRow}>
               <Text style={styles.permissionWarning}>通知权限被拒绝，赛前提醒不会触发。</Text>
               <Pressable onPress={() => void Linking.openSettings()} hitSlop={16}>
                 <Text style={styles.permissionLink}>去设置</Text>
+              </Pressable>
+            </View>
+          ) : prefs.notifyBefore15 && notificationPermission === 'undetermined' ? (
+            <View style={styles.permissionRow}>
+              <Text style={styles.permissionWarning}>尚未授予系统通知权限，赛前提醒暂未生效。</Text>
+              <Pressable
+                onPress={() => {
+                  void (async () => {
+                    const granted = await requestNotificationPermission();
+                    const status = await getNotificationPermissionStatus();
+                    setNotificationPermission(granted ? 'granted' : status);
+                    setPrefs({ notifyBefore15: granted });
+                    if (granted) {
+                      await syncPrematchReminders(usePrefsStore.getState().prefs);
+                    }
+                  })();
+                }}
+                hitSlop={16}
+              >
+                <Text style={styles.permissionLink}>去授权</Text>
               </Pressable>
             </View>
           ) : null}
@@ -406,7 +427,9 @@ export default function MeScreen() {
                         {match ? `${teamName(match.h)} vs ${teamName(match.a)}` : '比赛数据已移除'}
                       </Text>
                       <Text style={styles.queueMeta}>
-                        {match ? `${leagueName(match.l)} · ${hm(match.t)}` : item.id}
+                        {match
+                          ? `${leagueName(match.l)} · ${match.tbd ? '时间待定' : hm(match.t)}`
+                          : item.id}
                       </Text>
                     </Pressable>
                     {match ? (
@@ -452,7 +475,9 @@ export default function MeScreen() {
                           {match ? `${teamName(match.h)} vs ${teamName(match.a)}` : '比赛数据已移除'}
                         </Text>
                         <Text style={styles.queueMeta}>
-                          {match ? `${leagueName(match.l)} · ${hm(match.t)} · 已看过` : `${item.id} · 已看过`}
+                          {match
+                            ? `${leagueName(match.l)} · ${match.tbd ? '时间待定' : hm(match.t)} · 已看过`
+                            : `${item.id} · 已看过`}
                         </Text>
                       </Pressable>
                       {match ? (

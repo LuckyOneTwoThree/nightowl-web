@@ -202,7 +202,7 @@ export default function MatchScreen() {
       alive = false;
       subscription.remove();
     };
-  }, [id, rev]);
+  }, [id, rev, prefs.notifyBefore15]);
 
   const match = useMemo(
     () => getFixtures().find((item: Match) => item.id === id) as Match | undefined,
@@ -237,6 +237,8 @@ export default function MatchScreen() {
     ? state === 'finished' || state === 'ended_pending' || match.st === 'done'
     : false;
   const isLive = state === 'live';
+  const isPostponed = state === 'pp' || match?.st === 'pp';
+  const isTbd = !!match?.tbd && !isDone && !isLive && !isPostponed;
   const live = useLiveMatch(
     match ?? null,
     !!match && (isLive || isDone),
@@ -317,10 +319,12 @@ export default function MatchScreen() {
   const color = tierColor(tier.tier);
 
   const share = () => {
+    const timePart = isPostponed ? '延期' : isTbd ? '时间待定' : hm(match.t);
+    const indexPart = isTbd || isPostponed ? '' : ` · 夜猫指数 ${intel.index.toFixed(1)}`;
     void Share.share({
-      message: `${teamName(match.h)} vs ${teamName(match.a)} · ${hm(match.t)} · ${leagueName(
+      message: `${teamName(match.h)} vs ${teamName(match.a)} · ${timePart} · ${leagueName(
         match.l
-      )} · 夜猫指数 ${intel.index.toFixed(1)}`,
+      )}${indexPart}`,
     });
   };
 
@@ -329,6 +333,10 @@ export default function MatchScreen() {
   const reminded = reminderSet;
 
   const handleReminder = async () => {
+    if (isTbd || isPostponed) {
+      toast.error(isPostponed ? '比赛已延期，暂无法设置提醒' : '开球时间待定，确定后可设置提醒');
+      return;
+    }
     const ok = await scheduleMatchReminder(match);
     if (ok) {
       setReminderSet(true);
@@ -425,7 +433,13 @@ export default function MatchScreen() {
                 {match.r ? ` · 第 ${match.r} 轮` : ''}
               </Text>
             </View>
-            <SleepBadge tier={tier} size="md" showZh />
+            {isPostponed ? (
+              <Chip tone="warn">延期</Chip>
+            ) : isTbd ? (
+              <Chip tone="default">时间待定</Chip>
+            ) : (
+              <SleepBadge tier={tier} size="md" showZh />
+            )}
           </View>
 
           <View style={styles.teams}>
@@ -478,6 +492,17 @@ export default function MatchScreen() {
                   </View>
                   <Text style={styles.liveMinute}>{liveMinuteText}</Text>
                 </>
+              ) : isPostponed ? (
+                <>
+                  <Text style={styles.vs}>延期</Text>
+                  <Text style={styles.countdown}>本场延期</Text>
+                </>
+              ) : isTbd ? (
+                <>
+                  <Text style={styles.vs}>VS</Text>
+                  <Text style={styles.time}>--:--</Text>
+                  <Text style={styles.countdown}>时间待定</Text>
+                </>
               ) : (
                 <>
                   <Text style={styles.vs}>VS</Text>
@@ -512,6 +537,25 @@ export default function MatchScreen() {
                 <Pressable onPress={() => setWatchOpen(true)} hitSlop={16}>
                   <Text style={styles.stateAction}>看集锦</Text>
                 </Pressable>
+              </>
+            ) : isPostponed ? (
+              <View style={styles.stateLeft}>
+                <Text style={styles.stateText} numberOfLines={1}>
+                  本场比赛已延期，待官方重排时间
+                </Text>
+              </View>
+            ) : isTbd ? (
+              <>
+                <View style={styles.stateLeft}>
+                  <Text style={styles.stateText} numberOfLines={1}>
+                    开球时间待定 · 赛前 2–4 周公布
+                  </Text>
+                </View>
+                <View style={styles.stateActions}>
+                  <Pressable onPress={() => setWatchOpen(true)} hitSlop={16}>
+                    <Text style={styles.stateSecondary}>观看入口</Text>
+                  </Pressable>
+                </View>
               </>
             ) : (
               <>
@@ -553,10 +597,16 @@ export default function MatchScreen() {
           ) : null}
 
           <View style={styles.metrics}>
-            <View style={styles.metric}>
-              <Sparkles size={14} color={colors.accent} />
-              <Text style={styles.metricAccent}>夜猫指数 {intel.index.toFixed(1)}</Text>
-            </View>
+            {!isTbd && !isPostponed ? (
+              <View style={styles.metric}>
+                <Sparkles size={14} color={colors.accent} />
+                <Text style={styles.metricAccent}>夜猫指数 {intel.index.toFixed(1)}</Text>
+              </View>
+            ) : (
+              <Text style={styles.metricMuted}>
+                {isPostponed ? '比赛延期，暂不计指数' : '时间待定，确定后计算夜猫指数'}
+              </Text>
+            )}
             <Text style={styles.metricMuted}>看点 {intel.ev.star} 星</Text>
           </View>
 
@@ -760,6 +810,8 @@ function IntelTab({
   const trustTone = dataStateTone(dataState);
   const verdict = VERDICT_COPY[decision.verdict] ?? VERDICT_COPY.unknown;
   const reason = reasonTextOf(decision);
+  const isTbd = !!match.tbd;
+  const isPostponed = match.st === 'pp';
 
   return (
     <View style={styles.tabGap}>
@@ -835,16 +887,34 @@ function IntelTab({
           <View style={{ gap: 2 }}>
             <Text style={styles.cardEyebrow}>熬夜代价</Text>
             <Text style={styles.cardTitle}>
-              {intel.tier.label} {intel.tier.zh} · {intel.tier.cost}h
+              {isPostponed
+                ? '比赛已延期'
+                : isTbd
+                  ? '开球时间待定'
+                  : `${intel.tier.label} ${intel.tier.zh} · ${intel.tier.cost}h`}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-            <SleepBadge tier={intel.tier} />
-            <Chip tone="default">{hm(match.t)} 开球</Chip>
+            {isPostponed ? (
+              <Chip tone="warn">延期</Chip>
+            ) : isTbd ? (
+              <Chip tone="default">时间待定</Chip>
+            ) : (
+              <>
+                <SleepBadge tier={intel.tier} />
+                <Chip tone="default">{hm(match.t)} 开球</Chip>
+              </>
+            )}
           </View>
         </View>
-        <TierMeter tier={intel.tier} />
-        <Text style={styles.cardLine}>睡眠成本按开球时间实时计算，不读取静态字段。</Text>
+        {!isTbd && !isPostponed ? <TierMeter tier={intel.tier} /> : null}
+        <Text style={styles.cardLine}>
+          {isPostponed
+            ? '本场比赛已延期，待官方重排开球时间后再计算熬夜代价。'
+            : isTbd
+              ? '联赛尚未公布具体开球时间；时间确定后档位与成本会自动更新。'
+              : '睡眠成本按开球时间实时计算，不读取静态字段。'}
+        </Text>
       </Card>
 
       {/* ---- 第二层 · 指数归因（唯一主图表） ---- */}
@@ -861,7 +931,9 @@ function IntelTab({
         >
           <Text style={styles.cardEyebrow}>指数归因</Text>
           <View style={styles.attributionToggle}>
-            <Text style={styles.attributionIndex}>{intel.index.toFixed(1)}</Text>
+            <Text style={styles.attributionIndex}>
+              {isTbd || isPostponed ? '—' : intel.index.toFixed(1)}
+            </Text>
             {showAttribution ? (
               <ChevronUp size={16} color={colors.textMuted} />
             ) : (
@@ -897,17 +969,20 @@ function IntelTab({
             />
             <AttributionRow
               label="睡眠成本"
-              value={`${intel.tier.cost.toFixed(1)}h`}
-              ratio={intel.tier.cost / 4.5}
-              barColor={tierColor(intel.tier.tier)}
+              value={
+                isPostponed ? '比赛延期' : isTbd ? '时间待定' : `${intel.tier.cost.toFixed(1)}h`
+              }
+              ratio={isTbd || isPostponed ? 0 : intel.tier.cost / 4.5}
+              barColor={isTbd || isPostponed ? undefined : tierColor(intel.tier.tier)}
             />
             <View style={styles.formula}>
               <Text style={styles.formulaText}>
                 指数 = (看点 + 故事线 + 关注 + 联赛) ÷ (1 + 睡眠成本 + 0.5)
               </Text>
               <Text style={styles.formulaResult}>
-                分子 {(starPart + storyPart + followPart + leaguePart).toFixed(1)} ÷ 分母{' '}
-                {denominator.toFixed(1)} = {intel.index.toFixed(1)}
+                {isTbd || isPostponed
+                  ? `分子 ${(starPart + storyPart + followPart + leaguePart).toFixed(1)} · 分母待开球时间确定后计算`
+                  : `分子 ${(starPart + storyPart + followPart + leaguePart).toFixed(1)} ÷ 分母 ${denominator.toFixed(1)} = ${intel.index.toFixed(1)}`}
               </Text>
             </View>
           </>

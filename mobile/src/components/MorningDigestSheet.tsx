@@ -77,7 +77,9 @@ export function MorningDigestSheet({
                   <View key={item.id} style={styles.card}>
                     <View style={styles.cardTop}>
                       <Text style={styles.meta}>
-                        {match ? `${leagueName(match.l)} · ${hm(match.t)}` : item.id}
+                        {match
+                          ? `${leagueName(match.l)} · ${match.tbd ? '时间待定' : hm(match.t)}`
+                          : item.id}
                       </Text>
                       <Text style={styles.meta}>{item.status === 'watched' ? '已看' : '待补看'}</Text>
                     </View>
