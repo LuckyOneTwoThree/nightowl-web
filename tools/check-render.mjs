@@ -1022,6 +1022,8 @@ app.whenReady().then(async () => {
         return {
           rowCount: rows.length,
           firstLabel: rows[0]?.getAttribute('aria-label') || '',
+          // 空赛周：周视图走的是「本周暂无未开赛场次」分支，时间轴本就不该渲染。
+          emptyWeek: text.includes('本周暂无未开赛场次') || text.includes('历史周不显示熬夜风险'),
           hasTitle: text.includes('7 晚时间轴'),
           hasFloor: text.includes('底线'),
           hasWake: text.includes('起床'),
@@ -1029,50 +1031,57 @@ app.whenReady().then(async () => {
         };
       })()
     `);
-    ok('★ 周时间轴渲染 7 行（周一~周日）', weekTimeline.rowCount === 7, JSON.stringify(weekTimeline));
-    ok('★ 周时间轴标题 / 底线 / 起床结论常驻',
-      weekTimeline.hasTitle && weekTimeline.hasFloor && weekTimeline.hasWake && weekTimeline.hasVerdict,
-      JSON.stringify(weekTimeline));
+    if (weekTimeline.emptyWeek) {
+      // 真实快照可能整周无赛（如 2026-11-09）。这不是回归，转交人造场景验证时间轴。
+      deferToScenario('★ 周时间轴渲染 7 行（周一~周日）');
+      deferToScenario('★ 周时间轴标题 / 底线 / 起床结论常驻');
+      deferToScenario('★ 点单晚出现筛选横幅与「清除 M/D」按钮');
+    } else {
+      ok('★ 周时间轴渲染 7 行（周一~周日）', weekTimeline.rowCount === 7, JSON.stringify(weekTimeline));
+      ok('★ 周时间轴标题 / 底线 / 起床结论常驻',
+        weekTimeline.hasTitle && weekTimeline.hasFloor && weekTimeline.hasWake && weekTimeline.hasVerdict,
+        JSON.stringify(weekTimeline));
 
-    // 单晚筛选：点任一行出「正在筛选」，点日期旁的「清除」收起。
-    // 用「清除 M/D」精确匹配，避开设置抽屉里的线路记忆「清除」。
-    const dayRowClicked = await win.webContents.executeJavaScript(`
-      (() => {
-        const rows = [...document.querySelectorAll('button')].filter(b =>
-          /周[一二三四五六日]，\\d+ 场/.test(b.getAttribute('aria-label') || '')
-        );
-        if (rows.length < 4) return false;
-        rows[3].click();
-        return true;
-      })()
-    `);
-    await sleep(300);
-    const dayFilterOn = await win.webContents.executeJavaScript(`
-      (() => {
-        const text = document.body.innerText;
-        const clearBtn = [...document.querySelectorAll('button')].find(b =>
-          /^清除 \\d{1,2}\\/\\d{1,2}/.test((b.textContent || '').trim())
-        );
-        return { banner: text.includes('正在筛选'), hasClear: !!clearBtn };
-      })()
-    `);
-    ok('★ 点单晚出现筛选横幅与「清除 M/D」按钮',
-      dayRowClicked && dayFilterOn.banner && dayFilterOn.hasClear, JSON.stringify(dayFilterOn));
+      // 单晚筛选：点任一行出「正在筛选」，点日期旁的「清除」收起。
+      // 用「清除 M/D」精确匹配，避开设置抽屉里的线路记忆「清除」。
+      const dayRowClicked = await win.webContents.executeJavaScript(`
+        (() => {
+          const rows = [...document.querySelectorAll('button')].filter(b =>
+            /周[一二三四五六日]，\\d+ 场/.test(b.getAttribute('aria-label') || '')
+          );
+          if (rows.length < 4) return false;
+          rows[3].click();
+          return true;
+        })()
+      `);
+      await sleep(300);
+      const dayFilterOn = await win.webContents.executeJavaScript(`
+        (() => {
+          const text = document.body.innerText;
+          const clearBtn = [...document.querySelectorAll('button')].find(b =>
+            /^清除 \\d{1,2}\\/\\d{1,2}/.test((b.textContent || '').trim())
+          );
+          return { banner: text.includes('正在筛选'), hasClear: !!clearBtn };
+        })()
+      `);
+      ok('★ 点单晚出现筛选横幅与「清除 M/D」按钮',
+        dayRowClicked && dayFilterOn.banner && dayFilterOn.hasClear, JSON.stringify(dayFilterOn));
 
-    await win.webContents.executeJavaScript(`
-      (() => {
-        const btn = [...document.querySelectorAll('button')].find(b =>
-          /^清除 \\d{1,2}\\/\\d{1,2}/.test((b.textContent || '').trim())
-        );
-        if (btn) btn.click();
-        return !!btn;
-      })()
-    `);
-    await sleep(300);
-    const dayFilterOff = await win.webContents.executeJavaScript(
-      `!document.body.innerText.includes('正在筛选')`
-    );
-    ok('★ 清除后筛选横幅消失', dayFilterOff);
+      await win.webContents.executeJavaScript(`
+        (() => {
+          const btn = [...document.querySelectorAll('button')].find(b =>
+            /^清除 \\d{1,2}\\/\\d{1,2}/.test((b.textContent || '').trim())
+          );
+          if (btn) btn.click();
+          return !!btn;
+        })()
+      `);
+      await sleep(300);
+      const dayFilterOff = await win.webContents.executeJavaScript(
+        `!document.body.innerText.includes('正在筛选')`
+      );
+      ok('★ 清除后筛选横幅消失', dayFilterOff);
+    }
 
     /* ---------- 1366×768 视口与赛程筛选抽屉验证 ---------- */
     win.setContentSize(1366, 768);
@@ -2059,6 +2068,67 @@ app.whenReady().then(async () => {
         await sleep(900);
       };
       await switchView2('本周规划');
+      /* 周时间轴在人造赛程下必须真实渲染：主场景遇空赛周会转交到这里。 */
+      const weekTimeline2 = await win2.webContents.executeJavaScript(`
+        (() => {
+          const rows = [...document.querySelectorAll('button')].filter(b =>
+            /周[一二三四五六日]，\\d+ 场/.test(b.getAttribute('aria-label') || '')
+          );
+          const text = document.body.innerText;
+          return {
+            rowCount: rows.length,
+            firstLabel: rows[0]?.getAttribute('aria-label') || '',
+            hasTitle: text.includes('7 晚时间轴'),
+            hasFloor: text.includes('底线'),
+            hasWake: text.includes('起床'),
+            hasVerdict: /越过底线|未越线|全周未越线/.test(text)
+          };
+        })()
+      `);
+      ok('★ 周时间轴渲染 7 行（周一~周日）（人造场景）',
+        weekTimeline2.rowCount === 7, JSON.stringify(weekTimeline2));
+      ok('★ 周时间轴标题 / 底线 / 起床结论常驻（人造场景）',
+        weekTimeline2.hasTitle && weekTimeline2.hasFloor && weekTimeline2.hasWake && weekTimeline2.hasVerdict,
+        JSON.stringify(weekTimeline2));
+
+      const dayRowClicked2 = await win2.webContents.executeJavaScript(`
+        (() => {
+          const rows = [...document.querySelectorAll('button')].filter(b =>
+            /周[一二三四五六日]，\\d+ 场/.test(b.getAttribute('aria-label') || '')
+          );
+          if (rows.length < 4) return false;
+          rows[3].click();
+          return true;
+        })()
+      `);
+      await sleep(300);
+      const dayFilterOn2 = await win2.webContents.executeJavaScript(`
+        (() => {
+          const text = document.body.innerText;
+          const clearBtn = [...document.querySelectorAll('button')].find(b =>
+            /^清除 \\d{1,2}\\/\\d{1,2}/.test((b.textContent || '').trim())
+          );
+          return { banner: text.includes('正在筛选'), hasClear: !!clearBtn };
+        })()
+      `);
+      ok('★ 点单晚出现筛选横幅与「清除 M/D」按钮（人造场景）',
+        dayRowClicked2 && dayFilterOn2.banner && dayFilterOn2.hasClear, JSON.stringify(dayFilterOn2));
+
+      await win2.webContents.executeJavaScript(`
+        (() => {
+          const btn = [...document.querySelectorAll('button')].find(b =>
+            /^清除 \\d{1,2}\\/\\d{1,2}/.test((b.textContent || '').trim())
+          );
+          if (btn) btn.click();
+          return !!btn;
+        })()
+      `);
+      await sleep(300);
+      const dayFilterOff2 = await win2.webContents.executeJavaScript(
+        `!document.body.innerText.includes('正在筛选')`
+      );
+      ok('★ 清除后筛选横幅消失（人造场景）', dayFilterOff2);
+
       await switchView2('今晚观赛');
       const restored = await win2.webContents.executeJavaScript(`
         (() => {
