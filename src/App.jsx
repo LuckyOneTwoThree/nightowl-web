@@ -3,7 +3,7 @@ import { getFixtures, setFixtures, storylines, teamName } from './data/index.js'
 import { countdown as engineCountdown, ts, MATCH_DURATION_MS, sleepTier } from './core/engine.js';
 import { hm, humanCountdownShort } from './core/format.js';
 import { STANDINGS_LEAGUES } from './core/standings.js';
-import { loadPrefs, savePrefs } from './core/prefs.js';
+import { loadPrefs, savePrefs } from './lib/prefs-storage.js';
 import { normalizeQueue, queueStatusOf } from './core/queue.js';
 import { isPrematchDue, prematchNotification } from './core/notifications.js';
 import {

@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { defaultPrefs } from '@core/prefs.js';
 import { useAppStore } from './app';
 
 export type Prefs = {
@@ -19,16 +20,10 @@ export type Prefs = {
   onboardingDone: boolean;
 };
 
+// 9 个共享字段取自 core 的 defaultPrefs()（与桌面同一来源），
+// 仅追加移动端独有的持久化字段，避免两端默认值各写一份漂移。
 export const DEFAULT_PREFS: Prefs = {
-  followedTeams: [],
-  followedLeagues: ['PL'],
-  weeklyBudget: 4,
-  spoilerFree: true,
-  notifyBefore15: true,
-  notifyLiveEvents: true,
-  sleepEnabled: false,
-  sleepWakeTime: '07:30',
-  sleepMinHours: 7,
+  ...defaultPrefs(),
   sleepPromptDismissed: false,
   theme: 'dark',
   onboardingDone: false,

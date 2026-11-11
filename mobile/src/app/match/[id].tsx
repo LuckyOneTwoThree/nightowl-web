@@ -46,7 +46,7 @@ import {
   storyBonus,
   ts,
 } from '@core/engine.js';
-import { bjClock, bjDate, hm, humanCountdownShort, liveMinute as minuteOf, zhDate } from '@core/format.js';
+import { bjClock, bjDate, formatGoalDiff, hm, humanCountdownShort, liveMinute as minuteOf, zhDate } from '@core/format.js';
 import { eventKey, eventSummary, shouldNotifyEvent } from '@core/live-events.js';
 import { driversOf, narrativeOf, seasonIdentityOf } from '@core/narrative.js';
 import { decisionStrip } from '@core/decision-strip.js';
@@ -64,7 +64,6 @@ import { animateLayout } from '@/lib/layoutAnimation';
 import { hasScheduledMatchReminder, scheduleMatchReminder } from '@/lib/reminders';
 import { useLiveMatch, type LiveData } from '@/data/useLiveMatch';
 import { useNow } from '@/lib/useNow';
-import { formatGd } from '@/lib/format';
 import { useStopLossPrompt } from '@/lib/useStopLoss';
 import { useAppStore, useDataRev } from '@/state/app';
 import { useWatchLaterStore } from '@/state/queue';
@@ -1236,7 +1235,7 @@ function StandingsCard({
               {row ? (
                 <>
                   <Text style={styles.standingsStats}>
-                    {row.played} 场 · {row.points} 分 · 净胜球 {formatGd(row.gd)}
+                    {row.played} 场 · {row.points} 分 · 净胜球 {formatGoalDiff(row.gd)}
                   </Text>
                   {row.context ? (
                     <Text style={styles.standingsContext}>

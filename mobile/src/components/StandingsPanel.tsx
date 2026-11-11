@@ -5,13 +5,12 @@ import { useRouter } from 'expo-router';
 import { getFixtures, leagueName, teamName } from '@data/index.js';
 import { STANDINGS_LEAGUES, computeStandings, standingsCutoff } from '@core/standings.js';
 import { isFinished } from '@core/engine.js';
-import { bjDate } from '@core/format.js';
+import { bjDate, formatGoalDiff } from '@core/format.js';
 
 import { useAppStore, useDataRev } from '@/state/app';
 import { usePrefs } from '@/state/prefs';
 import { unrevealedTonightIds } from '@core/reveal.js';
 import { useNow } from '@/lib/useNow';
-import { formatGd } from '@/lib/format';
 import { Chip } from '@/ui/Chip';
 import { Crest } from '@/ui/Crest';
 import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
@@ -203,7 +202,7 @@ export default function StandingsPanel({
                   {focused ? <Text style={styles.matchBadge}>本场</Text> : null}
                 </View>
                 <Text style={[styles.numCol, styles.numText]}>{row.played}</Text>
-                <Text style={[styles.gdCol, styles.numText]}>{formatGd(row.gd)}</Text>
+                <Text style={[styles.gdCol, styles.numText]}>{formatGoalDiff(row.gd)}</Text>
                 <Text style={[styles.ptsCol, styles.ptsText]}>{row.points}</Text>
               </Pressable>
             );

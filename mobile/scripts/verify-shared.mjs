@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { buildCrestMapContent } from './crest-map.mjs';
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..', '..');
 const mobileRoot = path.resolve(scriptDir, '..');
@@ -82,6 +84,38 @@ try {
   }
 } catch {
   problems.push('missing: src/data/sync/tz.js');
+}
+
+/* crest：public/crests（桌面源）↔ assets/crests（移动副本）↔ src/data/crests.ts（生成映射）。
+   此前只校验 core/data，crest 增删改后忘跑 sync:crests 不会被门禁拦下。 */
+const crestSourceDir = path.join(repoRoot, 'public', 'crests');
+const crestDestDir = path.join(mobileRoot, 'assets', 'crests');
+const crestMapFile = path.join(mobileRoot, 'src', 'data', 'crests.ts');
+try {
+  const sourceCrests = (await readdir(crestSourceDir)).filter(f => f.endsWith('.png')).sort();
+  const destCrests = (await readdir(crestDestDir)).filter(f => f.endsWith('.png')).sort();
+  const sourceSet = new Set(sourceCrests);
+  const destSet = new Set(destCrests);
+  for (const file of sourceCrests) {
+    if (!destSet.has(file)) {
+      problems.push(`missing: assets/crests/${file}`);
+    } else if (
+      (await sha256(path.join(crestSourceDir, file))) !== (await sha256(path.join(crestDestDir, file)))
+    ) {
+      problems.push(`drift: assets/crests/${file}`);
+    }
+  }
+  for (const file of destCrests) {
+    if (!sourceSet.has(file)) problems.push(`extra: assets/crests/${file}`);
+  }
+  // 映射必须与「按当前源重算」字节一致：手改 crests.ts 或忘同步都会露馅
+  const expectedMap = buildCrestMapContent(sourceCrests);
+  const actualMap = await readFile(crestMapFile, 'utf8');
+  if (expectedMap !== actualMap) {
+    problems.push('drift: src/data/crests.ts（与 public/crests 不一致，请运行 npm run sync:crests）');
+  }
+} catch {
+  problems.push('missing: crest 源/副本/映射（public/crests、assets/crests、src/data/crests.ts）');
 }
 
 if (problems.length) {
