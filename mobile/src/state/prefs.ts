@@ -14,13 +14,15 @@ export type Prefs = {
   notifyLiveEvents: boolean;
   sleepEnabled: boolean;
   sleepWakeTime: string;
+  sleepWeekendEnabled: boolean;
+  sleepWeekendWakeTime: string;
   sleepMinHours: number;
   sleepPromptDismissed: boolean;
   theme: 'dark';
   onboardingDone: boolean;
 };
 
-// 9 个共享字段取自 core 的 defaultPrefs()（与桌面同一来源），
+// 共享字段取自 core 的 defaultPrefs()（与桌面同一来源），
 // 仅追加移动端独有的持久化字段，避免两端默认值各写一份漂移。
 export const DEFAULT_PREFS: Prefs = {
   ...defaultPrefs(),

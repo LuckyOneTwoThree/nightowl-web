@@ -6,13 +6,18 @@ import type { Prefs } from '@/state/prefs';
 
 import { colors, fontSize, weight } from './theme';
 
-type SleepPrefs = Pick<Prefs, 'sleepEnabled' | 'sleepWakeTime' | 'sleepMinHours'>;
+type SleepPrefs = Pick<
+  Prefs,
+  'sleepEnabled' | 'sleepWakeTime' | 'sleepWeekendEnabled' | 'sleepWeekendWakeTime' | 'sleepMinHours'
+>;
 
 export function sleepLedgerFor(match: Match | null | undefined, prefs: SleepPrefs) {
   if (!match?.t || match.tbd || !prefs.sleepEnabled || match.st === 'done' || match.st === 'pp') return null;
   const ledger = sleepLedger(match.t, {
     enabled: prefs.sleepEnabled,
     wakeTime: prefs.sleepWakeTime,
+    weekendEnabled: prefs.sleepWeekendEnabled,
+    weekendWakeTime: prefs.sleepWeekendWakeTime,
     minSleep: prefs.sleepMinHours,
   });
   if (!ledger.valid || !ledger.ready || (ledger.endTs ?? 0) < Date.now()) return null;
@@ -33,13 +38,15 @@ export function SleepNote({
   const text = ledger.overWake ? '看完直接到起床点' : `看完约剩 ${formatSleepHours(ledger.remainingHours)}`;
   const gap =
     ledger.belowFloor && !ledger.overWake ? ` · 低于 ${ledger.profile.minSleep}h 底线，建议补看` : '';
+  const wakeClock = ledger.wakeClock || ledger.profile.wakeTime;
+  const wakeLabel = ledger.isWeekendNight ? '周末起床' : '起床';
   return (
     <Text
       style={[styles.note, ledger.belowFloor && styles.warn, style]}
       numberOfLines={2}
-      accessibilityLabel={`按 ${ledger.profile.wakeTime} 起床，${text}${gap}`}
+      accessibilityLabel={`按 ${wakeClock} ${wakeLabel}，${text}${gap}`}
     >
-      按 {ledger.profile.wakeTime} 起床 · {text}
+      按 {wakeClock} {wakeLabel} · {text}
       {gap}
     </Text>
   );

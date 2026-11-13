@@ -15,7 +15,7 @@
 
 import { MATCH_DURATION_MS, owlDay, tierOf, ts } from './engine.js';
 import { isActionable } from './actionable.js';
-import { normalizeSleepProfile, parseClockTime } from './sleep.js';
+import { normalizeSleepProfile, parseClockTime, resolveWakeTimeForNight } from './sleep.js';
 
 const DAY_MIN = 1440;
 /** 夜从 18:00 起算；坐标 0 就是 18:00 */
@@ -51,10 +51,11 @@ export function nightMinuteOf(matchTime, night) {
  * 未启用作息时仍给出默认值（否则整张图没有参照物），但 `assumed: true`
  * 让界面必须说明这是默认底线，而不是用户自己的。
  */
-export function sleepFloorOf(profile) {
+export function sleepFloorOf(profile, nightDate = null) {
   const p = normalizeSleepProfile(profile);
   if (!p.valid) return null;
-  const wakeMin = parseClockTime(p.wakeTime);
+  const resolved = nightDate ? resolveWakeTimeForNight(nightDate, p) : { wakeTime: p.wakeTime, isWeekend: false };
+  const wakeMin = parseClockTime(resolved.wakeTime);
   if (wakeMin == null) return null;
   const abs = ((wakeMin - Math.round(p.minSleep * 60)) % DAY_MIN + DAY_MIN) % DAY_MIN;
   // 18:00 之前的钟点算作次日凌晨（00:30 属于这一夜，不属于上一夜）
@@ -62,8 +63,9 @@ export function sleepFloorOf(profile) {
   return {
     nightMin,
     clock: clockOfNightMinute(nightMin),
-    wakeTime: p.wakeTime,
+    wakeTime: resolved.wakeTime,
     minSleep: p.minSleep,
+    isWeekend: resolved.isWeekend,
     assumed: p.enabled !== true
   };
 }
@@ -87,7 +89,7 @@ function ticksBetween(startMin, endMin) {
  * @param {Array<{startMin: number, endMin: number}>} segments 参与绘制的场次段
  * @param {ReturnType<typeof sleepFloorOf>} floor
  */
-export function nightDomain(segments, floor) {
+export function nightDomain(segments, floor, extraFloors = []) {
   let min = Infinity;
   let max = -Infinity;
   for (const seg of segments || []) {
@@ -103,9 +105,10 @@ export function nightDomain(segments, floor) {
       ticks: ticksBetween(BAND_DOMAIN.startMin, BAND_DOMAIN.endMin)
     };
   }
-  if (floor) {
-    min = Math.min(min, floor.nightMin);
-    max = Math.max(max, floor.nightMin + 30);
+  for (const f of [floor, ...(extraFloors || [])]) {
+    if (!f || !Number.isFinite(f.nightMin)) continue;
+    min = Math.min(min, f.nightMin);
+    max = Math.max(max, f.nightMin + 30);
   }
   const startMin = min <= 0 ? Math.floor(min / 60) * 60 : Math.floor((min - 30) / 60) * 60;
   let endMin = Math.ceil((max + 30) / 60) * 60;
@@ -119,13 +122,15 @@ export function nightDomain(segments, floor) {
  *
  * @param {{days?: Array<{date: string, cost?: number, matches?: Array}>,
  *          matches?: Array}} week computeWeek 的返回值（只需要 days 与 matches）
- * @param {{enabled?: boolean, wakeTime?: string, minSleep?: number}} profile
+ * @param {{enabled?: boolean, wakeTime?: string, weekendEnabled?: boolean, weekendWakeTime?: string, minSleep?: number}} profile
  * @param {number} [now] 毫秒时间戳，用于标记「今夜」与「已过」
  */
 export function weekRiskBands(week, profile, now) {
   const days = Array.isArray(week?.days) ? week.days : [];
   const all = Array.isArray(week?.matches) ? week.matches : [];
   const floor = sleepFloorOf(profile);
+  const p = normalizeSleepProfile(profile);
+  const weekendFloor = p.valid && p.weekendEnabled ? sleepFloorOf(profile, '2026-11-06') : null;
   const nowTs = Number.isFinite(now) ? Number(now) : null;
 
   // 与 computeWeek 的可行动口径同源：只看未开赛、时间已定、且尚未过完赛时间的场次。
@@ -138,6 +143,7 @@ export function weekRiskBands(week, profile, now) {
     : scheduled.filter(m => isActionable(m, nowTs));
 
   const bands = days.map((day, index) => {
+    const bandFloor = sleepFloorOf(profile, day?.date) || floor;
     const known = actionable.filter(m => Number.isFinite(ts(m.t)) && owlDay(m.t) === day.date);
 
     const segments = known
@@ -156,7 +162,7 @@ export function weekRiskBands(week, profile, now) {
     const current = deltaMin != null && deltaMin >= 0 && deltaMin < NIGHT_SPAN_MIN;
 
     const overMinutes =
-      latest && floor ? Math.max(0, latest.endMin - floor.nightMin) : 0;
+      latest && bandFloor ? Math.max(0, latest.endMin - bandFloor.nightMin) : 0;
     const cost = known.reduce((max, m) => Math.max(max, tierOf(m).cost), 0);
 
     return {
@@ -168,6 +174,7 @@ export function weekRiskBands(week, profile, now) {
       firstStartMin: segments.length ? segments[0].startMin : null,
       latestEndMin: latest ? latest.endMin : null,
       latestEndClock: latest ? latest.endClock : null,
+      floor: bandFloor,
       belowFloor: overMinutes > 0,
       overMinutes,
       current,
@@ -183,9 +190,11 @@ export function weekRiskBands(week, profile, now) {
 
   return {
     floor,
+    weekendFloor,
     domain: nightDomain(
       bands.flatMap(b => b.segments),
-      floor
+      floor,
+      bands.map(b => b.floor)
     ),
     bands,
     worst: worst

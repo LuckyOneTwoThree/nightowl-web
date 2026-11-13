@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getFixtures, setFixtures, storylines, teamName } from './data/index.js';
-import { countdown as engineCountdown, ts, MATCH_DURATION_MS, sleepTier } from './core/engine.js';
+import { countdown as engineCountdown, ts, MATCH_DURATION_MS, sleepTier, mondayOfWall, nightOf } from './core/engine.js';
 import { hm, humanCountdownShort } from './core/format.js';
 import { STANDINGS_LEAGUES } from './core/standings.js';
 import { loadPrefs, savePrefs } from './lib/prefs-storage.js';
@@ -54,6 +54,16 @@ import { useWatchLater } from './hooks/useWatchLater.js';
 import { useStopLoss } from './hooks/useStopLoss.js';
 import { useOverlayStack } from './hooks/useOverlayStack.js';
 import { useFixturesRefresh } from './hooks/useFixturesRefresh.js';
+import {
+  EMPTY_WEEK_OVERRIDES,
+  togglePinnedMatch,
+  toggleExcludedMatch,
+  toggleBlockedNight
+} from './core/week-overrides.js';
+import {
+  loadWeekOverrides,
+  saveWeekOverrides
+} from './components/week-overrides-storage.js';
 import { VIEW_COMMANDS, ACTION_COMMANDS, buildMatchCommands } from './core/command-palette.js';
 
 /**
@@ -169,6 +179,7 @@ export default function App() {
   const [view, setView] = useState(boot.view);
   // 周视图看哪一周：0=本周，正数未来、负数过去。只移动锚点，可排性仍用真实 now（见 core/owl.js）
   const [weekOffset, setWeekOffset] = useState(0);
+  const [weekOverridesByWeek, setWeekOverridesByWeek] = useState(() => loadWeekOverrides());
   const [activeMatchId, setActiveMatchId] = useState(() => {
     if (boot.matchId) return boot.matchId;
     try {
@@ -477,9 +488,17 @@ export default function App() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: minuteKey/dataRev 是缓存失效触发器，body 读的是模块级 getFixtures() 与 Date.now()
   const tonight = useMemo(() => computeTonight(Date.now(), prefs), [minuteKey, prefs, dataRev]);
 
+  const manualReplayIds = useMemo(
+    () => normalizeQueue(watchLater).map(item => item.id),
+    [watchLater]
+  );
+
   // 最近值得补看：只扫描最近 96h（REPLAY_WINDOW_MS），排除今晚已在赛程里的场次；不新增数据源
   // biome-ignore lint/correctness/useExhaustiveDependencies: 同上：靠 minuteKey/dataRev 失效，不把它们读进 body
-  const replayPicks = useMemo(() => computeReplayPicks(Date.now(), prefs, 3), [minuteKey, prefs, dataRev]);
+  const replayPicks = useMemo(
+    () => computeReplayPicks(Date.now(), prefs, 3, { manualIds: manualReplayIds }),
+    [minuteKey, prefs, dataRev, manualReplayIds]
+  );
 
   /**
    * 托盘倒计时（分钟粒度）
@@ -540,10 +559,47 @@ export default function App() {
     });
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 靠 minuteKey 刷新当前夜猫周键
+  const activeWeekKey = useMemo(
+    () => mondayOfWall(nightOf(Date.now() + weekOffset * 7 * 86400000)),
+    [weekOffset, minuteKey]
+  );
+  const activeWeekOverrides = weekOverridesByWeek[activeWeekKey] || EMPTY_WEEK_OVERRIDES;
+
+  const updateActiveWeekOverrides = useCallback(
+    updater => {
+      const minWeekKey = mondayOfWall(nightOf(Date.now()));
+      setWeekOverridesByWeek(prev => {
+        const cur = prev[activeWeekKey] || EMPTY_WEEK_OVERRIDES;
+        const nextForWeek = updater(cur);
+        const nextMap = { ...prev, [activeWeekKey]: nextForWeek };
+        return saveWeekOverrides(nextMap, minWeekKey);
+      });
+    },
+    [activeWeekKey]
+  );
+
+  const handleTogglePinMatch = useCallback(
+    matchId => updateActiveWeekOverrides(ov => togglePinnedMatch(ov, matchId)),
+    [updateActiveWeekOverrides]
+  );
+  const handleToggleExcludeMatch = useCallback(
+    matchId => updateActiveWeekOverrides(ov => toggleExcludedMatch(ov, matchId)),
+    [updateActiveWeekOverrides]
+  );
+  const handleToggleBlockNight = useCallback(
+    nightStr => updateActiveWeekOverrides(ov => toggleBlockedNight(ov, nightStr)),
+    [updateActiveWeekOverrides]
+  );
+  const handleResetWeekOverrides = useCallback(
+    () => updateActiveWeekOverrides(() => EMPTY_WEEK_OVERRIDES),
+    [updateActiveWeekOverrides]
+  );
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: 靠 minuteKey/dataRev 失效；body 读 Date.now() 与模块级 fixtures
   const week = useMemo(
-    () => (view === 'week' ? computeWeek(Date.now(), prefs, { weekOffset }) : null),
-    [view, minuteKey, prefs, dataRev, weekOffset]
+    () => (view === 'week' ? computeWeek(Date.now(), prefs, { weekOffset, overrides: activeWeekOverrides }) : null),
+    [view, minuteKey, prefs, dataRev, weekOffset, activeWeekOverrides]
   );
 
   /**
@@ -991,6 +1047,10 @@ export default function App() {
                 onBudgetChange={v => setPrefs({ ...prefs, weeklyBudget: v })}
                 weekOffset={weekOffset}
                 onWeekOffsetChange={setWeekOffset}
+                onTogglePinMatch={handleTogglePinMatch}
+                onToggleExcludeMatch={handleToggleExcludeMatch}
+                onToggleBlockNight={handleToggleBlockNight}
+                onResetWeekOverrides={handleResetWeekOverrides}
                 revealed={revealed}
                 onReveal={reveal}
               />

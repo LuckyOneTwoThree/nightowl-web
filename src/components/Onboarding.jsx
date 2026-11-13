@@ -48,11 +48,15 @@ const LEAGUE_RULE =
  */
 export default function Onboarding({ open, prefs, onPrefsChange, onClose }) {
   const [step, setStep] = useState(1);
+  const [enableSleepOnFinish, setEnableSleepOnFinish] = useState(true);
   const step2FirstRef = useRef(null);
 
   // 关闭即回到第一步：否则从设置里「重新引导」会直接停在用户上次离开的第 2 步。
   useEffect(() => {
-    if (!open) setStep(1);
+    if (!open) {
+      setStep(1);
+      setEnableSleepOnFinish(true);
+    }
   }, [open]);
 
   // 背景 inert 时键盘焦点不能落在 body 上：第 1 步 TeamPicker 自带 autoFocus（不抢），
@@ -67,6 +71,13 @@ export default function Onboarding({ open, prefs, onPrefsChange, onClose }) {
   const bonusActive = leagueCount > 0 && leagueCount < 6;
 
   const finish = () => {
+    if (enableSleepOnFinish && !prefs.sleepEnabled) {
+      onPrefsChange({
+        ...prefs,
+        sleepEnabled: true,
+        sleepWeekendEnabled: prefs.sleepWeekendEnabled !== false
+      });
+    }
     markOnboardingDone();
     onClose();
   };
@@ -169,6 +180,73 @@ export default function Onboarding({ open, prefs, onPrefsChange, onClose }) {
                 <Chip tone={bonusActive ? 'resource' : 'neutral'}>
                   {bonusActive ? '+8 生效' : leagueCount === 0 ? '未选择' : '全选 · +0'}
                 </Chip>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-line-hairline bg-surface-card p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-medium text-text-primary">作息底线与睡眠账本</p>
+                    <Meta className="mt-0.5 block">自动按次日是工作日还是周末，算出每场看完还剩多少睡眠</Meta>
+                  </div>
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 text-2xs text-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={enableSleepOnFinish}
+                      onChange={e => setEnableSleepOnFinish(e.target.checked)}
+                      className="accent-accent"
+                    />
+                    <span>开启</span>
+                  </label>
+                </div>
+
+                {enableSleepOnFinish && (
+                  <div className="mt-2.5 grid grid-cols-2 gap-3 border-t border-line-hairline pt-2.5">
+                    <div>
+                      <span className="text-2xs text-text-muted">工作日早晨起床</span>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {['07:00', '07:30', '08:00', '08:30'].map(t => {
+                          const active = (prefs.sleepWakeTime || '07:30') === t;
+                          return (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => patch({ sleepWakeTime: t })}
+                              className={`rounded px-2 py-0.5 font-num text-2xs tabular-nums transition-colors cursor-pointer ${
+                                active
+                                  ? 'bg-accent/20 text-accent font-medium'
+                                  : 'bg-surface-panel text-text-muted hover:text-text-primary'
+                              }`}
+                            >
+                              {t}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-2xs text-text-muted">周末（周五/六夜）起床</span>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {['08:30', '09:00', '09:30', '10:00'].map(t => {
+                          const active = (prefs.sleepWeekendWakeTime || '09:00') === t;
+                          return (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => patch({ sleepWeekendEnabled: true, sleepWeekendWakeTime: t })}
+                              className={`rounded px-2 py-0.5 font-num text-2xs tabular-nums transition-colors cursor-pointer ${
+                                active
+                                  ? 'bg-accent/20 text-accent font-medium'
+                                  : 'bg-surface-panel text-text-muted hover:text-text-primary'
+                              }`}
+                            >
+                              {t}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           )}

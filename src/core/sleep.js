@@ -10,7 +10,7 @@
  * 内部用 epoch 计算，避免设备时区参与。
  */
 
-import { MATCH_DURATION_MS, ts } from './engine.js';
+import { MATCH_DURATION_MS, owlDay, ts } from './engine.js';
 
 const HOUR_MS = 3600000;
 const DAY_MS = 86400000;
@@ -19,6 +19,8 @@ const BJ_OFFSET_MS = 8 * HOUR_MS;
 export const SLEEP_DEFAULTS = Object.freeze({
   enabled: false,
   wakeTime: '07:30',
+  weekendEnabled: false,
+  weekendWakeTime: '09:00',
   minSleep: 7
 });
 
@@ -68,21 +70,61 @@ function normalizeMinSleep(value) {
   return Math.round(n * 10) / 10;
 }
 
+function formatClockMinutes(minutes) {
+  return `${pad2(Math.floor(minutes / 60))}:${pad2(minutes % 60)}`;
+}
+
+/**
+ * 判断所属比赛夜（YYYY-MM-DD）的次日晨是否为周末/休息日：
+ * 周五夜（UTCDay=5 → 周六晨）与周六夜（UTCDay=6 → 周日晨）。
+ */
+export function isWeekendNight(nightStr) {
+  const m = String(nightStr ?? '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return false;
+  const day = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay();
+  return day === 5 || day === 6;
+}
+
 /** 把任意输入收敛成可计算档案；invalid 时不显示推算值 */
 export function normalizeSleepProfile(profile = {}) {
   const enabled = profile?.enabled === true;
   const rawWake = typeof profile?.wakeTime === 'string' ? profile.wakeTime.trim() : '';
   const suppliedWake = rawWake !== '';
+  const weekendEnabled = Boolean(profile?.weekendEnabled ?? SLEEP_DEFAULTS.weekendEnabled);
+  const rawWeekendWake = typeof profile?.weekendWakeTime === 'string' ? profile.weekendWakeTime.trim() : '';
+  const suppliedWeekendWake = rawWeekendWake !== '';
   const suppliedMin = profile?.minSleep != null;
   const minutes = suppliedWake ? parseClockTime(rawWake) : parseClockTime(SLEEP_DEFAULTS.wakeTime);
+  const weekendMinutes = suppliedWeekendWake
+    ? parseClockTime(rawWeekendWake)
+    : parseClockTime(SLEEP_DEFAULTS.weekendWakeTime);
   const minSleep = suppliedMin ? normalizeMinSleep(profile.minSleep) : SLEEP_DEFAULTS.minSleep;
-  const valid = (!suppliedWake || minutes != null) && (!suppliedMin || minSleep != null);
+  const valid =
+    (!suppliedWake || minutes != null) &&
+    (!suppliedWeekendWake || weekendMinutes != null) &&
+    (!suppliedMin || minSleep != null);
   const resolvedMinutes = minutes ?? parseClockTime(SLEEP_DEFAULTS.wakeTime);
+  const resolvedWeekendMinutes = weekendMinutes ?? parseClockTime(SLEEP_DEFAULTS.weekendWakeTime);
   return {
     enabled,
-    wakeTime: `${pad2(Math.floor(resolvedMinutes / 60))}:${pad2(resolvedMinutes % 60)}`,
+    wakeTime: formatClockMinutes(resolvedMinutes),
+    wakeMinutes: resolvedMinutes,
+    weekendEnabled,
+    weekendWakeTime: formatClockMinutes(resolvedWeekendMinutes),
+    weekendWakeMinutes: resolvedWeekendMinutes,
     minSleep: minSleep ?? SLEEP_DEFAULTS.minSleep,
     valid
+  };
+}
+
+/** 根据所属夜（owlDay）解析当夜生效的起床时间（工作日 vs 周末） */
+export function resolveWakeTimeForNight(nightStr, profile) {
+  const p = normalizeSleepProfile(profile);
+  const isWeekend = Boolean(p.weekendEnabled && isWeekendNight(nightStr));
+  return {
+    wakeTime: isWeekend ? p.weekendWakeTime : p.wakeTime,
+    wakeMinutes: isWeekend ? p.weekendWakeMinutes : p.wakeMinutes,
+    isWeekend
   };
 }
 
@@ -100,7 +142,7 @@ function profileFrom(profile) {
  * 计算一场比赛看完后的个人睡眠。
  *
  * @param {string} matchTime 北京墙钟 YYYY-MM-DDTHH:mm
- * @param {{enabled?: boolean, wakeTime?: string, minSleep?: number}} profile
+ * @param {{enabled?: boolean, wakeTime?: string, weekendEnabled?: boolean, weekendWakeTime?: string, minSleep?: number}} profile
  * @param {{durationMs?: number}} [options]
  */
 export function sleepLedger(matchTime, profile, options = {}) {
@@ -114,12 +156,16 @@ export function sleepLedger(matchTime, profile, options = {}) {
     return { valid: false, ready: false, reason: 'invalid-match-time', profile: p };
   }
 
+  const nightDate = owlDay(matchTime);
+  const resolved = resolveWakeTimeForNight(nightDate, p);
+  const effectiveWakeTime = resolved.wakeTime;
+
   const durationMs =
     Number.isFinite(options.durationMs) && options.durationMs > 0
       ? options.durationMs
       : MATCH_DURATION_MS;
   const endTs = kickoffTs + durationMs;
-  let wakeTs = ts(`${bjDate(endTs)}T${p.wakeTime}`);
+  let wakeTs = ts(`${bjDate(endTs)}T${effectiveWakeTime}`);
   let overWake = false;
 
   if (!Number.isFinite(wakeTs)) {
@@ -150,13 +196,16 @@ export function sleepLedger(matchTime, profile, options = {}) {
     ready: p.enabled,
     reason: null,
     profile: p,
+    nightDate,
+    isWeekendNight: resolved.isWeekend,
     kickoffTs,
     endTs,
     wakeTs,
     endDate: bjDate(endTs),
     wakeDate: bjDate(wakeTs),
     endClock: `${pad2(bjParts(endTs).hh)}:${pad2(bjParts(endTs).mm)}`,
-    wakeClock: p.wakeTime,
+    wakeClock: effectiveWakeTime,
+    wakeTime: effectiveWakeTime,
     remainingHours: Math.round(remainingHours * 100) / 100,
     gapHours: Math.round(gapHours * 100) / 100,
     belowFloor: gapHours > 0,

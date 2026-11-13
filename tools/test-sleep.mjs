@@ -9,8 +9,10 @@ import {
   SLEEP_STATUS,
   formatSleepHours,
   isSleepProfileReady,
+  isWeekendNight,
   normalizeSleepProfile,
   parseClockTime,
+  resolveWakeTimeForNight,
   sleepLedger,
   stopLossAt
 } from '../src/core/sleep.js';
@@ -107,6 +109,42 @@ console.log('四、展示');
 ok('2.54h → 2.5h', formatSleepHours(2.54) === '2.5h');
 ok('负数被夹到 0h', formatSleepHours(-1) === '0h');
 ok('非数字显示占位符', formatSleepHours(NaN) === '—');
+
+console.log('');
+console.log('五、工作日 / 周末双轨作息');
+
+ok('周五夜（次日周六晨）识别为周末夜', isWeekendNight('2026-11-06') === true);
+ok('周六夜（次日周日晨）识别为周末夜', isWeekendNight('2026-11-07') === true);
+ok('周日夜（次日周一晨）不是周末夜', isWeekendNight('2026-11-08') === false);
+ok('周三夜不是周末夜', isWeekendNight('2026-11-04') === false);
+
+const dualProfile = {
+  enabled: true,
+  wakeTime: '07:30',
+  weekendEnabled: true,
+  weekendWakeTime: '09:00',
+  minSleep: 7
+};
+
+const friLate = sleepLedger('2026-11-07T00:00', dualProfile);
+ok('周五夜 00:00 开球 → 周六晨 09:00 起床，剩 7h 不越线',
+  friLate.valid && friLate.isWeekendNight === true && friLate.wakeClock === '09:00' && friLate.remainingHours === 7 && friLate.belowFloor === false,
+  JSON.stringify({ wk: friLate.wakeClock, rem: friLate.remainingHours, below: friLate.belowFloor }));
+
+const sunLate = sleepLedger('2026-11-09T00:00', dualProfile);
+ok('周日夜 00:00 开球（次日周一工作）→ 07:30 起床，剩 5.5h 越线',
+  sunLate.valid && sunLate.isWeekendNight === false && sunLate.wakeClock === '07:30' && sunLate.remainingHours === 5.5 && sunLate.belowFloor === true,
+  JSON.stringify({ wk: sunLate.wakeClock, rem: sunLate.remainingHours, below: sunLate.belowFloor }));
+
+const friStop = stopLossAt('2026-11-07T03:00', dualProfile);
+ok('周五夜止损点按周末 09:00 起床推算为 01:30',
+  friStop && friStop.stopAt === ts('2026-11-07T01:30'),
+  friStop ? String(friStop.stopAt) : 'null');
+
+const badWeekend = sleepLedger('2026-11-07T00:00', { ...dualProfile, weekendWakeTime: '99:99' });
+ok('非法周末起床时间使档案 invalid', badWeekend.valid === false && badWeekend.reason === 'invalid-profile');
+ok('resolveWakeTimeForNight 未开启周末区分时回落工作日时间',
+  resolveWakeTimeForNight('2026-11-06', { ...dualProfile, weekendEnabled: false }).wakeTime === '07:30');
 
 console.log('');
 console.log('────────────────────────────────────────────────────');

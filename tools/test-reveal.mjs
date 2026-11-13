@@ -5,7 +5,14 @@
  * 这里锁住唯一 selector，以及 stats 的 excludeIds 透传。
  */
 import { ts } from '../src/core/engine.js';
-import { hasRevealed, isScoreVisible, liveScoreForDisplay, unrevealedTonightIds } from '../src/core/reveal.js';
+import {
+  completedWatchHint,
+  hasRevealed,
+  isScoreVisible,
+  liveScoreForDisplay,
+  unrevealedTonightIds,
+  WATCH_HINT_LEVEL,
+} from '../src/core/reveal.js';
 import { computeMatchStats, computeSeasonStats, computeTeamForm } from '../src/core/stats.js';
 
 let pass = 0;
@@ -72,6 +79,34 @@ console.log('二、stats 排除透传');
     stats.home.form.length === 2 && stats.home.season.played === 2 &&
       stats.h2h.meetings.every(m => m.id !== 'N3'),
     JSON.stringify({ form: stats.home.form.length, played: stats.home.season.played, h2h: stats.h2h.meetings.map(m => m.id) }));
+}
+
+console.log('');
+console.log('三、防剧透观赛热度提示');
+{
+  const h00 = completedWatchHint({ st: 'done', sc: '0-0' }, { star: 1, isFollowed: false });
+  const h10 = completedWatchHint({ st: 'done', sc: '1-0' }, { star: 1, isFollowed: false });
+  ok('★ 0-0 与低星 1-0 同属 low 档，不可反向猜出 0-0',
+    h00?.level === WATCH_HINT_LEVEL.LOW &&
+      h10?.level === WATCH_HINT_LEVEL.LOW &&
+      h00?.label === h10?.label &&
+      h00?.shortLabel === h10?.shortLabel);
+
+  const h21 = completedWatchHint({ st: 'done', sc: '2-1' }, { star: 2, isFollowed: false });
+  const h20Star3 = completedWatchHint({ st: 'done', sc: '2-0' }, { star: 3, isFollowed: false });
+  ok('★ 总进球 >=3 或 3★ 且 2 球归为 high',
+    h21?.level === WATCH_HINT_LEVEL.HIGH && h20Star3?.level === WATCH_HINT_LEVEL.HIGH);
+
+  const hFollowed10 = completedWatchHint({ st: 'done', sc: '1-0' }, { star: 1, isFollowed: true });
+  ok('关注球队 1-0 归为 normal 而非直接判 low', hFollowed10?.level === WATCH_HINT_LEVEL.NORMAL);
+
+  const sched = completedWatchHint({ st: 'sched', sc: null });
+  ok('未完赛不返回热度提示', sched === null);
+
+  const texts = [h00, h10, h21, h20Star3, hFollowed10].map(x => `${x.label}|${x.shortLabel}`).join(' ');
+  ok('★ 提示文案不泄露比分数字、胜负或主客队',
+    !/\d+\s*[-:]\s*\d+|胜|负|平局|主队|客队/.test(texts),
+    texts);
 }
 
 console.log('');

@@ -27,6 +27,8 @@ export const defaultPrefs = () => ({
   notifyLiveEvents: true,
   sleepEnabled: false,
   sleepWakeTime: '07:30',
+  sleepWeekendEnabled: true,
+  sleepWeekendWakeTime: '09:00',
   sleepMinHours: 7
 });
 

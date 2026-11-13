@@ -4,6 +4,8 @@ export function sleepProfileFromPrefs(prefs) {
   return {
     enabled: prefs?.sleepEnabled === true,
     wakeTime: prefs?.sleepWakeTime || '07:30',
+    weekendEnabled: prefs?.sleepWeekendEnabled === true,
+    weekendWakeTime: prefs?.sleepWeekendWakeTime || '09:00',
     minSleep: prefs?.sleepMinHours ?? 7
   };
 }
@@ -35,7 +37,9 @@ export default function SleepNote({ match, prefs, className = '', showWake = tru
       ? ` · 低于 ${ledger.profile.minSleep}h 底线，建议补看`
       : '';
   const tone = ledger.belowFloor ? 'text-warn' : 'text-text-muted';
-  const title = `按 ${ledger.profile.wakeTime} 起床，预计 ${ledger.endClock} 结束；${
+  const wakeClock = ledger.wakeClock || ledger.profile.wakeTime;
+  const wakeTag = ledger.isWeekendNight ? '周末起床' : '起床';
+  const title = `按${ledger.isWeekendNight ? '周末作息 ' : ' '}${wakeClock} 起床，预计 ${ledger.endClock} 结束；${
     ledger.overWake
       ? '看完已经到起床点'
       : `剩余约 ${formatSleepHours(ledger.remainingHours)}，最低 ${ledger.profile.minSleep}h`
@@ -46,8 +50,8 @@ export default function SleepNote({ match, prefs, className = '', showWake = tru
       className={`inline-flex min-w-0 items-center gap-1 ${size === 'md' ? 'text-xs' : 'text-2xs'} ${tone} ${className}`}
       title={title}
     >
-      {showWake && <span className="font-num tabular-nums">{ledger.profile.wakeTime}</span>}
-      {showWake && <span className="text-text-faint">起床 ·</span>}
+      {showWake && <span className="font-num tabular-nums">{wakeClock}</span>}
+      {showWake && <span className="text-text-faint">{wakeTag} ·</span>}
       <span className={ledger.belowFloor ? 'font-medium' : ''}>{text}</span>
       {gap && <span>{gap}</span>}
     </span>

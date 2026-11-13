@@ -39,10 +39,14 @@ export default function OnboardingScreen() {
   const toggleLeague = usePrefsStore(state => state.toggleLeague);
   const finishOnboarding = usePrefsStore(state => state.finishOnboarding);
   const [step, setStep] = useState(0);
+  const [enableSleepOnFinish, setEnableSleepOnFinish] = useState(true);
 
   const finish = (requestPermissions = true) => {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const wantsNotifications = prefs.notifyBefore15;
+    if (enableSleepOnFinish) {
+      setPrefs({ sleepEnabled: true, sleepWeekendEnabled: true });
+    }
     finishOnboarding();
     router.replace('/');
     if (requestPermissions && wantsNotifications && notificationsAvailable()) {
@@ -216,6 +220,22 @@ export default function OnboardingScreen() {
             <Text style={styles.summaryLine}>
               每周预算：{prefs.weeklyBudget}h · 比分默认隐藏
             </Text>
+          </View>
+
+          <View style={styles.switchRow}>
+            <View style={styles.switchText}>
+              <Text style={styles.switchTitle}>启用睡眠账本（平日 {prefs.sleepWakeTime} · 周末 {prefs.sleepWeekendWakeTime} 起床）</Text>
+              <Text style={styles.switchHint}>
+                开启后每场自动换算剩余睡眠与止损提醒，可在设置页微调时间。
+              </Text>
+            </View>
+            <Switch
+              value={enableSleepOnFinish}
+              onValueChange={setEnableSleepOnFinish}
+              accessibilityLabel="启用睡眠账本"
+              trackColor={{ false: colors.control, true: colors.accent }}
+              thumbColor={enableSleepOnFinish ? colors.accentInk : colors.textMuted}
+            />
           </View>
 
           <View style={styles.switchRow}>

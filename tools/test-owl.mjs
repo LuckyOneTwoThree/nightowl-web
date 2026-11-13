@@ -30,6 +30,14 @@ import { compareSemver, isNewerVersion } from '../src/core/semver.js';
 import { datePart, zhDate } from '../src/core/format.js';
 import { weekDistributionAdvice, narrativeOf, LEVEL } from '../src/core/narrative.js';
 import { isActionable } from '../src/core/actionable.js';
+import {
+  EMPTY_WEEK_OVERRIDES,
+  normalizeWeekOverrides,
+  togglePinnedMatch,
+  toggleExcludedMatch,
+  toggleBlockedNight,
+  pruneWeekOverridesMap,
+} from '../src/core/week-overrides.js';
 
 /** 运行时数据源（与界面一致：保鲜同步后可替换） */
 const fixtures = getFixtures();
@@ -359,6 +367,20 @@ console.log('六·二、最近值得补看');
   ok('空输入返回空', rankReplayPicks([], now, prefs, 3).length === 0);
   ok('limit=1 只返回一场', rankReplayPicks(list, now, prefs, 1).length === 1);
   ok('★ 补看日期标签先取 datePart（避免 10月NaN日）', zhDate(datePart('2026-10-19T23:30')) === '10月19日');
+
+  const zeroZeroList = [
+    mk('PL-1-ARS-COV', 'ARS', 'COV', '2026-10-21T05:00', { l: 'PL', sc: '0-0' }), // 高看点但 0-0，非关注非 replay
+    mk('PD-1-GET-OSA', 'GET', 'OSA', '2026-10-21T04:00', { sc: '0-0' }), // 非关注 0-0，但后面测 manualIds
+    mk('PL-1-MCI-LIV', 'MCI', 'LIV', '2026-10-21T03:00', { l: 'PL', sc: '3-2' }), // 高进球场次
+    mk('PD-1-RMA-RSO', 'RMA', 'RSO', '2026-10-21T02:00', { sc: '0-0' }), // 关注球队哪怕 0-0 也保留
+  ];
+  const zzPicks = rankReplayPicks(zeroZeroList, now, prefs, 5);
+  ok('★ rankReplayPicks 过滤非关注非手动 0-0 闷平', !zzPicks.some(p => p.m.id === 'PL-1-ARS-COV'));
+  ok('★ 关注球队 0-0 仍保留在补看列表', zzPicks.some(p => p.m.id === 'PD-1-RMA-RSO'));
+  ok('★ 高进球非关注非 replay 标记为「场面开放」',
+    zzPicks.some(p => p.m.id === 'PL-1-MCI-LIV' && p.reason === '场面开放'));
+  const zzManualPicks = rankReplayPicks(zeroZeroList, now, prefs, 5, { manualIds: ['PL-1-ARS-COV'] });
+  ok('★ 手动加入清单的 0-0 场次不被过滤', zzManualPicks.some(p => p.m.id === 'PL-1-ARS-COV'));
 }
 
 console.log('');
@@ -804,6 +826,88 @@ console.log('十一、★ 今夜状态计数与无 Hero 文案（「今夜无赛
     mkSched('T4', { tbd: true, t: '2026-11-02T04:00' })
   ], at);
   ok('★ pending 优先于 tbd 出现在首行', nightHeadline(prio).title.includes('比分待录'), nightHeadline(prio).title);
+}
+
+console.log('');
+console.log('十二、周计划交互微调（固定 / 换掉 / 禁看夜）');
+{
+  let ov = togglePinnedMatch(EMPTY_WEEK_OVERRIDES, 'M1');
+  ov = toggleExcludedMatch(ov, 'M2');
+  ov = toggleBlockedNight(ov, '2026-11-12');
+  ok('toggle helpers 互斥并正常记录',
+    ov.pinnedIds.includes('M1') && ov.excludedIds.includes('M2') && ov.blockedNights.includes('2026-11-12'));
+  ov = togglePinnedMatch(ov, 'M2');
+  ok('★ 固定一场原本被跳过的比赛会自动移出 excludedIds',
+    ov.pinnedIds.includes('M2') && !ov.excludedIds.includes('M2'));
+  const pruned = pruneWeekOverridesMap(
+    { '2026-11-02': ov, '2026-11-09': ov, '2026-11-16': normalizeWeekOverrides({}) },
+    '2026-11-09'
+  );
+  ok('★ pruneWeekOverridesMap 剔除过期周与空周',
+    !pruned['2026-11-02'] && !!pruned['2026-11-09'] && !pruned['2026-11-16']);
+
+  const wkMatches = [
+    { id: 'W1', l: 'PL', r: 10, t: '2026-11-11T03:45', tbd: false, st: 'sched', h: 'WOL', a: 'EVE' }, // night 11-10, 3.5h
+    { id: 'W2', l: 'PD', r: 10, t: '2026-11-12T03:00', tbd: false, st: 'sched', h: 'RMA', a: 'BAR' }, // night 11-11, 3.5h (followed)
+    { id: 'W3', l: 'PL', r: 10, t: '2026-11-12T03:00', tbd: false, st: 'sched', h: 'MCI', a: 'LIV' }, // 同开球 night 11-11, 3.5h (焦点战)
+    { id: 'W4', l: 'SA', r: 10, t: '2026-11-13T01:30', tbd: false, st: 'sched', h: 'INT', a: 'MIL' }, // night 11-12, 2.0h
+  ];
+  const basePlan = E.planWeek(wkMatches, {}, [], [], ['RMA'], 4.0, ['PL', 'PD', 'SA'], {
+    ...E.PRODUCT_PLAN_OPTS,
+    nowTs: E.ts('2026-11-10T12:00'),
+  });
+  ok('无覆盖基线：不超支', basePlan.overBudgetHours === 0 && basePlan.best.some(e => e.m.id === 'W2'));
+
+  // 1) 跳过 W2 → 自动换入同开球竞争者 W3
+  const exclPlan = E.planWeek(wkMatches, {}, [], [], ['RMA'], 4.0, ['PL', 'PD', 'SA'], {
+    ...E.PRODUCT_PLAN_OPTS,
+    nowTs: E.ts('2026-11-10T12:00'),
+    excludedIds: ['W2'],
+  });
+  ok('★ excludedIds 生效：W2 不进精选与备选，W3 顶上',
+    !exclPlan.best.some(e => e.m.id === 'W2') &&
+      !exclPlan.alt.some(e => e.m.id === 'W2') &&
+      exclPlan.best.some(e => e.m.id === 'W3'),
+    JSON.stringify(exclPlan.best.map(e => e.m.id)));
+
+  // 2) 同时固定两场 3.5h 场次（不同夜），超出 4.0h 预算仍进入精选并计算超支
+  const pinOverPlan = E.planWeek(wkMatches, {}, [], [], [], 4.0, ['PL', 'PD', 'SA'], {
+    ...E.PRODUCT_PLAN_OPTS,
+    nowTs: E.ts('2026-11-10T12:00'),
+    pinnedIds: ['W1', 'W2'],
+  });
+  ok('★ pinnedIds 强制保留两场且精确计算 overBudgetHours=3.0',
+    pinOverPlan.best.some(e => e.m.id === 'W1') &&
+      pinOverPlan.best.some(e => e.m.id === 'W2') &&
+      pinOverPlan.used === 7 &&
+      pinOverPlan.overBudgetHours === 3,
+    JSON.stringify({ ids: pinOverPlan.best.map(e => e.m.id), used: pinOverPlan.used, over: pinOverPlan.overBudgetHours }));
+
+  // 3) blockedNights 禁看 11-10 与 11-11，只允许 W4（night 11-12）
+  const blkPlan = E.planWeek(wkMatches, {}, [], [], ['RMA'], 4.0, ['PL', 'PD', 'SA'], {
+    ...E.PRODUCT_PLAN_OPTS,
+    nowTs: E.ts('2026-11-10T12:00'),
+    blockedNights: ['2026-11-10', '2026-11-11'],
+  });
+  ok('★ blockedNights 拦截禁看夜的非固定场次，保留未禁夜 W4',
+    blkPlan.best.length === 1 && blkPlan.best[0].m.id === 'W4',
+    blkPlan.best.map(e => e.m.id).join(','));
+
+  // 4) computeWeek 透传 overrides 并标注 day.blocked
+  const sampleNow = fixtures.find(m => m.st === 'sched' && !m.tbd)?.t;
+  if (sampleNow) {
+    const sampleDay = E.owlDay(sampleNow);
+    const wOv = computeWeek(E.ts(sampleNow) - 3600000, {
+      followedTeams: [],
+      followedLeagues: ['PL'],
+      weeklyBudget: 4.0,
+    }, {
+      overrides: { pinnedIds: [], excludedIds: [], blockedNights: [sampleDay] },
+    });
+    const markedDay = wOv.days.find(d => d.date === sampleDay);
+    ok('★ computeWeek 正确标注 day.blocked 并排除禁看夜入选',
+      markedDay?.blocked === true && !wOv.plan.best.some(e => E.owlDay(e.m.t) === sampleDay));
+  }
 }
 
 console.log('');

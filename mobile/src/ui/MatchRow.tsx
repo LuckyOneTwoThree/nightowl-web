@@ -1,17 +1,20 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AlertTriangle, Eye } from 'lucide-react-native';
 
 import { evalOne, stateOf } from '@core/owl.js';
 import { sleepTier, ts } from '@core/engine.js';
 import { hm, liveMinute } from '@core/format.js';
+import { completedWatchHint, WATCH_HINT_LEVEL } from '@core/reveal.js';
 import { leagueColor, leagueName, teamName } from '@data/index.js';
 
 import { selectionFeedback } from '@/lib/feedback';
 import { useAppStore, useMatchRevealed } from '@/state/app';
+import { useWatchLaterStore } from '@/state/queue';
 import { Crest } from '@/ui/Crest';
 import { colors, fontSize, radius, spacing, tierColor, withAlpha, weight } from '@/ui/theme';
 import type { Prefs } from '@/state/prefs';
-import type { Match } from '@/types';
+import type { Ev, Match } from '@/types';
 
 type Props = {
   match: Match;
@@ -32,7 +35,7 @@ function parseScoreWinner(sc?: string | null): 'h' | 'a' | 'd' | null {
 }
 
 export function MatchRow({ match, now, prefs, onPress, minefield = false, showTier = true }: Props) {
-  const { index } = evalOne(match, prefs) as { index: number };
+  const { ev, index } = evalOne(match, prefs) as { ev: Ev & { stakes?: Array<{ label?: string }> }; index: number };
   const state = stateOf(match, now) as string;
   const isLive = state === 'live';
   const isDone = state === 'finished' || state === 'ended_pending';
@@ -40,6 +43,9 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
   const minute = isLive ? liveMinute(ts(match.t), now) : 0;
   const scoreVisible = useMatchRevealed(match.id, prefs.spoilerFree);
   const revealMatch = useAppStore(s => s.revealMatch);
+  const queueStatus = useWatchLaterStore(
+    s => s.items.find(item => item.id === match.id)?.status ?? null
+  );
 
   const homeFollowed = prefs.followedTeams.includes(match.h);
   const awayFollowed = prefs.followedTeams.includes(match.a);
@@ -49,6 +55,20 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
   const [homeScore, awayScore] = score ? score.split('-') : [];
   const winner = hasScore && scoreVisible ? parseScoreWinner(score) : null;
   const tColor = tierColor(tier.tier);
+  const watchHint = useMemo(
+    () =>
+      hasScore && !scoreVisible
+        ? (completedWatchHint as (m: Match, ev?: unknown) => {
+            level: string;
+            label: string;
+            shortLabel: string;
+          } | null)(match, ev)
+        : null,
+    [hasScore, scoreVisible, match, ev]
+  );
+  const stakeTag = !isDone && !isTbd && state !== 'pp'
+    ? ev?.rivalry || ev?.stakes?.[0]?.label || null
+    : null;
   const stateLabel = isTbd
     ? '时间待定'
     : isLive
@@ -138,6 +158,16 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
             </Text>
           ) : null}
         </View>
+        {stakeTag || queueStatus === 'pending' ? (
+          <View style={styles.metaRow}>
+            {queueStatus === 'pending' ? <Text style={styles.queuedTag}>已入补看</Text> : null}
+            {stakeTag ? (
+              <Text style={styles.stakeTag} numberOfLines={1}>
+                {stakeTag}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.right}>
@@ -150,20 +180,35 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
           scoreVisible ? (
             <Text style={styles.doneSub}>完场</Text>
           ) : (
-            <Pressable
-              onPress={e => {
-                e.stopPropagation();
-                selectionFeedback();
-                revealMatch(match.id);
-              }}
-              hitSlop={13}
-              accessibilityRole="button"
-              accessibilityLabel="揭晓比分"
-              style={({ pressed }) => [styles.revealPill, pressed && styles.pressed]}
-            >
-              <Eye size={11} color={colors.accent} />
-              <Text style={styles.revealPillText}>揭晓</Text>
-            </Pressable>
+            <View style={styles.revealWrap}>
+              {watchHint && watchHint.level !== WATCH_HINT_LEVEL.NORMAL ? (
+                <Text
+                  style={[
+                    styles.watchHintText,
+                    watchHint.level === WATCH_HINT_LEVEL.HIGH
+                      ? styles.watchHintHigh
+                      : styles.watchHintLow,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {watchHint.shortLabel}
+                </Text>
+              ) : null}
+              <Pressable
+                onPress={e => {
+                  e.stopPropagation();
+                  selectionFeedback();
+                  revealMatch(match.id);
+                }}
+                hitSlop={13}
+                accessibilityRole="button"
+                accessibilityLabel="揭晓比分"
+                style={({ pressed }) => [styles.revealPill, pressed && styles.pressed]}
+              >
+                <Eye size={11} color={colors.accent} />
+                <Text style={styles.revealPillText}>揭晓</Text>
+              </Pressable>
+            </View>
           )
         ) : isDone ? (
           <Text style={styles.doneText}>已结束</Text>
@@ -231,7 +276,33 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.accent,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  queuedTag: {
+    color: colors.accent,
+    fontSize: 10,
+    fontWeight: weight.title,
+    backgroundColor: colors.goldSoft,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.accent, 0.3),
+    borderRadius: radius.pill,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    overflow: 'hidden',
+  },
+  stakeTag: {
+    flex: 1,
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+  },
   right: { minWidth: 44, alignItems: 'flex-end', gap: 3 },
+  revealWrap: { alignItems: 'flex-end', gap: 3 },
+  watchHintText: { fontSize: 10, fontWeight: weight.title },
+  watchHintHigh: { color: colors.accent },
+  watchHintLow: { color: colors.textFaint },
   index: {
     color: colors.textMuted,
     fontSize: fontSize.sm,

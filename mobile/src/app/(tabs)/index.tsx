@@ -11,6 +11,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import {
+  Bookmark,
   ChevronRight,
   MoonStar,
   Search,
@@ -51,6 +52,7 @@ import { useNow } from '@/lib/useNow';
 import { useAppStore, useDataRev, useMatchRevealed } from '@/state/app';
 import { usePrefs, usePrefsStore } from '@/state/prefs';
 import { useWatchLaterStore } from '@/state/queue';
+import { toast } from '@/state/toast';
 import { SleepNote } from '@/ui/SleepNote';
 import { StopLossBanner } from '@/components/StopLossBanner';
 import { useStopLossPrompt } from '@/lib/useStopLoss';
@@ -120,9 +122,11 @@ export default function TonightScreen() {
   };
   const liveCount = groups.live.length + (hero && stateOf(hero.m, now) === 'live' ? 1 : 0);
 
+  const watchLaterItems = useWatchLaterStore(state => state.items);
+  const manualIds = useMemo(() => watchLaterItems.map(item => item.id), [watchLaterItems]);
   const replay = useMemo(
-    () => computeReplayPicks(now, prefs, 3) as ReplayPick[],
-    [now, prefs, rev]
+    () => computeReplayPicks(now, prefs, 3, { manualIds }) as ReplayPick[],
+    [now, prefs, rev, manualIds]
   );
 
   const heroNarrative = useMemo(
@@ -148,6 +152,8 @@ export default function TonightScreen() {
     const ledger = sleepLedger(target.t, {
       enabled: true,
       wakeTime: prefs.sleepWakeTime,
+      weekendEnabled: prefs.sleepWeekendEnabled,
+      weekendWakeTime: prefs.sleepWeekendWakeTime,
       minSleep: prefs.sleepMinHours,
     });
     if (!ledger.valid || !ledger.ready) return null;
@@ -527,6 +533,9 @@ function HeroCard({
   // 防剧透开启且未揭晓时不泄露比分；已揭晓但上游还没回填时如实说待更新。
   const scoreVisible = useMatchRevealed(hero.m.id, prefs.spoilerFree);
   const watchLater = useWatchLaterStore(state => state.items);
+  const toggleWatchLater = useWatchLaterStore(state => state.toggle);
+  const queueState = queueStatusOf(watchLater, hero.m.id);
+  const isQueued = queueState === 'pending';
   const hasScore = /^\d+-\d+$/.test(hero.m.sc || '');
   const liveScore = isLive && scoreVisible && hasScore ? hero.m.sc : null;
   const liveScoreNote = isLive && !liveScore ? (scoreVisible ? '比分待更新' : '比分未揭晓') : null;
@@ -715,27 +724,83 @@ function HeroCard({
           }}
         />
 
-        <Pressable
-          onPress={() => {
-            impactFeedback();
-            isLive ? onWatch() : onPress();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={isLive ? '看直播' : '查看比赛详情'}
-          style={({ pressed }) => [
-            styles.cta,
-            weak && !isLive && styles.ctaSecondary,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={[styles.ctaText, weak && !isLive && styles.ctaTextSecondary]}>
-            {isLive ? '看直播' : weak ? '查看详情' : '查看比赛'}
-          </Text>
-          <ChevronRight
-            size={16}
-            color={weak && !isLive ? colors.textSecondary : colors.accentInk}
-          />
-        </Pressable>
+        {isLive ? (
+          <Pressable
+            onPress={() => {
+              impactFeedback();
+              onWatch();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="看直播"
+            style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
+          >
+            <Text style={styles.ctaText}>看直播</Text>
+            <ChevronRight size={16} color={colors.accentInk} />
+          </Pressable>
+        ) : (
+          <View style={styles.ctaRow}>
+            <Pressable
+              onPress={() => {
+                impactFeedback();
+                onPress();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="查看比赛详情"
+              style={({ pressed }) => [
+                styles.cta,
+                styles.ctaFlex,
+                weak && styles.ctaSecondary,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={[styles.ctaText, weak && styles.ctaTextSecondary]}>
+                {weak ? '查看详情' : '查看比赛'}
+              </Text>
+              <ChevronRight
+                size={16}
+                color={weak ? colors.textSecondary : colors.accentInk}
+              />
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                impactFeedback();
+                const res = toggleWatchLater(hero.m);
+                if (!res.ok) {
+                  toast.error(
+                    res.reason === 'full'
+                      ? '补看队列已满，请先在「我的」移除旧条目'
+                      : '更新补看失败'
+                  );
+                  return;
+                }
+                if (res.action === 'added') toast.success('已加入明早补看');
+                else if (res.action === 'removed') toast.info('已移出明早补看');
+                else if (res.action === 'restored') toast.success('已恢复为待补看');
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isQueued }}
+              accessibilityLabel={isQueued ? '已加入明早补看，点击移出' : '加入明早补看'}
+              style={({ pressed }) => [
+                styles.ctaQueue,
+                (isQueued || decision.strip.verdict === 'defer') && styles.ctaQueueHighlight,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Bookmark
+                size={15}
+                color={isQueued || decision.strip.verdict === 'defer' ? colors.accent : colors.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.ctaQueueText,
+                  (isQueued || decision.strip.verdict === 'defer') && styles.ctaQueueTextHighlight,
+                ]}
+              >
+                {isQueued ? '已入补看' : '明早补看'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
       </LinearGradient>
     </View>
   );
@@ -980,6 +1045,11 @@ const styles = StyleSheet.create({
   line: { color: colors.textMuted, fontSize: fontSize.sm, lineHeight: 18 },
   weakNotice: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   weakText: { color: colors.textMuted, fontSize: fontSize.xs },
+  ctaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   cta: {
     height: 44,
     borderRadius: radius.control,
@@ -989,6 +1059,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
   },
+  ctaFlex: { flex: 1 },
+  ctaQueue: {
+    height: 44,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.control,
+    borderWidth: 1,
+    borderColor: colors.control,
+    backgroundColor: colors.panel,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  ctaQueueHighlight: {
+    borderColor: withAlpha(colors.accent, 0.45),
+    backgroundColor: colors.goldSoft,
+  },
+  ctaQueueText: { color: colors.textSecondary, fontSize: fontSize.sm, fontWeight: weight.title },
+  ctaQueueTextHighlight: { color: colors.accent },
   ctaSecondary: {
     backgroundColor: colors.raised,
     borderWidth: 1,

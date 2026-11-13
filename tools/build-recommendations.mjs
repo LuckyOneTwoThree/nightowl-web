@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { getFixtures, REC_MAP, rivalries, storylines, leagueName } from '../src/data/index.js';
 import { isActionable } from '../src/core/actionable.js';
+import { computeMatchStakes } from '../src/core/stakes.js';
 import * as E from '../src/core/engine.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -47,19 +48,21 @@ const nowArg = argv.find(a => a.startsWith('--now='));
 const NOW = nowArg ? E.ts(nowArg.split('=')[1]) : Date.now();
 
 /** 星级「底座」：不带 recMap，避免用推荐去证明推荐（自证循环） */
-function baseEval(match) {
-  return E.evaluate(match, {}, rivalries, storylines, [], []);
+function baseEval(match, stakes = null) {
+  return E.evaluate(match, {}, rivalries, storylines, [], [], { stakes });
 }
 
 /**
  * 焦点排序分。纯规则、可解释，不做隐式加权：
- * 关键节点 > 宿敌德比 > 六强内战 > 有故事线 > 其它（后者根本不入池）
+ * 关键节点 > 宿敌德比 > 榜首卡位 > 六强内战 > 欧冠区/晋级线卡位 > 有故事线/保级/连胜势头 > 其它
  */
 export function focusScore(match, ev) {
   if (ev.keyNode) return 5;
   if (ev.rivalry) return 4;
+  if (ev.stakes?.kind === 'title-clash') return 3.8;
   if (E.isBigSixClash(match)) return 3;
-  if (ev.storyIds.length) return 2;
+  if (ev.stakes?.kind === 'top-zone-clash' || ev.stakes?.kind === 'ucl-cutoff-clash') return 2.5;
+  if (ev.storyIds.length || ev.stakes) return 2;
   return 0;
 }
 
@@ -85,6 +88,7 @@ export function buildEntry(match, ev) {
   if (keyStory) points.push(`${keyStory.name}关键节点`);
   if (ev.rivalry) points.push(ev.rivalry);
   else if (bigSix) points.push(`${leagueName(match.l)}六强内战`);
+  if (ev.stakes?.label) points.push(ev.stakes.label);
   for (const s of stories) {
     if (keyStory && s.id === keyStory.id) continue;
     points.push(s.name);
@@ -120,6 +124,7 @@ export function buildPool({ fixtures, now = NOW, weeklyCap = WEEKLY_CAP, horizon
   let considered = 0;
   let skippedTbd = 0;
 
+  const standingsCache = new Map();
   for (const m of fixtures || []) {
     if (m.st !== 'sched') continue;
     // tbd 的 t 是整轮占位时间，写进 L1 会让「今晚焦点」指向一个不存在的时刻
@@ -131,7 +136,8 @@ export function buildPool({ fixtures, now = NOW, weeklyCap = WEEKLY_CAP, horizon
     if (!Number.isFinite(kick) || kick <= now || kick > horizonEnd) continue;
     if (!isActionable(m, now)) continue;
 
-    const ev = baseEval(m);
+    const stakes = computeMatchStakes(m, fixtures, { nowTs: now, standingsCache });
+    const ev = baseEval(m, stakes);
     const score = focusScore(m, ev);
     if (score < 2) continue;      // 没有规则依据的普通场次不进 L1（那是 L2/L3 的活）
     considered++;

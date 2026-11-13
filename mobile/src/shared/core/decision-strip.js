@@ -62,6 +62,8 @@ function sleepProfileFrom(prefs) {
   return {
     enabled: prefs?.sleepEnabled === true,
     wakeTime: prefs?.sleepWakeTime,
+    weekendEnabled: prefs?.sleepWeekendEnabled === true,
+    weekendWakeTime: prefs?.sleepWeekendWakeTime,
     minSleep: prefs?.sleepMinHours
   };
 }

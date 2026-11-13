@@ -207,19 +207,27 @@ export function isKeyNode(match, storylines) {
  * 计算一场比赛的最终星级与加成
  * 注意：followedLeagues 必须显式传入，不存在任何全局兜底
  */
-export function evaluate(match, recMap, rivalries, storylines, followed, followedLeagues) {
+export function evaluate(match, recMap, rivalries, storylines, followed, followedLeagues, opts = {}) {
   followed = followed || [];
   followedLeagues = Array.isArray(followedLeagues) ? followedLeagues : [];
   const rec = recMap && recMap[match.id];
   const stories = storylinesOf(match, storylines);
   const keyNode = isKeyNode(match, storylines);
   const rivalry = rivalryOf(match, rivalries);
+  const stakes = opts?.stakes || opts?.stakesById?.get(match.id) || null;
   const bonuses = [];
 
   let base = 1;
   if (rec && rec.star) base = rec.star;
   else if (rivalry || isBigSixClash(match)) base = 3;
   else if (stories.length) base = 2;
+
+  if (stakes?.starFloor && stakes.starFloor > base) {
+    base = stakes.starFloor;
+  }
+  if (stakes?.label) {
+    bonuses.push(stakes.label);
+  }
 
   let star = base;
   if (keyNode && star < 3) { star = 3; bonuses.push('故事线关键节点'); }
@@ -242,6 +250,7 @@ export function evaluate(match, recMap, rivalries, storylines, followed, followe
     stories, storyIds: stories.map(s => s.id),
     keyNode,
     rivalry: rivalry ? rivalry.zh : null,
+    stakes,
     rec: rec || null,
     bonuses
   };
@@ -272,11 +281,11 @@ export function owlIndex(ev, match, w = DEFAULT_WEIGHTS) {
 
 // ---------- 今晚之选 ----------
 
-export function pickToday(matches, recMap, rivalries, storylines, followed, followedLeagues, w = DEFAULT_WEIGHTS) {
+export function pickToday(matches, recMap, rivalries, storylines, followed, followedLeagues, w = DEFAULT_WEIGHTS, opts = {}) {
   const evs = matches
     .filter(m => m.st === 'sched' && !m.tbd)
     .map(m => {
-      const ev = evaluate(m, recMap, rivalries, storylines, followed, followedLeagues);
+      const ev = evaluate(m, recMap, rivalries, storylines, followed, followedLeagues, opts);
       return { m, ev, index: owlIndex(ev, m, w) };
     });
 
@@ -534,7 +543,7 @@ export function planWeek(matches, recMap, rivalries, storylines, followed, budge
 
   const build = (list) => list
     .map(m => {
-      const ev = evaluate(m, recMap, rivalries, storylines, followed, followedLeagues);
+      const ev = evaluate(m, recMap, rivalries, storylines, followed, followedLeagues, opts);
       return { m, ev, index: owlIndex(ev, m, w) };
     })
     .sort((a, b) => b.index - a.index);
@@ -566,12 +575,36 @@ export function planWeek(matches, recMap, rivalries, storylines, followed, budge
    * 但解是全局最优的：先最大化主队场次数，再在剩余额度里最大化价值。
    */
   const FOLLOWED_BONUS_VAL = 1e6; // 远大于任何可行解的价值总和（5 项 × 数百）
-  const candidates = capRatio >= 1 ? evs : evs.filter(e => tierOf(e.m).cost <= capRatio * budget);
-  const pickCap = Number.isFinite(maxPicks) ? maxPicks : candidates.length;
+  const pinnedSet = new Set(Array.isArray(opts.pinnedIds) ? opts.pinnedIds : []);
+  const excludedSet = new Set(
+    (Array.isArray(opts.excludedIds) ? opts.excludedIds : []).filter(id => !pinnedSet.has(id))
+  );
+  const blockedSet = new Set(Array.isArray(opts.blockedNights) ? opts.blockedNights : []);
 
-  let best = candidates.length
-    ? knapsackLimited(candidates, budget, w, pickCap, { followedBonusVal: FOLLOWED_BONUS_VAL })
+  const pinnedPool = pinnedSet.size
+    ? evs.concat(zeroEvs).filter(e => pinnedSet.has(e.m.id)).sort(cmpPref)
     : [];
+  const pinnedBest = [];
+  for (const e of pinnedPool) {
+    if (pinnedBest.some(b => exclusiveMatches(b.m, e.m))) continue;
+    pinnedBest.push(e);
+  }
+  const pinnedCost = pinnedBest.reduce((s, e) => s + tierOf(e.m).cost, 0);
+  const remBudget = Math.max(0, budget - pinnedCost);
+
+  const candidates = (capRatio >= 1 ? evs : evs.filter(e => tierOf(e.m).cost <= capRatio * budget))
+    .filter(e => !pinnedSet.has(e.m.id))
+    .filter(e => !excludedSet.has(e.m.id))
+    .filter(e => !blockedSet.has(owlDay(e.m.t)))
+    .filter(e => !pinnedBest.some(b => exclusiveMatches(b.m, e.m)));
+  const remPickCap = Number.isFinite(maxPicks)
+    ? Math.max(0, maxPicks - pinnedBest.length)
+    : candidates.length;
+
+  const autoBest = candidates.length && remPickCap > 0
+    ? knapsackLimited(candidates, remBudget, w, remPickCap, { followedBonusVal: FOLLOWED_BONUS_VAL })
+    : [];
+  let best = [...pinnedBest, ...autoBest];
 
   // 「本周精选」是观赛计划，按开球时间排序；关注球队优先只影响入选，不改变计划顺序。
   // （否则周一凌晨场会排在周六晚场之前，用户会把计划读成倒序。）
@@ -581,12 +614,18 @@ export function planWeek(matches, recMap, rivalries, storylines, followed, budge
   best.forEach(e => { bestIds[e.m.id] = true; });
   const alt = evs
     .filter(e => !bestIds[e.m.id])
+    .filter(e => !excludedSet.has(e.m.id))
+    .filter(e => !blockedSet.has(owlDay(e.m.t)))
     .filter(e => !best.some(b => exclusiveMatches(b.m, e.m)))
     .slice(0, 3);
 
   // 「零成本顺带」也是一份可执行计划：既不能和精选同时看，组内也不能同时看。
   // 零成本只说明不占睡眠预算，不说明可以在同一时段看多场。
-  const zeroExecutablePool = zeroEvs.filter(e => !best.some(b => exclusiveMatches(b.m, e.m)));
+  const zeroExecutablePool = zeroEvs
+    .filter(e => !bestIds[e.m.id])
+    .filter(e => !excludedSet.has(e.m.id))
+    .filter(e => !blockedSet.has(owlDay(e.m.t)))
+    .filter(e => !best.some(b => exclusiveMatches(b.m, e.m)));
   const zeroList = intervalSchedule(zeroExecutablePool, w);
 
   // 同开球组（≥2 场，含零成本）：供界面标注「同时开球 · 只能看一场」。
@@ -601,19 +640,27 @@ export function planWeek(matches, recMap, rivalries, storylines, followed, budge
   for (const [t, list] of byKick) {
     if (list.length < 2) continue;
     const entries = [...list].sort(cmpPref);
-    kickoffGroups.push({ t, entries, chosen: entries.find(e => bestIds[e.m.id]) || entries[0] });
+    const fallbackChosen = entries.find(
+      e => !excludedSet.has(e.m.id) && !blockedSet.has(owlDay(e.m.t))
+    ) || entries[0];
+    kickoffGroups.push({ t, entries, chosen: entries.find(e => bestIds[e.m.id]) || fallbackChosen });
   }
   kickoffGroups.sort((a, b) => ts(a.t) - ts(b.t));
 
   // 已用 = 入选场次档位成本之和。入选集合经互斥约束两两不重叠，每场都真实可看、
   // 各自独立计睡眠成本 —— 该值同时等于「同组取最大」口径（每组至多一场），不再对互斥场次重复累加。
   const usedCost = best.reduce((s, e) => s + tierOf(e.m).cost, 0);
+  const overBudgetHours = Math.max(0, Math.round((usedCost - budget) * 10) / 10);
 
   return {
     best,
     alt,
     budget,
     used: usedCost,
+    overBudgetHours,
+    pinnedIds: pinnedBest.map(e => e.m.id),
+    pinnedCount: pinnedBest.length,
+    blockedNights: [...blockedSet],
     evs,
     zeroList,
     zeroCount: zeroList.length,
@@ -626,10 +673,10 @@ export function planWeek(matches, recMap, rivalries, storylines, followed, budge
 
 // ---------- 雷区预警 ----------
 
-export function minefield(matches, recMap, rivalries, storylines, followed, followedLeagues) {
+export function minefield(matches, recMap, rivalries, storylines, followed, followedLeagues, opts = {}) {
   return matches
     .filter(m => m.st === 'sched' && !m.tbd)
-    .map(m => ({ m, ev: evaluate(m, recMap, rivalries, storylines, followed, followedLeagues) }))
+    .map(m => ({ m, ev: evaluate(m, recMap, rivalries, storylines, followed, followedLeagues, opts) }))
     .filter(e => {
       const cost = tierOf(e.m).cost;
       if (cost >= 3.5 && e.ev.star <= 1 && e.ev.storyIds.length === 0) return true;
@@ -648,10 +695,10 @@ export function minefield(matches, recMap, rivalries, storylines, followed, foll
 
 // ---------- 下一场焦点战 ----------
 
-export function nextFocal(matches, recMap, rivalries, storylines, followed, nowTs, followedLeagues) {
+export function nextFocal(matches, recMap, rivalries, storylines, followed, nowTs, followedLeagues, opts = {}) {
   const future = matches
     .filter(m => m.st === 'sched' && !m.tbd && ts(m.t) > nowTs)
-    .map(m => ({ m, ev: evaluate(m, recMap, rivalries, storylines, followed, followedLeagues) }))
+    .map(m => ({ m, ev: evaluate(m, recMap, rivalries, storylines, followed, followedLeagues, opts) }))
     .sort((a, b) => {
       if (b.ev.isLeagueFollowed !== a.ev.isLeagueFollowed && b.ev.star === a.ev.star) {
         return (b.ev.isLeagueFollowed ? 1 : 0) - (a.ev.isLeagueFollowed ? 1 : 0);

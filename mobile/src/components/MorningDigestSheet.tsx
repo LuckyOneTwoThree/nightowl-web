@@ -3,7 +3,10 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { leagueName, teamName } from '@data/index.js';
+import { evalOne } from '@core/owl.js';
 import { hm } from '@core/format.js';
+import { completedWatchHint } from '@core/reveal.js';
+import { usePrefs } from '@/state/prefs';
 import type { Match } from '@/types';
 import { Button } from '@/ui/Button';
 import { Chip } from '@/ui/Chip';
@@ -35,10 +38,13 @@ export function MorningDigestSheet({
   onClose,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const prefs = usePrefs();
   const [confirmAll, setConfirmAll] = useState(false);
   useEffect(() => {
     if (!visible) setConfirmAll(false);
   }, [visible]);
+
+  const firstPending = items.find(entry => entry.match && entry.item.status !== 'watched');
 
   return (
     <Modal
@@ -73,6 +79,15 @@ export function MorningDigestSheet({
               items.map(({ item, match }) => {
                 const shown = !!match && !!revealedIds[match.id];
                 const hasScore = !!match?.sc && match.st === 'done';
+                const ev = match ? (evalOne(match, prefs) as { ev: unknown }).ev : null;
+                const watchHint =
+                  !shown && hasScore
+                    ? (completedWatchHint as (m: Match, ev?: unknown) => {
+                        level: string;
+                        label: string;
+                        shortLabel: string;
+                      } | null)(match, ev)
+                    : null;
                 return (
                   <View key={item.id} style={styles.card}>
                     <View style={styles.cardTop}>
@@ -83,14 +98,26 @@ export function MorningDigestSheet({
                       </Text>
                       <Text style={styles.meta}>{item.status === 'watched' ? '已看' : '待补看'}</Text>
                     </View>
-                    <View style={styles.cardMain}>
+                    <Pressable
+                      onPress={() => match && onOpenMatch(match.id)}
+                      disabled={!match}
+                      accessibilityRole={match ? 'button' : undefined}
+                      accessibilityLabel={
+                        match ? `查看 ${teamName(match.h)} 对 ${teamName(match.a)} 详情` : undefined
+                      }
+                      style={({ pressed }) => [styles.cardMain, pressed && styles.pressed]}
+                    >
                       {match ? <Crest id={match.h} size={30} /> : null}
                       <View style={styles.cardText}>
                         <Text style={styles.matchTitle} numberOfLines={1}>
                           {match ? `${teamName(match.h)} vs ${teamName(match.a)}` : '比赛数据已移除'}
                         </Text>
                         <Text style={styles.meta}>
-                          {match ? (match.st === 'done' ? '已终场' : '比分待录') : '本地赛程中没有这场比赛'}
+                          {match
+                            ? match.st === 'done'
+                              ? `已终场${watchHint ? ` · ${watchHint.label}` : ''}`
+                              : '比分待录'
+                            : '本地赛程中没有这场比赛'}
                         </Text>
                       </View>
                       {match ? (
@@ -98,7 +125,7 @@ export function MorningDigestSheet({
                           {shown ? (hasScore ? match.sc : '待录') : '•• - ••'}
                         </Text>
                       ) : null}
-                    </View>
+                    </Pressable>
                     <View style={styles.actions}>
                       {match && !shown ? (
                         <Button label="揭晓" variant="secondary" onPress={() => onReveal(match.id)} />
@@ -129,7 +156,17 @@ export function MorningDigestSheet({
                   setConfirmAll(false);
                 }}
               />
-              <Button label="稍后再看" onPress={onClose} />
+              {firstPending?.match ? (
+                <>
+                  <Button label="稍后" variant="secondary" onPress={onClose} />
+                  <Button
+                    label="开始依序补看"
+                    onPress={() => onOpenMatch(firstPending.match!.id)}
+                  />
+                </>
+              ) : (
+                <Button label="稍后再看" onPress={onClose} />
+              )}
             </View>
           </View>
         </View>
@@ -169,7 +206,8 @@ const styles = StyleSheet.create({
   card: { borderRadius: radius.card, borderWidth: 1, borderColor: colors.hairline, backgroundColor: colors.card, padding: spacing.md, gap: spacing.sm },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between' },
   meta: { color: colors.textFaint, fontSize: fontSize.xs },
-  cardMain: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  cardMain: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  pressed: { opacity: 0.78 },
   cardText: { flex: 1, gap: 2 },
   matchTitle: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.title },
   score: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title, fontVariant: ['tabular-nums'] },

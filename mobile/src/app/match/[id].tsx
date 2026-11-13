@@ -58,7 +58,7 @@ import {
 } from '@core/data-health.js';
 import { computeMatchStandings } from '@core/standings.js';
 import { computeMatchStats } from '@core/stats.js';
-import { unrevealedTonightIds } from '@core/reveal.js';
+import { completedWatchHint, unrevealedTonightIds, WATCH_HINT_LEVEL } from '@core/reveal.js';
 
 import { animateLayout } from '@/lib/layoutAnimation';
 import { hasScheduledMatchReminder, scheduleMatchReminder } from '@/lib/reminders';
@@ -313,6 +313,14 @@ export default function MatchScreen() {
       : null;
   const liveMinuteText = liveData?.minuteLabel || `${minuteOf(ts(match.t), now)}'`;
   const finalScore = liveScoreText || match.sc || null;
+  const watchHint =
+    finishedNow && finalScore && !scoreVisible
+      ? (completedWatchHint as (m: Match, ev?: unknown) => {
+          level: string;
+          label: string;
+          shortLabel: string;
+        } | null)(match, intel.ev)
+      : null;
   const countdown = engineCountdown(ts(match.t), now);
   const tier = intel.tier;
   const color = tierColor(tier.tier);
@@ -457,6 +465,24 @@ export default function MatchScreen() {
                     <Eye size={13} color={colors.accent} />
                     <Text style={styles.revealText}>揭晓比分</Text>
                   </Pressable>
+                  {watchHint ? (
+                    <View
+                      style={[
+                        styles.heroWatchHintPill,
+                        watchHint.level === WATCH_HINT_LEVEL.HIGH && styles.heroWatchHintPillHigh,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.heroWatchHintText,
+                          watchHint.level === WATCH_HINT_LEVEL.HIGH && styles.heroWatchHintTextHigh,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {watchHint.label}
+                      </Text>
+                    </View>
+                  ) : null}
                 </>
               ) : finishedNow ? (
                 <Text style={styles.vs}>已结束</Text>
@@ -949,7 +975,7 @@ function IntelTab({
               positive
             />
             <AttributionRow
-              label="故事线加成"
+              label="故事线 / 局势"
               value={`+${storyPart.toFixed(1)}`}
               ratio={storyPart / 40}
               positive
@@ -1529,6 +1555,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panel,
   },
   revealText: { color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
+  heroWatchHintPill: {
+    marginTop: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    backgroundColor: colors.panel,
+  },
+  heroWatchHintPillHigh: {
+    borderColor: withAlpha(colors.accent, 0.4),
+    backgroundColor: colors.goldSoft,
+  },
+  heroWatchHintText: { color: colors.textMuted, fontSize: 10, fontWeight: weight.label },
+  heroWatchHintTextHigh: { color: colors.accent, fontWeight: weight.title },
   hideScore: {
     flexDirection: 'row',
     alignSelf: 'center',

@@ -379,7 +379,7 @@ export default function SettingsDrawer({
             </div>
           </Fieldset>
 
-          <Fieldset title="个人睡眠" hint="按自己的起床时间估算看完比赛后的剩余睡眠；默认关闭，不影响推荐排序。">
+          <Fieldset title="个人睡眠" hint="按自己的起床时间估算看完比赛后的剩余睡眠；支持区分工作日与周末（周五/六夜）起床时间。">
             <SwitchRow
               label="启用睡眠账本"
               hint="启用后 Hero、周规划与比赛详情会显示个人剩余睡眠；低于底线会明确提示。"
@@ -387,31 +387,74 @@ export default function SettingsDrawer({
               onChange={v => patch({ sleepEnabled: v })}
             />
             {prefs.sleepEnabled && (
-              <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-line-hairline bg-surface-card px-3 py-2.5">
-                <label className="text-2xs text-text-muted">
-                  起床时间
-                  <input
-                    type="time"
-                    value={prefs.sleepWakeTime || '07:30'}
-                    onChange={e => patch({ sleepWakeTime: e.target.value })}
-                    className="mt-1 block w-full rounded-md border border-line-control bg-surface-panel px-2 py-1 font-num text-xs text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
-                    aria-label="起床时间"
-                  />
-                </label>
-                <label className="text-2xs text-text-muted">
-                  最低睡眠
-                  <span className="ml-1 font-num text-text-primary">{Number(prefs.sleepMinHours ?? 7).toFixed(1)}h</span>
-                  <input
-                    type="range"
-                    min="4"
-                    max="10"
-                    step="0.5"
-                    value={prefs.sleepMinHours ?? 7}
-                    onChange={e => patch({ sleepMinHours: Number(e.target.value) })}
-                    className="mt-2 w-full accent-accent"
-                    aria-label="最低睡眠小时数"
-                  />
-                </label>
+              <div className="mt-2 space-y-2 rounded-lg border border-line-hairline bg-surface-card px-3 py-2.5">
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-2xs text-text-muted">
+                    工作日起床
+                    <input
+                      type="time"
+                      value={prefs.sleepWakeTime || '07:30'}
+                      onChange={e => patch({ sleepWakeTime: e.target.value })}
+                      className="mt-1 block w-full rounded-md border border-line-control bg-surface-panel px-2 py-1 font-num text-xs text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+                      aria-label="起床时间"
+                    />
+                  </label>
+                  <label className="text-2xs text-text-muted">
+                    最低睡眠
+                    <span className="ml-1 font-num text-text-primary">{Number(prefs.sleepMinHours ?? 7).toFixed(1)}h</span>
+                    <input
+                      type="range"
+                      min="4"
+                      max="10"
+                      step="0.5"
+                      value={prefs.sleepMinHours ?? 7}
+                      onChange={e => patch({ sleepMinHours: Number(e.target.value) })}
+                      className="mt-2 w-full accent-accent"
+                      aria-label="最低睡眠小时数"
+                    />
+                  </label>
+                </div>
+
+                <div className="border-t border-line-hairline pt-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-2xs text-text-secondary">周五 / 周六夜（次日周末）晚起</span>
+                    <Switch
+                      on={prefs.sleepWeekendEnabled !== false}
+                      onChange={v => patch({ sleepWeekendEnabled: v })}
+                      label="周五/周六夜晚起"
+                    />
+                  </div>
+                  {prefs.sleepWeekendEnabled !== false && (
+                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap gap-1">
+                        {['08:30', '09:00', '09:30', '10:00'].map(t => {
+                          const active = (prefs.sleepWeekendWakeTime || '09:00') === t;
+                          return (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => patch({ sleepWeekendWakeTime: t })}
+                              className={`rounded px-1.5 py-0.5 font-num text-2xs tabular-nums transition-colors cursor-pointer ${
+                                active
+                                  ? 'bg-accent/20 text-accent font-medium'
+                                  : 'bg-surface-panel text-text-muted hover:text-text-primary'
+                              }`}
+                            >
+                              {t}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <input
+                        type="time"
+                        value={prefs.sleepWeekendWakeTime || '09:00'}
+                        onChange={e => patch({ sleepWeekendWakeTime: e.target.value })}
+                        className="w-24 rounded-md border border-line-control bg-surface-panel px-2 py-0.5 font-num text-xs text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+                        aria-label="周末起床时间"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </Fieldset>

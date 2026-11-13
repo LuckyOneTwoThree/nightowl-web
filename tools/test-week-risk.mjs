@@ -275,6 +275,36 @@ console.log('四、真实快照不变量');
 }
 
 console.log('');
+console.log('五、双轨作息底线');
+{
+  const DATES = ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08'];
+  const days = DATES.map(date => ({ date, cost: 0, matches: [] }));
+  const mk = (id, t) => ({ id, t, h: 'AAA', a: 'BBB', l: 'PL', st: 'sched' });
+  const matches = [
+    // 周三夜 23:00 → 01:00 结束；按工作日 07:30（底线 00:30）越线 30 分钟
+    mk('wed-1', '2026-11-04T23:00'),
+    // 周五夜 23:30 → 01:30 结束；按周末 09:00（底线 02:00）未越线
+    mk('fri-1', '2026-11-06T23:30'),
+    // 周日夜 23:00 → 01:00 结束；按工作日 07:30（底线 00:30）越线 30 分钟
+    mk('sun-1', '2026-11-08T23:00')
+  ];
+  const dual = { enabled: true, wakeTime: '07:30', weekendEnabled: true, weekendWakeTime: '09:00', minSleep: 7 };
+  const risk = weekRiskBands({ days, matches }, dual, ts('2026-11-01T12:00'));
+
+  ok('工作日底线 00:30，周末底线 02:00',
+    risk.floor?.clock === '00:30' && risk.weekendFloor?.clock === '02:00',
+    JSON.stringify({ f: risk.floor?.clock, wf: risk.weekendFloor?.clock }));
+  ok('周三夜使用 00:30 底线且越线 30m',
+    risk.bands[2].floor?.clock === '00:30' && risk.bands[2].belowFloor === true && risk.bands[2].overMinutes === 30);
+  ok('周五夜使用周末 02:00 底线且不越线',
+    risk.bands[4].floor?.clock === '02:00' && risk.bands[4].floor?.isWeekend === true && risk.bands[4].belowFloor === false,
+    JSON.stringify(risk.bands[4].floor));
+  ok('周日夜次日周一，仍按 00:30 底线判定为越线',
+    risk.bands[6].floor?.clock === '00:30' && risk.bands[6].belowFloor === true);
+  ok('共 2 晚越线（不含周五夜）', risk.riskNights === 2, String(risk.riskNights));
+}
+
+console.log('');
 console.log(`通过 ${pass} 项，失败 ${fail} 项`);
 if (fail) {
   console.log('');

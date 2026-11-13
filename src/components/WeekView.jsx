@@ -5,6 +5,7 @@ import { stateOf } from '../core/owl.js';
 import { owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '../core/engine.js';
 import { sleepLedger } from '../core/sleep.js';
 import { weekRiskBands, weekBestEmptyState } from '../core/week-risk.js';
+import { hasAnyWeekOverride } from '../core/week-overrides.js';
 import { Chip, Crest, Hint, IndexTag, Meta, SectionLabel, SleepBadge, Stars } from './atoms.jsx';
 import { IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronUp, IconClose, IconWarn } from './icons.jsx';
 import MatchRow from './MatchRow.jsx';
@@ -38,10 +39,9 @@ const BUCKET_CLASS = ['bg-tier-0', 'bg-tier-1', 'bg-tier-2', 'bg-tier-3', 'bg-ti
  * 已结束的场次不再画：这张表回答的是「还要熬到几点」，历史归赛程页。
  * `tbd` 场次同样不画：占位时间（04:00 / 02:00）不是结论，画上去等于编一个时间出来。
  */
-function WeekTimeline({ risk, matchById, bestIds, selectedDay, onToggleDay }) {
+function WeekTimeline({ risk, matchById, bestIds, selectedDay, onToggleDay, blockedSet }) {
   const { domain, floor, bands } = risk;
   const pct = min => ((min - domain.startMin) / (domain.endMin - domain.startMin)) * 100;
-  const floorInRange = floor != null;
 
   return (
     <div className="border-t border-line-hairline px-2.5 pt-2 pb-2">
@@ -114,6 +114,7 @@ function WeekTimeline({ risk, matchById, bestIds, selectedDay, onToggleDay }) {
           // 但「周一已经过去了」不该和「周六有四场」占同样高度。
           const rowHeight = items.length ? lanes * 8 + 2 : 4;
           const isSelected = selectedDay === band.date;
+          const isBlocked = !!blockedSet?.has(band.date);
           const hasBest = items.some(it => bestIds.has(it.m.id));
 
           return (
@@ -126,20 +127,21 @@ function WeekTimeline({ risk, matchById, bestIds, selectedDay, onToggleDay }) {
                 band.latestEndClock ? `，最晚到 ${band.latestEndClock}` : ''
               }${band.belowFloor ? `，越过底线 ${band.overMinutes} 分钟` : '，未越线'}${
                 band.current ? '，今夜' : ''
-              }${hasBest ? '，含本周精选' : ''}`}
+              }${isBlocked ? '，已设为禁看夜' : ''}${hasBest ? '，含本周精选' : ''}`}
               title={`${zhDate(band.date)} · ${band.count} 场${
                 band.latestEndClock ? ` · 最晚到 ${band.latestEndClock}` : ''
-              }${band.belowFloor ? ` · 越过底线 ${band.overMinutes} 分钟` : ''}`}
+              }${band.belowFloor ? ` · 越过底线 ${band.overMinutes} 分钟` : ''}${isBlocked ? ' · 已设为禁看夜' : ''}`}
               className={`flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
                 isSelected ? 'bg-surface-raised ring-1 ring-accent/50' : 'hover:bg-surface-raised/60'
-              }`}
+              } ${isBlocked ? 'opacity-60' : ''}`}
             >
               <span
-                className={`w-6 shrink-0 text-2xs leading-none ${
-                  isSelected ? 'font-semibold text-accent' : 'text-text-secondary'
+                className={`inline-flex w-8 shrink-0 items-center gap-0.5 text-2xs leading-none ${
+                  isSelected ? 'font-semibold text-accent' : isBlocked ? 'text-text-faint line-through' : 'text-text-secondary'
                 }`}
               >
                 周{WEEKDAY_SHORT[i]}
+                {isBlocked && <span className="no-underline text-warn">禁</span>}
               </span>
 
               <span className="relative flex-1" style={{ height: rowHeight }} aria-hidden="true">
@@ -150,14 +152,18 @@ function WeekTimeline({ risk, matchById, bestIds, selectedDay, onToggleDay }) {
                     style={{ left: `${pct(tick.min)}%` }}
                   />
                 ))}
-                {floorInRange && (
-                  <span
-                    className={`absolute inset-y-0 w-px border-l border-dashed ${
-                      floor.assumed ? 'border-text-faint/60' : 'border-accent/60'
-                    }`}
-                    style={{ left: `${pct(floor.nightMin)}%` }}
-                  />
-                )}
+                {(() => {
+                  const rowFloor = band.floor || floor;
+                  if (!rowFloor) return null;
+                  return (
+                    <span
+                      className={`absolute inset-y-0 w-px border-l border-dashed ${
+                        rowFloor.assumed ? 'border-text-faint/60' : 'border-accent/60'
+                      }`}
+                      style={{ left: `${pct(rowFloor.nightMin)}%` }}
+                    />
+                  );
+                })()}
                 {items.length === 0 && (
                   <span className="absolute inset-x-0 top-1/2 h-px bg-line-hairline/70" />
                 )}
@@ -216,6 +222,10 @@ export default function WeekView({
   onBudgetChange,
   weekOffset = 0,
   onWeekOffsetChange,
+  onTogglePinMatch,
+  onToggleExcludeMatch,
+  onToggleBlockNight,
+  onResetWeekOverrides,
   revealed,
   onReveal
 }) {
@@ -227,7 +237,12 @@ export default function WeekView({
   const listRef = useScrollMemory(`week:${activeTab}:${selectedDay || 'all'}`);
 
   const { plan, minefield, days, advice } = week;
+  const overrides = week.overrides || { pinnedIds: [], excludedIds: [], blockedNights: [] };
+  const pinnedSet = useMemo(() => new Set(overrides.pinnedIds), [overrides.pinnedIds]);
+  const blockedSet = useMemo(() => new Set(overrides.blockedNights), [overrides.blockedNights]);
+  const hasOverrides = hasAnyWeekOverride(overrides);
   const remaining = Math.max(0, plan.budget - plan.used);
+  const overBudget = plan.overBudgetHours > 0;
 
   /**
    * 「额度」与「真实欠睡」是两个量纲：额度按 S0–S4 档位累加（23:00 记 1.0h、03:45 记 3.5h），
@@ -237,7 +252,13 @@ export default function WeekView({
    */
   const sleepGapHours = useMemo(() => {
     if (prefs?.sleepEnabled !== true) return null;
-    const profile = { enabled: true, wakeTime: prefs.sleepWakeTime, minSleep: prefs.sleepMinHours };
+    const profile = {
+      enabled: true,
+      wakeTime: prefs.sleepWakeTime,
+      weekendEnabled: prefs.sleepWeekendEnabled === true,
+      weekendWakeTime: prefs.sleepWeekendWakeTime,
+      minSleep: prefs.sleepMinHours
+    };
     let sum = 0;
     let known = 0;
     for (const e of plan.best) {
@@ -248,7 +269,7 @@ export default function WeekView({
       }
     }
     return known ? sum : null;
-  }, [plan.best, prefs?.sleepEnabled, prefs?.sleepWakeTime, prefs?.sleepMinHours]);
+  }, [plan.best, prefs?.sleepEnabled, prefs?.sleepWakeTime, prefs?.sleepWeekendEnabled, prefs?.sleepWeekendWakeTime, prefs?.sleepMinHours]);
 
   /* 周切换：只平移锚点，可排性仍按真实 now（口径见 core/owl.js 的 weekOffset）。
      历史周没有「还要熬到几点」的风险语义，风险带与底线结论一律不显示。 */
@@ -270,11 +291,13 @@ export default function WeekView({
         {
           enabled: prefs.sleepEnabled,
           wakeTime: prefs.sleepWakeTime,
+          weekendEnabled: prefs.sleepWeekendEnabled === true,
+          weekendWakeTime: prefs.sleepWeekendWakeTime,
           minSleep: prefs.sleepMinHours
         },
         now
       ),
-    [week, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepMinHours, now]
+    [week, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepWeekendEnabled, prefs.sleepWeekendWakeTime, prefs.sleepMinHours, now]
   );
   const hasScheduledMatches = risk.bands.some(b => !b.empty);
 
@@ -408,8 +431,20 @@ export default function WeekView({
       {/* 睡眠底线结论：口径 = 整周未开赛场次，与下方时间轴完全同源（core/week-risk.js） */}
       {showRisk && risk.floor && (
         <div className={`px-0.5 text-2xs ${risk.riskNights > 0 ? 'text-warn' : 'text-text-muted'}`}>
-          按 <span className="font-num tabular-nums">{risk.floor.wakeTime}</span> 起床 · 底线{' '}
-          <span className="font-num tabular-nums">{risk.floor.clock}</span>
+          按 <span className="font-num tabular-nums">{risk.floor.wakeTime}</span>
+          {risk.weekendFloor && risk.weekendFloor.wakeTime !== risk.floor.wakeTime && (
+            <>
+              {' '}
+              （周末 <span className="font-num tabular-nums">{risk.weekendFloor.wakeTime}</span>）
+            </>
+          )}{' '}
+          起床 · 底线{' '}
+          <span className="font-num tabular-nums">
+            {risk.floor.clock}
+            {risk.weekendFloor && risk.weekendFloor.clock !== risk.floor.clock
+              ? `/${risk.weekendFloor.clock}`
+              : ''}
+          </span>
           {risk.floor.assumed ? '（未设作息，按默认画）' : ''} ·
           {risk.riskNights > 0
             ? ` ${risk.riskNights} 晚越过底线${risk.worst ? `，最晚到 ${risk.worst.latestEndClock}` : ''}`
@@ -434,7 +469,11 @@ export default function WeekView({
               <span className="text-text-faint">·</span>
               <span className="text-text-secondary">已排 {plan.used.toFixed(1)}h</span>
               <span className="text-text-faint">·</span>
-              <span className="text-text-muted">剩余 {remaining.toFixed(1)}h</span>
+              {overBudget ? (
+                <span className="font-medium text-warn">超支 {plan.overBudgetHours.toFixed(1)}h</span>
+              ) : (
+                <span className="text-text-muted">剩余 {remaining.toFixed(1)}h</span>
+              )}
             </div>
           </div>
           <span className="inline-flex shrink-0 items-center gap-1 text-2xs text-text-muted">
@@ -526,8 +565,24 @@ export default function WeekView({
             matchById={matchById}
             bestIds={bestIds}
             selectedDay={selectedDay}
+            blockedSet={blockedSet}
             onToggleDay={date => setSelectedDay(cur => (cur === date ? null : date))}
           />
+        )}
+
+        {hasOverrides && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line-hairline bg-surface-raised/35 px-3 py-1.5 text-2xs">
+            <span className="text-text-secondary">
+              已手动微调：固定 {overrides.pinnedIds.length} · 跳过 {overrides.excludedIds.length} · 禁看 {overrides.blockedNights.length} 晚
+            </span>
+            <button
+              type="button"
+              onClick={() => onResetWeekOverrides?.()}
+              className="rounded border border-line-hairline px-2 py-0.5 text-text-muted transition-colors hover:border-accent/40 hover:text-accent cursor-pointer"
+            >
+              恢复自动排期
+            </button>
+          </div>
         )}
       </section>
 
@@ -572,9 +627,22 @@ export default function WeekView({
         className="scrollbar-thin -mr-1 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1"
       >
         {selectedDay && activeBand && (
-          <div className="rounded-lg border border-accent/30 bg-surface-accent px-2.5 py-1.5 text-2xs text-text-primary">
-            正在筛选：<span className="font-semibold text-accent">{zhDate(activeBand.date)} 夜</span>（共{' '}
-            {activeBand.count} 场） · 点上方「清除」取消
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-accent/30 bg-surface-accent px-2.5 py-1.5 text-2xs text-text-primary">
+            <span>
+              正在筛选：<span className="font-semibold text-accent">{zhDate(activeBand.date)} 夜</span>（共{' '}
+              {activeBand.count} 场{blockedSet.has(activeBand.date) ? ' · 已设为禁看夜' : ''}）
+            </span>
+            <button
+              type="button"
+              onClick={() => onToggleBlockNight?.(activeBand.date)}
+              className={`rounded border px-2 py-0.5 text-2xs font-medium transition-colors cursor-pointer ${
+                blockedSet.has(activeBand.date)
+                  ? 'border-warn/40 bg-warn/10 text-warn hover:bg-warn/20'
+                  : 'border-line-hairline bg-surface-card text-text-secondary hover:border-accent/40 hover:text-accent'
+              }`}
+            >
+              {blockedSet.has(activeBand.date) ? '取消禁看夜' : '设为禁看夜'}
+            </button>
           </div>
         )}
 
@@ -609,14 +677,19 @@ export default function WeekView({
                       <PickRow
                         e={e}
                         active={e.m.id === activeMatchId}
+                        pinned={pinnedSet.has(e.m.id)}
                         kickoffGroup={group}
                         onSelect={onSelect}
+                        onTogglePin={onTogglePinMatch}
+                        onToggleExclude={onToggleExcludeMatch}
                       />
                       <KickoffAlternatives
                         group={group}
                         selectedId={e.m.id}
                         activeMatchId={activeMatchId}
+                        pinnedSet={pinnedSet}
                         onSelect={onSelect}
+                        onTogglePin={onTogglePinMatch}
                       />
                     </div>
                   );
@@ -708,10 +781,18 @@ export default function WeekView({
               ) : (
                 <div className="space-y-1">
                   {filteredAlt.map(e => (
-                    <button
+                    <div
                       key={e.m.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => onSelect(e.m.id)}
+                      onKeyDown={ev => {
+                        if (ev.target !== ev.currentTarget) return;
+                        if (ev.key === 'Enter' || ev.key === ' ') {
+                          ev.preventDefault();
+                          onSelect(e.m.id);
+                        }
+                      }}
                       className="flex w-full items-center gap-2 rounded-lg border border-transparent bg-surface-card px-2.5 py-1.5 text-left transition-colors hover:border-line-hairline hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
                     >
                       <Meta num className="shrink-0">
@@ -721,7 +802,19 @@ export default function WeekView({
                         {teamName(e.m.h)} vs {teamName(e.m.a)}
                       </span>
                       <IndexTag value={e.index} />
-                    </button>
+                      {onTogglePinMatch && (
+                        <button
+                          type="button"
+                          onClick={ev => {
+                            ev.stopPropagation();
+                            onTogglePinMatch(e.m.id);
+                          }}
+                          className="shrink-0 rounded border border-accent/35 bg-surface-accent px-1.5 py-0.5 text-2xs font-medium text-accent transition-colors hover:bg-accent/20 cursor-pointer"
+                        >
+                          固定入选
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
@@ -737,7 +830,7 @@ export default function WeekView({
  * 同开球组的落选场次。默认收起，避免把「精选 2 场」扩成 6 行；
  * 展开后只切换右侧预览，不改变算法精选（计划不是手动编辑列表）。
  */
-function KickoffAlternatives({ group, selectedId, activeMatchId, onSelect }) {
+function KickoffAlternatives({ group, selectedId, activeMatchId, pinnedSet, onSelect, onTogglePin }) {
   const [open, setOpen] = useState(false);
   const others = (group?.entries || []).filter(e => e.m.id !== selectedId);
   if (others.length === 0) return null;
@@ -747,7 +840,7 @@ function KickoffAlternatives({ group, selectedId, activeMatchId, onSelect }) {
         type="button"
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
-        title="仅切换右侧预览，不改变本周精选"
+        title="展开同开球场次，可预览或固定替换"
         className="inline-flex items-center gap-1 pt-0.5 text-2xs text-text-faint transition-colors hover:text-text-secondary focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none cursor-pointer"
       >
         同开球其他 {others.length} 场
@@ -756,10 +849,18 @@ function KickoffAlternatives({ group, selectedId, activeMatchId, onSelect }) {
       {open && (
         <div className="mt-1 space-y-0.5">
           {others.map(x => (
-            <button
+            <div
               key={x.m.id}
-              type="button"
+              role="button"
+              tabIndex={0}
               onClick={() => onSelect?.(x.m.id)}
+              onKeyDown={ev => {
+                if (ev.target !== ev.currentTarget) return;
+                if (ev.key === 'Enter' || ev.key === ' ') {
+                  ev.preventDefault();
+                  onSelect?.(x.m.id);
+                }
+              }}
               aria-current={x.m.id === activeMatchId ? 'true' : undefined}
               className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors cursor-pointer ${
                 x.m.id === activeMatchId ? 'bg-surface-raised' : 'hover:bg-surface-raised/60'
@@ -772,7 +873,19 @@ function KickoffAlternatives({ group, selectedId, activeMatchId, onSelect }) {
                 {teamName(x.m.h)} vs {teamName(x.m.a)}
               </span>
               <IndexTag value={x.index} />
-            </button>
+              {onTogglePin && (
+                <button
+                  type="button"
+                  onClick={ev => {
+                    ev.stopPropagation();
+                    onTogglePin(x.m.id);
+                  }}
+                  className="shrink-0 rounded border border-line-hairline px-1.5 py-0.5 text-2xs text-text-muted transition-colors hover:border-accent/40 hover:text-accent cursor-pointer"
+                >
+                  {pinnedSet?.has(x.m.id) ? '取消固定' : '固定替换'}
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -783,7 +896,7 @@ function KickoffAlternatives({ group, selectedId, activeMatchId, onSelect }) {
 /**
  * 背包入选行
  */
-function PickRow({ e, active, kickoffGroup, onSelect }) {
+function PickRow({ e, active, pinned = false, kickoffGroup, onSelect, onTogglePin, onToggleExclude }) {
   const m = e.m;
   const night = owlDay(m.t);
   const crossesMidnight = night !== m.t.slice(0, 10);
@@ -802,9 +915,17 @@ function PickRow({ e, active, kickoffGroup, onSelect }) {
           : '跨联赛焦点';
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(m.id)}
+      onKeyDown={ev => {
+        if (ev.target !== ev.currentTarget) return;
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          onSelect(m.id);
+        }
+      }}
       aria-current={active ? 'true' : undefined}
       className={`relative w-full overflow-hidden rounded-lg py-2 pr-2.5 pl-3 text-left transition-all focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
         active
@@ -827,6 +948,11 @@ function PickRow({ e, active, kickoffGroup, onSelect }) {
           <div className="flex items-center gap-1.5">
             <span className="shrink-0 text-2xs text-text-muted">{leagueName(m.l)}</span>
             <SleepBadge match={m} compact />
+            {pinned && (
+              <span className="rounded bg-accent/15 px-1.5 py-px text-2xs font-medium text-accent">
+                已固定
+              </span>
+            )}
             {conflictCount > 1 && (
               <span className="inline-flex items-center gap-0.5 rounded bg-warn/12 px-1.5 py-px font-num text-2xs font-medium text-warn">
                 <IconWarn size={10} />
@@ -851,17 +977,48 @@ function PickRow({ e, active, kickoffGroup, onSelect }) {
           <div className="mt-1 flex items-center gap-2">
             <Stars star={e.ev.star} />
             <span className="min-w-0 truncate text-2xs text-text-faint">{reason}</span>
-            <span
-              className="ml-auto shrink-0"
-              title={`开球 ${m.t.slice(5, 10).replace('-', '/')} ${m.t.split('T')[1]}${crossesMidnight ? ` · 归属 ${dateLabel}` : ''}`}
-            >
-              <Meta num>
-                {dateLabel} · {sleepTier(m.t).cost}h
-              </Meta>
-            </span>
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+              {onTogglePin && (
+                <button
+                  type="button"
+                  onClick={ev => {
+                    ev.stopPropagation();
+                    onTogglePin(m.id);
+                  }}
+                  title={pinned ? '取消固定，交回算法排期' : '固定保留在精选'}
+                  className={`rounded border px-1.5 py-0.5 text-2xs leading-none transition-colors cursor-pointer ${
+                    pinned
+                      ? 'border-accent/45 bg-surface-accent text-accent hover:bg-accent/20'
+                      : 'border-line-hairline text-text-muted hover:border-accent/40 hover:text-accent'
+                  }`}
+                >
+                  {pinned ? '取消固定' : '固定'}
+                </button>
+              )}
+              {onToggleExclude && !pinned && (
+                <button
+                  type="button"
+                  onClick={ev => {
+                    ev.stopPropagation();
+                    onToggleExclude(m.id);
+                  }}
+                  title="跳过这场，让系统换一场备选"
+                  className="rounded border border-line-hairline px-1.5 py-0.5 text-2xs leading-none text-text-muted transition-colors hover:border-warn/40 hover:text-warn cursor-pointer"
+                >
+                  换掉
+                </button>
+              )}
+              <span
+                title={`开球 ${m.t.slice(5, 10).replace('-', '/')} ${m.t.split('T')[1]}${crossesMidnight ? ` · 归属 ${dateLabel}` : ''}`}
+              >
+                <Meta num>
+                  {dateLabel} · {sleepTier(m.t).cost}h
+                </Meta>
+              </span>
+            </div>
           </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }

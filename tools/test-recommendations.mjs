@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { getFixtures, rivalries, storylines, REC_MAP, leagueName } from '../src/data/index.js';
 import { narrativeOf, LEVEL } from '../src/core/narrative.js';
+import { computeMatchStakes } from '../src/core/stakes.js';
 import * as E from '../src/core/engine.js';
 import { buildPool, buildEntry, focusScore, WEEKLY_CAP } from './build-recommendations.mjs';
 
@@ -117,7 +118,8 @@ console.log('二、内容诚实：只用有源头的事实');
       `第 ${m.r} 轮`,
       ...(storylines || []).map(s => s.name),
       ...(rivalries || []).map(x => x.zh),
-      '六强内战', '关键节点', '档', '睡眠成本'
+      '六强内战', '关键节点', '档', '睡眠成本',
+      '榜首卡位', '欧冠区卡位', '前八直通卡位', '晋级线卡位', '保级六分战', '近期势头正盛'
     ];
     for (const p of r.points) {
       if (!allowed.some(a => p.includes(a))) unknown.push(`${r.m}: ${p}`);
@@ -131,10 +133,12 @@ console.log('');
 console.log('三、不注水：星级不得高于底座规则');
 {
   const inflated = [];
+  const standingsCache = new Map();
   for (const r of gen) {
     const m = fixtures.find(x => x.id === r.m);
     if (!m) continue;
-    const base = E.evaluate(m, {}, rivalries, storylines, [], []).star;
+    const stakes = computeMatchStakes(m, fixtures, { standingsCache });
+    const base = E.evaluate(m, {}, rivalries, storylines, [], [], { stakes }).star;
     if (r.star > Math.max(2, base)) inflated.push(`${r.m}: rec★${r.star} > base★${base}`);
   }
   ok('★ 生成条目的星级不高于底座星级（不靠推荐自我抬高）', inflated.length === 0,

@@ -1,4 +1,4 @@
-import { shouldHideScore } from '../core/reveal.js';
+import { completedWatchHint, shouldHideScore, WATCH_HINT_LEVEL } from '../core/reveal.js';
 import { hm, liveMinute } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { ts, MATCH_DURATION_MS } from '../core/engine.js';
@@ -53,6 +53,10 @@ export default function MatchRow({
   const awayFollowed = followedTeams.includes(m.a);
   const scoreShown = m.st === 'done' && (!spoilerFree || revealed);
   const winner = scoreShown ? parseWinner(m.sc) : null;
+  const watchHint =
+    m.st === 'done' && shouldHideScore(spoilerFree, revealed)
+      ? completedWatchHint(m, { isFollowed: homeFollowed || awayFollowed })
+      : null;
 
   const rowBg = active
     ? 'bg-surface-raised border border-accent/35 shadow-card'
@@ -181,8 +185,19 @@ export default function MatchRow({
                 {m.sc || '—'}
               </span>
             ) : m.st === 'done' && shouldHideScore(spoilerFree, revealed) ? (
-              <span className="shrink-0 font-num text-xs text-text-faint" title="比分已隐藏">
-                • : •
+              <span className="inline-flex shrink-0 items-center gap-1.5" title="比分已隐藏">
+                {watchHint && watchHint.level !== WATCH_HINT_LEVEL.NORMAL && (
+                  <span
+                    className={`rounded-sm border px-1.5 py-0.5 text-2xs leading-none ${
+                      watchHint.level === WATCH_HINT_LEVEL.HIGH
+                        ? 'border-accent/35 bg-accent/10 text-accent'
+                        : 'border-line-hairline bg-surface-raised text-text-faint'
+                    }`}
+                  >
+                    {watchHint.shortLabel}
+                  </span>
+                )}
+                <span className="font-num text-xs text-text-faint">• : •</span>
               </span>
             ) : (
               <span className="shrink-0 font-num text-xs text-text-faint">vs</span>

@@ -23,6 +23,15 @@ export type RiskSegment = {
   endClock: string;
 };
 
+export type RiskFloor = {
+  nightMin: number;
+  clock: string;
+  wakeTime: string;
+  minSleep: number;
+  isWeekend?: boolean;
+  assumed: boolean;
+};
+
 export type RiskBand = {
   date: string;
   weekday: number;
@@ -32,6 +41,8 @@ export type RiskBand = {
   firstStartMin: number | null;
   latestEndMin: number | null;
   latestEndClock: string | null;
+  floor?: RiskFloor | null;
+  blocked?: boolean;
   belowFloor: boolean;
   overMinutes: number;
   current: boolean;
@@ -39,13 +50,8 @@ export type RiskBand = {
 };
 
 export type WeekRisk = {
-  floor: {
-    nightMin: number;
-    clock: string;
-    wakeTime: string;
-    minSleep: number;
-    assumed: boolean;
-  } | null;
+  floor: RiskFloor | null;
+  weekendFloor?: RiskFloor | null;
   domain: { startMin: number; endMin: number; ticks: Array<{ min: number; label: string }> };
   bands: RiskBand[];
   worst: { date: string; weekday: number; latestEndMin: number; latestEndClock: string } | null;
@@ -106,7 +112,8 @@ export function WeekRiskBand({
   onSelectDate: (date: string | null) => void;
   weekWord?: string;
 }) {
-  const { domain, floor, bands } = risk;
+  const { domain, floor, weekendFloor, bands } = risk;
+  const hasDistinctWeekend = Boolean(weekendFloor && floor && weekendFloor.clock !== floor.clock);
   const span = Math.max(1, domain.endMin - domain.startMin);
   const pct = (min: number) => `${((min - domain.startMin) / span) * 100}%`;
 
@@ -141,7 +148,9 @@ export function WeekRiskBand({
           <View style={styles.legend} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
             <View style={styles.legendLine} />
             <Text style={styles.legendText}>
-              底线 {floor.clock}
+              {hasDistinctWeekend
+                ? `底线 平日 ${floor.clock} · 周末 ${weekendFloor?.clock}`
+                : `底线 ${floor.clock}`}
               {floor.assumed ? '（默认）' : ''}
             </Text>
           </View>
@@ -172,13 +181,15 @@ export function WeekRiskBand({
 
       {bands.map(band => {
         const selected = selectedDate === band.date;
+        const rowFloor = band.floor ?? floor;
         const { placed, lanes } = placeSegments(band.segments);
         const laneHeight = lanes > 1 ? (TRACK_HEIGHT - 2) / lanes : TRACK_HEIGHT;
         const laneTop = (lane: number) => (lanes > 1 ? lane * (laneHeight + 2) : 0);
         const label = band.empty
-          ? `${weekdayOf(band.weekday)}，暂无已定开球时间的场次`
+          ? `${weekdayOf(band.weekday)}${band.blocked ? '（已设禁看夜）' : ''}，暂无已定开球时间的场次`
           : [
               weekdayOf(band.weekday),
+              band.blocked ? '已设禁看夜' : '',
               `${band.count} 场`,
               `最晚到 ${band.latestEndClock}`,
               band.belowFloor ? `越过底线 ${fmtOver(band.overMinutes)}` : '未越线',
@@ -198,19 +209,28 @@ export function WeekRiskBand({
             style={({ pressed }) => [
               styles.row,
               selected && styles.rowSelected,
+              band.blocked && styles.rowBlocked,
               pressed && styles.pressed,
             ]}
           >
             <View style={styles.dayCol}>
               <View style={[styles.nowDot, band.current && styles.nowDotOn]} />
-              <Text style={[styles.dayText, band.current && styles.dayTextNow]}>{WEEKDAYS[band.weekday]}</Text>
+              <Text
+                style={[
+                  styles.dayText,
+                  band.current && styles.dayTextNow,
+                  band.blocked && styles.dayTextBlocked,
+                ]}
+              >
+                {WEEKDAYS[band.weekday]}
+              </Text>
             </View>
 
             <View style={styles.trackCol}>
               <View style={styles.track}>
                 {placed.map(({ seg, lane }) => {
                   const tier = sleepTier(seg.t);
-                  const tailStart = floor ? Math.max(seg.startMin, floor.nightMin) : null;
+                  const tailStart = rowFloor ? Math.max(seg.startMin, rowFloor.nightMin) : null;
                   const hasTail = tailStart != null && seg.endMin > tailStart;
                   return (
                     <View key={seg.id}>
@@ -223,6 +243,7 @@ export function WeekRiskBand({
                             left: pct(seg.startMin),
                             width: pct(seg.endMin - seg.startMin),
                             backgroundColor: tierColor(tier.tier),
+                            opacity: band.blocked ? 0.35 : 1,
                           },
                         ]}
                       />
@@ -236,6 +257,7 @@ export function WeekRiskBand({
                               height: laneHeight,
                               left: pct(tailStart as number),
                               width: pct(seg.endMin - (tailStart as number)),
+                              opacity: band.blocked ? 0.35 : 1,
                             },
                           ]}
                         />
@@ -244,24 +266,27 @@ export function WeekRiskBand({
                   );
                 })}
                 {band.count === 0 ? <View style={styles.emptyLine} /> : null}
-                {floor ? <View style={[styles.floorLine, { left: pct(floor.nightMin) }]} /> : null}
+                {rowFloor ? <View style={[styles.floorLine, { left: pct(rowFloor.nightMin) }]} /> : null}
               </View>
             </View>
 
             <View style={styles.endCol}>
               <View style={styles.endTop}>
-                {band.belowFloor ? <TriangleAlert size={11} color={colors.warn} /> : null}
+                {band.blocked ? <Text style={styles.blockedTag}>禁</Text> : null}
+                {band.belowFloor && !band.blocked ? <TriangleAlert size={11} color={colors.warn} /> : null}
                 <Text
                   style={[
                     styles.endTime,
-                    band.belowFloor && styles.endTimeWarn,
-                    band.empty && styles.endTimeEmpty,
+                    band.belowFloor && !band.blocked && styles.endTimeWarn,
+                    (band.empty || band.blocked) && styles.endTimeEmpty,
                   ]}
                 >
                   {band.latestEndClock ?? '—'}
                 </Text>
               </View>
-              <Text style={styles.endCount}>{band.count > 0 ? `${band.count} 场` : '—'}</Text>
+              <Text style={styles.endCount}>
+                {band.blocked ? '禁看' : band.count > 0 ? `${band.count} 场` : '—'}
+              </Text>
             </View>
           </Pressable>
         );
@@ -305,6 +330,7 @@ const styles = StyleSheet.create({
   nowDotOn: { backgroundColor: colors.accent },
   dayText: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: weight.title },
   dayTextNow: { color: colors.accent },
+  dayTextBlocked: { color: colors.textFaint, textDecorationLine: 'line-through' },
   trackCol: { flex: 1, alignSelf: 'stretch', justifyContent: 'center' },
   tick: {
     position: 'absolute',
@@ -318,8 +344,17 @@ const styles = StyleSheet.create({
   },
   tickFirst: { marginLeft: 0, textAlign: 'left' },
   tickLast: { marginLeft: -52, textAlign: 'right' },
-  endCol: { width: 50, alignItems: 'flex-end', justifyContent: 'center', gap: 1 },
-  endTop: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  endCol: { width: 54, alignItems: 'flex-end', justifyContent: 'center', gap: 1 },
+  endTop: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  blockedTag: {
+    color: colors.warn,
+    fontSize: 10,
+    fontWeight: weight.title,
+    backgroundColor: 'rgba(224,168,46,0.14)',
+    paddingHorizontal: 3,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
   endTime: {
     color: colors.textSecondary,
     fontSize: fontSize.sm,
@@ -338,6 +373,9 @@ const styles = StyleSheet.create({
   },
   rowSelected: {
     backgroundColor: withAlpha(colors.accent, 0.08),
+  },
+  rowBlocked: {
+    backgroundColor: 'rgba(255,255,255,0.02)',
   },
   track: { height: TRACK_HEIGHT, justifyContent: 'center' },
   segment: {

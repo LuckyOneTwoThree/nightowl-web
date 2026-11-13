@@ -15,6 +15,8 @@ const KEY = {
   liveNotify: 'notifyLiveEvents',
   sleepEnabled: 'sleepEnabled',
   sleepWakeTime: 'sleepWakeTime',
+  sleepWeekendEnabled: 'sleepWeekendEnabled',
+  sleepWeekendWakeTime: 'sleepWeekendWakeTime',
   sleepMinHours: 'sleepMinHours'
 };
 
@@ -73,6 +75,8 @@ export function loadPrefs() {
     notifyLiveEvents: readJSON(KEY.liveNotify, d.notifyLiveEvents) !== false,
     sleepEnabled: readJSON(KEY.sleepEnabled, d.sleepEnabled) === true,
     sleepWakeTime: readString(KEY.sleepWakeTime, d.sleepWakeTime),
+    sleepWeekendEnabled: readJSON(KEY.sleepWeekendEnabled, d.sleepWeekendEnabled) !== false,
+    sleepWeekendWakeTime: readString(KEY.sleepWeekendWakeTime, d.sleepWeekendWakeTime),
     sleepMinHours: readNumber(KEY.sleepMinHours, d.sleepMinHours)
   };
 }
@@ -87,6 +91,8 @@ export function savePrefs(p) {
     localStorage.setItem(KEY.liveNotify, JSON.stringify(p.notifyLiveEvents));
     localStorage.setItem(KEY.sleepEnabled, JSON.stringify(!!p.sleepEnabled));
     localStorage.setItem(KEY.sleepWakeTime, String(p.sleepWakeTime || '07:30'));
+    localStorage.setItem(KEY.sleepWeekendEnabled, JSON.stringify(p.sleepWeekendEnabled !== false));
+    localStorage.setItem(KEY.sleepWeekendWakeTime, String(p.sleepWeekendWakeTime || '09:00'));
     localStorage.setItem(KEY.sleepMinHours, String(Number.isFinite(p.sleepMinHours) ? p.sleepMinHours : 7));
   } catch {
     // 存储不可用时静默降级：本次会话仍可用，只是不持久化

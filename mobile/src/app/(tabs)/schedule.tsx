@@ -349,6 +349,11 @@ export default function ScheduleScreen() {
           >
             只看关注
           </Chip>
+          {activeDate !== today ? (
+            <Chip tone="accent" onPress={() => setSelectedDate(today)}>
+              回到今天
+            </Chip>
+          ) : null}
           {filtersDirty ? (
             <Pressable
               onPress={() =>

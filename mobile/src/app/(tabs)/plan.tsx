@@ -2,17 +2,31 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, ChevronRight, TriangleAlert, X } from 'lucide-react-native';
+import {
+  Ban,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Pin,
+  RotateCcw,
+  SkipForward,
+  TriangleAlert,
+  X,
+} from 'lucide-react-native';
 
 import { leagueName, teamName } from '@data/index.js';
 import { computeWeek } from '@core/owl.js';
-import { owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '@core/engine.js';
+import { mondayOfWall, nightOf, owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '@core/engine.js';
+import { hasAnyWeekOverride, normalizeWeekOverrides } from '@core/week-overrides.js';
 import { weekRiskBands, weekBestEmptyState } from '@core/week-risk.js';
 import { hm, hmCost, zhDate } from '@core/format.js';
 import { animateLayout } from '@/lib/layoutAnimation';
 import { useNow } from '@/lib/useNow';
 import { useDataRev } from '@/state/app';
 import { usePrefs, usePrefsStore } from '@/state/prefs';
+import { toast } from '@/state/toast';
+import { useWeekOverridesStore } from '@/state/weekOverrides';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
@@ -37,6 +51,8 @@ type WeekData = {
     zeroCount: number;
     budget: number;
     used: number;
+    overBudgetHours?: number;
+    pinnedIds?: string[];
     kickoffGroups: KickoffGroup[];
   };
   minefield: Array<{ m: Match; ev: Ev; reason: string }>;
@@ -68,11 +84,31 @@ export default function PlanScreen() {
   const [showMinefield, setShowMinefield] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
+  const byWeek = useWeekOverridesStore(state => state.byWeek);
+  const togglePin = useWeekOverridesStore(state => state.togglePin);
+  const toggleExclude = useWeekOverridesStore(state => state.toggleExclude);
+  const toggleBlockNight = useWeekOverridesStore(state => state.toggleBlockNight);
+  const resetWeek = useWeekOverridesStore(state => state.resetWeek);
+
+  const currentWeekStart = useMemo(() => mondayOfWall(nightOf(now)) as string, [now]);
+  const activeWeekKey = useMemo(
+    () => mondayOfWall(nightOf(now + weekOffset * 7 * DAY_MS)) as string,
+    [now, weekOffset]
+  );
+  const activeOverrides = useMemo(
+    () => normalizeWeekOverrides(byWeek[activeWeekKey]),
+    [byWeek, activeWeekKey]
+  );
+
   const week = useMemo(
     // 周偏移只移动「看哪一周」的锚点；可排性始终用真实 now（后移 now 会把未来周
     // 前半段误判成历史，见 core computeWeek 的 weekOffset 语义）
-    () => computeWeek(now, prefs, { weekOffset }) as unknown as WeekData,
-    [now, weekOffset, prefs, rev]
+    () =>
+      computeWeek(now, prefs, {
+        weekOffset,
+        overrides: weekOffset >= 0 ? activeOverrides : undefined,
+      }) as unknown as WeekData,
+    [now, weekOffset, prefs, rev, activeOverrides]
   );
 
   const start = week.weekStartStr;
@@ -85,15 +121,35 @@ export default function PlanScreen() {
   /* 一周风险带：哪晚最重、到几点、是否越过睡眠底线。
      参照线用「起床时间 − 最低睡眠」，和 P0 的睡眠账本同源；没设作息时 core 会给默认值
      并标 assumed，界面必须说明这是默认线，不能冒充用户自己的作息。 */
-  const risk = useMemo(
-    () =>
-      weekRiskBands(
-        week,
-        { enabled: prefs.sleepEnabled, wakeTime: prefs.sleepWakeTime, minSleep: prefs.sleepMinHours },
-        now
-      ) as unknown as WeekRisk,
-    [week, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepMinHours, now]
-  );
+  const risk = useMemo(() => {
+    const computed = weekRiskBands(
+      week,
+      {
+        enabled: prefs.sleepEnabled,
+        wakeTime: prefs.sleepWakeTime,
+        weekendEnabled: prefs.sleepWeekendEnabled,
+        weekendWakeTime: prefs.sleepWeekendWakeTime,
+        minSleep: prefs.sleepMinHours,
+      },
+      now
+    ) as unknown as WeekRisk;
+    if (weekOffset < 0 || activeOverrides.blockedNights.length === 0) return computed;
+    const blockedSet = new Set(activeOverrides.blockedNights);
+    return {
+      ...computed,
+      bands: computed.bands.map(b => ({ ...b, blocked: blockedSet.has(b.date) })),
+    };
+  }, [
+    week,
+    prefs.sleepEnabled,
+    prefs.sleepWakeTime,
+    prefs.sleepWeekendEnabled,
+    prefs.sleepWeekendWakeTime,
+    prefs.sleepMinHours,
+    now,
+    weekOffset,
+    activeOverrides.blockedNights,
+  ]);
 
   const hasAnyMatches = week.actionableDays.some(day => day.count > 0);
 
@@ -226,7 +282,11 @@ export default function PlanScreen() {
           </View>
           <View style={styles.budgetStats}>
             <Text style={styles.budgetStat}>已用 {hmCost(plan.used)}</Text>
-            <Text style={styles.budgetStat}>结余 {hmCost(remain)}</Text>
+            {(plan.overBudgetHours ?? 0) > 0 ? (
+              <Text style={styles.budgetStatWarn}>超支 {hmCost(plan.overBudgetHours!)}</Text>
+            ) : (
+              <Text style={styles.budgetStat}>结余 {hmCost(remain)}</Text>
+            )}
           </View>
         </View>
         {plan.budget > 0 ? (
@@ -264,6 +324,35 @@ export default function PlanScreen() {
             </Chip>
           ))}
         </View>
+        {showRisk && hasAnyWeekOverride(activeOverrides) ? (
+          <View style={styles.overrideBar}>
+            <Text style={styles.overrideSummary} numberOfLines={1}>
+              已微调：
+              {[
+                activeOverrides.pinnedIds.length ? `固定 ${activeOverrides.pinnedIds.length}` : '',
+                activeOverrides.excludedIds.length ? `跳过 ${activeOverrides.excludedIds.length}` : '',
+                activeOverrides.blockedNights.length ? `禁看 ${activeOverrides.blockedNights.length} 晚` : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </Text>
+            <Pressable
+              onPress={() => {
+                void Haptics.selectionAsync();
+                animateLayout();
+                resetWeek(activeWeekKey);
+                toast.info('已恢复自动排期');
+              }}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="恢复自动排期"
+              style={({ pressed }) => [styles.overrideResetBtn, pressed && styles.pressed]}
+            >
+              <RotateCcw size={12} color={colors.accent} />
+              <Text style={styles.overrideResetText}>恢复自动排期</Text>
+            </Pressable>
+          </View>
+        ) : null}
         <Text style={styles.hint}>
           零成本 S0 场次不占额度，但同一时段仍只能看一场；背包最多 5 场，是本周可安排的场次上限。
         </Text>
@@ -299,6 +388,32 @@ export default function PlanScreen() {
                 onPress={() => {
                   void Haptics.selectionAsync();
                   animateLayout();
+                  const blocked = toggleBlockNight(activeWeekKey, selectedDay, currentWeekStart);
+                  toast.info(blocked ? '已设为禁看夜 · 自动重排本周' : '已取消禁看夜');
+                }}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={activeBand?.blocked ? '取消禁看夜' : '设为禁看夜'}
+                style={({ pressed }) => [
+                  styles.blockNightChip,
+                  activeBand?.blocked && styles.blockNightChipActive,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Ban size={12} color={activeBand?.blocked ? colors.warn : colors.textSecondary} />
+                <Text
+                  style={[
+                    styles.blockNightText,
+                    activeBand?.blocked && styles.blockNightTextActive,
+                  ]}
+                >
+                  {activeBand?.blocked ? '取消禁看' : '禁看此夜'}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  void Haptics.selectionAsync();
+                  animateLayout();
                   setSelectedDay(null);
                 }}
                 hitSlop={13}
@@ -330,14 +445,40 @@ export default function PlanScreen() {
         />
         {bestShown.length > 0 ? (
           <View style={styles.list}>
-            {bestShown.map(entry => (
-              <PickRow
-                key={entry.m.id}
-                entry={entry}
-                kickoffGroup={kickoffGroupByMatch.get(entry.m.id)}
-                onPress={() => openMatch(entry.m.id)}
-              />
-            ))}
+            {bestShown.map(entry => {
+              const isPinned = activeOverrides.pinnedIds.includes(entry.m.id);
+              return (
+                <PickRow
+                  key={entry.m.id}
+                  entry={entry}
+                  kickoffGroup={kickoffGroupByMatch.get(entry.m.id)}
+                  interactive={showRisk}
+                  isPinned={isPinned}
+                  onPress={() => openMatch(entry.m.id)}
+                  onTogglePin={() => {
+                    void Haptics.selectionAsync();
+                    animateLayout();
+                    const pinned = togglePin(activeWeekKey, entry.m.id, currentWeekStart);
+                    toast.info(pinned ? '已固定进本周精选' : '已取消固定');
+                  }}
+                  onExclude={() => {
+                    void Haptics.selectionAsync();
+                    animateLayout();
+                    toggleExclude(activeWeekKey, entry.m.id, currentWeekStart);
+                    toast.info('已跳过，已自动顺位备选场次');
+                  }}
+                  onSwapWithGroupItem={altId => {
+                    void Haptics.selectionAsync();
+                    animateLayout();
+                    if (isPinned) togglePin(activeWeekKey, entry.m.id, currentWeekStart);
+                    toggleExclude(activeWeekKey, entry.m.id, currentWeekStart);
+                    togglePin(activeWeekKey, altId, currentWeekStart);
+                    toast.success('已切换同开球替换场次');
+                  }}
+                  onOpenAlt={openMatch}
+                />
+              );
+            })}
           </View>
         ) : (
           <Card tone="panel" style={styles.emptyCard}>
@@ -442,22 +583,40 @@ export default function PlanScreen() {
           <SectionHeader title="备选" count={altShown.length} />
           <View style={styles.list}>
             {altShown.map(entry => (
-              <Pressable
-                key={entry.m.id}
-                onPress={() => openMatch(entry.m.id)}
-                accessibilityRole="button"
-                accessibilityLabel={`${teamName(entry.m.h)} 对 ${teamName(entry.m.a)}，指数 ${entry.index.toFixed(1)}`}
-                style={({ pressed }) => [styles.altRow, pressed && styles.pressed]}
-              >
-                <View style={styles.altDate}>
-                  <Text style={styles.altTime}>{hm(entry.m.t)}</Text>
-                  <Text style={styles.altDay}>{zhDate(entry.m.t.split('T')[0])}</Text>
-                </View>
-                <Text style={styles.altTeams} numberOfLines={1}>
-                  {teamName(entry.m.h)} vs {teamName(entry.m.a)}
-                </Text>
-                <Text style={styles.altIndex}>{entry.index.toFixed(1)}</Text>
-              </Pressable>
+              <View key={entry.m.id} style={styles.altCardRow}>
+                <Pressable
+                  onPress={() => openMatch(entry.m.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${teamName(entry.m.h)} 对 ${teamName(entry.m.a)}，指数 ${entry.index.toFixed(1)}`}
+                  style={({ pressed }) => [styles.altRow, pressed && styles.pressed]}
+                >
+                  <View style={styles.altDate}>
+                    <Text style={styles.altTime}>{hm(entry.m.t)}</Text>
+                    <Text style={styles.altDay}>{zhDate(entry.m.t.split('T')[0])}</Text>
+                  </View>
+                  <Text style={styles.altTeams} numberOfLines={1}>
+                    {teamName(entry.m.h)} vs {teamName(entry.m.a)}
+                  </Text>
+                  <Text style={styles.altIndex}>{entry.index.toFixed(1)}</Text>
+                </Pressable>
+                {showRisk ? (
+                  <Pressable
+                    onPress={() => {
+                      void Haptics.selectionAsync();
+                      animateLayout();
+                      togglePin(activeWeekKey, entry.m.id, currentWeekStart);
+                      toast.success('已固定入选本周精选');
+                    }}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={`固定入选 ${teamName(entry.m.h)} 对 ${teamName(entry.m.a)}`}
+                    style={({ pressed }) => [styles.altPinBtn, pressed && styles.pressed]}
+                  >
+                    <Pin size={12} color={colors.accent} />
+                    <Text style={styles.altPinText}>固定入选</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             ))}
           </View>
         </View>
@@ -496,12 +655,25 @@ export default function PlanScreen() {
 function PickRow({
   entry,
   kickoffGroup,
+  interactive,
+  isPinned,
   onPress,
+  onTogglePin,
+  onExclude,
+  onSwapWithGroupItem,
+  onOpenAlt,
 }: {
   entry: Entry;
   kickoffGroup?: KickoffGroup;
+  interactive: boolean;
+  isPinned: boolean;
   onPress: () => void;
+  onTogglePin: () => void;
+  onExclude: () => void;
+  onSwapWithGroupItem: (altId: string) => void;
+  onOpenAlt: (altId: string) => void;
 }) {
+  const [groupOpen, setGroupOpen] = useState(false);
   const match = entry.m;
   const tier = sleepTier(match.t);
   const night = owlDay(match.t);
@@ -513,61 +685,151 @@ function PickRow({
     ? kickoffGroup.entries.filter(x => x.m.id !== match.id)
     : [];
   const groupSize = kickoffGroup?.entries.length ?? 0;
+  const stakeLabel = (entry.ev as { stakes?: Array<{ label?: string }> }).stakes?.[0]?.label;
   const reason = entry.ev.isFollowed
-    ? '主队出战'
+    ? stakeLabel
+      ? `主队出战 · ${stakeLabel}`
+      : '主队出战'
     : entry.ev.rivalry
       ? entry.ev.rivalry
-      : entry.ev.keyNode
-        ? '故事线关键节点'
-        : entry.ev.star >= 3
-          ? '焦点战'
-          : '跨联赛焦点';
+      : stakeLabel
+        ? stakeLabel
+        : entry.ev.keyNode
+          ? '故事线关键节点'
+          : entry.ev.star >= 3
+            ? '焦点战'
+            : '跨联赛焦点';
 
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${teamName(match.h)} 对 ${teamName(match.a)}，${dateLabel} ${hm(match.t)}，指数 ${entry.index.toFixed(1)}`}
-      style={({ pressed }) => [styles.pickRow, pressed && styles.pressed]}
-    >
+    <View style={[styles.pickCard, isPinned && styles.pickCardPinned]}>
       <View style={[styles.pickBar, { backgroundColor: leagueColor(match.l) }]} />
-      <View style={styles.pickTime}>
-        <Text style={styles.pickTimeText}>{hm(match.t)}</Text>
-        <Text style={styles.pickDate}>{dateLabel}</Text>
-      </View>
-      <View style={styles.pickMain}>
-        <View style={styles.pickTop}>
-          <Text style={styles.pickLeague}>{leagueName(match.l)}</Text>
-          <SleepBadge tier={tier} />
-          <Text style={styles.pickIndex}>{entry.index.toFixed(1)}</Text>
-        </View>
-        <View style={styles.pickTeams}>
-          <Crest id={match.h} size={20} />
-          <Text style={styles.pickTeamName} numberOfLines={1}>
-            {teamName(match.h)}
-          </Text>
-          <Text style={styles.pickVs}>vs</Text>
-          <Crest id={match.a} size={20} />
-          <Text style={styles.pickTeamName} numberOfLines={1}>
-            {teamName(match.a)}
-          </Text>
-        </View>
-        <Text style={styles.pickReason} numberOfLines={1}>
-          {reason}
-        </Text>
+      <View style={styles.pickBody}>
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={`${teamName(match.h)} 对 ${teamName(match.a)}，${dateLabel} ${hm(match.t)}，指数 ${entry.index.toFixed(1)}`}
+          style={({ pressed }) => [styles.pickMainPressable, pressed && styles.pressed]}
+        >
+          <View style={styles.pickTime}>
+            <Text style={styles.pickTimeText}>{hm(match.t)}</Text>
+            <Text style={styles.pickDate}>{dateLabel}</Text>
+          </View>
+          <View style={styles.pickMain}>
+            <View style={styles.pickTop}>
+              <Text style={styles.pickLeague}>{leagueName(match.l)}</Text>
+              <SleepBadge tier={tier} />
+              {isPinned ? (
+                <View style={styles.pinnedPill}>
+                  <Text style={styles.pinnedPillText}>已固定</Text>
+                </View>
+              ) : null}
+              <Text style={styles.pickIndex}>{entry.index.toFixed(1)}</Text>
+            </View>
+            <View style={styles.pickTeams}>
+              <Crest id={match.h} size={20} />
+              <Text style={styles.pickTeamName} numberOfLines={1}>
+                {teamName(match.h)}
+              </Text>
+              <Text style={styles.pickVs}>vs</Text>
+              <Crest id={match.a} size={20} />
+              <Text style={styles.pickTeamName} numberOfLines={1}>
+                {teamName(match.a)}
+              </Text>
+            </View>
+            <Text style={styles.pickReason} numberOfLines={1}>
+              {reason}
+            </Text>
+          </View>
+        </Pressable>
+
         {groupAlternatives.length > 0 ? (
-          <>
-            <Text style={styles.pickConflict} numberOfLines={1}>
-              同时开球 · 只能看一场 · 组内 {groupSize} 场
-            </Text>
-            <Text style={styles.pickConflictNames} numberOfLines={1}>
-              同组：{groupAlternatives.slice(0, 2).map(x => `${teamName(x.m.h)} vs ${teamName(x.m.a)}`).join('、')}
-              {groupAlternatives.length > 2 ? ' 等' : ''}
-            </Text>
-          </>
+          <View style={styles.groupBlock}>
+            <Pressable
+              onPress={() => {
+                void Haptics.selectionAsync();
+                animateLayout();
+                setGroupOpen(v => !v);
+              }}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: groupOpen }}
+              style={({ pressed }) => [styles.groupToggleBtn, pressed && styles.pressed]}
+            >
+              <Text style={styles.pickConflict} numberOfLines={1}>
+                同时开球其他 {groupAlternatives.length} 场（共 {groupSize} 场）
+              </Text>
+              {groupOpen ? (
+                <ChevronUp size={14} color={colors.warn} />
+              ) : (
+                <ChevronDown size={14} color={colors.warn} />
+              )}
+            </Pressable>
+            {groupOpen ? (
+              <View style={styles.groupList}>
+                {groupAlternatives.map(alt => (
+                  <View key={alt.m.id} style={styles.groupAltRow}>
+                    <Pressable
+                      onPress={() => onOpenAlt(alt.m.id)}
+                      hitSlop={6}
+                      accessibilityRole="button"
+                      style={({ pressed }) => [styles.groupAltInfo, pressed && styles.pressed]}
+                    >
+                      <Text style={styles.groupAltLeague}>{leagueName(alt.m.l)}</Text>
+                      <Text style={styles.groupAltTeams} numberOfLines={1}>
+                        {teamName(alt.m.h)} vs {teamName(alt.m.a)}
+                      </Text>
+                      <Text style={styles.groupAltIndex}>{alt.index.toFixed(1)}</Text>
+                    </Pressable>
+                    {interactive ? (
+                      <Pressable
+                        onPress={() => onSwapWithGroupItem(alt.m.id)}
+                        hitSlop={6}
+                        accessibilityRole="button"
+                        accessibilityLabel={`换看 ${teamName(alt.m.h)} 对 ${teamName(alt.m.a)}`}
+                        style={({ pressed }) => [styles.groupSwapBtn, pressed && styles.pressed]}
+                      >
+                        <Text style={styles.groupSwapText}>换看</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {interactive ? (
+          <View style={styles.pickActions}>
+            <Pressable
+              onPress={onTogglePin}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={isPinned ? '取消固定本场' : '固定本场'}
+              style={({ pressed }) => [
+                styles.pickActionBtn,
+                isPinned && styles.pickActionBtnActive,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Pin size={12} color={isPinned ? colors.accent : colors.textSecondary} />
+              <Text style={[styles.pickActionText, isPinned && styles.pickActionTextActive]}>
+                {isPinned ? '取消固定' : '固定本场'}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={onExclude}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="换掉本场"
+              style={({ pressed }) => [styles.pickActionBtn, pressed && styles.pressed]}
+            >
+              <SkipForward size={12} color={colors.textSecondary} />
+              <Text style={styles.pickActionText}>换掉本场</Text>
+            </Pressable>
+          </View>
         ) : null}
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -615,6 +877,39 @@ const styles = StyleSheet.create({
   budgetUnit: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: weight.label },
   budgetStats: { alignItems: 'flex-end', gap: 3 },
   budgetStat: { color: colors.textMuted, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
+  budgetStatWarn: {
+    color: colors.warn,
+    fontSize: fontSize.xs,
+    fontWeight: weight.title,
+    fontVariant: ['tabular-nums'],
+  },
+  overrideBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingTop: spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.hairline,
+  },
+  overrideSummary: {
+    flex: 1,
+    color: colors.accent,
+    fontSize: fontSize.xs,
+    fontWeight: weight.title,
+  },
+  overrideResetBtn: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.accent, 0.35),
+    backgroundColor: colors.goldSoft,
+  },
+  overrideResetText: { color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
   budgetBarTrack: {
     height: 7,
     borderRadius: radius.pill,
@@ -646,6 +941,23 @@ const styles = StyleSheet.create({
     backgroundColor: withAlpha(colors.accent, 0.06),
   },
   filterText: { flex: 1, color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
+  blockNightChip: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.control,
+    backgroundColor: colors.panel,
+  },
+  blockNightChipActive: {
+    borderColor: withAlpha(colors.warn, 0.5),
+    backgroundColor: 'rgba(224,168,46,0.12)',
+  },
+  blockNightText: { color: colors.textSecondary, fontSize: fontSize.xs, fontWeight: weight.title },
+  blockNightTextActive: { color: colors.warn },
   filterClear: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 4 },
   filterClearText: { color: colors.textMuted, fontSize: fontSize.xs },
   list: {
@@ -658,13 +970,20 @@ const styles = StyleSheet.create({
   emptyCard: { alignItems: 'center', gap: spacing.xs },
   emptyTitle: { color: colors.textSecondary, fontSize: fontSize.sm, textAlign: 'center' },
   addBudget: { marginTop: spacing.sm, height: 44 },
-  pickRow: {
+  pickCard: {
     flexDirection: 'row',
-    minHeight: 92,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.hairline,
   },
+  pickCardPinned: {
+    backgroundColor: withAlpha(colors.accent, 0.03),
+  },
   pickBar: { width: 3, alignSelf: 'stretch' },
+  pickBody: { flex: 1 },
+  pickMainPressable: {
+    flexDirection: 'row',
+    minHeight: 80,
+  },
   pickTime: { width: 60, padding: spacing.md, gap: 2 },
   pickTimeText: {
     color: colors.text,
@@ -676,6 +995,15 @@ const styles = StyleSheet.create({
   pickMain: { flex: 1, paddingVertical: spacing.md, paddingRight: spacing.md, gap: 6 },
   pickTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   pickLeague: { color: colors.textMuted, fontSize: fontSize.xs },
+  pinnedPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.accent, 0.4),
+    backgroundColor: colors.goldSoft,
+  },
+  pinnedPillText: { color: colors.accent, fontSize: 10, fontWeight: weight.title },
   pickIndex: {
     marginLeft: 'auto',
     color: colors.textSecondary,
@@ -687,8 +1015,82 @@ const styles = StyleSheet.create({
   pickTeamName: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.label, maxWidth: '34%' },
   pickVs: { color: colors.textFaint, fontSize: fontSize.xs },
   pickReason: { color: colors.textFaint, fontSize: fontSize.xs },
-  pickConflict: { color: colors.warn, fontSize: fontSize.xs, fontWeight: weight.title },
-  pickConflictNames: { color: colors.textFaint, fontSize: fontSize.xs },
+  groupBlock: {
+    paddingLeft: 60,
+    paddingRight: spacing.md,
+    paddingBottom: spacing.xs,
+    gap: spacing.xs,
+  },
+  groupToggleBtn: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.control,
+    backgroundColor: 'rgba(224,168,46,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(224,168,46,0.22)',
+  },
+  pickConflict: { flex: 1, color: colors.warn, fontSize: fontSize.xs, fontWeight: weight.title },
+  groupList: {
+    gap: 4,
+    paddingTop: 2,
+  },
+  groupAltRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingLeft: spacing.sm,
+    borderRadius: radius.control,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+  },
+  groupAltInfo: {
+    flex: 1,
+    minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  groupAltLeague: { color: colors.textFaint, fontSize: fontSize.xs },
+  groupAltTeams: { flex: 1, color: colors.textSecondary, fontSize: fontSize.xs },
+  groupAltIndex: { color: colors.textMuted, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
+  groupSwapBtn: {
+    minHeight: 32,
+    paddingHorizontal: spacing.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: colors.hairline,
+  },
+  groupSwapText: { color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
+  pickActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  pickActionBtn: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm + 2,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    backgroundColor: colors.panel,
+  },
+  pickActionBtnActive: {
+    borderColor: withAlpha(colors.accent, 0.45),
+    backgroundColor: colors.goldSoft,
+  },
+  pickActionText: { color: colors.textSecondary, fontSize: fontSize.xs, fontWeight: weight.label },
+  pickActionTextActive: { color: colors.accent, fontWeight: weight.title },
   zeroRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -736,15 +1138,34 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   otherTeams: { flex: 1, color: colors.textSecondary, fontSize: fontSize.xs },
+  altCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.hairline,
+    gap: spacing.sm,
+  },
   altRow: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
     minHeight: 52,
-    paddingHorizontal: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.hairline,
+    paddingLeft: spacing.md,
   },
+  altPinBtn: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.accent, 0.35),
+    backgroundColor: colors.goldSoft,
+  },
+  altPinText: { color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
   altDate: { width: 70, gap: 1 },
   altTime: { color: colors.textSecondary, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   altDay: { color: colors.textFaint, fontSize: fontSize.xs },

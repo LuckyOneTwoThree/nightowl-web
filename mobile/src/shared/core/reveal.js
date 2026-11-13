@@ -64,3 +64,44 @@ export function unrevealedTonightIds(fixtures, nowTs, spoilerFree, revealed) {
   }
   return out;
 }
+
+export const WATCH_HINT_LEVEL = Object.freeze({
+  HIGH: 'high',
+  NORMAL: 'normal',
+  LOW: 'low',
+});
+
+/**
+ * Spoiler-free post-match watchability hint derived purely from total goals
+ * and match rating (`ev.star`), intentionally merging 0-0 and low-star 1-goal
+ * matches into `'low'` so users cannot reverse-infer exact scorelines.
+ */
+export function completedWatchHint(match, ev = null) {
+  if (!match || match.st !== 'done' || typeof match.sc !== 'string') return null;
+  const parsed = match.sc.trim().match(/^(\d+)\s*[-:]\s*(\d+)$/);
+  if (!parsed) return null;
+
+  const totalGoals = Number(parsed[1]) + Number(parsed[2]);
+  const star = Number.isFinite(ev?.star) ? ev.star : 0;
+  const followed = !!ev?.isFollowed;
+
+  if (totalGoals >= 3 || (totalGoals === 2 && star >= 3)) {
+    return {
+      level: WATCH_HINT_LEVEL.HIGH,
+      label: '推荐先看集锦',
+      shortLabel: '推荐集锦',
+    };
+  }
+  if (totalGoals === 0 || (totalGoals === 1 && !followed && star < 2)) {
+    return {
+      level: WATCH_HINT_LEVEL.LOW,
+      label: '场面平淡 · 可直接揭晓',
+      shortLabel: '场面平淡',
+    };
+  }
+  return {
+    level: WATCH_HINT_LEVEL.NORMAL,
+    label: '常规场面 · 按需补看',
+    shortLabel: '按需补看',
+  };
+}

@@ -14,8 +14,21 @@ import { getFixtures, rivalries, storylines, REC_MAP, LEAGUE_ORDER, TEAM_MAP, le
 import * as E from './engine.js';
 import { weekDistributionAdvice } from './narrative.js';
 import { isActionable } from './actionable.js';
+import { computeMatchStakes } from './stakes.js';
+import { normalizeWeekOverrides } from './week-overrides.js';
 
 const DAY_MS = 86400000;
+
+function buildStakesMap(matches, allFixtures, nowTs) {
+  const map = new Map();
+  const standingsCache = new Map();
+  for (const m of matches || []) {
+    if (!m?.id) continue;
+    const stakes = computeMatchStakes(m, allFixtures, { nowTs, standingsCache });
+    if (stakes) map.set(m.id, stakes);
+  }
+  return map;
+}
 
 /** 一律按时间戳排序，禁用字符串比较（凌晨场次会错位） */
 function byTs(a, b) {
@@ -47,11 +60,13 @@ function isPickable(m, nowTs) {
 /* ------------------------------------------------------------------ */
 
 export function computeTonight(nowTs, prefs) {
+  const all = getFixtures();
   const night = E.nightOf(nowTs);
-  const slice = getFixtures().filter(m => E.owlDay(m.t) === night).sort(byTs);
+  const slice = all.filter(m => E.owlDay(m.t) === night).sort(byTs);
 
   // slice 供展示（含刚终场、待录比分的场次）；算法只吃尚未结束的
   const pickable = slice.filter(m => isPickable(m, nowTs));
+  const stakesById = buildStakesMap(pickable, all, nowTs);
 
   const { hero, extras } = E.pickToday(
     pickable,
@@ -60,17 +75,25 @@ export function computeTonight(nowTs, prefs) {
     storylines,
     prefs.followedTeams,
     prefs.followedLeagues,
-    E.PRODUCT_WEIGHTS
+    E.PRODUCT_WEIGHTS,
+    { stakesById }
   );
 
   // 无球日 / 全部 tbd → 降级为"下一场焦点战倒计时"
-  const focal = hero
-    ? null
-    : E.nextFocal(getFixtures(), REC_MAP, rivalries, storylines, prefs.followedTeams, nowTs, prefs.followedLeagues);
+  let focal = null;
+  if (!hero) {
+    const futureSched = all.filter(m => m.st === 'sched' && !m.tbd && E.ts(m.t) > nowTs);
+    const focalStakes = buildStakesMap(futureSched, all, nowTs);
+    focal = E.nextFocal(all, REC_MAP, rivalries, storylines, prefs.followedTeams, nowTs, prefs.followedLeagues, {
+      stakesById: focalStakes
+    });
+  }
 
   // 今晚的雷区场次（复用引擎，避免界面自造判据）
   const minefieldIds = new Set(
-    E.minefield(pickable, REC_MAP, rivalries, storylines, prefs.followedTeams, prefs.followedLeagues).map(e => e.m.id)
+    E.minefield(pickable, REC_MAP, rivalries, storylines, prefs.followedTeams, prefs.followedLeagues, {
+      stakesById
+    }).map(e => e.m.id)
   );
 
   return { night, slice, hero, extras, focal, minefieldIds, nightState: nightStateOf(slice, nowTs) };
@@ -226,13 +249,17 @@ export function computeWeek(nowTs, prefs, opts = {}) {
     const d = new Date(Date.parse(weekStartStr + 'T00:00:00Z') + i * DAY_MS);
     dayDates.push(d.toISOString().slice(0, 10));
   }
-  const matches = getFixtures()
+  const allFixtures = getFixtures();
+  const matches = allFixtures
     .filter(m => dayDates.includes(E.owlDay(m.t)))
     .sort(byTs);
 
   // 周窗口内"尚未结束"的场次才进算法与风险带；
   // 已踢完但状态未同步的场次（本地单机 + 手动保鲜下很常见）不参与背包、雷区与越线判断。
+  const overrides = normalizeWeekOverrides(opts.overrides);
+  const blockedSet = new Set(overrides.blockedNights);
   const actionableMatches = matches.filter(m => isPickable(m, nowTs));
+  const stakesById = buildStakesMap(actionableMatches, allFixtures, nowTs);
 
   const plan = E.planWeek(
     actionableMatches,
@@ -242,23 +269,33 @@ export function computeWeek(nowTs, prefs, opts = {}) {
     prefs.followedTeams,
     prefs.weeklyBudget,
     prefs.followedLeagues,
-    { ...E.PRODUCT_PLAN_OPTS, nowTs }
+    {
+      ...E.PRODUCT_PLAN_OPTS,
+      nowTs,
+      stakesById,
+      pinnedIds: overrides.pinnedIds,
+      excludedIds: overrides.excludedIds,
+      blockedNights: overrides.blockedNights,
+    }
   );
 
-  const mine = E.minefield(actionableMatches, REC_MAP, rivalries, storylines, prefs.followedTeams, prefs.followedLeagues);
-  const days = buildWeekDays(weekStartStr, matches);
-  const actionableDays = buildWeekDays(weekStartStr, actionableMatches);
+  const mine = E.minefield(actionableMatches, REC_MAP, rivalries, storylines, prefs.followedTeams, prefs.followedLeagues, {
+    stakesById
+  });
+  const days = buildWeekDays(weekStartStr, matches).map(d => ({ ...d, blocked: blockedSet.has(d.date) }));
+  const actionableDays = buildWeekDays(weekStartStr, actionableMatches).map(d => ({ ...d, blocked: blockedSet.has(d.date) }));
 
-  // 周度建议只基于「还能安排」的场次。
+  // 周度建议只基于「还能安排」的场次（且避开用户标记的禁看夜）。
   // 若沿用全周场次，会出现"建议本周注意 09-10 的重度档"而那天早已过去的情况 ——
   // 背包看未来、建议却看全周，两者口径不一致会让人怀疑结论。
-  const advice = weekDistributionAdvice(actionableDays.filter(d => d.count > 0));
+  const advice = weekDistributionAdvice(actionableDays.filter(d => d.count > 0 && !d.blocked));
 
   return {
     weekStartStr,
     weekOffset,
     matches,
     actionableMatches,
+    overrides,
     plan,
     minefield: mine,
     days,
@@ -366,8 +403,15 @@ export function owlDayOffset(n, nowTs = Date.now()) {
  * 列表行、同开球逐条、备选场次的指数一律中性次级色（见 atoms.jsx 的 IndexTag）。
  * 想恢复高亮前先想清楚：一屏几十个金色数字会让「今晚之选」失去唯一性。
  */
-export function evalOne(m, prefs) {
-  const ev = E.evaluate(m, REC_MAP, rivalries, storylines, prefs.followedTeams, prefs.followedLeagues);
+export function evalOne(m, prefs, nowTs = Date.now(), opts = {}) {
+  const stakes =
+    opts?.stakes !== undefined
+      ? opts.stakes
+      : computeMatchStakes(m, opts?.fixtures || getFixtures(), {
+          nowTs,
+          standingsCache: opts?.standingsCache
+        });
+  const ev = E.evaluate(m, REC_MAP, rivalries, storylines, prefs.followedTeams, prefs.followedLeagues, { stakes });
   return { ev, index: E.owlIndex(ev, m, E.PRODUCT_WEIGHTS) };
 }
 
@@ -375,19 +419,29 @@ export function evalOne(m, prefs) {
  *  ⚠️ 口径唯一出处：UI 文案（补看分区标题）与 App 层注释都以此常量为准，勿另写数字 */
 export const REPLAY_WINDOW_MS = 96 * 3600000;
 
+function parseTotalGoals(sc) {
+  if (typeof sc !== 'string') return null;
+  const matched = sc.trim().match(/^(\d+)\s*[-:]\s*(\d+)$/);
+  return matched ? Number(matched[1]) + Number(matched[2]) : null;
+}
+
 /**
  * 最近值得补看
  *
  * 不含「今晚」已出现在赛程里的场次（由 TonightView 的已结束分区负责），
  * 只看最近 96h 内、已完赛、且至少满足一项的场次：
  *   关注球队 / 人工 replay 标记 / 看点 ≥2 星。
- * 排序：关注球队 → replay 标记 → 星级 → 夜猫指数 → 新鲜度。
+ * 非关注球队、非 replay 标记、非手动加入清单的 0-0 闷平自动滤出。
+ * 排序：关注球队 → replay 标记 → 星级 → 场面开放加分 → 夜猫指数 → 新鲜度。
  */
-export function rankReplayPicks(matches, nowTs, prefs, limit = 3) {
+export function rankReplayPicks(matches, nowTs, prefs, limit = 3, opts = {}) {
   const currentNight = E.nightOf(nowTs);
   const currentIds = new Set(
     (matches || []).filter(m => E.owlDay(m.t) === currentNight).map(m => m.id)
   );
+  const manualIds = opts?.manualIds instanceof Set
+    ? opts.manualIds
+    : new Set(opts?.manualIds || []);
 
   const picks = [];
   for (const m of matches || []) {
@@ -402,17 +456,25 @@ export function rankReplayPicks(matches, nowTs, prefs, limit = 3) {
     const replayFlag = !!ev.rec?.replay;
     if (!ev.isFollowed && !replayFlag && ev.star < 2) continue;
 
+    const totalGoals = parseTotalGoals(m.sc);
+    if (totalGoals === 0 && !ev.isFollowed && !replayFlag && !manualIds.has(m.id)) {
+      continue;
+    }
+
     const reason = ev.isFollowed
       ? '关注球队'
       : replayFlag
         ? '值得补看'
-        : ev.star >= 3
-          ? '高看点'
-          : '近期赛果';
+        : totalGoals !== null && totalGoals >= 3
+          ? '场面开放'
+          : ev.star >= 3
+            ? '高看点'
+            : '近期赛果';
     const score =
       (ev.isFollowed ? 1000 : 0) +
       (replayFlag ? 500 : 0) +
       ev.star * 100 +
+      (totalGoals !== null && totalGoals >= 3 ? 15 : 0) +
       index +
       (age <= 24 * 3600000 ? 20 : 0);
 
@@ -424,8 +486,8 @@ export function rankReplayPicks(matches, nowTs, prefs, limit = 3) {
 }
 
 /** App 层入口：从当前 fixtures 计算最近值得补看 */
-export function computeReplayPicks(nowTs, prefs, limit = 3) {
-  return rankReplayPicks(getFixtures(), nowTs, prefs, limit);
+export function computeReplayPicks(nowTs, prefs, limit = 3, opts = {}) {
+  return rankReplayPicks(getFixtures(), nowTs, prefs, limit, opts);
 }
 
 /** 当前进行中的场次计数（用于顶栏指示） */
@@ -448,7 +510,9 @@ export function liveCountAt(nowTs) {
  */
 export function sameNightPicks(m, prefs, limit = 3, nowTs = Date.now()) {
   const night = E.owlDay(m.t);
-  return getFixtures()
+  const all = getFixtures();
+  const standingsCache = new Map();
+  return all
     .filter(
       x =>
         x.id !== m.id &&
@@ -457,7 +521,7 @@ export function sameNightPicks(m, prefs, limit = 3, nowTs = Date.now()) {
         isPickable(x, nowTs)
     )
     .map(x => {
-      const { ev } = evalOne(x, prefs);
+      const { ev } = evalOne(x, prefs, nowTs, { fixtures: all, standingsCache });
       return {
         m: x,
         ev,
@@ -480,7 +544,9 @@ export function sameNightLighterPicks(m, prefs, limit = 50, nowTs = Date.now()) 
   const night = E.owlDay(m.t);
   const currentEnd = E.ts(m.t) + E.MATCH_DURATION_MS;
   if (!Number.isFinite(currentEnd)) return [];
-  return getFixtures()
+  const all = getFixtures();
+  const standingsCache = new Map();
+  return all
     .filter(
       x =>
         x.id !== m.id &&
@@ -489,7 +555,7 @@ export function sameNightLighterPicks(m, prefs, limit = 50, nowTs = Date.now()) 
         isPickable(x, nowTs)
     )
     .map(x => {
-      const { ev } = evalOne(x, prefs);
+      const { ev } = evalOne(x, prefs, nowTs, { fixtures: all, standingsCache });
       return {
         m: x,
         ev,

@@ -7,6 +7,7 @@ import { CalendarDays, MoonStar, SlidersHorizontal, UserRound } from 'lucide-rea
 import { liveCountAt } from '@core/owl.js';
 import { useNow } from '@/lib/useNow';
 import { useDataRev } from '@/state/app';
+import { useWatchLaterStore } from '@/state/queue';
 
 import { colors, fontSize, radius, spacing, weight } from './theme';
 
@@ -41,6 +42,9 @@ export function AppTabBar({ state, navigateToTab }: TabBarProps) {
   const now = useNow(60_000);
   const rev = useDataRev();
   const liveCount = useMemo(() => liveCountAt(now) as number, [now, rev]);
+  const pendingQueueCount = useWatchLaterStore(
+    s => s.items.filter(item => item.status !== 'watched').length
+  );
 
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
@@ -69,6 +73,12 @@ export function AppTabBar({ state, navigateToTab }: TabBarProps) {
               {route.name === 'index' && liveCount > 0 ? (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{liveCount > 9 ? '9+' : liveCount}</Text>
+                </View>
+              ) : route.name === 'me' && pendingQueueCount > 0 ? (
+                <View style={[styles.badge, styles.badgeQueue]}>
+                  <Text style={[styles.badgeText, styles.badgeQueueText]}>
+                    {pendingQueueCount > 9 ? '9+' : pendingQueueCount}
+                  </Text>
                 </View>
               ) : null}
             </View>
@@ -129,4 +139,6 @@ const styles = StyleSheet.create({
     borderColor: colors.panel,
   },
   badgeText: { color: colors.resultInk, fontSize: fontSize.xs, fontWeight: weight.title },
+  badgeQueue: { backgroundColor: colors.accent },
+  badgeQueueText: { color: colors.accentInk },
 });

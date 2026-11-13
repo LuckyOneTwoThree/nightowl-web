@@ -30,8 +30,8 @@ export function StopLossBanner({ context, notice, onSleep, onSnooze, onIgnore }:
           {teamName(match.h)} vs {teamName(match.a)} · {hm(match.t)} 开球
         </Text>
         <Text style={styles.body}>
-          按 {ledger.profile.wakeTime} 起床、最低 {ledger.profile.minSleep}h 计算，{remaining}。
-          现在睡，明早看结果？
+          按 {ledger.wakeClock || ledger.profile.wakeTime} {ledger.isWeekendNight ? '周末起床' : '起床'}、最低{' '}
+          {ledger.profile.minSleep}h 计算，{remaining}。现在睡，明早看结果？
         </Text>
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
         <View style={styles.actions}>

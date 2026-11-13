@@ -137,6 +137,13 @@ export default function MeScreen() {
   const adjustWake = (deltaMinutes: number) => {
     setPrefs({ sleepWakeTime: formatWakeMinutes(parseWakeMinutes(prefs.sleepWakeTime) + deltaMinutes) });
   };
+  const adjustWeekendWake = (deltaMinutes: number) => {
+    setPrefs({
+      sleepWeekendWakeTime: formatWakeMinutes(
+        parseWakeMinutes(prefs.sleepWeekendWakeTime || '09:00') + deltaMinutes
+      ),
+    });
+  };
   const adjustMinSleep = (deltaHours: number) => {
     const current = Number(prefs.sleepMinHours);
     const base = Number.isFinite(current) ? current : 7;
@@ -168,6 +175,13 @@ export default function MeScreen() {
             <Text style={styles.profileName}>夜猫看台</Text>
             <Text style={styles.profileSub}>
               关注 {prefs.followedTeams.length} 支球队 · 每周 {prefs.weeklyBudget}h
+              {prefs.sleepEnabled
+                ? ` · ${prefs.sleepWakeTime || '07:30'} 起${
+                    prefs.sleepWeekendEnabled
+                      ? ` / 周末 ${prefs.sleepWeekendWakeTime || '09:00'}`
+                      : ''
+                  }`
+                : ''}
             </Text>
           </View>
         </View>
@@ -393,6 +407,26 @@ export default function MeScreen() {
                 onMinus={() => adjustMinSleep(-0.5)}
                 onPlus={() => adjustMinSleep(0.5)}
               />
+              <View style={styles.divider} />
+              <SettingSwitch
+                icon={<MoonStar size={16} color={colors.textMuted} />}
+                label="周五 / 周六夜（次日周末）晚起"
+                hint="次日不早起时按周末起床时间算睡眠底线"
+                value={Boolean(prefs.sleepWeekendEnabled)}
+                onValueChange={value => setPrefs({ sleepWeekendEnabled: value })}
+              />
+              {prefs.sleepWeekendEnabled ? (
+                <>
+                  <View style={styles.divider} />
+                  <SleepStepper
+                    label="周末起床时间"
+                    hint="仅用于周五夜与周六夜的睡眠底线和止损提醒"
+                    value={prefs.sleepWeekendWakeTime || '09:00'}
+                    onMinus={() => adjustWeekendWake(-30)}
+                    onPlus={() => adjustWeekendWake(30)}
+                  />
+                </>
+              ) : null}
             </>
           ) : null}
         </Card>

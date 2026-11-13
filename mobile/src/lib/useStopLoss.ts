@@ -27,7 +27,10 @@ type StopLossContext = {
   match: Match;
 };
 
-type SleepPrefs = Pick<Prefs, 'sleepEnabled' | 'sleepWakeTime' | 'sleepMinHours'>;
+type SleepPrefs = Pick<
+  Prefs,
+  'sleepEnabled' | 'sleepWakeTime' | 'sleepWeekendEnabled' | 'sleepWeekendWakeTime' | 'sleepMinHours'
+>;
 
 export function useStopLossPrompt(
   match: Match | null,
@@ -117,6 +120,8 @@ export function useStopLossPrompt(
     const profile = {
       enabled: true,
       wakeTime: prefs.sleepWakeTime,
+      weekendEnabled: prefs.sleepWeekendEnabled,
+      weekendWakeTime: prefs.sleepWeekendWakeTime,
       minSleep: prefs.sleepMinHours,
     };
     const prompt = shouldStopLossPrompt(match, profile, now, states[night] as any);
@@ -124,7 +129,21 @@ export function useStopLossPrompt(
     setContext({ ...prompt, match } as StopLossContext);
     setNotice(null);
     writeState(night, markStopLossPrompted(states[night] as any) as NightState);
-  }, [enabled, blocked, loaded, match, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepMinHours, now, states, context, writeState]);
+  }, [
+    enabled,
+    blocked,
+    loaded,
+    match,
+    prefs.sleepEnabled,
+    prefs.sleepWakeTime,
+    prefs.sleepWeekendEnabled,
+    prefs.sleepWeekendWakeTime,
+    prefs.sleepMinHours,
+    now,
+    states,
+    context,
+    writeState,
+  ]);
 
   useEffect(() => {
     if (!context) return;

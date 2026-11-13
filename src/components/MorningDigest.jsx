@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { leagueName, teamName } from '../data/index.js';
 import { hm } from '../core/format.js';
+import { completedWatchHint, WATCH_HINT_LEVEL } from '../core/reveal.js';
 import { Button, Chip, Crest, Meta } from './atoms.jsx';
 import { IconClose } from './icons.jsx';
 import { useDialogFocus } from '../hooks/useDialogFocus.js';
@@ -90,6 +91,7 @@ export default function MorningDigest({
               {items.map(({ item, match }) => {
                 const shown = !!match && !!revealed?.has(match.id);
                 const hasScore = !!match?.sc && match.st === 'done';
+                const watchHint = !shown && hasScore ? completedWatchHint(match, item?.ev || null) : null;
                 return (
                   <article
                     key={item.id}
@@ -109,8 +111,13 @@ export default function MorningDigest({
                         <p className="truncate text-sm font-semibold text-text-primary">
                           {match ? `${teamName(match.h)} vs ${teamName(match.a)}` : '比赛数据已移除'}
                         </p>
-                        <p className="mt-0.5 text-2xs text-text-faint">
-                          {match ? (match.st === 'done' ? '已终场' : '比分待录') : '本地赛程中没有这场比赛'}
+                        <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-2xs text-text-faint">
+                          <span>{match ? (match.st === 'done' ? '已终场' : '比分待录') : '本地赛程中没有这场比赛'}</span>
+                          {watchHint && (
+                            <Chip tone={watchHint.level === WATCH_HINT_LEVEL.HIGH ? 'accent' : 'default'}>
+                              {watchHint.label}
+                            </Chip>
+                          )}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">

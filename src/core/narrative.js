@@ -116,8 +116,21 @@ export function storylinesOf(match, storylines) {
  */
 export function driversOf(ev) {
   if (!ev) return [];
-  const head = ev.rivalry || (ev.rec ? '人工精编推荐' : ev.star >= 3 ? '焦点战' : ev.star === 2 ? '有看点' : '常规场次');
+  const head =
+    ev.rivalry ||
+    (ev.rec
+      ? '人工精编推荐'
+      : ev.stakes?.driverLabel
+        ? ev.stakes.driverLabel
+        : ev.star >= 3
+          ? '焦点战'
+          : ev.star === 2
+            ? '有看点'
+            : '常规场次');
   const list = [{ key: 'star', label: head, value: ev.star * 10 }];
+  if (ev.stakes?.driverLabel && head !== ev.stakes.driverLabel) {
+    list.push({ key: 'stakes', label: ev.stakes.driverLabel, value: 18 });
+  }
   const storyB = storyBonus(ev, PRODUCT_WEIGHTS);
   if (storyB > 0) {
     list.push({ key: 'story', label: ev.keyNode ? '故事线关键节点' : '故事线在役', value: storyB });
@@ -158,6 +171,7 @@ export function narrativeOf(match, ev, storylines) {
   if (ev?.rivalry) l2.push(`${ev.rivalry} —— 宿敌对决`);
   // 与宿敌重复时不叠加（曼市德比本身已是六强内战）
   else if (isBigSixClash(match)) l2.push(`${leagueName(match.l)} 六强内战`);
+  if (ev?.stakes?.headline) l2.push(ev.stakes.headline);
   // 关注球队只由调用方传入的 ev 决定；缺 ev 时不臆测（避免把「未配置」写成「关注」）
   if (ev?.isFollowed) l2.push('关注球队出战');
   const stories = storylinesOf(match, storylines);
