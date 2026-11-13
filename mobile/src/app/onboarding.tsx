@@ -40,13 +40,15 @@ export default function OnboardingScreen() {
   const finishOnboarding = usePrefsStore(state => state.finishOnboarding);
   const [step, setStep] = useState(0);
   const [enableSleepOnFinish, setEnableSleepOnFinish] = useState(true);
+  const [selectedTeams, setSelectedTeams] = useState<string[]>(prefs.followedTeams);
 
   const finish = (requestPermissions = true) => {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const wantsNotifications = prefs.notifyBefore15;
-    if (enableSleepOnFinish) {
-      setPrefs({ sleepEnabled: true, sleepWeekendEnabled: true });
-    }
+    setPrefs({
+      followedTeams: selectedTeams,
+      ...(enableSleepOnFinish ? { sleepEnabled: true, sleepWeekendEnabled: true } : {}),
+    });
     finishOnboarding();
     router.replace('/');
     if (requestPermissions && wantsNotifications && notificationsAvailable()) {
@@ -77,6 +79,9 @@ export default function OnboardingScreen() {
 
   const next = () => {
     void Haptics.selectionAsync();
+    if (step === 1) {
+      setPrefs({ followedTeams: selectedTeams });
+    }
     if (step < 2) setStep(value => value + 1);
     else finish();
   };
@@ -180,8 +185,8 @@ export default function OnboardingScreen() {
           </Text>
           <View style={styles.picker}>
             <TeamPicker
-              selected={prefs.followedTeams}
-              onChange={ids => setPrefs({ followedTeams: ids })}
+              selected={selectedTeams}
+              onChange={setSelectedTeams}
             />
           </View>
         </View>

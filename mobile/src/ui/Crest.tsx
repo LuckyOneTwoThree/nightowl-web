@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { teamColor } from '@data/index.js';
@@ -14,7 +15,7 @@ function withAlpha(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-export function Crest({ id, size = 36 }: { id: string; size?: number }) {
+export const Crest = memo(function Crest({ id, size = 36 }: { id: string; size?: number }) {
   const source = crestSource(id);
   if (source) {
     return (
@@ -22,7 +23,7 @@ export function Crest({ id, size = 36 }: { id: string; size?: number }) {
         source={source}
         style={{ width: size, height: size }}
         contentFit="contain"
-        transition={120}
+        transition={0}
         accessibilityLabel={id}
       />
     );
@@ -50,8 +51,8 @@ export function Crest({ id, size = 36 }: { id: string; size?: number }) {
           letterSpacing: 0.2,
         }}
       >
-        {id}
+        {id.slice(0, 3)}
       </Text>
     </View>
   );
-}
+});

@@ -23,6 +23,7 @@ import { getFixtures, leagueName, storylines, teamColor, teamName } from '@data/
 import {
   computeReplayPicks,
   computeTonight,
+  evalOne,
   groupTonight,
   heroDisplayTier,
   heroTier,
@@ -31,16 +32,18 @@ import {
   stateOf,
 } from '@core/owl.js';
 import { queueStatusOf } from '@core/queue.js';
-import { countdown as engineCountdown, sleepTier, ts } from '@core/engine.js';
+import { countdown as engineCountdown, owlIndex, PRODUCT_WEIGHTS, sleepTier, ts } from '@core/engine.js';
 import { decisionStrip } from '@core/decision-strip.js';
 import { formatSleepHours, sleepLedger } from '@core/sleep.js';
 import {
   bjClock,
   bjDate,
+  datePart,
   hm,
   humanCountdownShort,
   liveMinute,
   weekdayOf,
+  zhDate,
 } from '@core/format.js';
 import { narrativeOf } from '@core/narrative.js';
 import { syncNow } from '@/data/sync/run';
@@ -69,6 +72,7 @@ import { colors, fontSize, radius, spacing, withAlpha, weight } from '@/ui/theme
 import type { Entry, Match, Narrative, Tier } from '@/types';
 
 type ReplayPick = Entry & { reason: string };
+type FocalEntry = Omit<Entry, 'index'> & { index?: number };
 
 export default function TonightScreen() {
   const router = useRouter();
@@ -97,7 +101,7 @@ export default function TonightScreen() {
     slice: Match[];
     hero: Entry | null;
     extras: Entry[];
-    focal: Entry | null;
+    focal: FocalEntry | null;
     minefieldIds: Set<string>;
     // 今夜状态计数（不是枚举）：hero 为 null 可能是全 tbd / 全完赛 / 比分未到 / 真无赛
     nightState: {
@@ -124,10 +128,91 @@ export default function TonightScreen() {
 
   const watchLaterItems = useWatchLaterStore(state => state.items);
   const manualIds = useMemo(() => watchLaterItems.map(item => item.id), [watchLaterItems]);
+  const manualIdSet = useMemo(() => new Set(manualIds), [manualIds]);
   const replay = useMemo(
     () => computeReplayPicks(now, prefs, 3, { manualIds }) as ReplayPick[],
     [now, prefs, rev, manualIds]
   );
+
+  const isQuietTonight =
+    !hero &&
+    groups.live.length === 0 &&
+    groups.upcoming.length === 0 &&
+    groups.finished.length === 0;
+
+  const nextUpcoming = useMemo(() => {
+    if (!isQuietTonight) return [] as Match[];
+    const focalId = tonight.focal?.m.id;
+    return getFixtures()
+      .filter(
+        m =>
+          m.st === 'sched' &&
+          !m.tbd &&
+          ts(m.t) > now &&
+          m.id !== focalId
+      )
+      .sort((a, b) => ts(a.t) - ts(b.t))
+      .slice(0, 5);
+  }, [isQuietTonight, tonight.focal, now, rev]);
+
+  const fallbackReplays = useMemo(() => {
+    if (replay.length > 0) return [] as ReplayPick[];
+    const REPLAY_FALLBACK_WINDOW = 21 * 86_400_000;
+    const all = getFixtures();
+    const standingsCache = new Map();
+    const candidates: Array<{ score: number; pick: ReplayPick }> = [];
+    for (const m of all) {
+      if (m.st !== 'done' || !m.sc) continue;
+      const age = now - ts(m.t);
+      if (age <= 0 || age > REPLAY_FALLBACK_WINDOW) continue;
+      const evaluated = evalOne(m, prefs, now, { fixtures: all, standingsCache }) as {
+        ev: Entry['ev'];
+        index: number;
+      };
+      const isManual = manualIdSet.has(m.id);
+      const isReplayFlag = Boolean(
+        (evaluated.ev?.rec as { replay?: boolean } | undefined)?.replay
+      );
+      const isFollowed = evaluated.ev?.isFollowed === true;
+      if (!isManual && !isFollowed && !isReplayFlag && (evaluated.ev?.star ?? 0) < 2) {
+        continue;
+      }
+      const scMatch = String(m.sc || '').trim().match(/^(\d+)\s*[-:]\s*(\d+)$/);
+      const totalGoals = scMatch ? Number(scMatch[1]) + Number(scMatch[2]) : null;
+      if (totalGoals === 0 && !isManual && !isFollowed && !isReplayFlag) continue;
+      const score =
+        (isManual ? 100 : 0) +
+        (isFollowed ? 30 : 0) +
+        (isReplayFlag ? 15 : 0) +
+        (totalGoals !== null && totalGoals >= 3 ? 5 : 0) +
+        evaluated.index;
+      const reason = isManual
+        ? '你的待看清单'
+        : isFollowed
+          ? '关注球队回顾'
+          : isReplayFlag
+            ? '值得补看'
+            : totalGoals !== null && totalGoals >= 3
+              ? '场面开放'
+              : '高分回看';
+      candidates.push({
+        score,
+        pick: {
+          m,
+          ev: evaluated.ev,
+          index: evaluated.index,
+          reason,
+        },
+      });
+    }
+    return candidates
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3)
+      .map(item => item.pick);
+  }, [replay.length, now, prefs, rev, manualIdSet]);
+
+  const shownReplays = replay.length > 0 ? replay : fallbackReplays;
+  const replaySectionTitle = replay.length > 0 ? '最近值得补看' : '近期精彩回顾';
 
   const heroNarrative = useMemo(
     () => (hero ? (narrativeOf(hero.m, hero.ev, storylines) as Narrative) : null),
@@ -375,13 +460,14 @@ export default function TonightScreen() {
         <View style={styles.section}>
           <SectionHeader title="进行中" count={groups.live.length} live />
           <View style={styles.list}>
-            {groups.live.map(match => (
+            {groups.live.map((match, idx) => (
               <MatchRow
                 key={match.id}
                 match={match}
                 now={now}
                 prefs={prefs}
                 minefield={tonight.minefieldIds.has(match.id)}
+                isLast={idx === groups.live.length - 1}
                 onPress={() => openMatch(match.id)}
               />
             ))}
@@ -389,32 +475,73 @@ export default function TonightScreen() {
         </View>
       ) : null}
 
-      <View style={styles.section}>
-        <SectionHeader
-          title="未开赛"
-          count={groups.upcoming.length}
-          actionLabel={groups.upcoming.length > 8 ? '全部赛程' : undefined}
-          onAction={groups.upcoming.length > 8 ? () => router.push('/schedule') : undefined}
-        />
-        {groups.upcoming.length > 0 ? (
-          <View style={styles.list}>
-            {groups.upcoming.slice(0, 8).map(match => (
-              <MatchRow
-                key={match.id}
-                match={match}
-                now={now}
-                prefs={prefs}
-                minefield={tonight.minefieldIds.has(match.id)}
-                onPress={() => openMatch(match.id)}
-              />
-            ))}
+      {isQuietTonight ? (
+        <View style={styles.section}>
+          <SectionHeader
+            title="接下来的重点赛程"
+            count={nextUpcoming.length}
+            actionLabel="全部赛程"
+            onAction={() => router.push('/schedule')}
+          />
+          {nextUpcoming.length > 0 ? (
+            <View style={styles.list}>
+              {nextUpcoming.map((match, idx) => (
+                <MatchRow
+                  key={match.id}
+                  match={match}
+                  now={now}
+                  prefs={prefs}
+                  showDate
+                  isLast={idx === nextUpcoming.length - 1}
+                  onPress={() => openMatch(match.id)}
+                />
+              ))}
+            </View>
+          ) : null}
+          <View style={styles.quietActions}>
+            <Button
+              label="查看完整赛程"
+              variant="secondary"
+              onPress={() => router.push('/schedule')}
+              style={styles.quietActionBtn}
+            />
+            <Button
+              label="下周熬夜规划"
+              variant="secondary"
+              onPress={() => router.push('/plan')}
+              style={styles.quietActionBtn}
+            />
           </View>
-        ) : (
-          <Card style={styles.smallCard}>
-            <Text style={styles.emptyText}>今晚没有未开赛场次。</Text>
-          </Card>
-        )}
-      </View>
+        </View>
+      ) : (
+        <View style={styles.section}>
+          <SectionHeader
+            title="未开赛"
+            count={groups.upcoming.length}
+            actionLabel={groups.upcoming.length > 8 ? '全部赛程' : undefined}
+            onAction={groups.upcoming.length > 8 ? () => router.push('/schedule') : undefined}
+          />
+          {groups.upcoming.length > 0 ? (
+            <View style={styles.list}>
+              {groups.upcoming.slice(0, 8).map((match, idx, arr) => (
+                <MatchRow
+                  key={match.id}
+                  match={match}
+                  now={now}
+                  prefs={prefs}
+                  minefield={tonight.minefieldIds.has(match.id)}
+                  isLast={idx === arr.length - 1}
+                  onPress={() => openMatch(match.id)}
+                />
+              ))}
+            </View>
+          ) : (
+            <Card style={styles.smallCard}>
+              <Text style={styles.emptyText}>今晚未开赛场次已全部开球或待定。</Text>
+            </Card>
+          )}
+        </View>
+      )}
 
       {groups.finished.length > 0 ? (
         <View style={styles.section}>
@@ -429,12 +556,13 @@ export default function TonightScreen() {
           />
           {showFinished ? (
             <View style={styles.list}>
-              {groups.finished.map(match => (
+              {groups.finished.map((match, idx) => (
                 <MatchRow
                   key={match.id}
                   match={match}
                   now={now}
                   prefs={prefs}
+                  isLast={idx === groups.finished.length - 1}
                   onPress={() => openMatch(match.id)}
                 />
               ))}
@@ -443,15 +571,15 @@ export default function TonightScreen() {
         </View>
       ) : null}
 
-      {replay.length > 0 ? (
+      {shownReplays.length > 0 ? (
         <View style={styles.section}>
-          <SectionHeader title="最近值得补看" count={replay.length} />
+          <SectionHeader title={replaySectionTitle} count={shownReplays.length} />
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.replayRow}
           >
-            {replay.map(pick => (
+            {shownReplays.map(pick => (
               <Pressable
                 key={pick.m.id}
                 onPress={() => openMatch(pick.m.id)}
@@ -812,31 +940,116 @@ function FocalCard({
   headline,
   onPress,
 }: {
-  entry: Entry;
+  entry: FocalEntry;
   now: number;
   /** 今晚确实有场次（只是都已结束 / 待定）时的说明，避免把「有 18 场」说成「今晚没球」 */
   headline?: string | null;
   onPress: () => void;
 }) {
   const countdown = engineCountdown(ts(entry.m.t), now);
+  const tier = sleepTier(entry.m.t) as Tier;
+  const kickDay = datePart(entry.m.t);
+  const focalIndex =
+    typeof entry.index === 'number' && Number.isFinite(entry.index)
+      ? entry.index
+      : Number(owlIndex(entry.ev, entry.m, PRODUCT_WEIGHTS) ?? 0);
+  const focalNarrative = useMemo(
+    () => narrativeOf(entry.m, entry.ev, storylines) as Narrative,
+    [entry]
+  );
+
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`下一场焦点战，${teamName(entry.m.h)} 对 ${teamName(entry.m.a)}`}
-      style={({ pressed }) => [pressed && styles.pressed]}
+    <LinearGradient
+      colors={[
+        withAlpha(teamColor(entry.m.h), 0.16),
+        colors.card,
+        withAlpha(teamColor(entry.m.a), 0.12),
+      ]}
+      locations={[0, 0.55, 1]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.hero}
     >
-      <Card style={styles.focal}>
-        {headline ? <Text style={styles.focalMeta}>{headline}</Text> : null}
-        <Text style={styles.heroLeague}>下一场焦点战</Text>
-        <Text style={styles.focalTitle}>
-          {teamName(entry.m.h)} vs {teamName(entry.m.a)}
-        </Text>
-        <Text style={styles.focalMeta}>
-          {leagueName(entry.m.l)} · {hm(entry.m.t)} · {humanCountdownShort(countdown)}
-        </Text>
-      </Card>
-    </Pressable>
+      <Pressable
+        onPress={() => {
+          impactFeedback();
+          onPress();
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={`下一场焦点战，${teamName(entry.m.h)} 对 ${teamName(entry.m.a)}`}
+        style={({ pressed }) => [styles.heroBody, pressed && styles.pressed]}
+      >
+        <View style={styles.heroTop}>
+          <View style={styles.heroTopLeft}>
+            <View style={styles.eyebrowRow}>
+              <MoonStar size={11} color={colors.accent} />
+              <Text style={styles.heroEyebrow}>
+                {headline ? `今夜休赛 · ${headline}` : '今夜无球日 · 下一场焦点战'}
+              </Text>
+            </View>
+            <Text style={styles.heroLeague}>
+              {leagueName(entry.m.l)}
+              {entry.m.r ? ` · 第 ${entry.m.r} 轮` : ''}
+            </Text>
+          </View>
+          <SleepBadge tier={tier} size="md" showZh />
+        </View>
+
+        <View style={styles.teams}>
+          <View style={styles.team}>
+            <Crest id={entry.m.h} size={54} />
+            <Text style={styles.teamName} numberOfLines={1}>
+              {teamName(entry.m.h)}
+            </Text>
+          </View>
+          <View style={styles.center}>
+            <Text style={styles.focalDate}>
+              {zhDate(kickDay)} · {weekdayOf(kickDay)}
+            </Text>
+            <Text style={styles.time}>{hm(entry.m.t)}</Text>
+            <Text style={styles.focalCountdown}>{humanCountdownShort(countdown)}</Text>
+          </View>
+          <View style={styles.team}>
+            <Crest id={entry.m.a} size={54} />
+            <Text style={styles.teamName} numberOfLines={1}>
+              {teamName(entry.m.a)}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.metrics}>
+          <View style={styles.metric}>
+            <Text style={styles.metricLabel}>夜猫指数</Text>
+            <Text style={styles.metricAccent}>{focalIndex.toFixed(1)}</Text>
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.metric}>
+            <Text style={styles.metricLabel}>看点</Text>
+            <Text style={styles.metricValue}>{'★'.repeat(Math.max(1, entry.ev?.star || 1))}</Text>
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.metric}>
+            <Text style={styles.metricLabel}>开球时间</Text>
+            <Text style={styles.metricValue}>
+              {zhDate(kickDay)} {hm(entry.m.t)}
+            </Text>
+          </View>
+        </View>
+
+        {focalNarrative?.headline ? (
+          <View style={styles.narrative}>
+            <Text style={styles.headline} numberOfLines={2}>
+              {focalNarrative.headline}
+            </Text>
+            {focalNarrative.lines?.[0] ? (
+              <Text style={styles.line} numberOfLines={2}>
+                {focalNarrative.lines[0]}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+      </Pressable>
+    </LinearGradient>
   );
 }
 
@@ -1085,12 +1298,26 @@ const styles = StyleSheet.create({
   },
   ctaText: { color: colors.accentInk, fontSize: fontSize.md, fontWeight: weight.title },
   ctaTextSecondary: { color: colors.textSecondary, fontWeight: weight.title },
-  focal: { gap: spacing.xs },
-  focalTitle: { color: colors.text, fontSize: fontSize.xl, fontWeight: weight.title },
-  focalMeta: {
+  heroBody: {
+    gap: spacing.md,
+  },
+  focalDate: {
     color: colors.textMuted,
-    fontSize: fontSize.md,
+    fontSize: fontSize.xs,
     fontVariant: ['tabular-nums'],
+  },
+  focalCountdown: {
+    color: colors.accent,
+    fontSize: fontSize.sm,
+    fontWeight: weight.title,
+    fontVariant: ['tabular-nums'],
+  },
+  quietActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  quietActionBtn: {
+    flex: 1,
   },
   emptyHero: { gap: spacing.sm },
   emptyTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: weight.title },

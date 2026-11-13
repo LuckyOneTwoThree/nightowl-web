@@ -406,18 +406,29 @@ export default function ScheduleScreen() {
               </Text>
             </View>
           )}
-          renderItem={({ item }) => (
-            <View style={styles.matchWrap}>
-              <MatchRow
-                match={item}
-                now={now}
-                prefs={prefs}
-                onPress={() =>
-                  router.push({ pathname: '/match/[id]', params: { id: item.id } })
-                }
-              />
-            </View>
-          )}
+          renderItem={({ item, index, section }) => {
+            const isFirst = index === 0;
+            const isLast = index === section.data.length - 1;
+            return (
+              <View
+                style={[
+                  styles.matchWrap,
+                  isFirst && styles.matchWrapFirst,
+                  isLast && styles.matchWrapLast,
+                ]}
+              >
+                <MatchRow
+                  match={item}
+                  now={now}
+                  prefs={prefs}
+                  isLast={isLast}
+                  onPress={() =>
+                    router.push({ pathname: '/match/[id]', params: { id: item.id } })
+                  }
+                />
+              </View>
+            );
+          }}
           ListEmptyComponent={
             <EmptyState
               icon={<Search size={20} color={colors.textMuted} />}
@@ -553,6 +564,7 @@ const styles = StyleSheet.create({
   filterBlock: { paddingTop: spacing.sm, gap: spacing.sm },
   filterRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
@@ -597,5 +609,17 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderRightWidth: 1,
     borderColor: colors.hairline,
+    overflow: 'hidden',
+  },
+  matchWrapFirst: {
+    borderTopWidth: 1,
+    borderTopLeftRadius: radius.card,
+    borderTopRightRadius: radius.card,
+  },
+  matchWrapLast: {
+    borderBottomWidth: 1,
+    borderBottomLeftRadius: radius.card,
+    borderBottomRightRadius: radius.card,
+    marginBottom: spacing.xs,
   },
 });

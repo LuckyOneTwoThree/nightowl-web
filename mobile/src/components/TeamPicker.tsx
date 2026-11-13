@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -12,6 +12,7 @@ import { Check, Search, X } from 'lucide-react-native';
 
 import { LEAGUE_ORDER, leagueColor, leagueName, teams } from '@data/index.js';
 
+import { selectionFeedback } from '@/lib/feedback';
 import { Crest } from '@/ui/Crest';
 import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 
@@ -21,12 +22,59 @@ type Props = {
   autoFocus?: boolean;
 };
 
+type TeamItem = (typeof teams)[number];
+type GridItem = { team: TeamItem } | { pad: string };
+
 const TABS = ['ALL', ...LEAGUE_ORDER];
 const TEAM_BY_ID = new Map(teams.map(team => [team.id, team]));
+
+const TeamGridCell = memo(function TeamGridCell({
+  item,
+  active,
+  onToggle,
+}: {
+  item: GridItem;
+  active: boolean;
+  onToggle: (id: string) => void;
+}) {
+  if ('pad' in item) return <View style={styles.team} />;
+  const team = item.team;
+
+  return (
+    <Pressable
+      onPress={() => onToggle(team.id)}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: active }}
+      style={({ pressed }) => [
+        styles.team,
+        active && styles.activeTeam,
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={styles.crestWrap}>
+        <Crest id={team.id} size={42} />
+        {active ? (
+          <View style={styles.check}>
+            <Check size={10} color={colors.accentInk} strokeWidth={3} />
+          </View>
+        ) : null}
+      </View>
+      <Text style={styles.teamName} numberOfLines={1}>
+        {team.zh}
+      </Text>
+      <View style={styles.teamMeta}>
+        <View style={[styles.leagueDot, { backgroundColor: leagueColor(team.league) }]} />
+        <Text style={styles.teamId}>{team.id}</Text>
+      </View>
+    </Pressable>
+  );
+});
 
 export function TeamPicker({ selected, onChange, autoFocus = false }: Props) {
   const [league, setLeague] = useState('ALL');
   const [query, setQuery] = useState('');
+
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -46,7 +94,7 @@ export function TeamPicker({ selected, onChange, autoFocus = false }: Props) {
    * `flex: 1` 会把它们拉成各占一半；补一个不可见占位块保持 1/3 宽度。
    */
   const listData = useMemo(() => {
-    const rows = filtered.map(team => ({ team }));
+    const rows: GridItem[] = filtered.map(team => ({ team }));
     const remainder = rows.length % 3;
     if (!remainder) return rows;
     return [
@@ -55,11 +103,20 @@ export function TeamPicker({ selected, onChange, autoFocus = false }: Props) {
     ];
   }, [filtered]);
 
-  const toggle = (id: string) => {
+  const toggle = useCallback((id: string) => {
+    selectionFeedback();
     onChange(
-      selected.includes(id) ? selected.filter(team => team !== id) : [...selected, id]
+      selectedSet.has(id) ? selected.filter(team => team !== id) : [...selected, id]
     );
-  };
+  }, [selected, selectedSet, onChange]);
+
+  const renderGridItem = useCallback(
+    ({ item }: { item: GridItem }) => {
+      const active = 'team' in item ? selectedSet.has(item.team.id) : false;
+      return <TeamGridCell item={item} active={active} onToggle={toggle} />;
+    },
+    [selectedSet, toggle]
+  );
 
   return (
     <View style={styles.root}>
@@ -118,7 +175,14 @@ export function TeamPicker({ selected, onChange, autoFocus = false }: Props) {
           {selected.length === 0 ? ' · 不设主队也能用' : ''}
         </Text>
         {selected.length > 0 ? (
-          <Pressable onPress={() => onChange([])} hitSlop={12} style={styles.clearHit}>
+          <Pressable
+            onPress={() => {
+              selectionFeedback();
+              onChange([]);
+            }}
+            hitSlop={12}
+            style={styles.clearHit}
+          >
             <Text style={styles.clear}>清空</Text>
           </Pressable>
         ) : null}
@@ -156,12 +220,17 @@ export function TeamPicker({ selected, onChange, autoFocus = false }: Props) {
       <FlatList
         data={listData}
         keyExtractor={item => ('pad' in item ? item.pad : item.team.id)}
+        extraData={selectedSet}
         numColumns={3}
         style={styles.list}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.grid}
         columnWrapperStyle={styles.row}
+        initialNumToRender={18}
+        maxToRenderPerBatch={18}
+        windowSize={7}
+        removeClippedSubviews
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyText}>没有找到球队</Text>
@@ -174,39 +243,7 @@ export function TeamPicker({ selected, onChange, autoFocus = false }: Props) {
             </Text>
           ) : undefined
         }
-        renderItem={({ item }) => {
-          if ('pad' in item) return <View style={styles.team} />;
-          const team = item.team;
-          const active = selected.includes(team.id);
-          return (
-            <Pressable
-              onPress={() => toggle(team.id)}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: active }}
-              style={({ pressed }) => [
-                styles.team,
-                active && styles.activeTeam,
-                pressed && styles.pressed,
-              ]}
-            >
-              <View style={styles.crestWrap}>
-                <Crest id={team.id} size={42} />
-                {active ? (
-                  <View style={styles.check}>
-                    <Check size={10} color={colors.accentInk} strokeWidth={3} />
-                  </View>
-                ) : null}
-              </View>
-              <Text style={styles.teamName} numberOfLines={1}>
-                {team.zh}
-              </Text>
-              <View style={styles.teamMeta}>
-                <View style={[styles.leagueDot, { backgroundColor: leagueColor(team.league) }]} />
-                <Text style={styles.teamId}>{team.id}</Text>
-              </View>
-            </Pressable>
-          );
-        }}
+        renderItem={renderGridItem}
       />
     </View>
   );

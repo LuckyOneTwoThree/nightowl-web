@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -17,8 +18,14 @@ import { colors, fontSize, spacing, weight } from '@/ui/theme';
 
 export default function TeamPickerScreen() {
   const router = useRouter();
-  const selected = usePrefsStore(state => state.prefs.followedTeams);
+  const initialSelected = usePrefsStore(state => state.prefs.followedTeams);
   const setPrefs = usePrefsStore(state => state.setPrefs);
+  const [selected, setSelected] = useState(initialSelected);
+
+  const handleClose = () => {
+    setPrefs({ followedTeams: selected });
+    router.back();
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -28,19 +35,19 @@ export default function TeamPickerScreen() {
       >
       <View style={styles.header}>
         <Text style={styles.title}>关注球队</Text>
-        <Pressable onPress={() => router.back()} hitSlop={5} style={styles.close} accessibilityLabel="关闭">
+        <Pressable onPress={handleClose} hitSlop={5} style={styles.close} accessibilityLabel="关闭">
           <X size={20} color={colors.textMuted} />
         </Pressable>
       </View>
       <View style={styles.body}>
         <TeamPicker
           selected={selected}
-          onChange={ids => setPrefs({ followedTeams: ids })}
+          onChange={setSelected}
         />
       </View>
       <View style={styles.footer}>
         <Text style={styles.footerText}>已选 {selected.length} 支球队</Text>
-        <Button label="完成" onPress={() => router.back()} style={styles.done} />
+        <Button label="完成" onPress={handleClose} style={styles.done} />
       </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

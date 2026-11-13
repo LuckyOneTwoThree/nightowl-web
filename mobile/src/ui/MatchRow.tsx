@@ -1,10 +1,10 @@
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AlertTriangle, Eye } from 'lucide-react-native';
 
 import { evalOne, stateOf } from '@core/owl.js';
 import { sleepTier, ts } from '@core/engine.js';
-import { hm, liveMinute } from '@core/format.js';
+import { hm, liveMinute, zhDate } from '@core/format.js';
 import { completedWatchHint, WATCH_HINT_LEVEL } from '@core/reveal.js';
 import { leagueColor, leagueName, teamName } from '@data/index.js';
 
@@ -23,6 +23,8 @@ type Props = {
   onPress: () => void;
   minefield?: boolean;
   showTier?: boolean;
+  showDate?: boolean;
+  isLast?: boolean;
 };
 
 function parseScoreWinner(sc?: string | null): 'h' | 'a' | 'd' | null {
@@ -34,7 +36,16 @@ function parseScoreWinner(sc?: string | null): 'h' | 'a' | 'd' | null {
   return 'd';
 }
 
-export function MatchRow({ match, now, prefs, onPress, minefield = false, showTier = true }: Props) {
+export const MatchRow = memo(function MatchRow({
+  match,
+  now,
+  prefs,
+  onPress,
+  minefield = false,
+  showTier = true,
+  showDate = false,
+  isLast = false,
+}: Props) {
   const { ev, index } = evalOne(match, prefs) as { ev: Ev & { stakes?: Array<{ label?: string }> }; index: number };
   const state = stateOf(match, now) as string;
   const isLive = state === 'live';
@@ -89,7 +100,6 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
         selectionFeedback();
         onPress();
       }}
-      android_ripple={{ color: colors.press }}
       accessibilityRole="button"
       accessibilityLabel={`${teamName(match.h)} 对 ${teamName(match.a)}，${leagueName(match.l)}，${
         isTbd ? '时间待定' : hm(match.t)
@@ -97,6 +107,7 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
       accessibilityHint="双击查看比赛详情"
       style={({ pressed }) => [
         styles.row,
+        !isLast && styles.rowBorder,
         (homeFollowed || awayFollowed) && styles.rowFollowed,
         pressed && styles.pressed,
       ]}
@@ -108,6 +119,11 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
         ]}
       />
       <View style={styles.timeCol}>
+        {showDate && !isTbd ? (
+          <Text style={styles.dateMini} numberOfLines={1}>
+            {zhDate(match.t.slice(0, 10))}
+          </Text>
+        ) : null}
         <Text style={styles.time}>{isTbd ? '--:--' : hm(match.t)}</Text>
         <Text style={styles.league} numberOfLines={1}>
           {leagueName(match.l)}
@@ -230,7 +246,7 @@ export function MatchRow({ match, now, prefs, onPress, minefield = false, showTi
       </View>
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   row: {
@@ -238,15 +254,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingRight: spacing.md,
+  },
+  rowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.hairline,
   },
   rowFollowed: {
     backgroundColor: withAlpha(colors.accent, 0.03),
   },
-  pressed: { backgroundColor: colors.press },
+  pressed: { backgroundColor: colors.raised },
   leagueBar: { width: 3, alignSelf: 'stretch', marginRight: spacing.sm },
   timeCol: { width: 60, gap: 2 },
+  dateMini: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: weight.label,
+    fontVariant: ['tabular-nums'],
+  },
   time: {
     color: colors.text,
     fontSize: fontSize.md,

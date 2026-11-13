@@ -68,7 +68,8 @@ export function AppTabBar({ state, navigateToTab }: TabBarProps) {
             accessibilityLabel={meta.label}
             style={({ pressed }) => [styles.tab, pressed && styles.pressed]}
           >
-            <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+            {focused ? <View style={styles.activeIndicator} /> : null}
+            <View style={styles.iconWrap}>
               {meta.icon(color)}
               {route.name === 'index' && liveCount > 0 ? (
                 <View style={styles.badge}>
@@ -98,47 +99,57 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panel,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.hairline,
-    paddingTop: 8,
+    paddingTop: 6,
     paddingHorizontal: spacing.sm,
   },
   tab: {
     flex: 1,
     height: 54,
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
     borderRadius: radius.control,
   },
-  pressed: { opacity: 0.7 },
-  label: { fontSize: fontSize.xs, fontWeight: weight.title },
+  activeIndicator: {
+    position: 'absolute',
+    top: -6,
+    width: 24,
+    height: 2.5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+  },
+  pressed: { opacity: 0.72 },
+  label: { fontSize: fontSize.xs, fontWeight: weight.label },
   labelActive: { fontWeight: weight.title },
   iconWrap: {
     position: 'relative',
-    width: 34,
-    height: 34,
+    width: 36,
+    height: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.pill,
-  },
-  iconWrapActive: {
-    backgroundColor: colors.goldSoft,
   },
   badge: {
     position: 'absolute',
-    top: -5,
-    right: -7,
-    minWidth: 18,
-    minHeight: 18,
-    paddingVertical: 1,
-    borderRadius: 9,
+    top: -3,
+    right: -6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
     backgroundColor: colors.live,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: colors.panel,
   },
-  badgeText: { color: colors.resultInk, fontSize: fontSize.xs, fontWeight: weight.title },
+  badgeText: {
+    color: colors.resultInk,
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: weight.title,
+    fontVariant: ['tabular-nums'],
+  },
   badgeQueue: { backgroundColor: colors.accent },
   badgeQueueText: { color: colors.accentInk },
 });
