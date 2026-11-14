@@ -2,6 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDialogFocus } from '../hooks/useDialogFocus.js';
 import { getFixtures, leagueName, teamName } from '../data/index.js';
 import { STANDINGS_LEAGUES, computeStandings, standingsCutoff } from '../core/standings.js';
+import {
+  canSimulateMatch,
+  SANDBOX_DISCLAIMER,
+  SANDBOX_OUTCOME,
+  simulateMatchStandings
+} from '../core/sandbox.js';
 import { isFinished } from '../core/engine.js';
 import { unrevealedTonightIds } from '../core/reveal.js';
 import { bjDate, formatGoalDiff } from '../core/format.js';
@@ -43,10 +49,22 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
   const closeRef = useRef(null);
   const scrollRef = useRef(null);
   const [league, setLeague] = useState(initialLeague || 'PL');
+  const currentMatchId = match?.id ?? null;
+  const [sandbox, setSandbox] = useState({ matchId: null, outcome: SANDBOX_OUTCOME.NONE });
+  const outcome = sandbox.matchId === currentMatchId ? sandbox.outcome : SANDBOX_OUTCOME.NONE;
+  const selectOutcome = next => {
+    setSandbox(prev => {
+      const prevOutcome = prev.matchId === currentMatchId ? prev.outcome : SANDBOX_OUTCOME.NONE;
+      const target =
+        prevOutcome === next && next !== SANDBOX_OUTCOME.NONE ? SANDBOX_OUTCOME.NONE : next;
+      return { matchId: currentMatchId, outcome: target };
+    });
+  };
 
   useEffect(() => {
     if (open) {
       setLeague(STANDINGS_LEAGUES.includes(initialLeague) ? initialLeague : 'PL');
+      setSandbox({ matchId: null, outcome: SANDBOX_OUTCOME.NONE });
     }
   }, [open, initialLeague]);
 
@@ -56,6 +74,7 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
   const nowTs = Number.isFinite(now) ? now : Date.now();
   const isMatchLeague = !!match && match.l === activeLeague;
   const historical = isMatchLeague && isFinished(match);
+  const canSandbox = isMatchLeague && canSimulateMatch(match);
 
   // 今晚已完赛、未「揭晓」的场次 → 从积分计算中排除（防剧透）。
   // revealed 是会话级 Set；dataRev 变化时 fixtures 可能新增完赛场次，需重算。
@@ -66,10 +85,23 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
   }, [spoilerFree, revealed, nowTs, dataRev]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: 同上：dataRev 触发重算，body 用 getFixtures()
-  const table = useMemo(() => {
+  const baseTable = useMemo(() => {
     const asOfTs = historical ? standingsCutoff(match, nowTs) : nowTs;
     return computeStandings(activeLeague, getFixtures(), { asOfTs, excludeIds: hiddenIds });
   }, [activeLeague, historical, match, nowTs, dataRev, hiddenIds]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 同上：dataRev 触发重算，body 用 getFixtures()
+  const sim = useMemo(() => {
+    if (!canSandbox || outcome === SANDBOX_OUTCOME.NONE) return null;
+    return simulateMatchStandings(match, outcome, getFixtures(), { nowTs, excludeIds: hiddenIds });
+  }, [canSandbox, match, outcome, nowTs, dataRev, hiddenIds]);
+
+  const table = sim?.supported && sim.table ? sim.table : baseTable;
+  const baseRankByTeam = useMemo(() => {
+    const map = new Map();
+    for (const r of baseTable?.rows || []) map.set(r.teamId, r.rank);
+    return map;
+  }, [baseTable]);
 
   /* 打开时的滚动落点：带本场上下文就锚定到交手双方，否则回榜首。
    *
@@ -191,7 +223,7 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="text-xs font-medium text-text-primary">{leagueName(activeLeague)}</span>
               <Meta num>{asOfText}</Meta>
-              <Meta num>{table.doneCount} 场已同步</Meta>
+              <Meta num>{sim ? `${table.doneCount} 场（沙盘推演）` : `${table.doneCount} 场已同步`}</Meta>
               {excludedText && <Meta num>{excludedText}</Meta>}
               <Hint
                 content={`${table.tiebreakerNote} ${
@@ -203,6 +235,35 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
               />
             </div>
             {matchSummary && <p className="mt-1 text-2xs text-text-muted">{matchSummary}</p>}
+            {canSandbox && rows.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="text-2xs text-text-faint">3 分杠杆沙盘：</span>
+                {[
+                  [SANDBOX_OUTCOME.NONE, '基准现状'],
+                  [SANDBOX_OUTCOME.HOME_WIN, `若 ${teamName(match.h)} 胜 1-0`],
+                  [SANDBOX_OUTCOME.DRAW, '若平 0-0'],
+                  [SANDBOX_OUTCOME.AWAY_WIN, `若 ${teamName(match.a)} 胜 0-1`]
+                ].map(([key, label]) => {
+                  const active = outcome === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => selectOutcome(key)}
+                      className={`rounded-md border px-2 py-0.5 text-2xs transition-colors focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none ${
+                        active
+                          ? 'border-accent/45 bg-accent/15 font-semibold text-accent'
+                          : 'border-line-hairline bg-surface-panel/70 text-text-muted hover:text-text-primary'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+                {sim && <span className="text-2xs text-text-faint">{SANDBOX_DISCLAIMER}</span>}
+              </div>
+            )}
           </div>
           <p className="text-2xs text-text-faint">
             {isUcl ? '前8直通 / 9–24 附加赛 / 25–36 出局' : '前四参考线 / 后三名风险区'}
@@ -267,6 +328,8 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
 
                     const row = item.row;
                     const focused = focusIds.has(row.teamId);
+                    const baseRank = sim ? baseRankByTeam.get(row.teamId) : null;
+                    const rankDelta = baseRank != null ? baseRank - row.rank : 0;
                     return (
                       <tr
                         key={row.teamId}
@@ -274,7 +337,14 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
                         className={`border-t border-line-hairline/70 ${focused ? 'bg-surface-raised/70' : ''}`}
                       >
                         <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-muted">
-                          {row.rank}
+                          <span className="inline-flex items-center justify-end gap-1">
+                            {row.rank}
+                            {rankDelta !== 0 && (
+                              <span className={rankDelta > 0 ? 'font-semibold text-accent' : 'font-semibold text-warn'}>
+                                {rankDelta > 0 ? `↑${rankDelta}` : `↓${Math.abs(rankDelta)}`}
+                              </span>
+                            )}
+                          </span>
                         </td>
                         <td className="px-2 py-1.5">
                           <div className="flex min-w-0 items-center gap-2">

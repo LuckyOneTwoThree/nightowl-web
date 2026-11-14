@@ -346,6 +346,70 @@ export async function hasScheduledMatchReminder(matchId: string): Promise<boolea
   }
 }
 
+export async function hasSecondHalfCutInReminder(matchId: string): Promise<boolean> {
+  if (!notificationsAvailable()) return false;
+  try {
+    const Notifications = await import('expo-notifications');
+    const existing = await Notifications.getAllScheduledNotificationsAsync();
+    return existing.some(item => {
+      const data = item.content.data || {};
+      return data.matchId === matchId && data.kind === 'second-half';
+    });
+  } catch {
+    return false;
+  }
+}
+
+export async function cancelSecondHalfCutInReminder(matchId: string): Promise<void> {
+  if (!notificationsAvailable()) return;
+  try {
+    const Notifications = await import('expo-notifications');
+    const existing = await Notifications.getAllScheduledNotificationsAsync();
+    for (const item of existing) {
+      const data = item.content.data || {};
+      if (data.matchId === matchId && data.kind === 'second-half') {
+        await Notifications.cancelScheduledNotificationAsync(item.identifier);
+      }
+    }
+  } catch {
+    /* 容错 */
+  }
+}
+
+export async function scheduleSecondHalfCutInReminder(
+  match: Match,
+  alarmAt: number
+): Promise<ManualReminderStatus> {
+  if (!notificationsAvailable()) return { ok: false, reason: 'unavailable' };
+  if (!match || match.tbd || match.st !== 'sched') return { ok: false, reason: 'ineligible' };
+  const when = new Date(alarmAt);
+  if (!Number.isFinite(when.getTime()) || when.getTime() <= Date.now()) {
+    return { ok: false, reason: 'too-late' };
+  }
+  try {
+    const Notifications = await import('expo-notifications');
+    await configure(Notifications);
+    const granted = await requestNotificationPermission();
+    if (!granted) return { ok: false, reason: 'permission-denied' };
+    await cancelSecondHalfCutInReminder(match.id);
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: `下半场 60' 切入唤醒 · ${teamName(match.h)} vs ${teamName(match.a)}`,
+        body: `${leagueName(match.l)} 即将进入第 60 分钟下半场阶段，现在醒来看关键末尾即可。`,
+        data: { matchId: match.id, kind: 'second-half', kickoff: match.t },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: when,
+        channelId: CHANNEL_ID,
+      },
+    });
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: 'error' };
+  }
+}
+
 export function syncPrematchReminders(prefs: Prefs): Promise<ReminderResult> {
   if (syncInFlight) {
     queuedPrefs = prefs;

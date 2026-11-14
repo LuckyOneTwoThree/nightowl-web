@@ -101,6 +101,7 @@ function AppShell() {
             name="team-picker"
             options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
           />
+          <Stack.Screen name="pair" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen
             name="onboarding"
             options={{ presentation: 'fullScreenModal', animation: 'fade' }}

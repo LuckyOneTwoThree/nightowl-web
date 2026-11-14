@@ -39,6 +39,7 @@ type QueueStore = {
   toggle: (match: Match) => ToggleResult;
   remove: (id: string) => void;
   markWatched: (id: string) => void;
+  replaceItems: (next: unknown[]) => void;
 };
 
 export const useWatchLaterStore = create<QueueStore>()(
@@ -58,6 +59,8 @@ export const useWatchLaterStore = create<QueueStore>()(
       remove: id => set({ items: removeFromQueue(get().items, id) as WatchLaterItem[] }),
       markWatched: id =>
         set({ items: markQueueWatched(get().items, id) as WatchLaterItem[] }),
+      replaceItems: next =>
+        set({ items: normalizeQueue(next, Date.now()) as WatchLaterItem[] }),
     }),
     {
       name: 'nightowl:watchLater:v1',

@@ -6,6 +6,7 @@ import { evalOne, stateOf } from '@core/owl.js';
 import { sleepTier, ts } from '@core/engine.js';
 import { hm, liveMinute, zhDate } from '@core/format.js';
 import { completedWatchHint, WATCH_HINT_LEVEL } from '@core/reveal.js';
+import { summarizeDrama } from '@core/drama.js';
 import { leagueColor, leagueName, teamName } from '@data/index.js';
 
 import { selectionFeedback } from '@/lib/feedback';
@@ -76,6 +77,15 @@ export const MatchRow = memo(function MatchRow({
           } | null)(match, ev)
         : null,
     [hasScore, scoreVisible, match, ev]
+  );
+  const dramaTag = useMemo(
+    () =>
+      hasScore && !scoreVisible
+        ? (summarizeDrama as (m: Match, events?: unknown[] | null) => {
+            tags: Array<{ id: string; label: string; tone: string }>;
+          })(match, null).tags[0] || null
+        : null,
+    [hasScore, scoreVisible, match]
   );
   const stakeTag = !isDone && !isTbd && state !== 'pp'
     ? ev?.rivalry || ev?.stakes?.[0]?.label || null
@@ -197,17 +207,17 @@ export const MatchRow = memo(function MatchRow({
             <Text style={styles.doneSub}>完场</Text>
           ) : (
             <View style={styles.revealWrap}>
-              {watchHint && watchHint.level !== WATCH_HINT_LEVEL.NORMAL ? (
+              {dramaTag || (watchHint && watchHint.level !== WATCH_HINT_LEVEL.NORMAL) ? (
                 <Text
                   style={[
                     styles.watchHintText,
-                    watchHint.level === WATCH_HINT_LEVEL.HIGH
+                    (dramaTag?.tone === 'accent' || (!dramaTag && watchHint?.level === WATCH_HINT_LEVEL.HIGH))
                       ? styles.watchHintHigh
                       : styles.watchHintLow,
                   ]}
                   numberOfLines={1}
                 >
-                  {watchHint.shortLabel}
+                  {dramaTag ? dramaTag.label : watchHint!.shortLabel}
                 </Text>
               ) : null}
               <Pressable

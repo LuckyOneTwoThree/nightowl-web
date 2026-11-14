@@ -18,6 +18,7 @@ import {
 } from './core/owl.js';
 import { narrativeOf } from './core/narrative.js';
 import { unrevealedTonightIds } from './core/reveal.js';
+import { buildSyncBundle } from './core/sync-bundle.js';
 
 import TopBar from './components/TopBar.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
@@ -26,6 +27,8 @@ import WeekView from './components/WeekView.jsx';
 import ScheduleView from './components/ScheduleView.jsx';
 import IntelPanel from './components/IntelPanel.jsx';
 import StandingsModal from './components/StandingsModal.jsx';
+import SeasonReportModal from './components/SeasonReportModal.jsx';
+import LanPairModal from './components/LanPairModal.jsx';
 import PlayerStage from './components/PlayerStage.jsx';
 import NextUpRail from './components/NextUpRail.jsx';
 import SettingsDrawer from './components/SettingsDrawer.jsx';
@@ -66,6 +69,25 @@ import {
   saveWeekOverrides
 } from './components/week-overrides-storage.js';
 import { VIEW_COMMANDS, ACTION_COMMANDS, buildMatchCommands } from './core/command-palette.js';
+import { planSecondHalfCutIn } from './core/second-half.js';
+import {
+  RADAR_VERDICT,
+  RADAR_VERDICT_META,
+  isRadarWindowActive,
+  isRadarWindowExpired
+} from './core/radar.js';
+import {
+  applyDiaryPatch,
+  deleteDiaryEntry,
+  loadDiary,
+  saveDiary
+} from './components/diary-storage.js';
+import {
+  loadRadarState,
+  saveRadarState,
+  toggleCutInId,
+  toggleWatchRadarId
+} from './components/radar-storage.js';
 
 /**
  * 比赛 id → 记录（O(1) 取用）
@@ -128,7 +150,8 @@ export default function App() {
     addWatchLater,
     toggleWatchLater,
     removeWatchLater,
-    markWatchLaterWatched
+    markWatchLaterWatched,
+    commitWatchLater
   } = useWatchLater();
 
   // ---- 明早补看摘要 / 连续补看会话 ----
@@ -137,6 +160,54 @@ export default function App() {
   /* 连续补看会话：{ ids, cursor }，null 表示没在连看。
      只存 id 快照 + 游标（见 core/digest-session.js），比赛对象每次从 matchMap 取当前值。 */
   const [digestSession, setDigestSession] = useState(null);
+
+  // ---- 观赛情绪印章账本 + 60'切入 & 悬念雷达 ----
+  const [diary, setDiary] = useState(() => loadDiary());
+  const [seasonReportOpen, setSeasonReportOpen] = useState(false);
+  const [radarState, setRadarState] = useState(() => loadRadarState());
+  const radarPollTsRef = useRef(new Map());
+
+  const handleSaveDiary = useCallback(patch => {
+    setDiary(prev => applyDiaryPatch(prev, patch));
+  }, []);
+  const handleRemoveDiary = useCallback(matchId => {
+    setDiary(prev => deleteDiaryEntry(prev, matchId));
+  }, []);
+  const handleImportDiary = useCallback(nextDiary => {
+    setDiary(saveDiary(nextDiary));
+  }, []);
+
+  const handleToggleCutIn = useCallback(matchId => {
+    setRadarState(prev => toggleCutInId(prev, matchId).state);
+  }, []);
+  const handleToggleRadar = useCallback(matchId => {
+    setRadarState(prev => toggleWatchRadarId(prev, matchId).state);
+  }, []);
+  const handleToggleRadarEnabled = useCallback(enabled => {
+    setRadarState(prev => saveRadarState({ ...prev, enabled }));
+  }, []);
+  const openSeasonReport = useCallback(() => setSeasonReportOpen(true), []);
+  const closeSeasonReport = useCallback(() => setSeasonReportOpen(false), []);
+
+  // ---- M5: 同窗置顶小窗看球（Mini Mode）----
+  const [miniMode, setMiniMode] = useState(false);
+  const handleToggleMiniMode = useCallback(next => {
+    setMiniMode(prev => {
+      const target = typeof next === 'boolean' ? next : !prev;
+      window.desktop?.setMiniMode?.(target);
+      return target;
+    });
+  }, []);
+
+  // ---- M6: 局域网一扫同步 / 被窝手机接力 ----
+  const [lanPairOpen, setLanPairOpen] = useState(false);
+  const [lanPairSession, setLanPairSession] = useState(null);
+  const [lanPairLoading, setLanPairLoading] = useState(false);
+  const [lanPairNotice, setLanPairNotice] = useState(null);
+  const lastPairOptsRef = useRef({ mode: 'sync', handoff: null });
+  const lastAppliedMergedAtRef = useRef(0);
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
 
   // ---- 桌面外壳设置（关闭到托盘 / 开机自启）----
   // 存在主进程：这两项要在窗口创建前生效，不能只放 localStorage
@@ -193,6 +264,88 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [revealed, setRevealed] = useState(() => new Set());
+
+  const startLanPairSession = useCallback(
+    async ({ mode = 'sync', handoff = null } = {}) => {
+      lastPairOptsRef.current = { mode, handoff };
+      setLanPairLoading(true);
+      setLanPairNotice(null);
+      try {
+        const bundle = buildSyncBundle(
+          {
+            prefs: prefsRef.current,
+            weekOverridesByWeek,
+            watchLater,
+            revealedIds: [...revealed],
+            diary
+          },
+          Date.now()
+        );
+        const res = await fetch('/api/pair/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode, handoff, bundle })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+          setLanPairSession({ active: false, error: data.error || `HTTP ${res.status}` });
+        } else {
+          setLanPairSession(data);
+        }
+      } catch (err) {
+        setLanPairSession({ active: false, error: String(err?.message || err) });
+      } finally {
+        setLanPairLoading(false);
+      }
+    },
+    [weekOverridesByWeek, watchLater, revealed, diary]
+  );
+
+  const openLanPair = useCallback(
+    (opts = { mode: 'sync', handoff: null }) => {
+      setLanPairOpen(true);
+      void startLanPairSession(opts);
+    },
+    [startLanPairSession]
+  );
+
+  const closeLanPair = useCallback(() => {
+    setLanPairOpen(false);
+    setLanPairNotice(null);
+    void fetch('/api/pair/stop', { method: 'POST' }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!lanPairOpen) return undefined;
+    let alive = true;
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/pair/status');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!alive) return;
+        if (data.active) setLanPairSession(prev => ({ ...(prev || {}), ...data }));
+        if (data.latestMergedAt && data.latestMergedAt > lastAppliedMergedAtRef.current && data.merged) {
+          lastAppliedMergedAtRef.current = data.latestMergedAt;
+          const m = data.merged;
+          if (m.prefs) setPrefs({ ...prefsRef.current, ...m.prefs });
+          if (m.weekOverridesByWeek) {
+            const minKey = mondayOfWall(nightOf(Date.now()));
+            setWeekOverridesByWeek(saveWeekOverrides(m.weekOverridesByWeek, minKey));
+          }
+          if (Array.isArray(m.watchLater)) commitWatchLater(m.watchLater);
+          if (Array.isArray(m.revealedIds)) setRevealed(prev => new Set([...prev, ...m.revealedIds]));
+          if (m.diary) handleImportDiary(m.diary);
+          setLanPairNotice('已收到手机端同步数据，并完成双向无损合并');
+        }
+      } catch {}
+    };
+    const timer = setInterval(poll, 1500);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [lanPairOpen, setPrefs, commitWatchLater, handleImportDiary]);
   const [filters, setFilters] = useState(() => defaultScheduleFilters());
   // 完整积分榜是参考视图：{ league, matchId }；matchId 为空表示从赛程入口全局查看
   const [standingsState, setStandingsState] = useState(null);
@@ -549,6 +702,133 @@ export default function App() {
       });
     }
   }, [clockTs, dataRev, prefs.notifyBefore15, prefs.followedTeams, tonight.hero]);
+
+  // 下半场 60' 切入唤醒 + 55'–70' 无剧透悬念唤醒雷达（受控节能调度，最多盯盘 2 场）
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 依赖 clockTs / dataRev 按分钟检查，避免每帧重复请求
+  useEffect(() => {
+    const api = window.desktop;
+    const now = Date.now();
+    const night = nightOf(now);
+    const list = getFixtures();
+    const byId = new Map(list.map(m => [m.id, m]));
+    const sleepProfile = {
+      enabled: Boolean(prefs.sleepEnabled),
+      wakeTime: prefs.sleepWakeTime || '07:30',
+      weekendEnabled: prefs.sleepWeekendEnabled !== false,
+      weekendWakeTime: prefs.sleepWeekendWakeTime || '09:00',
+      minSleep: prefs.sleepMinHours ?? 7
+    };
+
+    const nextFired = [...(radarState.firedKeys || [])];
+    let firedDirty = false;
+
+    for (const id of radarState.cutInIds || []) {
+      const m = byId.get(id);
+      if (!m) continue;
+      const fireKey = `${night}|${id}|cutin`;
+      if (nextFired.includes(fireKey)) continue;
+      const plan = planSecondHalfCutIn(m, sleepProfile, now);
+      if (plan.eligible && now >= plan.alarmAt - 60000 && now <= plan.cutInAt) {
+        nextFired.push(fireKey);
+        firedDirty = true;
+        api?.notify?.({
+          title: '下半场 60\' 切入窗口将到',
+          body: `${teamName(m.h)} vs ${teamName(m.a)} 即将进入 60 分钟下半场阶段，准备切入观赛。`,
+          matchId: id,
+          kind: 'cutin',
+          silentWhenFocused: false
+        });
+      }
+    }
+
+    if (firedDirty) {
+      setRadarState(prev => saveRadarState({ ...prev, firedKeys: nextFired }));
+    }
+
+    if (!radarState.enabled) return undefined;
+    const targets = (radarState.watchIds || []).slice(0, 2);
+    if (targets.length === 0) return undefined;
+
+    const ac = new AbortController();
+    let cancelled = false;
+
+    (async () => {
+      for (const id of targets) {
+        if (cancelled) break;
+        const m = byId.get(id);
+        if (!m) continue;
+        const radarKey = `${night}|${id}|radar`;
+        if (nextFired.includes(radarKey)) continue;
+
+        if (isRadarWindowExpired(m, now)) {
+          setRadarState(prev =>
+            saveRadarState({
+              ...prev,
+              firedKeys: [...(prev.firedKeys || []), radarKey],
+              watchIds: (prev.watchIds || []).filter(w => w !== id),
+              verdicts: {
+                ...(prev.verdicts || {}),
+                [id]: prev.verdicts?.[id] || {
+                  verdict: RADAR_VERDICT.UNAVAILABLE,
+                  minuteLabel: null,
+                  updatedAt: now
+                }
+              }
+            })
+          );
+          continue;
+        }
+
+        if (!isRadarWindowActive(m, now)) continue;
+        const lastPoll = radarPollTsRef.current.get(id) || 0;
+        if (now - lastPoll < 180_000) continue;
+        radarPollTsRef.current.set(id, now);
+
+        try {
+          const followedParam = encodeURIComponent((prefs.followedTeams || []).join(','));
+          const r = await fetch(`/api/radar?matchId=${encodeURIComponent(id)}&followedTeams=${followedParam}`, {
+            signal: ac.signal
+          });
+          if (!r.ok || cancelled) continue;
+          const dto = await r.json();
+          if (!dto?.verdict || cancelled) continue;
+
+          if (dto.verdict !== RADAR_VERDICT.UNAVAILABLE) {
+            const meta = RADAR_VERDICT_META[dto.verdict] || RADAR_VERDICT_META[RADAR_VERDICT.WORTH_WAKING];
+            setRadarState(prev =>
+              saveRadarState({
+                ...prev,
+                firedKeys: [...(prev.firedKeys || []), radarKey],
+                watchIds: (prev.watchIds || []).filter(w => w !== id),
+                verdicts: {
+                  ...(prev.verdicts || {}),
+                  [id]: {
+                    verdict: dto.verdict,
+                    minuteLabel: dto.minuteLabel || null,
+                    updatedAt: Date.now()
+                  }
+                }
+              })
+            );
+            api?.notify?.({
+              title: `${meta.notifyTitle} · ${teamName(m.h)} vs ${teamName(m.a)}`,
+              body: meta.notifyBody,
+              matchId: id,
+              kind: 'radar',
+              silentWhenFocused: false
+            });
+          }
+        } catch {
+          // 离线或服务不可用时保持静默等待
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [clockTs, dataRev, radarState.enabled, radarState.cutInIds, radarState.watchIds, prefs]);
 
   // 点击系统通知 → 回到对应比赛
   useEffect(() => {
@@ -966,12 +1246,12 @@ export default function App() {
         closePalette();
         return;
       }
-      if (settingsOpen || onboardingOpen || updateModalOpen || splashOpen || standingsState) return;
+      if (settingsOpen || onboardingOpen || updateModalOpen || splashOpen || standingsState || seasonReportOpen || lanPairOpen) return;
       openPalette();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [paletteOpen, settingsOpen, onboardingOpen, updateModalOpen, splashOpen, standingsState, openPalette, closePalette]);
+  }, [paletteOpen, settingsOpen, onboardingOpen, updateModalOpen, splashOpen, standingsState, seasonReportOpen, lanPairOpen, openPalette, closePalette]);
 
   const runPaletteItem = useCallback(item => {
     const action = item?.action;
@@ -983,6 +1263,14 @@ export default function App() {
     }
     if (action.type === 'settings') {
       setSettingsOpen(true);
+      return;
+    }
+    if (action.type === 'season-report') {
+      setSeasonReportOpen(true);
+      return;
+    }
+    if (action.type === 'lan-pair') {
+      openLanPair({ mode: 'sync', handoff: null });
       return;
     }
     if (action.type === 'sync') {
@@ -1000,7 +1288,7 @@ export default function App() {
         setFilters({ ...defaultScheduleFilters(), date: 'all', query: teamName(m.h) });
       }
     }
-  }, [tonight, triggerSync]);
+  }, [tonight, triggerSync, openLanPair]);
 
   // ---- 浮层栈：背景 inert / Esc 只关最上层 / 打开顺序决定层级（实现见 hooks/useOverlayStack）----
   const { overlayOpen, inertFor } = useOverlayStack({
@@ -1009,6 +1297,8 @@ export default function App() {
       onboarding: onboardingVisible,
       update: updateModalOpen,
       standings: !!standingsState,
+      season: seasonReportOpen,
+      lanPair: lanPairOpen,
       palette: paletteOpen,
       morning: morningDigestOpen
     },
@@ -1018,37 +1308,53 @@ export default function App() {
       onboarding: closeOnboarding,
       update: closeUpdateModal,
       standings: closeStandings,
+      season: closeSeasonReport,
+      lanPair: closeLanPair,
       palette: closePalette,
       morning: closeMorningDigest
     }
   });
+
+  useEffect(() => {
+    if (!miniMode) return undefined;
+    const onEsc = e => {
+      if (e.key === 'Escape' && !overlayOpen) {
+        e.preventDefault();
+        handleToggleMiniMode(false);
+      }
+    };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [miniMode, overlayOpen, handleToggleMiniMode]);
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden stage-atmosphere text-text-primary">
       <h1 className="sr-only">夜猫看台 · 今晚观赛决策台</h1>
       <div className="flex min-h-0 flex-1 flex-col" inert={overlayOpen || undefined}>
         {/* TopBar 的时钟、PlayerStage 的倒计时各自内部按秒刷新，不走这里 */}
-        <TopBar
-          view={view}
-          onViewChange={setView}
-          liveCount={liveCount}
-          prefs={prefs}
-          dataHealth={dataHealth}
-          onOpenSettings={openSettings}
-          onOpenPalette={openPalette}
-          updateAvailable={updateAvailable}
-          updateVersion={updateState.info?.version}
-          onOpenUpdate={() => {
-            openUpdateModal();
-            if (updateState.status === 'idle') handleCheckUpdate();
-          }}
-          onOpenStandings={openStandingsForActive}
-        />
+        <div className={miniMode ? 'hidden' : 'shrink-0'}>
+          <TopBar
+            view={view}
+            onViewChange={setView}
+            liveCount={liveCount}
+            prefs={prefs}
+            dataHealth={dataHealth}
+            onOpenSettings={openSettings}
+            onOpenPalette={openPalette}
+            updateAvailable={updateAvailable}
+            updateVersion={updateState.info?.version}
+            onOpenUpdate={() => {
+              openUpdateModal();
+              if (updateState.status === 'idle') handleCheckUpdate();
+            }}
+            onOpenStandings={openStandingsForActive}
+          />
+        </div>
 
         {/* 主工作区：左栏黄金比例（330-390px） + 右栏核心主舞台（~75%） */}
         <main className="flex min-h-0 flex-1 overflow-hidden">
           {/* 左栏：决策与列表 */}
-          <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] 2xl:w-[390px] shrink-0 flex-col overflow-hidden border-r border-line-hairline bg-surface-panel p-4">
+          <section className={miniMode ? 'hidden' : 'flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] 2xl:w-[390px] shrink-0 flex-col overflow-hidden border-r border-line-hairline bg-surface-panel p-4'}>
           {/* 计划有变（FR-05）：一次同步检测到的与用户相关的改期/延期，关闭后本轮不再出现 */}
           {visibleScheduleChanges && dismissedChangesAt !== scheduleChanges?.at && (
             <div className="mb-2 shrink-0">
@@ -1128,12 +1434,12 @@ export default function App() {
           {/* 右栏：转播舞台 + 情报中枢 */}
           <section
             ref={rightPaneRef}
-            className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto p-4"
+            className={miniMode ? 'flex min-h-0 flex-1 flex-col overflow-hidden p-0' : 'scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto p-4'}
           >
-            <div className="mx-auto flex w-full max-w-[1800px] 2xl:max-w-full flex-col gap-3">
+            <div className={miniMode ? 'flex h-full w-full flex-col' : 'mx-auto flex w-full max-w-[1800px] 2xl:max-w-full flex-col gap-3'}>
               {/* 连续补看会话条取代「正在查看」提示条：连看时已经有位置指示，
                   两条都贴顶会互相遮挡，而它们说的是同一件事 */}
-              {digestSession && digestMatch && (
+              {!miniMode && digestSession && digestMatch && (
                 <div className="sticky top-0 z-30">
                   <DigestSessionBar
                     match={digestMatch}
@@ -1145,7 +1451,7 @@ export default function App() {
                   />
                 </div>
               )}
-              {activeMatch && !activeInView && !digestSession && (
+              {!miniMode && activeMatch && !activeInView && !digestSession && (
                 <div
                   role="status"
                   className="sticky top-0 z-20 flex animate-view-enter items-center justify-between gap-3 rounded-lg border border-line-hairline bg-surface-panel/95 px-3 py-1.5 shadow-card backdrop-blur-xl motion-reduce:animate-none"
@@ -1179,6 +1485,9 @@ export default function App() {
                 notifyLiveEvents={prefs.notifyLiveEvents}
                 excludedIds={spoilerExcludedIds}
                 stopRequest={stopPlaybackRequest}
+                miniMode={miniMode}
+                onToggleMiniMode={handleToggleMiniMode}
+                onStartHandoff={handoff => openLanPair({ mode: 'handoff', handoff })}
                 underVideo={
                   <IntelPanel
                     match={activeMatch}
@@ -1196,6 +1505,13 @@ export default function App() {
                     now={clockTs}
                     watchLaterState={activeMatch ? queueStatusOf(watchLater, activeMatch.id) : 'none'}
                     onWatchLater={() => toggleWatchLater(activeMatch)}
+                    radarState={radarState}
+                    onToggleCutIn={handleToggleCutIn}
+                    onToggleRadar={handleToggleRadar}
+                    diaryEntry={activeMatch ? diary.entries?.[activeMatch.id] || null : null}
+                    onSaveDiary={handleSaveDiary}
+                    onRemoveDiary={handleRemoveDiary}
+                    onOpenSeasonReport={openSeasonReport}
                   />
                 }
               />
@@ -1229,6 +1545,13 @@ export default function App() {
           }}
           onClose={closeMorningDigest}
           onStartSession={startDigestSession}
+          diary={diary}
+          onSaveDiary={handleSaveDiary}
+          onRemoveDiary={handleRemoveDiary}
+          onOpenSeasonReport={() => {
+            closeMorningDigest();
+            openSeasonReport();
+          }}
         />
       </div>
 
@@ -1260,6 +1583,16 @@ export default function App() {
           weekIds={weekBestIds}
           desktopSettings={desktopSettings}
           onDesktopSettingsChange={updateDesktopSettings}
+          radarEnabled={radarState.enabled}
+          onRadarEnabledChange={handleToggleRadarEnabled}
+          onOpenSeasonReport={() => {
+            closeSettings();
+            openSeasonReport();
+          }}
+          onOpenLanPair={() => {
+            closeSettings();
+            openLanPair({ mode: 'sync', handoff: null });
+          }}
           onOpenUpdateModal={() => {
             openUpdateModal();
             if (updateState.status === 'idle') {
@@ -1293,6 +1626,29 @@ export default function App() {
         />
       </div>
 
+      <div inert={inertFor('season') || undefined}>
+        <SeasonReportModal
+          open={seasonReportOpen}
+          diary={diary}
+          prefs={prefs}
+          revealedIds={revealed}
+          onImportDiary={handleImportDiary}
+          onOpenMatch={id => select(id)}
+          onClose={closeSeasonReport}
+        />
+      </div>
+
+      <div inert={inertFor('lanPair') || undefined}>
+        <LanPairModal
+          open={lanPairOpen}
+          session={lanPairSession}
+          loading={lanPairLoading}
+          syncNotice={lanPairNotice}
+          onRestart={() => void startLanPairSession(lastPairOptsRef.current)}
+          onClose={closeLanPair}
+        />
+      </div>
+
       <div inert={inertFor('update') || undefined}>
         <UpdateModal
           open={updateModalOpen}
@@ -1306,7 +1662,7 @@ export default function App() {
       </div>
 
       {/* 发现新版本时的轻量主动浮动提醒（避免用户不知道有更新） */}
-      {updateAvailable && !toastDismissed && !updateModalOpen && !settingsOpen && !onboardingOpen && !splashOpen && !standingsState && (
+      {updateAvailable && !toastDismissed && !updateModalOpen && !settingsOpen && !onboardingOpen && !splashOpen && !standingsState && !seasonReportOpen && !lanPairOpen && (
         <aside
           aria-label="版本更新提醒"
           className="fixed bottom-5 right-5 z-modal flex max-w-sm items-center gap-3 rounded-xl border border-accent/40 bg-surface-card/95 p-3.5 shadow-pop backdrop-blur-xl transition-all duration-300"

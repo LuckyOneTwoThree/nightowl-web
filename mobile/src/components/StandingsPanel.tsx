@@ -4,6 +4,12 @@ import { useRouter } from 'expo-router';
 
 import { getFixtures, leagueName, teamName } from '@data/index.js';
 import { STANDINGS_LEAGUES, computeStandings, standingsCutoff } from '@core/standings.js';
+import {
+  canSimulateMatch,
+  SANDBOX_DISCLAIMER,
+  SANDBOX_OUTCOME,
+  simulateMatchStandings,
+} from '@core/sandbox.js';
 import { isFinished } from '@core/engine.js';
 import { bjDate, formatGoalDiff } from '@core/format.js';
 
@@ -75,10 +81,12 @@ export default function StandingsPanel({
 
   const safeInitial = STANDINGS_LEAGUES.includes(initialLeague) ? initialLeague : 'PL';
   const [league, setLeague] = useState(safeInitial);
+  const [outcome, setOutcome] = useState<string>(SANDBOX_OUTCOME.NONE);
 
   useEffect(() => {
     setLeague(safeInitial);
-  }, [safeInitial]);
+    setOutcome(SANDBOX_OUTCOME.NONE);
+  }, [safeInitial, matchId]);
 
   const match = useMemo(
     () => getFixtures().find(item => item.id === matchId) as Match | undefined,
@@ -86,16 +94,37 @@ export default function StandingsPanel({
   );
   const isMatchLeague = !!match && match.l === league;
   const historical = isMatchLeague && isFinished(match);
+  const canSandbox = !!match && isMatchLeague && canSimulateMatch(match);
 
   const excludedIds = useMemo(() => {
     const ids = unrevealedTonightIds(getFixtures(), now, prefs.spoilerFree, revealedIds);
     return ids.size ? ids : null;
   }, [now, prefs.spoilerFree, revealedIds, rev]);
 
-  const table = useMemo(() => {
+  const baseTable = useMemo(() => {
     const asOfTs = historical ? standingsCutoff(match, now) : now;
     return computeStandings(league, getFixtures(), { asOfTs, excludeIds: excludedIds || undefined }) as LeagueTable;
   }, [league, historical, match, now, rev, excludedIds]);
+
+  const sim = useMemo(() => {
+    if (!canSandbox || !match || outcome === SANDBOX_OUTCOME.NONE) return null;
+    return (simulateMatchStandings as (
+      m: Match,
+      o: string,
+      f: unknown[],
+      opts: { nowTs: number; excludeIds?: Set<string> }
+    ) => { supported: boolean; table: LeagueTable | null })(match, outcome, getFixtures(), {
+      nowTs: now,
+      excludeIds: excludedIds || undefined,
+    });
+  }, [canSandbox, match, outcome, now, rev, excludedIds]);
+
+  const table = sim?.supported && sim.table ? sim.table : baseTable;
+  const baseRankByTeam = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of baseTable.rows) map.set(r.teamId, r.rank);
+    return map;
+  }, [baseTable]);
 
   const isUcl = league === 'UCL';
   const focusIds = new Set(isMatchLeague && match ? [match.h, match.a] : []);
@@ -145,6 +174,34 @@ export default function StandingsPanel({
           {isUcl ? '前8直通 / 9–24 附加赛 / 25–36 出局' : '前四参考线 / 后三名风险区'}
         </Text>
         {matchSummary ? <Text style={styles.matchSummary}>{matchSummary}</Text> : null}
+        {canSandbox && table.rows.length > 0 ? (
+          <View style={styles.sandboxWrap}>
+            <View style={styles.sandboxChips}>
+              {[
+                { key: SANDBOX_OUTCOME.NONE, label: '基准' },
+                { key: SANDBOX_OUTCOME.HOME_WIN, label: `若 ${teamName(match!.h)} 胜` },
+                { key: SANDBOX_OUTCOME.DRAW, label: '若平' },
+                { key: SANDBOX_OUTCOME.AWAY_WIN, label: `若 ${teamName(match!.a)} 胜` },
+              ].map(opt => (
+                <Chip
+                  key={opt.key}
+                  selected={outcome === opt.key}
+                  tone={outcome === opt.key ? 'accent' : 'default'}
+                  onPress={() =>
+                    setOutcome(prev =>
+                      prev === opt.key && opt.key !== SANDBOX_OUTCOME.NONE
+                        ? SANDBOX_OUTCOME.NONE
+                        : opt.key
+                    )
+                  }
+                >
+                  {opt.label}
+                </Chip>
+              ))}
+            </View>
+            {sim ? <Text style={styles.hintText}>{SANDBOX_DISCLAIMER}</Text> : null}
+          </View>
+        ) : null}
         <Text style={styles.hintText}>
           {isUcl
             ? '各队场次可能不同 · 同分按积分/净胜球/进球简化排序'
@@ -179,6 +236,8 @@ export default function StandingsPanel({
 
             const row = item.row;
             const focused = focusIds.has(row.teamId);
+            const baseRank = sim ? baseRankByTeam.get(row.teamId) : undefined;
+            const rankDelta = baseRank != null ? baseRank - row.rank : 0;
             return (
               <Pressable
                 key={item.key}
@@ -193,7 +252,14 @@ export default function StandingsPanel({
                   pressed && styles.pressed,
                 ]}
               >
-                <Text style={[styles.rankCol, styles.rankText]}>{row.rank}</Text>
+                <Text style={[styles.rankCol, styles.rankText]}>
+                  {row.rank}
+                  {rankDelta !== 0 ? (
+                    <Text style={rankDelta > 0 ? styles.rankUp : styles.rankDown}>
+                      {rankDelta > 0 ? `↑${rankDelta}` : `↓${Math.abs(rankDelta)}`}
+                    </Text>
+                  ) : null}
+                </Text>
                 <View style={styles.teamCol}>
                   <Crest id={row.teamId} size={20} />
                   <Text style={styles.teamName} numberOfLines={1}>
@@ -259,7 +325,11 @@ const styles = StyleSheet.create({
   },
   rowFocus: { backgroundColor: colors.raised },
   pressed: { opacity: 0.8 },
-  rankCol: { width: 30, textAlign: 'right' },
+  rankCol: { width: 44, textAlign: 'right' },
+  rankUp: { color: colors.accent, fontWeight: weight.title },
+  rankDown: { color: colors.warn, fontWeight: weight.title },
+  sandboxWrap: { marginTop: spacing.xs, gap: spacing.xs },
+  sandboxChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   teamCol: {
     flex: 1,
     minWidth: 0,

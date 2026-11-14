@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import {
@@ -47,6 +47,8 @@ import {
   syncPrematchReminders,
 } from '@/lib/reminders';
 import { usePrefs, usePrefsStore } from '@/state/prefs';
+import { useDiaryStore } from '@/state/diary';
+import { SeasonReportModal } from '@/components/SeasonReportModal';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
@@ -83,6 +85,14 @@ export default function MeScreen() {
     useState<NotificationPermissionState>('unavailable');
   const [showMore, setShowMore] = useState(false);
   const [quickPulling, setQuickPulling] = useState(false);
+  const [seasonReportOpen, setSeasonReportOpen] = useState(false);
+  const diary = useDiaryStore(state => state.diary);
+  const revealedMap = useAppStore(state => state.revealedIds);
+  const revealedList = useMemo(
+    () => Object.keys(revealedMap || {}).filter(k => revealedMap[k]),
+    [revealedMap]
+  );
+  const diaryCount = Object.keys(diary.entries || {}).length;
 
   useEffect(() => {
     if (!notificationsAvailable()) return undefined;
@@ -376,6 +386,41 @@ export default function MeScreen() {
               </Pressable>
             </>
           ) : null}
+          <Text style={styles.hint}>
+            能力边界：手机端可设开球前 15 分钟与下半场 60&apos; 本地切入唤醒；实时悬念雷达受 Android Doze 后台调度限制，仅桌面端常驻可用。
+          </Text>
+        </Card>
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="熬夜战报" />
+        <Card style={styles.cardGap}>
+          <Pressable
+            onPress={() => setSeasonReportOpen(true)}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
+          >
+            <View style={styles.settingText}>
+              <Text style={styles.settingLabel}>我的熬夜赛季账单</Text>
+              <Text style={styles.settingHint}>
+                已盖章 {diaryCount} 场 · 本地战报卡片与文本分享（防剧透隔离已开启）
+              </Text>
+            </View>
+            <ChevronRight size={16} color={colors.textFaint} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/pair' as Href)}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.linkRow, { borderBottomWidth: 0 }, pressed && styles.pressed]}
+          >
+            <View style={styles.settingText}>
+              <Text style={styles.settingLabel}>局域网同步与被窝接力</Text>
+              <Text style={styles.settingHint}>
+                同一 Wi-Fi 下扫码或输入 6 位口令，与桌面端双向合并偏好与账本
+              </Text>
+            </View>
+            <ChevronRight size={16} color={colors.textFaint} />
+          </Pressable>
         </Card>
       </View>
 
@@ -653,6 +698,14 @@ export default function MeScreen() {
       </View>
 
       <Text style={styles.footer}>夜猫看台 · Android 移动端 · v{version}</Text>
+
+      <SeasonReportModal
+        open={seasonReportOpen}
+        diary={diary}
+        prefs={prefs}
+        revealedIds={revealedList}
+        onClose={() => setSeasonReportOpen(false)}
+      />
     </Screen>
   );
 }

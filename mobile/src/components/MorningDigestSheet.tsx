@@ -6,11 +6,16 @@ import { leagueName, teamName } from '@data/index.js';
 import { evalOne } from '@core/owl.js';
 import { hm } from '@core/format.js';
 import { completedWatchHint } from '@core/reveal.js';
+import { summarizeDrama } from '@core/drama.js';
+import { resolveLive } from '@/data/live.js';
 import { usePrefs } from '@/state/prefs';
 import type { Match } from '@/types';
 import { Button } from '@/ui/Button';
 import { Chip } from '@/ui/Chip';
 import { Crest } from '@/ui/Crest';
+import { DramaBar, type DramaSummary } from '@/components/DramaBar';
+import { DiaryStampCard } from '@/components/DiaryStampCard';
+import { useDiaryStore } from '@/state/diary';
 import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 
 type DigestItem = {
@@ -39,10 +44,45 @@ export function MorningDigestSheet({
 }: Props) {
   const insets = useSafeAreaInsets();
   const prefs = usePrefs();
+  const diaryEntries = useDiaryStore(state => state.diary.entries);
+  const upsertDiary = useDiaryStore(state => state.upsertEntry);
+  const removeDiary = useDiaryStore(state => state.removeEntry);
   const [confirmAll, setConfirmAll] = useState(false);
+  const [dramaById, setDramaById] = useState<Record<string, DramaSummary>>({});
   useEffect(() => {
     if (!visible) setConfirmAll(false);
   }, [visible]);
+
+  useEffect(() => {
+    if (!visible) return;
+    const targets = items
+      .map(entry => entry.match)
+      .filter((m): m is Match => !!m && m.st === 'done' && !revealedIds[m.id] && !dramaById[m.id]);
+    if (targets.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      for (const m of targets.slice(0, 6)) {
+        if (cancelled) break;
+        try {
+          const live = await (resolveLive as (match: Match) => Promise<{ ok?: boolean; events?: unknown[] }>)(m);
+          if (cancelled || !live?.ok) continue;
+          const summary = (summarizeDrama as (match: Match, events?: unknown[] | null) => DramaSummary)(
+            m,
+            Array.isArray(live.events) ? live.events : null
+          );
+          if (summary.hasEvents) {
+            setDramaById(prev => (prev[m.id] ? prev : { ...prev, [m.id]: summary }));
+          }
+        } catch {
+          // 离线或上游失败时回落到本地 summarizeDrama(match, null)
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, items, revealedIds, dramaById]);
 
   const firstPending = items.find(entry => entry.match && entry.item.status !== 'watched');
 
@@ -88,6 +128,11 @@ export function MorningDigestSheet({
                         shortLabel: string;
                       } | null)(match, ev)
                     : null;
+                const localDrama =
+                  !shown && match?.st === 'done'
+                    ? dramaById[match.id] ||
+                      (summarizeDrama as (m: Match, ev?: unknown[] | null) => DramaSummary)(match, null)
+                    : null;
                 return (
                   <View key={item.id} style={styles.card}>
                     <View style={styles.cardTop}>
@@ -115,7 +160,7 @@ export function MorningDigestSheet({
                         <Text style={styles.meta}>
                           {match
                             ? match.st === 'done'
-                              ? `已终场${watchHint ? ` · ${watchHint.label}` : ''}`
+                              ? '已终场'
                               : '比分待录'
                             : '本地赛程中没有这场比赛'}
                         </Text>
@@ -126,6 +171,19 @@ export function MorningDigestSheet({
                         </Text>
                       ) : null}
                     </Pressable>
+                    {!shown && (localDrama || watchHint) ? (
+                      <DramaBar drama={localDrama} fallbackHint={watchHint} />
+                    ) : null}
+                    {shown && match ? (
+                      <DiaryStampCard
+                        compact
+                        matchId={match.id}
+                        entry={diaryEntries[match.id] || null}
+                        defaultMode="replay"
+                        onSave={upsertDiary}
+                        onRemove={removeDiary}
+                      />
+                    ) : null}
                     <View style={styles.actions}>
                       {match && !shown ? (
                         <Button label="揭晓" variant="secondary" onPress={() => onReveal(match.id)} />

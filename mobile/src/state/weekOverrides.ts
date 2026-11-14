@@ -32,6 +32,10 @@ type WeekOverridesStore = {
   toggleExclude: (weekKey: string, matchId: string | number, minWeekKey?: string | null) => boolean;
   toggleBlockNight: (weekKey: string, dateKey: string, minWeekKey?: string | null) => boolean;
   resetWeek: (weekKey: string) => void;
+  replaceByWeek: (
+    nextByWeek: Record<string, unknown>,
+    minWeekKey?: string | null
+  ) => void;
   setHydrated: (value: boolean) => void;
 };
 
@@ -104,6 +108,13 @@ export const useWeekOverridesStore = create<WeekOverridesStore>()(
           return { byWeek: copy };
         });
       },
+      replaceByWeek: (nextByWeek, minWeekKey = null) =>
+        set({
+          byWeek: pruneWeekOverridesMap(
+            nextByWeek || {},
+            minWeekKey as null | undefined
+          ) as Record<string, WeekOverrideEntry>,
+        }),
       setHydrated: value => set({ hydrated: value }),
     }),
     {

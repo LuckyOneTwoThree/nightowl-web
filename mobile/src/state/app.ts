@@ -27,6 +27,7 @@ type AppStore = {
     lastSyncErrorAt?: number | null;
   }) => void;
   revealMatch: (id: string) => void;
+  mergeRevealed: (ids: string[]) => void;
   hideMatch: (id: string) => void;
   clearRevealed: () => void;
 };
@@ -66,6 +67,14 @@ export const useAppStore = create<AppStore>(set => ({
     set(state => ({
       revealedIds: { ...state.revealedIds, [id]: true },
     })),
+  mergeRevealed: ids =>
+    set(state => {
+      const next = { ...state.revealedIds };
+      for (const id of ids) {
+        if (id) next[id] = true;
+      }
+      return { revealedIds: next };
+    }),
   hideMatch: id =>
     set(state => {
       const next = { ...state.revealedIds };

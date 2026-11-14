@@ -333,6 +333,8 @@ function LineEmptyState({ loading, state, isNearKickoff, scrapeError, serviceDow
  *   · 「直播链路待接入 · 本地流代理与抓取对齐属 P3，尚未实现」是开发排期注释，
  *     且与实际实现脱节（代理早已可用，见设置抽屉的服务状态）。改为按真实状态说话。
  */
+const SLEEP_PRESETS = [0, 15, 30, 45, 60];
+
 export default function PlayerStage({
   match,
   state,
@@ -343,7 +345,10 @@ export default function PlayerStage({
   notifyLiveEvents = true,
   underVideo = null,
   excludedIds = null,
-  stopRequest = 0
+  stopRequest = 0,
+  miniMode = false,
+  onToggleMiniMode,
+  onStartHandoff
 }) {
   // 秒级刷新只存在于本组件（倒计时文本与进行中的分钟数）。
   // 若由 App 供秒级 now，每秒重渲染会波及整个视图树 —— 赛程视图会每秒
@@ -371,6 +376,27 @@ export default function PlayerStage({
   const [streamUrl, setStreamUrl] = useState(null);
   const [streamKind, setStreamKind] = useState(null);
   const [error, setError] = useState(null);
+
+  // M5: 睡眠定时关闭（off / 15m / 30m / 45m / 60m）
+  const [sleepTimerMin, setSleepTimerMin] = useState(0);
+  const [sleepDeadlineTs, setSleepDeadlineTs] = useState(null);
+  const [sleepDoneNotice, setSleepDoneNotice] = useState(null);
+
+  const cycleSleepTimer = useCallback(() => {
+    const idx = SLEEP_PRESETS.indexOf(sleepTimerMin);
+    const nextMin = SLEEP_PRESETS[(idx + 1) % SLEEP_PRESETS.length];
+    setSleepTimerMin(nextMin);
+    setSleepDoneNotice(null);
+    setSleepDeadlineTs(nextMin > 0 ? Date.now() + nextMin * 60_000 : null);
+  }, [sleepTimerMin]);
+
+  const sleepRemainingLabel = useMemo(() => {
+    if (!sleepDeadlineTs) return null;
+    const leftSec = Math.max(0, Math.ceil((sleepDeadlineTs - now) / 1000));
+    const mm = String(Math.floor(leftSec / 60)).padStart(2, '0');
+    const ss = String(leftSec % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  }, [sleepDeadlineTs, now]);
 
   /**
    * 无视频流时的侧轨折叠（P1-2）
@@ -691,6 +717,28 @@ export default function PlayerStage({
     artRef.current = art;
   }, []);
 
+  // M5: 睡眠定时到期：暂停当前播放并静音 + 本地提醒
+  useEffect(() => {
+    if (!sleepDeadlineTs || now < sleepDeadlineTs) return;
+    setSleepDeadlineTs(null);
+    setSleepTimerMin(0);
+    const art = artRef.current;
+    if (art && !art.destroyed) {
+      try {
+        art.pause();
+        art.muted = true;
+      } catch {}
+    }
+    setSleepDoneNotice('睡眠定时已到：已自动暂停播放，早点休息');
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('夜猫看台 · 睡眠定时已到', {
+          body: '已为你暂停播放，晚安'
+        });
+      }
+    } catch {}
+  }, [now, sleepDeadlineTs]);
+
   /**
    * 播放中的作用域快捷键：F 全屏 · P 画中画 · M 静音 · 1–9 切换直链线路
    *
@@ -1010,6 +1058,9 @@ export default function PlayerStage({
 
   /* ---------------- 状态提示：按真实状态说话，不写死排期文案 ---------------- */
   const notices = [];
+  if (sleepDoneNotice) {
+    notices.push({ tone: 'warn', text: sleepDoneNotice, action: { label: '知道了', onClick: () => setSleepDoneNotice(null) } });
+  }
   if (error) {
     notices.push({
       tone: 'danger',
@@ -1035,14 +1086,29 @@ export default function PlayerStage({
   }
 
   /* ---------------- 视频核心屏 ---------------- */
+  const triggerHandoff = () => {
+    if (!onStartHandoff || !match) return;
+    onStartHandoff({
+      matchId: match.id,
+      title: `${teamName(match.h)} vs ${teamName(match.a)}`,
+      lines: orderedLines
+    });
+  };
+
   const VideoScreen = (
     <div
       ref={videoCardRef}
-      style={{
-        aspectRatio: `${aspectRatio}`
-      }}
-      className={`dark relative isolate z-0 w-full overflow-hidden rounded-xl bg-stage-bg border border-line-hairline shadow-2xl transition-all duration-200 ${
-        !streamUrl ? 'max-h-[36vh] min-h-[280px]' : ''
+      style={
+        miniMode
+          ? undefined
+          : {
+              aspectRatio: `${aspectRatio}`
+            }
+      }
+      className={`dark relative isolate z-0 w-full overflow-hidden bg-stage-bg transition-all duration-200 ${
+        miniMode
+          ? 'h-full rounded-none border-0 shadow-none'
+          : `rounded-xl border border-line-hairline shadow-2xl ${!streamUrl ? 'max-h-[36vh] min-h-[280px]' : ''}`
       } ${isOverlayOpen ? 'pointer-events-none select-none' : ''}`}
     >
       {streamUrl ? (
@@ -1084,20 +1150,28 @@ export default function PlayerStage({
       )}
 
       {/* 顶部对阵常驻条 —— 全应用唯一的对阵命名处 */}
-      <div className={`pointer-events-none absolute inset-x-0 top-0 z-overlay flex items-center justify-between gap-2 px-3.5 py-2.5 ${streamUrl ? 'bg-gradient-to-b from-black/80 via-black/35 to-transparent' : ''}`}>
+      <div
+        style={miniMode ? { WebkitAppRegion: 'drag' } : undefined}
+        className={`pointer-events-none absolute inset-x-0 top-0 z-overlay flex items-center justify-between gap-2 px-3.5 py-2.5 ${streamUrl || miniMode ? 'bg-gradient-to-b from-black/80 via-black/35 to-transparent' : ''}`}
+      >
         <div className="flex min-w-0 items-baseline gap-2">
-          {streamUrl && (
+          {(streamUrl || miniMode) && (
             <>
               <span className="truncate text-sm font-semibold text-text-primary">
                 {teamName(match.h)} vs {teamName(match.a)}
               </span>
-              <span className="shrink-0 text-2xs text-text-muted">
-                {leagueName(match.l)} 第 {match.r} 轮
-              </span>
+              {!miniMode && (
+                <span className="shrink-0 text-2xs text-text-muted">
+                  {leagueName(match.l)} 第 {match.r} 轮
+                </span>
+              )}
             </>
           )}
         </div>
-        <div className="pointer-events-auto flex shrink-0 items-center gap-2">
+        <div
+          style={miniMode ? { WebkitAppRegion: 'no-drag' } : undefined}
+          className="pointer-events-auto flex shrink-0 items-center gap-2"
+        >
           {live && streamUrl && (
             <span className="inline-flex items-center gap-1.5">
               <LiveDot />
@@ -1113,15 +1187,38 @@ export default function PlayerStage({
                 )}
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => setTheaterMode(v => !v)}
-            title={theaterMode ? '切换为协同模式' : '切换为宽屏剧场'}
-            aria-label={theaterMode ? '切换为协同模式' : '切换为宽屏剧场'}
-            className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-white/[0.08] text-text-secondary transition-colors hover:bg-white/[0.14] hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
-          >
-            {theaterMode ? <IconTheaterOff /> : <IconTheaterOn />}
-          </button>
+          {sleepRemainingLabel && (
+            <button
+              type="button"
+              onClick={cycleSleepTimer}
+              title="点击切换或关闭睡眠定时"
+              className="rounded-md bg-white/[0.12] px-1.5 py-0.5 font-num text-2xs tabular-nums text-accent transition-colors hover:bg-white/[0.2]"
+            >
+              ⏱ {sleepRemainingLabel}
+            </button>
+          )}
+          {onToggleMiniMode && (
+            <button
+              type="button"
+              onClick={() => onToggleMiniMode(!miniMode)}
+              title={miniMode ? '还原主窗口' : '小窗悬浮看球'}
+              aria-label={miniMode ? '还原主窗口' : '小窗悬浮看球'}
+              className="inline-flex h-6 items-center justify-center rounded-md bg-white/[0.08] px-1.5 text-2xs text-text-secondary transition-colors hover:bg-white/[0.16] hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+            >
+              {miniMode ? '还原' : '小窗'}
+            </button>
+          )}
+          {!miniMode && (
+            <button
+              type="button"
+              onClick={() => setTheaterMode(v => !v)}
+              title={theaterMode ? '切换为协同模式' : '切换为宽屏剧场'}
+              aria-label={theaterMode ? '切换为协同模式' : '切换为宽屏剧场'}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-white/[0.08] text-text-secondary transition-colors hover:bg-white/[0.14] hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+            >
+              {theaterMode ? <IconTheaterOff /> : <IconTheaterOn />}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -1351,8 +1448,19 @@ export default function PlayerStage({
       )}
 
       {!streamUrl && !railMode && (
-        <div className="mt-auto flex shrink-0 items-center justify-between gap-2 border-t border-line-hairline pt-3">
-          <Meta>官方平台直达 · 播放与线路说明</Meta>
+        <div className="mt-auto flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-line-hairline pt-3">
+          <div className="flex items-center gap-1.5">
+            {onStartHandoff && !finished && (
+              <button
+                type="button"
+                onClick={triggerHandoff}
+                className="rounded-md border border-accent/35 bg-accent/10 px-2 py-0.5 text-2xs font-medium text-accent transition-colors hover:bg-accent/20 cursor-pointer"
+              >
+                手机接力看
+              </button>
+            )}
+            <Meta>官方平台直达</Meta>
+          </div>
           <Hint
             content="官方平台直达链接跳转官方站点或站内搜索；本机代理仅转发公开直播线路，不托管、不录制任何音视频内容。"
             align="end"
@@ -1361,12 +1469,33 @@ export default function PlayerStage({
       )}
 
       {streamUrl && (
-        <div className="mt-auto flex shrink-0 items-center justify-between border-t border-line-hairline pt-3">
+        <div className="mt-auto flex shrink-0 flex-wrap items-center justify-between gap-1.5 border-t border-line-hairline pt-3">
           <span className="inline-flex items-center gap-1.5">
             <Hint content={SHORTCUT_HINT} align="start">
               <IconKeyboard size={12} />
             </Hint>
-            <Meta>快捷键</Meta>
+            <button
+              type="button"
+              onClick={cycleSleepTimer}
+              title="点击切换睡眠定时（关闭/15/30/45/60分钟）"
+              className={`rounded-md border px-1.5 py-0.5 font-num text-2xs tabular-nums transition-colors cursor-pointer ${
+                sleepRemainingLabel
+                  ? 'border-accent/40 bg-accent/10 text-accent'
+                  : 'border-line-hairline text-text-secondary hover:border-accent/30 hover:text-text-primary'
+              }`}
+            >
+              {sleepRemainingLabel ? `⏱ ${sleepRemainingLabel}` : '睡眠定时'}
+            </button>
+            {onStartHandoff && (
+              <button
+                type="button"
+                onClick={triggerHandoff}
+                title="生成局域网二维码，无缝交棒给手机继续播"
+                className="rounded-md border border-line-hairline px-1.5 py-0.5 text-2xs text-text-secondary transition-colors hover:border-accent/40 hover:text-accent cursor-pointer"
+              >
+                手机接力
+              </button>
+            )}
           </span>
           <Button variant="danger" icon={<IconStop />} onClick={stopPlayback}>
             停止
@@ -1377,35 +1506,36 @@ export default function PlayerStage({
   );
 
   return (
-    <div className="flex w-full flex-col gap-2.5">
-      {/* 宽屏协同模式：主列放视频 + 情报，右侧回顾独立成栏。
-          这样右侧回顾比画面高时，画面下方由情报填满，不再留下大块空白。
-          堆叠分支用默认 stretch：右栏卡片拉伸到与主列等高，页脚钉在卡片底部，
-          右下不再露出页面底色；赛前分支保持 items-start（侧栏通常比画面高）。 */}
-      {/* 三种布局共用同一套 DOM，只在 className 上不同。
-          此前根节点在 div / Fragment 之间切换、VideoScreen 的树层级也不同，
-          React 会把整棵子树卸载重建 —— 点「宽屏剧场」、或加时赛到第 120 分钟
-          （matchState 由 live 变 ended_pending，stackIntel 翻转）都会黑屏重连一次，
-          重建后还会再触发一次 video:playing，把同一场起播记成两次成功。 */}
-      <div className={theaterMode ? 'flex w-full flex-col gap-2.5' : 'flex w-full flex-col gap-3 xl:flex-row'}>
+    <div className={miniMode ? 'h-full w-full' : 'flex w-full flex-col gap-2.5'}>
+      <div
+        className={
+          miniMode
+            ? 'h-full w-full'
+            : theaterMode
+              ? 'flex w-full flex-col gap-2.5'
+              : 'flex w-full flex-col gap-3 xl:flex-row'
+        }
+      >
         <div
           className={
-            theaterMode
-              ? 'w-full'
-              : stackIntel
-                ? 'flex min-w-0 flex-1 flex-col gap-3'
-                : 'flex min-w-0 flex-1 flex-col'
+            miniMode
+              ? 'h-full w-full'
+              : theaterMode
+                ? 'w-full'
+                : stackIntel
+                  ? 'flex min-w-0 flex-1 flex-col gap-3'
+                  : 'flex min-w-0 flex-1 flex-col'
           }
         >
-          <div className="player-adaptive-video flex min-w-0">
+          <div className={miniMode ? 'flex h-full w-full' : 'player-adaptive-video flex min-w-0'}>
             {VideoScreen}
           </div>
-          {!theaterMode && stackIntel ? underVideo : null}
+          {!miniMode && !theaterMode && stackIntel ? underVideo : null}
         </div>
-        {!theaterMode ? ControlSidebar : null}
+        {!miniMode && !theaterMode ? ControlSidebar : null}
       </div>
 
-      {theaterMode && (
+      {!miniMode && theaterMode && (
         <>
 
           {!theaterLinesExpanded ? (
@@ -1467,6 +1597,22 @@ export default function PlayerStage({
               </div>
               <div className="shrink-0">
                 <div className="flex items-center justify-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={cycleSleepTimer}
+                    className={`rounded-md border px-2 py-1 font-num text-2xs tabular-nums transition-colors cursor-pointer ${
+                      sleepRemainingLabel
+                        ? 'border-accent/40 bg-accent/10 text-accent'
+                        : 'border-line-hairline text-text-secondary hover:border-accent/30 hover:text-text-primary'
+                    }`}
+                  >
+                    {sleepRemainingLabel ? `⏱ ${sleepRemainingLabel}` : '睡眠定时'}
+                  </button>
+                  {onStartHandoff && (
+                    <Button variant="ghost" onClick={triggerHandoff}>
+                      手机接力
+                    </Button>
+                  )}
                   {streamUrl && (
                     <Button variant="danger" icon={<IconStop />} onClick={stopPlayback}>
                       停止
@@ -1494,6 +1640,22 @@ export default function PlayerStage({
                   )}
                 </span>
                 <span className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={cycleSleepTimer}
+                    className={`rounded-md border px-2 py-1 font-num text-2xs tabular-nums transition-colors cursor-pointer ${
+                      sleepRemainingLabel
+                        ? 'border-accent/40 bg-accent/10 text-accent'
+                        : 'border-line-hairline text-text-secondary hover:border-accent/30 hover:text-text-primary'
+                    }`}
+                  >
+                    {sleepRemainingLabel ? `⏱ ${sleepRemainingLabel}` : '睡眠定时'}
+                  </button>
+                  {onStartHandoff && (
+                    <Button variant="ghost" onClick={triggerHandoff}>
+                      手机接力
+                    </Button>
+                  )}
                   <OfficialLinks sources={sources} match={match} replay={finished} />
                   {streamUrl && (
                     <Button variant="danger" icon={<IconStop />} onClick={stopPlayback}>
@@ -1555,7 +1717,7 @@ export default function PlayerStage({
       )}
 
       {/* 非剧场且非堆叠：情报在主行下方（堆叠时它在视频正下方，见上面的左列） */}
-      {!theaterMode && !stackIntel ? underVideo : null}
+      {!miniMode && !theaterMode && !stackIntel ? underVideo : null}
     </div>
   );
 }

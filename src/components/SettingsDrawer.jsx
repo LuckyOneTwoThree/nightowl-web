@@ -47,7 +47,11 @@ export default function SettingsDrawer({
   onOpenMorningDigest,
   weekIds = null,
   desktopSettings = null,
-  onDesktopSettingsChange
+  onDesktopSettingsChange,
+  radarEnabled = true,
+  onRadarEnabledChange,
+  onOpenSeasonReport,
+  onOpenLanPair
 }) {
   const leagueCount = prefs.followedLeagues.length;
   const bonusActive = leagueCount > 0 && leagueCount < 6;
@@ -572,8 +576,44 @@ export default function SettingsDrawer({
                 on={prefs.notifyLiveEvents}
                 onChange={v => patch({ notifyLiveEvents: v })}
               />
+              {onRadarEnabledChange && (
+                <SwitchRow
+                  label="无剧透悬念唤醒雷达"
+                  hint="仅对手动加入盯盘的凌晨场次（每晚最多 2 场）在 55'–70' 窗口检查悬念，绝不弹出比分。"
+                  on={radarEnabled}
+                  onChange={onRadarEnabledChange}
+                />
+              )}
             </div>
           </Fieldset>
+
+          {onOpenSeasonReport && (
+            <Fieldset
+              title="熬夜赛季账单"
+              hint="记录每场观赛情绪印章、防剧透口诀统计与主队陪看战绩，支持本机长图 PNG 与 JSON 备份导出。"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <Meta>全部统计均由本机账本现算，绝不上云</Meta>
+                <Button variant="default" size="xs" onClick={onOpenSeasonReport}>
+                  查看赛季账单
+                </Button>
+              </div>
+            </Fieldset>
+          )}
+
+          {onOpenLanPair && (
+            <Fieldset
+              title="局域网一扫同步（零云端）"
+              hint="仅在点击时临时监听一个 120 秒后自动销毁的局域网配对端口，完成与手机端的偏好、待看列表、已揭晓与印章账本合并。"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <Meta>不经过任何云服务器与账号体系</Meta>
+                <Button variant="default" size="xs" onClick={onOpenLanPair}>
+                  局域网一扫同步
+                </Button>
+              </div>
+            </Fieldset>
+          )}
 
           {/* 桌面外壳（FR-08）：只在 Electron 里出现，Web 预览不显示这两项 */}
           {desktopSettings && (

@@ -7,8 +7,15 @@
  *   · 想改某一块的排版时不必在 800 行里找位置。
  */
 
+import { useMemo, useState } from 'react';
 import { Chip, Crest, Hint, Meta } from '../atoms.jsx';
-import { bjDate, formatGoalDiff } from '../../core/format.js';
+import { bjDate, formatGoalDiff, hm } from '../../core/format.js';
+import {
+  canSimulateMatch,
+  SANDBOX_DISCLAIMER,
+  SANDBOX_OUTCOME,
+  simulateMatchStandings
+} from '../../core/sandbox.js';
 import { teamName, leagueName } from '../../data/index.js';
 import { IconCompare, IconForm, IconH2H } from '../icons.jsx';
 import { Block } from './primitives.jsx';
@@ -93,19 +100,78 @@ export function FormSection({ match, stats, onSelect }) {
  * 积分榜位置：只展示当前比赛双方，不展开完整联赛表。
  * 数据按开球时点截止；已完赛场次不显示之后的结果。
  */
-export function StandingsSection({ standings, match, onOpenStandings }) {
+const SANDBOX_OPTIONS = [
+  { key: SANDBOX_OUTCOME.NONE, label: '基准现状' },
+  { key: SANDBOX_OUTCOME.HOME_WIN, label: '若主胜 1-0' },
+  { key: SANDBOX_OUTCOME.DRAW, label: '若平 0-0' },
+  { key: SANDBOX_OUTCOME.AWAY_WIN, label: '若客胜 0-1' }
+];
+
+function RankDeltaBadge({ delta }) {
+  if (!Number.isFinite(delta) || delta === 0) return null;
+  const up = delta > 0;
+  return (
+    <span
+      className={`font-num text-2xs font-semibold tabular-nums ${
+        up ? 'text-accent' : 'text-warn'
+      }`}
+    >
+      {up ? `↑${delta}` : `↓${Math.abs(delta)}`}
+    </span>
+  );
+}
+
+/**
+ * 积分榜位置：只展示当前比赛双方，不展开完整联赛表。
+ * 未完赛场次内嵌「3 分杠杆 · 确定性赛果沙盘」，可即时推演胜平负后的位次与分差。
+ */
+export function StandingsSection({
+  standings,
+  match,
+  now,
+  excludedIds = null,
+  onSelect,
+  onOpenStandings
+}) {
+  const currentMatchId = match?.id ?? null;
+  const [sandbox, setSandbox] = useState({ matchId: null, outcome: SANDBOX_OUTCOME.NONE });
+  const outcome = sandbox.matchId === currentMatchId ? sandbox.outcome : SANDBOX_OUTCOME.NONE;
+  const selectOutcome = next => {
+    setSandbox(prev => {
+      const prevOutcome = prev.matchId === currentMatchId ? prev.outcome : SANDBOX_OUTCOME.NONE;
+      const target =
+        prevOutcome === next && next !== SANDBOX_OUTCOME.NONE ? SANDBOX_OUTCOME.NONE : next;
+      return { matchId: currentMatchId, outcome: target };
+    });
+  };
+
+  const canSandbox = !!match && canSimulateMatch(match) && standings?.supported;
+  const sim = useMemo(() => {
+    if (!canSandbox || outcome === SANDBOX_OUTCOME.NONE) return null;
+    return simulateMatchStandings(match, outcome, null, { nowTs: now, excludeIds: excludedIds });
+  }, [canSandbox, match, outcome, now, excludedIds]);
+
+  const linkedSim = useMemo(() => {
+    if (!canSandbox) return null;
+    return sim || simulateMatchStandings(match, SANDBOX_OUTCOME.NONE, null, { nowTs: now, excludeIds: excludedIds });
+  }, [canSandbox, sim, match, now, excludedIds]);
+
   if (!standings || !standings.supported) return null;
 
+  const activeSim = sim && sim.supported ? sim : null;
   const asOfText = standings.historical
     ? '截至本场开球前'
     : standings.lastResultAt
       ? `截至 ${bjDate(standings.lastResultAt).slice(5)}`
       : '暂无赛果';
 
+  const simHomeRow = activeSim?.table?.rows?.find(r => r.teamId === match.h) || null;
+  const simAwayRow = activeSim?.table?.rows?.find(r => r.teamId === match.a) || null;
   const rows = [
-    { id: match.h, row: standings.home },
-    { id: match.a, row: standings.away }
+    { id: match.h, row: simHomeRow || standings.home, delta: activeSim?.homeDelta || null },
+    { id: match.a, row: simAwayRow || standings.away, delta: activeSim?.awayDelta || null }
   ];
+  const linked = linkedSim?.linkedMatch || null;
 
   return (
     <Block
@@ -115,7 +181,7 @@ export function StandingsSection({ standings, match, onOpenStandings }) {
         <span className="flex items-center gap-1.5">
           <Meta>{leagueName(standings.league)}</Meta>
           <Meta num>
-            {asOfText} · {standings.doneCount} 场
+            {asOfText} · {activeSim ? `${activeSim.table.doneCount} 场（沙盘）` : `${standings.doneCount} 场`}
             {standings.excludedCount > 0 ? ` · 已排除 ${standings.excludedCount} 场未揭晓` : ''}
           </Meta>
           <Hint
@@ -125,13 +191,39 @@ export function StandingsSection({ standings, match, onOpenStandings }) {
         </span>
       }
     >
+      {canSandbox && standings.rows.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line-hairline bg-surface-raised/45 px-2.5 py-1.5">
+          <span className="text-2xs font-medium text-text-secondary">3 分杠杆沙盘</span>
+          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="假设本场赛果">
+            {SANDBOX_OPTIONS.map(opt => {
+              const active = outcome === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => selectOutcome(opt.key)}
+                  className={`rounded-md border px-2 py-0.5 text-2xs transition-colors focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:outline-none ${
+                    active
+                      ? 'border-accent/45 bg-accent/15 font-semibold text-accent'
+                      : 'border-line-hairline bg-surface-panel/70 text-text-muted hover:text-text-primary'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {standings.rows.length === 0 ? (
         <p className="py-1 text-2xs text-text-faint">
           {standings.note || '本联赛暂无已同步赛果'}
         </p>
       ) : (
         <div>
-          {rows.map(({ id, row }) => (
+          {rows.map(({ id, row, delta }) => (
             <div
               key={id}
               className="border-t border-line-hairline py-1.5 first:border-t-0"
@@ -148,7 +240,10 @@ export function StandingsSection({ standings, match, onOpenStandings }) {
                 )}
                 {row ? (
                   <span className="ml-auto flex flex-wrap items-center gap-x-2 gap-y-0.5 font-num text-2xs tabular-nums text-text-secondary">
-                    <span>第 {row.rank}</span>
+                    <span className="inline-flex items-center gap-1">
+                      第 {row.rank}
+                      {delta && <RankDeltaBadge delta={delta.rankDelta} />}
+                    </span>
                     <span className="text-text-faint">·</span>
                     <span>{row.played} 场</span>
                     <span className="text-text-faint">·</span>
@@ -160,14 +255,34 @@ export function StandingsSection({ standings, match, onOpenStandings }) {
                   <span className="ml-auto text-2xs text-text-faint">暂无排名</span>
                 )}
               </div>
-              {row?.context && (
+              {(delta?.lineNote || row?.context) && (
                 <p className="mt-0.5 pl-6 text-2xs leading-relaxed text-text-muted">
-                  {row.context.primary}
-                  {row.context.secondary ? ` · ${row.context.secondary}` : ''}
+                  {activeSim && delta?.lineNote
+                    ? delta.lineNote
+                    : `${row.context.primary}${row.context.secondary ? ` · ${row.context.secondary}` : ''}`}
                 </p>
               )}
             </div>
           ))}
+        </div>
+      )}
+      {activeSim && (
+        <p className="mt-1.5 text-2xs text-text-faint">{SANDBOX_DISCLAIMER}</p>
+      )}
+      {linked && (
+        <div className="mt-1.5 flex items-center justify-between gap-2 rounded-md border border-line-hairline bg-surface-panel/60 px-2.5 py-1 text-2xs text-text-muted">
+          <span className="truncate">
+            关联竞争：{hm(linked.t)} {teamName(linked.h)} vs {teamName(linked.a)}
+          </span>
+          {onSelect && (
+            <button
+              type="button"
+              onClick={() => onSelect(linked.id)}
+              className="shrink-0 font-medium text-accent hover:underline focus-visible:outline-none"
+            >
+              去看 →
+            </button>
+          )}
         </div>
       )}
       {onOpenStandings && standings.rows.length > 0 && (

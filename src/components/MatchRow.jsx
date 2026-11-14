@@ -1,4 +1,5 @@
 import { completedWatchHint, shouldHideScore, WATCH_HINT_LEVEL } from '../core/reveal.js';
+import { summarizeDrama } from '../core/drama.js';
 import { hm, liveMinute } from '../core/format.js';
 import { teamName, leagueName, leagueColor } from '../data/index.js';
 import { ts, MATCH_DURATION_MS } from '../core/engine.js';
@@ -56,6 +57,10 @@ export default function MatchRow({
   const watchHint =
     m.st === 'done' && shouldHideScore(spoilerFree, revealed)
       ? completedWatchHint(m, { isFollowed: homeFollowed || awayFollowed })
+      : null;
+  const dramaTag =
+    m.st === 'done' && shouldHideScore(spoilerFree, revealed)
+      ? summarizeDrama(m, null).tags[0] || null
       : null;
 
   const rowBg = active
@@ -186,15 +191,15 @@ export default function MatchRow({
               </span>
             ) : m.st === 'done' && shouldHideScore(spoilerFree, revealed) ? (
               <span className="inline-flex shrink-0 items-center gap-1.5" title="比分已隐藏">
-                {watchHint && watchHint.level !== WATCH_HINT_LEVEL.NORMAL && (
+                {(dramaTag || (watchHint && watchHint.level !== WATCH_HINT_LEVEL.NORMAL)) && (
                   <span
                     className={`rounded-sm border px-1.5 py-0.5 text-2xs leading-none ${
-                      watchHint.level === WATCH_HINT_LEVEL.HIGH
+                      (dramaTag?.tone === 'accent' || (!dramaTag && watchHint?.level === WATCH_HINT_LEVEL.HIGH))
                         ? 'border-accent/35 bg-accent/10 text-accent'
                         : 'border-line-hairline bg-surface-raised text-text-faint'
                     }`}
                   >
-                    {watchHint.shortLabel}
+                    {dramaTag ? dramaTag.label : watchHint.shortLabel}
                   </span>
                 )}
                 <span className="font-num text-xs text-text-faint">• : •</span>

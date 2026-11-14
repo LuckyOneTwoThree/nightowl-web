@@ -15,6 +15,7 @@ try {
     minimize: () => ipcRenderer.send('win:minimize'),
     toggleMaximize: () => ipcRenderer.send('win:toggle-maximize'),
     close: () => ipcRenderer.send('win:close'),
+    setMiniMode: enabled => ipcRenderer.send('win:set-mini-mode', Boolean(enabled)),
     /**
      * 在系统默认浏览器中打开外部链接（央视频、咪咕等官方平台）。
      * 用 invoke 而不是 send：打不开时渲染层要能说「失败并给重试」，send 没有回执。

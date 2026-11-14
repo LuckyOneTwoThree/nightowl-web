@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { leagueName, teamName } from '../data/index.js';
 import { hm } from '../core/format.js';
-import { completedWatchHint, WATCH_HINT_LEVEL } from '../core/reveal.js';
+import { completedWatchHint } from '../core/reveal.js';
+import { summarizeDrama } from '../core/drama.js';
 import { Button, Chip, Crest, Meta } from './atoms.jsx';
+import DramaMeter from './DramaMeter.jsx';
+import DiaryStampBar from './DiaryStampBar.jsx';
 import { IconClose } from './icons.jsx';
 import { useDialogFocus } from '../hooks/useDialogFocus.js';
 
@@ -25,14 +28,51 @@ export default function MorningDigest({
   onOpenMatch,
   onClose,
   onStartSession,
-  watchedCount = 0
+  watchedCount = 0,
+  diary = null,
+  onSaveDiary = null,
+  onRemoveDiary = null,
+  onOpenSeasonReport = null
 }) {
   const [confirmAll, setConfirmAll] = useState(false);
+  const [dramaById, setDramaById] = useState({});
   const closeBtnRef = useRef(null);
 
   useEffect(() => {
     if (!open) setConfirmAll(false);
   }, [open]);
+
+  // 仅为当前待揭晓的已完赛条目按需拉取脱敏剧情脉冲（/api/drama 不下发比分与队属）
+  useEffect(() => {
+    if (!open) return;
+    const targets = items
+      .map(entry => entry?.match)
+      .filter(m => m && m.st === 'done' && !revealed?.has(m.id) && !dramaById[m.id]);
+    if (targets.length === 0) return;
+
+    const ac = new AbortController();
+    let cancelled = false;
+    (async () => {
+      for (const m of targets.slice(0, 6)) {
+        if (cancelled) break;
+        try {
+          const res = await fetch(`/api/drama?matchId=${encodeURIComponent(m.id)}`, {
+            signal: ac.signal
+          });
+          if (!res.ok) continue;
+          const payload = await res.json();
+          if (cancelled || !payload) continue;
+          setDramaById(prev => (prev[m.id] ? prev : { ...prev, [m.id]: payload }));
+        } catch {
+          // 离线或服务未开时静默回落到本地 summarizeDrama(match, null)
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [open, items, revealed, dramaById]);
 
   /**
    * 焦点进场与归还走统一 hook（与设置抽屉、更新弹窗、积分榜同一份实现）。
@@ -92,6 +132,7 @@ export default function MorningDigest({
                 const shown = !!match && !!revealed?.has(match.id);
                 const hasScore = !!match?.sc && match.st === 'done';
                 const watchHint = !shown && hasScore ? completedWatchHint(match, item?.ev || null) : null;
+                const localDrama = !shown && match?.st === 'done' ? dramaById[match.id] || summarizeDrama(match, null) : null;
                 return (
                   <article
                     key={item.id}
@@ -111,14 +152,14 @@ export default function MorningDigest({
                         <p className="truncate text-sm font-semibold text-text-primary">
                           {match ? `${teamName(match.h)} vs ${teamName(match.a)}` : '比赛数据已移除'}
                         </p>
-                        <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-2xs text-text-faint">
-                          <span>{match ? (match.st === 'done' ? '已终场' : '比分待录') : '本地赛程中没有这场比赛'}</span>
-                          {watchHint && (
-                            <Chip tone={watchHint.level === WATCH_HINT_LEVEL.HIGH ? 'accent' : 'default'}>
-                              {watchHint.label}
-                            </Chip>
-                          )}
+                        <p className="mt-0.5 text-2xs text-text-faint">
+                          {match ? (match.st === 'done' ? '已终场' : '比分待录') : '本地赛程中没有这场比赛'}
                         </p>
+                        {!shown && (localDrama || watchHint) && (
+                          <div className="mt-1.5">
+                            <DramaMeter drama={localDrama} fallbackHint={watchHint} />
+                          </div>
+                        )}
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         {match && (
@@ -148,6 +189,18 @@ export default function MorningDigest({
                         )}
                       </div>
                     </div>
+                    {shown && match && onSaveDiary && (
+                      <div className="mt-2.5">
+                        <DiaryStampBar
+                          compact
+                          matchId={match.id}
+                          entry={diary?.entries?.[match.id] || null}
+                          defaultMode="replay"
+                          onSave={onSaveDiary}
+                          onRemove={onRemoveDiary}
+                        />
+                      </div>
+                    )}
                   </article>
                 );
               })}
@@ -156,7 +209,14 @@ export default function MorningDigest({
         </div>
 
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-line-hairline px-4 py-3">
-          <Meta>{done > 0 ? `${done} 场已看` : '不着急，稍后也能从补看队列进入'}</Meta>
+          <div className="flex items-center gap-2">
+            <Meta>{done > 0 ? `${done} 场已看` : '不着急，稍后也能从补看队列进入'}</Meta>
+            {onOpenSeasonReport && (
+              <Button variant="ghost" size="xs" onClick={onOpenSeasonReport}>
+                赛季账单
+              </Button>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {allRevealed ? (
               <Meta>已全部揭晓</Meta>

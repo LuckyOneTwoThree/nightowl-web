@@ -46,12 +46,28 @@ export const ACTION_COMMANDS = [
     action: { type: 'settings' }
   },
   {
+    id: 'action:season-report',
+    kind: '操作',
+    title: '我的熬夜赛季账单',
+    subtitle: '查看观赛印章统计、主队胜率与长图导出',
+    keywords: ['账单', '印章', '统计', '战报', 'season', 'diary'],
+    action: { type: 'season-report' }
+  },
+  {
     id: 'action:sync',
     kind: '操作',
     title: '立即同步比分',
     subtitle: '从 ESPN / openfootball 拉取最新赛果',
     keywords: ['同步', '刷新', '比分', 'sync'],
     action: { type: 'sync' }
+  },
+  {
+    id: 'action:lan-pair',
+    kind: '操作',
+    title: '局域网一扫同步',
+    subtitle: '生成 120 秒临时局域网二维码，与手机双向合并偏好与账本',
+    keywords: ['局域网', '一扫', '二维码', '手机', 'lan', 'pair'],
+    action: { type: 'lan-pair' }
   }
 ];
 

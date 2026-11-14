@@ -59,12 +59,25 @@ import {
 import { computeMatchStandings } from '@core/standings.js';
 import { computeMatchStats } from '@core/stats.js';
 import { completedWatchHint, unrevealedTonightIds, WATCH_HINT_LEVEL } from '@core/reveal.js';
+import { summarizeDrama } from '@core/drama.js';
+import { planSecondHalfCutIn } from '@core/second-half.js';
+import {
+  canSimulateMatch,
+  SANDBOX_DISCLAIMER,
+  SANDBOX_OUTCOME,
+  simulateMatchStandings,
+} from '@core/sandbox.js';
 
 import { animateLayout } from '@/lib/layoutAnimation';
 import {
+  cancelSecondHalfCutInReminder,
   hasScheduledMatchReminder,
+  hasSecondHalfCutInReminder,
   scheduleMatchReminderWithStatus,
+  scheduleSecondHalfCutInReminder,
 } from '@/lib/reminders';
+import { DiaryStampCard } from '@/components/DiaryStampCard';
+import { useDiaryStore } from '@/state/diary';
 import { useLiveMatch, type LiveData } from '@/data/useLiveMatch';
 import { useNow } from '@/lib/useNow';
 import { useStopLossPrompt } from '@/lib/useStopLoss';
@@ -78,6 +91,7 @@ import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
 import { Crest } from '@/ui/Crest';
 import { LiveTimeline } from '@/components/LiveTimeline';
+import { DramaBar, type DramaSummary } from '@/components/DramaBar';
 import { WatchSheet } from '@/components/WatchSheet';
 import { StopLossBanner } from '@/components/StopLossBanner';
 import { EmptyState } from '@/ui/EmptyState';
@@ -88,7 +102,7 @@ import { SegmentedControl } from '@/ui/SegmentedControl';
 import { SleepBadge } from '@/ui/SleepBadge';
 import { SleepNote } from '@/ui/SleepNote';
 import { colors, fontSize, radius, spacing, tierColor, withAlpha, weight } from '@/ui/theme';
-import type { Entry, Ev, Match, MatchStandings, Narrative, Tier } from '@/types';
+import type { Entry, Ev, Match, MatchStandings, Narrative, StandingsRow, Tier } from '@/types';
 
 type Tab = 'intel' | 'stats';
 
@@ -163,6 +177,10 @@ export default function MatchScreen() {
   };
   const [watchOpen, setWatchOpen] = useState(params.watch === '1');
   const [reminderSet, setReminderSet] = useState(false);
+  const [cutInSet, setCutInSet] = useState(false);
+  const diaryEntry = useDiaryStore(state => (id ? state.diary.entries[id] || null : null));
+  const upsertDiary = useDiaryStore(state => state.upsertEntry);
+  const removeDiary = useDiaryStore(state => state.removeEntry);
   // 比赛事件提示（进球 / 红牌）留在页面内，它指的是「刚刚发生了什么」，不是操作反馈；
   // 操作反馈统一走全局 toast，才能区分成功与失败。
   const [eventNote, setEventNote] = useState<string | null>(null);
@@ -194,6 +212,9 @@ export default function MatchScreen() {
     const sync = () => {
       void hasScheduledMatchReminder(id).then(value => {
         if (alive) setReminderSet(value);
+      });
+      void hasSecondHalfCutInReminder(id).then(value => {
+        if (alive) setCutInSet(value);
       });
     };
     sync();
@@ -235,6 +256,19 @@ export default function MatchScreen() {
   }, [match, prefs, now, rev, spoilerExcludedIds]);
 
   const state = match ? (stateOf(match, now) as string) : 'sched';
+  const cutInPlan = match
+    ? planSecondHalfCutIn(
+        match,
+        {
+          enabled: Boolean(prefs.sleepEnabled),
+          wakeTime: prefs.sleepWakeTime || '07:30',
+          weekendEnabled: prefs.sleepWeekendEnabled !== false,
+          weekendWakeTime: prefs.sleepWeekendWakeTime || '09:00',
+          minSleep: prefs.sleepMinHours ?? 7,
+        },
+        now
+      )
+    : { eligible: false as const };
   const isDone = match
     ? state === 'finished' || state === 'ended_pending' || match.st === 'done'
     : false;
@@ -323,6 +357,13 @@ export default function MatchScreen() {
           label: string;
           shortLabel: string;
         } | null)(match, intel.ev)
+      : null;
+  const dramaSummary =
+    finishedNow && !scoreVisible
+      ? (summarizeDrama as (m: Match, events?: unknown[] | null) => DramaSummary)(
+          match,
+          liveData?.events || null
+        )
       : null;
   const countdown = engineCountdown(ts(match.t), now);
   const tier = intel.tier;
@@ -632,6 +673,10 @@ export default function MatchScreen() {
             </Text>
           ) : null}
 
+          {finishedNow && !scoreVisible && (dramaSummary || watchHint) ? (
+            <DramaBar drama={dramaSummary} fallbackHint={watchHint} />
+          ) : null}
+
           <View style={styles.metrics}>
             {!isTbd && !isPostponed ? (
               <View style={styles.metric}>
@@ -647,6 +692,51 @@ export default function MatchScreen() {
           </View>
 
           <SleepNote match={match} prefs={prefs} style={styles.sleepNote} />
+
+          {cutInPlan.eligible ? (
+            <View style={styles.cutInCard}>
+              <View style={styles.cutInHead}>
+                <Text style={styles.cutInTitle}>
+                  下半场 60&apos; 切入 · 省 {cutInPlan.savedNightMinutes}m
+                </Text>
+                <Text style={styles.cutInMeta}>
+                  先睡 {cutInPlan.preSleepMinutes} 分钟 · {bjClock(cutInPlan.alarmAt, false)} 闹钟
+                </Text>
+              </View>
+              <Text style={styles.cutInBoundary}>
+                手机端支持定点 60&apos; 本地唤醒；实时悬念雷达受省电调度限制仅桌面端支持。
+              </Text>
+              <Pressable
+                onPress={() => {
+                  void (async () => {
+                    if (cutInSet) {
+                      await cancelSecondHalfCutInReminder(match.id);
+                      setCutInSet(false);
+                      toast.success("已取消 60' 切入唤醒");
+                      return;
+                    }
+                    if (cutInPlan.alarmAt == null) return;
+                    const res = await scheduleSecondHalfCutInReminder(match, cutInPlan.alarmAt);
+                    if (res.ok) {
+                      setCutInSet(true);
+                      toast.success(`已设 ${bjClock(cutInPlan.alarmAt, false)} 半场切入提醒`);
+                    } else if (res.reason === 'permission-denied') {
+                      toast.error('请先允许通知权限后再设唤醒');
+                    } else {
+                      toast.error('当前环境或时间窗口不可排程提醒');
+                    }
+                  })();
+                }}
+                accessibilityRole="button"
+                style={[styles.cutInBtn, cutInSet && styles.cutInBtnOn]}
+              >
+                <Bell size={14} color={cutInSet ? colors.accent : colors.textSecondary} />
+                <Text style={[styles.cutInBtnText, cutInSet && styles.cutInBtnTextOn]}>
+                  {cutInSet ? "已排程 60' 切入闹钟 · 取消" : "开启 60' 半场切入闹钟"}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           <Pressable
             onPress={() => {
@@ -690,6 +780,16 @@ export default function MatchScreen() {
               <Text style={styles.hideScoreText}>重新隐藏比分</Text>
             </Pressable>
           ) : null}
+
+          {finishedNow || liveNow || diaryEntry ? (
+            <DiaryStampCard
+              matchId={match.id}
+              entry={diaryEntry}
+              defaultMode={finishedNow ? 'replay' : 'live'}
+              onSave={upsertDiary}
+              onRemove={removeDiary}
+            />
+          ) : null}
         </LinearGradient>
 
         <View style={styles.segmentWrap}>
@@ -722,6 +822,8 @@ export default function MatchScreen() {
             match={match}
             stats={intel.stats}
             standings={intel.standings}
+            now={now}
+            excludedIds={spoilerExcludedIds}
             onOpenMatch={matchId =>
               router.push({ pathname: '/match/[id]', params: { id: matchId } })
             }
@@ -1120,12 +1222,16 @@ function StatsTab({
   match,
   stats,
   standings,
+  now,
+  excludedIds,
   onOpenMatch,
   onOpenStandings,
 }: {
   match: Match;
   stats: StatsData;
   standings: MatchStandings;
+  now: number;
+  excludedIds: Set<string>;
   onOpenMatch: (id: string) => void;
   onOpenStandings: (league: string) => void;
 }) {
@@ -1170,6 +1276,9 @@ function StatsTab({
       <StandingsCard
         match={match}
         standings={standings}
+        now={now}
+        excludedIds={excludedIds}
+        onOpenMatch={onOpenMatch}
         onOpenStandings={onOpenStandings}
       />
 
@@ -1216,29 +1325,91 @@ function StatsTab({
   );
 }
 
+type SandboxTeamDelta = {
+  rankDelta: number;
+  lineNote: string;
+};
+
+type SandboxResult = {
+  supported: boolean;
+  table: { rows: StandingsRow[]; doneCount: number } | null;
+  homeDelta: SandboxTeamDelta | null;
+  awayDelta: SandboxTeamDelta | null;
+  linkedMatch: { id: string; h: string; a: string; t: string } | null;
+};
+
+const SANDBOX_PILLS = [
+  { key: SANDBOX_OUTCOME.NONE, label: '基准' },
+  { key: SANDBOX_OUTCOME.HOME_WIN, label: '主胜 1-0' },
+  { key: SANDBOX_OUTCOME.DRAW, label: '打平 0-0' },
+  { key: SANDBOX_OUTCOME.AWAY_WIN, label: '客胜 0-1' },
+];
+
 function StandingsCard({
   match,
   standings,
+  now,
+  excludedIds,
+  onOpenMatch,
   onOpenStandings,
 }: {
   match: Match;
   standings: MatchStandings;
+  now: number;
+  excludedIds: Set<string>;
+  onOpenMatch: (id: string) => void;
   onOpenStandings: (league: string) => void;
 }) {
+  const [outcome, setOutcome] = useState<string>(SANDBOX_OUTCOME.NONE);
+  useEffect(() => {
+    setOutcome(SANDBOX_OUTCOME.NONE);
+  }, [match.id]);
+
+  const canSandbox = canSimulateMatch(match) && standings.supported;
+  const sim = useMemo(() => {
+    if (!canSandbox || outcome === SANDBOX_OUTCOME.NONE) return null;
+    return (simulateMatchStandings as (
+      m: Match,
+      o: string,
+      f: null,
+      opts: { nowTs: number; excludeIds: Set<string> }
+    ) => SandboxResult)(match, outcome, null, { nowTs: now, excludeIds: excludedIds });
+  }, [canSandbox, match, outcome, now, excludedIds]);
+
+  const linkedSim = useMemo(() => {
+    if (!canSandbox) return null;
+    return (
+      sim ||
+      (simulateMatchStandings as (
+        m: Match,
+        o: string,
+        f: null,
+        opts: { nowTs: number; excludeIds: Set<string> }
+      ) => SandboxResult)(match, SANDBOX_OUTCOME.NONE, null, { nowTs: now, excludeIds: excludedIds })
+    );
+  }, [canSandbox, sim, match, now, excludedIds]);
+
   const league = standings.league;
   if (!standings.supported || !league) return null;
 
+  const activeSim = sim && sim.supported ? sim : null;
   const asOfText = standings.historical
     ? '截至本场开球前'
     : standings.lastResultAt
       ? `截至 ${bjDate(standings.lastResultAt).slice(5)}`
       : '暂无赛果';
-  const metaText =
-    standings.doneCount > 0 ? `${asOfText} · ${standings.doneCount} 场` : asOfText;
+  const metaText = activeSim?.table
+    ? `${asOfText} · ${activeSim.table.doneCount} 场（沙盘）`
+    : standings.doneCount > 0
+      ? `${asOfText} · ${standings.doneCount} 场`
+      : asOfText;
+  const simHome = activeSim?.table?.rows?.find(r => r.teamId === match.h) || null;
+  const simAway = activeSim?.table?.rows?.find(r => r.teamId === match.a) || null;
   const rows = [
-    { id: match.h, row: standings.home },
-    { id: match.a, row: standings.away },
+    { id: match.h, row: simHome || standings.home, delta: activeSim?.homeDelta || null },
+    { id: match.a, row: simAway || standings.away, delta: activeSim?.awayDelta || null },
   ];
+  const linked = linkedSim?.linkedMatch || null;
 
   return (
     <Card style={styles.cardGap}>
@@ -1246,11 +1417,32 @@ function StandingsCard({
       <Text style={styles.standingsAsOf}>
         {leagueName(league)} · {metaText}
       </Text>
+      {canSandbox && standings.rows.length > 0 ? (
+        <View style={styles.sandboxWrap}>
+          <View style={styles.sandboxRow}>
+            {SANDBOX_PILLS.map(opt => (
+              <Chip
+                key={opt.key}
+                selected={outcome === opt.key}
+                tone={outcome === opt.key ? 'accent' : 'default'}
+                onPress={() =>
+                  setOutcome(prev =>
+                    prev === opt.key && opt.key !== SANDBOX_OUTCOME.NONE ? SANDBOX_OUTCOME.NONE : opt.key
+                  )
+                }
+              >
+                {opt.label}
+              </Chip>
+            ))}
+          </View>
+          {activeSim ? <Text style={styles.standingsHint}>{SANDBOX_DISCLAIMER}</Text> : null}
+        </View>
+      ) : null}
       {standings.rows.length === 0 ? (
         <Text style={styles.cardLine}>{standings.note || '本联赛暂无已同步赛果'}</Text>
       ) : (
         <View>
-          {rows.map(({ id, row }, index) => (
+          {rows.map(({ id, row, delta }, index) => (
             <View
               key={id}
               style={[styles.standingsRow, index > 0 && styles.standingsRowBorder]}
@@ -1267,6 +1459,11 @@ function StandingsCard({
                 ) : null}
                 <Text style={styles.standingsRank}>
                   {row ? `第 ${row.rank}` : '暂无'}
+                  {delta && delta.rankDelta !== 0
+                    ? delta.rankDelta > 0
+                      ? ` ↑${delta.rankDelta}`
+                      : ` ↓${Math.abs(delta.rankDelta)}`
+                    : ''}
                 </Text>
               </View>
               {row ? (
@@ -1274,7 +1471,9 @@ function StandingsCard({
                   <Text style={styles.standingsStats}>
                     {row.played} 场 · {row.points} 分 · 净胜球 {formatGoalDiff(row.gd)}
                   </Text>
-                  {row.context ? (
+                  {activeSim && delta?.lineNote ? (
+                    <Text style={styles.standingsContext}>{delta.lineNote}</Text>
+                  ) : row.context ? (
                     <Text style={styles.standingsContext}>
                       {row.context.primary}
                       {row.context.secondary ? ` · ${row.context.secondary}` : ''}
@@ -1286,6 +1485,19 @@ function StandingsCard({
               )}
             </View>
           ))}
+          {linked ? (
+            <Pressable
+              onPress={() => onOpenMatch(linked.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`查看关联竞争场次 ${teamName(linked.h)} 对 ${teamName(linked.a)}`}
+              style={({ pressed }) => [styles.linkedMatchRow, pressed && styles.pressed]}
+            >
+              <Text style={styles.linkedMatchText} numberOfLines={1}>
+                关联竞争：{hm(linked.t)} {teamName(linked.h)} vs {teamName(linked.a)}
+              </Text>
+              <ChevronRight size={14} color={colors.accent} />
+            </Pressable>
+          ) : null}
           <Text style={styles.standingsHint}>
             排名按积分 → 净胜球 → 进球数简化排序；国内分区为参考线，欧冠按赛制。
           </Text>
@@ -1642,6 +1854,44 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   sleepNote: { marginTop: spacing.xs + 2 },
+  cutInCard: {
+    marginTop: spacing.sm,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    backgroundColor: colors.panel,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  cutInHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  cutInTitle: { color: colors.text, fontSize: fontSize.xs, fontWeight: weight.title },
+  cutInMeta: { color: colors.resource, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
+  cutInBoundary: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 16 },
+  cutInBtn: {
+    minHeight: 44,
+    marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    borderRadius: radius.control,
+    borderWidth: 1,
+    borderColor: colors.control,
+    backgroundColor: colors.card,
+    paddingHorizontal: spacing.md,
+  },
+  cutInBtnOn: {
+    borderColor: colors.accent,
+    backgroundColor: colors.goldSoft,
+  },
+  cutInBtnText: { color: colors.textSecondary, fontSize: fontSize.xs, fontWeight: weight.title },
+  cutInBtnTextOn: { color: colors.accent },
   watchLaterButton: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
@@ -1929,6 +2179,34 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: fontSize.sm,
     fontWeight: weight.title,
+  },
+  sandboxWrap: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    gap: spacing.xs,
+  },
+  sandboxRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  linkedMatchRow: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.hairline,
+    backgroundColor: colors.panel,
+  },
+  linkedMatchText: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: fontSize.xs,
   },
   meetingDate: { width: 48, color: colors.textFaint, fontSize: fontSize.xs },
   meetingTeams: { flex: 1, color: colors.textSecondary, fontSize: fontSize.xs },

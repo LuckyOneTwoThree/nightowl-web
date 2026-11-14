@@ -190,6 +190,7 @@ function createWindow({ hidden = false } = {}) {
   });
   mainWindow.on('closed', () => {
     mainWindow = null;
+    savedNormalBounds = null;
   });
 
   /**
@@ -384,6 +385,7 @@ ipcMain.handle('desktop:settings:set', (_event, patch) => {
 ipcMain.on('desktop:tray:title', (_event, text) => setTrayTitle(text));
 
 /* 自绘标题栏的窗口动作（渲染层 → 主进程） */
+let savedNormalBounds = null;
 ipcMain.on('win:minimize', () => mainWindow?.minimize());
 ipcMain.on('win:toggle-maximize', () => {
   if (!mainWindow) return;
@@ -391,6 +393,25 @@ ipcMain.on('win:toggle-maximize', () => {
   else mainWindow.maximize();
 });
 ipcMain.on('win:close', () => mainWindow?.close());
+ipcMain.on('win:set-mini-mode', (_event, enabled) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (enabled) {
+    if (!savedNormalBounds) {
+      if (mainWindow.isMaximized()) mainWindow.unmaximize();
+      savedNormalBounds = mainWindow.getBounds();
+    }
+    mainWindow.setMinimumSize(360, 210);
+    mainWindow.setSize(440, 260, true);
+    mainWindow.setAlwaysOnTop(true, 'floating');
+  } else {
+    mainWindow.setAlwaysOnTop(false);
+    mainWindow.setMinimumSize(1120, 700);
+    if (savedNormalBounds) {
+      mainWindow.setBounds(savedNormalBounds, true);
+      savedNormalBounds = null;
+    }
+  }
+});
 ipcMain.handle('win:open-external', async (_event, url) => {
   if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return false;
   try {

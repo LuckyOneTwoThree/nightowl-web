@@ -13,7 +13,9 @@
  *   同时因为中国自 1991 年起无夏令时，VTIMEZONE 可以写死 +0800，不需要切换规则。
  */
 
-import { MATCH_DURATION_MS, ts } from './engine.js';
+import { MATCH_DURATION_MS, tierOf, ts } from './engine.js';
+import { bjClock } from './format.js';
+import { sleepLedger, stopLossAt } from './sleep.js';
 import { teamName, leagueName } from '../data/index.js';
 
 /** ICS 换行必须是 CRLF */
@@ -107,10 +109,10 @@ const VTIMEZONE = [
  * @param {number} now
  * @param {number} reminderMinutes 0 = 不加提醒
  */
-export function buildEvent({ match, startTs, durationMs = MATCH_DURATION_MS }, now = Date.now(), reminderMinutes = 30) {
+export function buildEvent({ match, startTs, durationMs = MATCH_DURATION_MS, extraDescription = '' }, now = Date.now(), reminderMinutes = 30) {
   const round = match.r ? `第 ${match.r} 轮` : '';
   const summary = `${leagueName(match.l)} ${teamName(match.h)} vs ${teamName(match.a)}`;
-  const description = [round, '来自夜猫看台'].filter(Boolean).join(' · ');
+  const description = [round, extraDescription, '来自夜猫看台'].filter(Boolean).join(' · ');
   const lines = [
     'BEGIN:VEVENT',
     `UID:${match.id}@nightowl-terrace`,
@@ -163,6 +165,64 @@ export function buildIcs({ matches = [], reminderMinutes = 30, now = Date.now(),
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//NightOwl Terrace//Calendar Export//CN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:${escapeText(calendarName)}`,
+    ...VTIMEZONE,
+    ...events,
+    'END:VCALENDAR'
+  ];
+  return lines.map(foldLine).join(CRLF) + CRLF;
+}
+
+/**
+ * 为「本周规划」入选场次生成带夜猫档位、预计完赛与个人止损时间的专用日历（不含比分与指数）
+ *
+ * @param {Array} planPicks Match[] 或 { m: Match }[]
+ * @param {object|null} [sleepProfile]
+ * @param {{now?: number, reminderMinutes?: number, calendarName?: string}} [opts]
+ */
+export function buildPlanIcs(planPicks = [], sleepProfile = null, opts = {}) {
+  const now = Number.isFinite(opts.now) ? opts.now : Date.now();
+  const reminderMinutes = Number.isFinite(opts.reminderMinutes) ? opts.reminderMinutes : 30;
+  const calendarName = opts.calendarName || '夜猫看台 · 本周精选计划';
+
+  const seen = new Set();
+  const events = [];
+  for (const item of planPicks || []) {
+    const m = item?.m || item;
+    if (!m || !m.id || m.tbd || m.st !== 'sched' || seen.has(m.id)) continue;
+    const start = ts(m.t);
+    if (!Number.isFinite(start) || start <= now) continue;
+    seen.add(m.id);
+
+    const tier = tierOf(m);
+    const endClock = bjClock(start + MATCH_DURATION_MS, false);
+    const parts = [`${tier.label}(${tier.zh})`, `预计完赛 ${endClock}`];
+    if (sleepProfile) {
+      const ledger = sleepLedger(m.t, sleepProfile);
+      const stop = stopLossAt(m.t, sleepProfile);
+      if (stop) parts.push(`建议止损 ${bjClock(stop.stopAt, false)}`);
+      else if (ledger.valid && ledger.ready) parts.push(`个人余眠约 ${ledger.remainingHours}h`);
+    }
+
+    events.push(
+      ...buildEvent(
+        { match: m, startTs: start, extraDescription: parts.join(' · ') },
+        now,
+        reminderMinutes
+      )
+    );
+  }
+
+  if (!events.length) {
+    throw new Error('本周规划暂无可导出的未开赛已定档场次');
+  }
+
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//NightOwl Terrace//Weekly Plan//CN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${escapeText(calendarName)}`,

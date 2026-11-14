@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import { zhDate, hmCost, hm } from '../core/format.js';
-import { teamName, leagueName, leagueColor } from '../data/index.js';
+import { teamName, leagueName, leagueColor, getFixtures } from '../data/index.js';
 import { stateOf } from '../core/owl.js';
 import { owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '../core/engine.js';
-import { sleepLedger } from '../core/sleep.js';
+import { sleepLedger, normalizeSleepProfile } from '../core/sleep.js';
 import { weekRiskBands, weekBestEmptyState } from '../core/week-risk.js';
 import { hasAnyWeekOverride } from '../core/week-overrides.js';
+import { detectCrunchPeriods } from '../core/crunch.js';
+import { buildPlanIcs } from '../core/ics.js';
 import { Chip, Crest, Hint, IndexTag, Meta, SectionLabel, SleepBadge, Stars } from './atoms.jsx';
 import { IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronUp, IconClose, IconWarn } from './icons.jsx';
 import MatchRow from './MatchRow.jsx';
@@ -232,6 +234,7 @@ export default function WeekView({
   const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState('best');
   const [selectedDay, setSelectedDay] = useState(null);
+  const [planIcsMsg, setPlanIcsMsg] = useState(null);
   /* 滚动位置按「页签 + 日期筛选」分桶：切走再切回能回到原处，
      换页签本来就是换了一份内容，沿用上一份的位置才是错的。 */
   const listRef = useScrollMemory(`week:${activeTab}:${selectedDay || 'all'}`);
@@ -353,6 +356,66 @@ export default function WeekView({
   const weekRange = days.length
     ? `${days[0].date.slice(5).replace('-', '/')} – ${days[days.length - 1].date.slice(5).replace('-', '/')}`
     : '';
+
+  const crunchReport = useMemo(
+    () => detectCrunchPeriods(prefs?.followedTeams || [], getFixtures(), now),
+    [prefs?.followedTeams, now]
+  );
+
+  const sleepProfileForIcs = useMemo(() => {
+    if (prefs?.sleepEnabled !== true) return null;
+    return normalizeSleepProfile({
+      enabled: true,
+      wakeTime: prefs.sleepWakeTime,
+      weekendEnabled: prefs.sleepWeekendEnabled === true,
+      weekendWakeTime: prefs.sleepWeekendWakeTime,
+      minSleep: prefs.sleepMinHours
+    });
+  }, [
+    prefs?.sleepEnabled,
+    prefs?.sleepWakeTime,
+    prefs?.sleepWeekendEnabled,
+    prefs?.sleepWeekendWakeTime,
+    prefs?.sleepMinHours
+  ]);
+
+  const handleDownloadPlanIcs = () => {
+    try {
+      const ics = buildPlanIcs(plan.best, sleepProfileForIcs, { now });
+      const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `nightowl-plan-${days[0]?.date || 'week'}.ics`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setPlanIcsMsg({ ok: true, text: `已导出 ${plan.best.length} 场规划（不含比分）` });
+    } catch (err) {
+      setPlanIcsMsg({ ok: false, text: err?.message || '导出失败' });
+    }
+  };
+
+  const handleCopyPlanIcsUrl = async () => {
+    try {
+      const ids = plan.best.map(e => e.m.id).join(',');
+      const origin = typeof window !== 'undefined' && window.location.host ? window.location.origin : 'http://127.0.0.1:3100';
+      const qs = new URLSearchParams({ ids });
+      if (prefs?.sleepWakeTime) qs.set('wakeWorkday', prefs.sleepWakeTime);
+      if (prefs?.sleepWeekendWakeTime) qs.set('wakeWeekend', prefs.sleepWeekendWakeTime);
+      if (prefs?.sleepMinHours != null) qs.set('sleepGoal', String(prefs.sleepMinHours));
+      const url = `${origin}/api/calendar/plan.ics?${qs.toString()}`;
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        setPlanIcsMsg({ ok: true, text: '已复制本地日历订阅地址' });
+      } else {
+        setPlanIcsMsg({ ok: true, text: url });
+      }
+    } catch {
+      setPlanIcsMsg({ ok: false, text: '复制失败' });
+    }
+  };
 
   const filteredBest = useMemo(
     () => (selectedDay ? plan.best.filter(e => owlDay(e.m.t) === selectedDay) : plan.best),
@@ -586,7 +649,66 @@ export default function WeekView({
             </button>
           </div>
         )}
+
+        {weekOffset >= 0 && plan.best.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-1.5 border-t border-line-hairline bg-surface-panel/50 px-3 py-1.5 text-2xs">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleDownloadPlanIcs}
+                className="rounded border border-accent/35 bg-accent/10 px-2 py-0.5 font-medium text-accent transition-colors hover:bg-accent/20 cursor-pointer"
+              >
+                导出规划日历 (.ics)
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyPlanIcsUrl}
+                className="rounded border border-line-hairline px-2 py-0.5 text-text-secondary transition-colors hover:border-accent/40 hover:text-text-primary cursor-pointer"
+              >
+                复制订阅链接
+              </button>
+            </div>
+            {planIcsMsg && (
+              <span className={`text-2xs ${planIcsMsg.ok ? 'text-resource' : 'text-warn'}`}>
+                {planIcsMsg.text}
+              </span>
+            )}
+          </div>
+        )}
       </section>
+
+      {weekOffset === 0 && (crunchReport.alerts.length > 0 || crunchReport.totalTbdSkipped > 0) && (
+        <div className="shrink-0 rounded-xl border border-warn/30 bg-warn/10 px-3 py-2 text-2xs">
+          <div className="flex items-center justify-between gap-2 font-medium text-warn">
+            <span>未来 14 天魔鬼赛程预警</span>
+            <span className="font-num tabular-nums">
+              {crunchReport.alerts.length > 0 ? `${crunchReport.alerts.length} 支主队密集期` : '主队赛程待定'}
+            </span>
+          </div>
+          {crunchReport.alerts.map(a => (
+            <div key={a.teamId} className="mt-1 flex items-center justify-between gap-2 text-text-secondary">
+              <span className="min-w-0 truncate">
+                <strong className="text-text-primary">{teamName(a.teamId)}</strong>{' '}
+                {a.startDate.slice(5)}–{a.endDate.slice(5)}：10 天内 {a.matchCount} 场（{a.nightCount} 夜场 · 最高 {a.maxTier}）
+              </span>
+              {a.highlightedIds?.[0] && (
+                <button
+                  type="button"
+                  onClick={() => onSelect?.(a.highlightedIds[0])}
+                  className="shrink-0 rounded border border-warn/30 px-1.5 py-0.5 text-2xs text-warn hover:bg-warn/15 cursor-pointer"
+                >
+                  查看首战
+                </button>
+              )}
+            </div>
+          ))}
+          {crunchReport.totalTbdSkipped > 0 && (
+            <p className="mt-1 text-text-faint">
+              已按规则排除 {crunchReport.totalTbdSkipped} 场开球时间待定（TBD）场次，确定开球时间后自动重算。
+            </p>
+          )}
+        </div>
+      )}
 
       {/* ---- 三段式列表切换 Tab ---- */}
       <div

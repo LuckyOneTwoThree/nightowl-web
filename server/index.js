@@ -20,7 +20,24 @@ import { resolveHighlights } from './highlights.js';
 import { resolveLive } from './live.js';
 import { recordChecks, checksFor } from './check-log.js';
 import { diffFixtures } from './schedule-diff.js';
-import { ts, MATCH_DURATION_MS } from '../src/core/engine.js';
+import {
+  ts,
+  MATCH_DURATION_MS,
+  evaluate,
+  rivalryOf,
+  nightOf,
+  mondayOfWall,
+  owlDay,
+  planWeek,
+  PRODUCT_PLAN_OPTS
+} from '../src/core/engine.js';
+import { summarizeDrama } from '../src/core/drama.js';
+import { evaluateRadarSuspense, RADAR_VERDICT } from '../src/core/radar.js';
+import { buildPlanIcs } from '../src/core/ics.js';
+import { SLEEP_DEFAULTS, normalizeSleepProfile } from '../src/core/sleep.js';
+import { buildSyncBundle } from '../src/core/sync-bundle.js';
+import { createLanPairManager, PAIR_MAX_BODY_BYTES } from './lan-pair.js';
+import { rivalries, storylines, REC_MAP } from '../src/data/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -221,6 +238,10 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
   const backgroundSync = deps.backgroundSync !== false;
 
   const proxy = createProxy(rules, log);
+  const lanPairMgr = createLanPairManager();
+  let latestPairMerged = null;
+  let latestPairMergedAt = 0;
+  let cachedLocalBundle = buildSyncBundle({});
   let syncing = false;
   let lastSync = null;
   /**
@@ -537,6 +558,87 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
         return;
       }
 
+      /* ---------------- 无剧透剧情心电图（仅返回脱敏标签与中性脉冲分钟） ---------------- */
+      if (pathname === '/api/drama' && req.method === 'GET') {
+        if (rejectForeignOrigin(req, res)) return;
+        const matchId = searchParams.get('matchId') || '';
+        try {
+          const fixtures = await loadFixturesImpl();
+          const match = fixtures.find(m => m.id === matchId);
+          if (!match) {
+            sendJSON(res, 404, { ok: false, error: '比赛不存在' });
+            return;
+          }
+          let events = null;
+          if (match.st === 'done') {
+            const force = searchParams.get('refresh') === '1';
+            try {
+              const result = await resolveLiveImpl(match, { rules, log, force });
+              if (Array.isArray(result?.events) && result.events.length > 0) {
+                events = result.events;
+              }
+            } catch {
+              // ESPN summary 拉取失败时，退回本地终场比分做粗粒度诚实降级
+            }
+          }
+          const summary = summarizeDrama(match, events);
+          sendJSON(res, 200, { ok: summary.available, matchId, ...summary });
+        } catch (err) {
+          sendJSON(res, 500, {
+            ok: false,
+            available: false,
+            hasEvents: false,
+            tags: [],
+            pulseMinutes: [],
+            error: String(err?.message || err)
+          });
+        }
+        return;
+      }
+
+      /* ---------------- 无剧透悬念唤醒雷达（严禁下发比分与球队事件） ---------------- */
+      if (pathname === '/api/radar' && req.method === 'GET') {
+        if (rejectForeignOrigin(req, res)) return;
+        const matchId = searchParams.get('matchId') || '';
+        const followedParam = searchParams.get('followedTeams') || '';
+        const followedTeams = followedParam ? followedParam.split(',').map(s => s.trim()).filter(Boolean) : [];
+        try {
+          const fixtures = await loadFixturesImpl();
+          const match = fixtures.find(m => m.id === matchId);
+          if (!match) {
+            sendJSON(res, 404, { ok: false, error: '比赛不存在' });
+            return;
+          }
+          const force = searchParams.get('refresh') === '1';
+          let snapshot = null;
+          try {
+            snapshot = await resolveLiveImpl(match, { rules, log, force });
+          } catch {
+            snapshot = null;
+          }
+          const ev = evaluate(match, REC_MAP, rivalries, storylines, followedTeams, []);
+          const context = {
+            isDerby: Boolean(rivalryOf(match, rivalries)),
+            isFollowed: followedTeams.includes(match.h) || followedTeams.includes(match.a),
+            star: ev?.star || 0
+          };
+          const dto = evaluateRadarSuspense(match, snapshot, context);
+          sendJSON(res, 200, {
+            ok: dto.verdict !== RADAR_VERDICT.UNAVAILABLE,
+            ...dto
+          });
+        } catch (err) {
+          sendJSON(res, 500, {
+            ok: false,
+            matchId: matchId || null,
+            verdict: RADAR_VERDICT.UNAVAILABLE,
+            minuteLabel: null,
+            error: String(err?.message || err)
+          });
+        }
+        return;
+      }
+
       if (pathname === '/api/scores/sync' && req.method === 'POST') {
         if (rejectForeignOrigin(req, res)) return;
         if (rules.scores?.enabled === false) {
@@ -675,6 +777,134 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
           log.warn?.(`[scraper] 获取直播源失败: ${err.message}`);
           sendJSON(res, 500, { ok: false, error: err.message, lines: [] });
         }
+        return;
+      }
+
+      /* ---------------- M5: 本周精选计划日历订阅 ---------------- */
+      if (pathname === '/api/calendar/plan.ics' && req.method === 'GET') {
+        try {
+          const nowTs = Date.now();
+          const fixtures = await loadFixturesImpl();
+          const idsParam = searchParams.get('ids') || '';
+          const explicitIds = idsParam ? idsParam.split(',').map(s => s.trim()).filter(Boolean) : [];
+          const teamsParam = searchParams.get('teams') || '';
+          const leaguesParam = searchParams.get('leagues') || '';
+          const followedTeams = teamsParam ? teamsParam.split(',').map(s => s.trim()).filter(Boolean) : [];
+          const followedLeagues = leaguesParam ? leaguesParam.split(',').map(s => s.trim()).filter(Boolean) : [];
+          const budgetNum = Number(searchParams.get('budget'));
+          const weeklyBudget = Number.isFinite(budgetNum) ? budgetNum : 4.0;
+          const remindNum = Number(searchParams.get('remind'));
+          const reminderMinutes = Number.isFinite(remindNum) ? remindNum : 30;
+          const sleepProfile = normalizeSleepProfile({
+            wakeWorkday: searchParams.get('wakeWorkday') || SLEEP_DEFAULTS.wakeWorkday,
+            wakeWeekend: searchParams.get('wakeWeekend') || SLEEP_DEFAULTS.wakeWeekend,
+            sleepGoalHours: searchParams.get('sleepGoal') ? Number(searchParams.get('sleepGoal')) : SLEEP_DEFAULTS.sleepGoalHours
+          });
+
+          let picks = [];
+          if (explicitIds.length > 0) {
+            const byId = new Map(fixtures.map(m => [m.id, m]));
+            picks = explicitIds.map(id => byId.get(id)).filter(Boolean);
+          } else {
+            const weekStartStr = mondayOfWall(nightOf(nowTs));
+            const dayDates = [];
+            for (let i = 0; i < 7; i++) {
+              const d = new Date(Date.parse(`${weekStartStr}T00:00:00Z`) + i * 86400000);
+              dayDates.push(d.toISOString().slice(0, 10));
+            }
+            const weekPool = fixtures.filter(m => {
+              if (!m || m.st !== 'sched' || m.tbd) return false;
+              const kick = ts(m.t);
+              if (!Number.isFinite(kick) || kick <= nowTs) return false;
+              return dayDates.includes(owlDay(m.t));
+            });
+            const plan = planWeek(weekPool, REC_MAP, rivalries, storylines, followedTeams, weeklyBudget, followedLeagues, {
+              ...PRODUCT_PLAN_OPTS,
+              nowTs
+            });
+            picks = plan.picks || [];
+          }
+
+          let icsText;
+          try {
+            icsText = buildPlanIcs(picks, sleepProfile, { now: nowTs, reminderMinutes });
+          } catch {
+            icsText = [
+              'BEGIN:VCALENDAR',
+              'VERSION:2.0',
+              'PRODID:-//NightOwl Terrace//Weekly Plan//CN',
+              'CALSCALE:GREGORIAN',
+              'METHOD:PUBLISH',
+              'X-WR-CALNAME:夜猫看台 · 本周精选计划',
+              'END:VCALENDAR',
+              ''
+            ].join('\r\n');
+          }
+
+          const headers = {
+            'Content-Type': 'text/calendar; charset=utf-8',
+            'Cache-Control': 'no-store'
+          };
+          if (searchParams.get('download') === '1') {
+            headers['Content-Disposition'] = 'attachment; filename="nightowl-week-plan.ics"';
+          }
+          const body = Buffer.from(icsText, 'utf8');
+          headers['Content-Length'] = body.length;
+          res.writeHead(200, headers);
+          res.end(body);
+        } catch (err) {
+          sendJSON(res, 500, { ok: false, error: String(err?.message || err) });
+        }
+        return;
+      }
+
+      /* ---------------- M6: 局域网一扫同步 / 被窝接力（隔离微服务器管理） ---------------- */
+      if (pathname === '/api/pair/status' && req.method === 'GET') {
+        if (rejectForeignOrigin(req, res)) return;
+        sendJSON(res, 200, {
+          ok: true,
+          ...lanPairMgr.getStatus(),
+          latestMergedAt: latestPairMergedAt,
+          merged: latestPairMerged
+        });
+        return;
+      }
+
+      if (pathname === '/api/pair/start' && req.method === 'POST') {
+        if (rejectForeignOrigin(req, res)) return;
+        let body = {};
+        try {
+          body = await readJsonBody(req, PAIR_MAX_BODY_BYTES);
+        } catch (err) {
+          sendJSON(res, 400, { ok: false, error: String(err?.message || err) });
+          return;
+        }
+        try {
+          cachedLocalBundle = buildSyncBundle(body.bundle || {});
+          latestPairMerged = null;
+          latestPairMergedAt = 0;
+          const status = await lanPairMgr.startSession({
+            mode: body.mode === 'handoff' ? 'handoff' : 'sync',
+            ttlMs: body.ttlMs,
+            getLocalBundle: () => cachedLocalBundle,
+            onMergedBundle: merged => {
+              cachedLocalBundle = merged;
+              latestPairMerged = merged;
+              latestPairMergedAt = Date.now();
+            },
+            handoff: body.handoff || null
+          });
+          sendJSON(res, 200, { ok: true, ...status });
+        } catch (err) {
+          sendJSON(res, 500, { ok: false, error: String(err?.message || err) });
+        }
+        return;
+      }
+
+      if (pathname === '/api/pair/stop' && req.method === 'POST') {
+        if (rejectForeignOrigin(req, res)) return;
+        await lanPairMgr.stopSession();
+        sendJSON(res, 200, { ok: true, active: false });
         return;
       }
 
@@ -850,6 +1080,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
   server.on('close', () => {
     if (startupTimer) clearTimeout(startupTimer);
     if (cronTimer) clearInterval(cronTimer);
+    void lanPairMgr.stopSession();
   });
 
   return server;

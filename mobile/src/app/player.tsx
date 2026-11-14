@@ -15,7 +15,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { ChevronLeft, ListVideo, RefreshCw, VolumeX } from 'lucide-react-native';
+import { ChevronLeft, ListVideo, MoonStar, RefreshCw, VolumeX } from 'lucide-react-native';
 
 import { autoSwitchDecision } from '@core/line-switch.js';
 import { teamName } from '@data/index.js';
@@ -66,6 +66,8 @@ export default function PlayerScreen() {
   );
 }
 
+const SLEEP_PRESETS = [0, 15, 30, 45, 60] as const;
+
 function PlayerView({
   match,
   lines,
@@ -88,6 +90,9 @@ function PlayerView({
   // 否则用户在全屏面板里根本看不到提醒，额度却被永久用掉了。
   const stopLoss = useStopLossPrompt(match, prefs, now, true, panelOpen);
   const [notice, setNotice] = useState<string | null>(null);
+  const [sleepMin, setSleepMin] = useState<number>(0);
+  const [sleepDeadline, setSleepDeadline] = useState<number | null>(null);
+  const [sleepTick, setSleepTick] = useState<number>(() => Date.now());
   const [hudVisible, setHudVisible] = useState(true);
   const [muted, setMuted] = useState(true);
   const hudOpacity = useRef(new Animated.Value(1)).current;
@@ -203,6 +208,48 @@ function PlayerView({
     onSelect(id);
   };
 
+  useEffect(() => {
+    if (!sleepDeadline) return undefined;
+    setSleepTick(Date.now());
+    const id = setInterval(() => {
+      const current = Date.now();
+      setSleepTick(current);
+      if (current >= sleepDeadline) {
+        setSleepDeadline(null);
+        setSleepMin(0);
+        try {
+          player.pause();
+        } catch {}
+        setMuted(true);
+        setNotice('睡眠定时已到：已暂停播放，晚安');
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [sleepDeadline, player]);
+
+  const cycleSleepTimer = () => {
+    const idx = SLEEP_PRESETS.indexOf(sleepMin as (typeof SLEEP_PRESETS)[number]);
+    const nextMin = SLEEP_PRESETS[(idx + 1) % SLEEP_PRESETS.length];
+    setSleepMin(nextMin);
+    if (nextMin > 0) {
+      const deadline = Date.now() + nextMin * 60_000;
+      setSleepTick(Date.now());
+      setSleepDeadline(deadline);
+      setNotice(`已设睡眠定时：${nextMin} 分钟后自动暂停`);
+    } else {
+      setSleepDeadline(null);
+      setNotice('已关闭睡眠定时');
+    }
+    setHudVisible(true);
+  };
+
+  const sleepLeftText = sleepDeadline
+    ? (() => {
+        const s = Math.max(0, Math.ceil((sleepDeadline - sleepTick) / 1000));
+        return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+      })()
+    : null;
+
   return (
     <View
       style={styles.root}
@@ -234,8 +281,19 @@ function PlayerView({
           <View style={styles.liveDot} />
           <Text style={styles.title} numberOfLines={1}>
             {teamName(match.h)} vs {teamName(match.a)} · {active.name}
+            {sleepLeftText ? ` · ⏱ ${sleepLeftText}` : ''}
           </Text>
         </View>
+        <Pressable
+          onPress={cycleSleepTimer}
+          style={[styles.sleepButton, Boolean(sleepLeftText) && styles.sleepButtonOn]}
+          accessibilityRole="button"
+          accessibilityLabel={
+            sleepLeftText ? `睡眠定时剩余 ${sleepLeftText}，点击切换` : '开启睡眠定时'
+          }
+        >
+          <MoonStar size={16} color={sleepLeftText ? colors.accent : colors.text} />
+        </Pressable>
         <Pressable
           onPress={() => {
             setHudVisible(true);
@@ -368,6 +426,20 @@ const styles = StyleSheet.create({
     borderColor: colors.hairline,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sleepButton: {
+    minWidth: 44,
+    minHeight: 44,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(11,14,21,0.72)',
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sleepButtonOn: {
+    borderColor: colors.accent,
+    backgroundColor: colors.goldSoft,
   },
   titlePill: {
     flex: 1,

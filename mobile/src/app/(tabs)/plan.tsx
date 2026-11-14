@@ -15,8 +15,9 @@ import {
   X,
 } from 'lucide-react-native';
 
-import { leagueName, teamName } from '@data/index.js';
+import { getFixtures, leagueName, teamName } from '@data/index.js';
 import { computeWeek } from '@core/owl.js';
+import { detectCrunchPeriods } from '@core/crunch.js';
 import { mondayOfWall, nightOf, owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '@core/engine.js';
 import { hasAnyWeekOverride, normalizeWeekOverrides } from '@core/week-overrides.js';
 import { weekRiskBands, weekBestEmptyState } from '@core/week-risk.js';
@@ -118,6 +119,25 @@ export default function PlanScreen() {
     .slice(0, 10);
   const plan = week.plan;
   const remain = Math.max(0, plan.budget - plan.used);
+
+  type CrunchReport = {
+    alerts: Array<{
+      teamId: string;
+      windowDays: number;
+      startDate: string;
+      endDate: string;
+      matchCount: number;
+      nightCount: number;
+      maxTier: string;
+      highlightedIds: string[];
+      tbdSkipped: number;
+    }>;
+    totalTbdSkipped: number;
+  };
+  const crunchReport = useMemo(
+    () => detectCrunchPeriods(prefs.followedTeams, getFixtures(), now) as CrunchReport,
+    [prefs.followedTeams, now, rev]
+  );
 
   /* 一周风险带：哪晚最重、到几点、是否越过睡眠底线。
      参照线用「起床时间 − 最低睡眠」，和 P0 的睡眠账本同源；没设作息时 core 会给默认值
@@ -352,6 +372,45 @@ export default function PlanScreen() {
           零成本 S0 场次不占额度，但同一时段仍只能看一场；背包最多 5 场，是本周可安排的场次上限。
         </Text>
       </Card>
+
+      {weekOffset === 0 && (crunchReport.alerts.length > 0 || crunchReport.totalTbdSkipped > 0) ? (
+        <View style={styles.section}>
+          <SectionHeader
+            title="未来 14 天魔鬼赛程预警"
+            count={crunchReport.alerts.length || undefined}
+          />
+          <Card style={styles.crunchCard}>
+            {crunchReport.alerts.map(alert => (
+              <View key={alert.teamId} style={styles.crunchRow}>
+                <View style={styles.crunchTextCol}>
+                  <Text style={styles.crunchTitle}>
+                    {teamName(alert.teamId)} · {alert.startDate.slice(5)}–{alert.endDate.slice(5)}
+                  </Text>
+                  <Text style={styles.crunchMeta}>
+                    {alert.windowDays} 天内 {alert.matchCount} 场（{alert.nightCount} 夜场 · 最高{' '}
+                    {alert.maxTier}）
+                  </Text>
+                </View>
+                {alert.highlightedIds[0] ? (
+                  <Pressable
+                    onPress={() => openMatch(alert.highlightedIds[0])}
+                    accessibilityRole="button"
+                    accessibilityLabel={`查看 ${teamName(alert.teamId)} 密集期首战`}
+                    style={({ pressed }) => [styles.crunchBtn, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.crunchBtnText}>看首战</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ))}
+            {crunchReport.totalTbdSkipped > 0 ? (
+              <Text style={styles.hint}>
+                已排除 {crunchReport.totalTbdSkipped} 场开球时间待定（TBD）场次，定档后自动重算。
+              </Text>
+            ) : null}
+          </Card>
+        </View>
+      ) : null}
 
       {showRisk ? (
         <View style={styles.section}>
@@ -1167,5 +1226,30 @@ const styles = StyleSheet.create({
   altTeams: { flex: 1, color: colors.textSecondary, fontSize: fontSize.sm },
   altIndex: { color: colors.textMuted, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   footer: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 17, textAlign: 'center' },
+  crunchCard: {
+    borderColor: withAlpha(colors.warn, 0.35),
+    backgroundColor: withAlpha(colors.warn, 0.08),
+    gap: spacing.sm,
+  },
+  crunchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  crunchTextCol: { flex: 1, gap: 2 },
+  crunchTitle: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.title },
+  crunchMeta: { color: colors.warn, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
+  crunchBtn: {
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.control,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.warn, 0.4),
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  crunchBtnText: { color: colors.warn, fontSize: fontSize.xs, fontWeight: weight.title },
   pressed: { opacity: 0.8 },
 });

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { hm } from '../core/format.js';
+import { hm, bjClock } from '../core/format.js';
+import { planSecondHalfCutIn } from '../core/second-half.js';
+import { RADAR_MAX_WATCHED, RADAR_VERDICT_META } from '../core/radar.js';
 import { storylines, teamName, TEAM_MAP } from '../data/index.js';
+import DiaryStampBar from './DiaryStampBar.jsx';
 import { sleepTier, storyBonus, followedBonus, leagueBonus, PRODUCT_WEIGHTS, WATCH_COST } from '../core/engine.js';
 import { computeMatchStandings } from '../core/standings.js';
 import {
@@ -70,7 +73,14 @@ export default function IntelPanel({
   matchChecks = {},
   onRecheckMatch,
   recheckingId = null,
-  recheckMsg = null
+  recheckMsg = null,
+  radarState = null,
+  onToggleCutIn = null,
+  onToggleRadar = null,
+  diaryEntry = null,
+  onSaveDiary = null,
+  onRemoveDiary = null,
+  onOpenSeasonReport = null
 }) {
   const [tab, setTab] = useState('decision');
 
@@ -178,9 +188,13 @@ export default function IntelPanel({
                 tier={tier}
                 match={match}
                 prefs={prefs}
+                now={now}
                 watchLaterState={watchLaterState}
                 onWatchLater={onWatchLater}
                 hidePersonal={isHeroMatch}
+                radarState={radarState}
+                onToggleCutIn={onToggleCutIn}
+                onToggleRadar={onToggleRadar}
               />
             </div>
             <div className="pt-4 lg:pl-6 lg:pt-0">
@@ -199,6 +213,17 @@ export default function IntelPanel({
           <div className="space-y-2 border-t border-line-hairline pt-3">
             <NarrativeSection narrative={narrative} stories={stories} ev={ev} hideHeadline={isHeroMatch} fold />
             <IdentitySection match={match} identity={identity} fold />
+            {onSaveDiary && (match.st === 'done' || match.st === 'live' || diaryEntry) && (
+              <DiaryStampBar
+                compact
+                matchId={match.id}
+                entry={diaryEntry}
+                defaultMode={match.st === 'done' ? 'replay' : 'live'}
+                onSave={onSaveDiary}
+                onRemove={onRemoveDiary}
+                onOpenReport={onOpenSeasonReport}
+              />
+            )}
           </div>
         </div>
       ) : tab === 'stats' ? (
@@ -223,6 +248,9 @@ export default function IntelPanel({
             <StandingsSection
               standings={standings}
               match={match}
+              now={now}
+              excludedIds={excludedIds}
+              onSelect={onSelect}
               onOpenStandings={onOpenStandings}
             />
           </div>
@@ -345,13 +373,46 @@ function DataTrustCell({ match, checkedAt = 0, onRecheck, rechecking = false, re
   );
 }
 
-function SleepCostSection({ tier, match, prefs, watchLaterState = 'none', onWatchLater, hidePersonal = false }) {
+function formatMinutesShort(min) {
+  if (!Number.isFinite(min) || min <= 0) return '0m';
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+function SleepCostSection({
+  tier,
+  match,
+  prefs,
+  now,
+  watchLaterState = 'none',
+  onWatchLater,
+  hidePersonal = false,
+  radarState = null,
+  onToggleCutIn = null,
+  onToggleRadar = null
+}) {
   const [queueMsg, setQueueMsg] = useState(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: 换场清掉「已加入补看」提示；body 只调 setState
   useEffect(() => setQueueMsg(null), [match?.id]);
   const style = TIER_MAP[tier.label] || TIER_MAP.S0;
   const queued = watchLaterState === 'pending';
   const watched = watchLaterState === 'watched';
+  const sleepProfile = {
+    enabled: Boolean(prefs?.sleepEnabled),
+    wakeTime: prefs?.sleepWakeTime || '07:30',
+    weekendEnabled: prefs?.sleepWeekendEnabled !== false,
+    weekendWakeTime: prefs?.sleepWeekendWakeTime || '09:00',
+    minSleep: prefs?.sleepMinHours ?? 7
+  };
+  const cutInPlan = planSecondHalfCutIn(match, sleepProfile, now ?? Date.now());
+  const cutInOn = !!radarState?.cutInIds?.includes(match.id);
+  const radarOn = !!radarState?.watchIds?.includes(match.id);
+  const radarVerdict = radarState?.verdicts?.[match.id] || null;
+  const radarCount = radarState?.watchIds?.length || 0;
+  const verdictMeta = radarVerdict ? RADAR_VERDICT_META[radarVerdict.verdict] : null;
   return (
     <Block icon={<IconTier />} title="睡眠代价" right={<Meta num>{match.tbd ? '时间待定' : `${hm(match.t)} 开球`}</Meta>}>
       {match.tbd ? (
@@ -405,6 +466,48 @@ function SleepCostSection({ tier, match, prefs, watchLaterState = 'none', onWatc
         <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-line-hairline bg-surface-raised/40 px-2.5 py-1.5">
           <span className="text-2xs text-text-muted">个人睡眠</span>
           <SleepNote match={match} prefs={prefs} size="md" />
+        </div>
+      )}
+      {cutInPlan.eligible && (onToggleCutIn || onToggleRadar) && (
+        <div className="mt-2 rounded-md border border-line-hairline bg-surface-raised/40 px-2.5 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-2xs font-medium text-text-primary">
+              下半场 60' 切入 · 省 {cutInPlan.savedNightMinutes}m
+            </span>
+            <Meta num>
+              先睡 {formatMinutesShort(cutInPlan.preSleepMinutes)} · {bjClock(cutInPlan.alarmAt, false)} 响铃
+            </Meta>
+          </div>
+          {verdictMeta && (
+            <div className="mt-1 flex items-center gap-1.5 text-2xs text-accent">
+              <Chip tone={verdictMeta.tone === 'gold' ? 'gold' : verdictMeta.tone === 'teal' ? 'resource' : 'neutral'}>
+                {verdictMeta.label}
+              </Chip>
+              {radarVerdict.minuteLabel && <Meta num>{radarVerdict.minuteLabel}</Meta>}
+            </div>
+          )}
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {onToggleCutIn && (
+              <Button variant={cutInOn ? 'default' : 'ghost'} size="xs" onClick={() => onToggleCutIn(match.id)}>
+                {cutInOn ? "已设 60' 提醒" : "设 60' 切入提醒"}
+              </Button>
+            )}
+            {onToggleRadar && (
+              <Button
+                variant={radarOn ? 'default' : 'ghost'}
+                size="xs"
+                onClick={() => onToggleRadar(match.id)}
+                disabled={!radarOn && radarCount >= RADAR_MAX_WATCHED}
+                title={
+                  !radarOn && radarCount >= RADAR_MAX_WATCHED
+                    ? `每晚最多盯盘 ${RADAR_MAX_WATCHED} 场`
+                    : "55'–70' 窗口无剧透判定是否值得唤醒"
+                }
+              >
+                {radarOn ? '雷达盯盘中 · 取消' : `悬念雷达 (${radarCount}/${RADAR_MAX_WATCHED})`}
+              </Button>
+            )}
+          </div>
         </div>
       )}
       {onWatchLater && (
