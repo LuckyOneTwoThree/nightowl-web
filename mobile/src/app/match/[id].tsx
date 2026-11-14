@@ -61,7 +61,10 @@ import { computeMatchStats } from '@core/stats.js';
 import { completedWatchHint, unrevealedTonightIds, WATCH_HINT_LEVEL } from '@core/reveal.js';
 
 import { animateLayout } from '@/lib/layoutAnimation';
-import { hasScheduledMatchReminder, scheduleMatchReminder } from '@/lib/reminders';
+import {
+  hasScheduledMatchReminder,
+  scheduleMatchReminderWithStatus,
+} from '@/lib/reminders';
 import { useLiveMatch, type LiveData } from '@/data/useLiveMatch';
 import { useNow } from '@/lib/useNow';
 import { useStopLossPrompt } from '@/lib/useStopLoss';
@@ -344,12 +347,20 @@ export default function MatchScreen() {
       toast.error(isPostponed ? '比赛已延期，暂无法设置提醒' : '开球时间待定，确定后可设置提醒');
       return;
     }
-    const ok = await scheduleMatchReminder(match);
-    if (ok) {
+    const result = await scheduleMatchReminderWithStatus(match);
+    if (result.ok) {
       setReminderSet(true);
       toast.success('已设置赛前提醒');
+      return;
+    }
+    if (result.reason === 'permission-denied') {
+      toast.error('未获取通知权限，请在系统设置中开启通知');
+    } else if (result.reason === 'unavailable') {
+      toast.error('仅安装版支持赛前通知提醒');
+    } else if (result.reason === 'too-late') {
+      toast.error('距开球不足 15 分钟，无法设置赛前提醒');
     } else {
-      toast.error('未设置成功：安装版或赛前 15 分钟内可用');
+      toast.error('未设置成功，请稍后重试');
     }
   };
 

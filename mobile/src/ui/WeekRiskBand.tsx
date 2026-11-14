@@ -117,8 +117,11 @@ export function WeekRiskBand({
   const span = Math.max(1, domain.endMin - domain.startMin);
   const pct = (min: number) => `${((min - domain.startMin) / span) * 100}%`;
 
+  const hasSegments = bands.some(b => !b.empty);
+
   const headline = (() => {
-    if (!risk.worst) return `${weekWord}没有可安排的场次`;
+    if (!hasSegments) return `${weekWord}没有可安排的场次`;
+    if (!risk.worst) return `${weekWord}有比赛夜均已禁看`;
     const worstDay = weekdayOf(risk.worst.weekday);
     const tail = `最晚到 ${risk.worst.latestEndClock}（${worstDay}）`;
     if (!floor) return tail;
@@ -127,7 +130,7 @@ export function WeekRiskBand({
   })();
 
   /* 一周没有任何已定开球时间的场次（历史周、休赛周）时，7 行空轨道只是噪音 */
-  if (!risk.worst) {
+  if (!hasSegments) {
     return (
       <View style={styles.wrap}>
         <Text style={styles.headline}>{headline}</Text>

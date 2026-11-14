@@ -48,6 +48,27 @@ const empty = getMorningDigest([], [match], morning, wake);
 ok('空队列不生成摘要', empty.canShow === false && empty.items.length === 0);
 
 console.log('');
+console.log('三、周末作息起床时间');
+// 2026-10-31 是周六早晨（昨晚 2026-10-30 周五夜），开启周末起床 09:30 后 08:00 不提前弹出，09:35 弹出
+const weekendOpts = { weekendEnabled: true, weekendWakeTime: '09:30' };
+ok(
+  '★ 开启周末作息时，周六 08:00 不按工作日 07:30 提前弹出',
+  getMorningDigest(q2, [match, older], morning, wake, weekendOpts).canShow === false
+);
+ok(
+  '★ 周六 09:35 超过周末起床时间后正常弹出',
+  getMorningDigest(q2, [match, older], ts('2026-10-31T09:35'), wake, weekendOpts).canShow === true
+);
+// 2026-10-29 是周四早晨（昨晚 2026-10-28 周三夜）→ 仍按工作日 07:30
+const weekdayMatch = { id: 'PL-8-TOT-CHE', t: '2026-10-29T03:00', h: 'TOT', a: 'CHE', l: 'PL', st: 'sched' };
+const weekdayMorning = ts('2026-10-29T08:00');
+const qWeekday = addToQueue([], weekdayMatch, weekdayMorning).queue;
+ok(
+  '工作日早晨仍按 sleepWakeTime 弹出',
+  getMorningDigest(qWeekday, [weekdayMatch], weekdayMorning, wake, weekendOpts).canShow === true
+);
+
+console.log('');
 console.log('────────────────────────────────────────────────────');
 if (fail) {
   console.log(`通过 ${pass} 项，失败 ${fail} 项`);

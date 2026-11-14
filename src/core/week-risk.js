@@ -141,8 +141,12 @@ export function weekRiskBands(week, profile, now) {
   const actionable = nowTs == null
     ? scheduled.filter(m => !m.tbd)
     : scheduled.filter(m => isActionable(m, nowTs));
+  const blockedSet = new Set(
+    Array.isArray(week?.overrides?.blockedNights) ? week.overrides.blockedNights : []
+  );
 
   const bands = days.map((day, index) => {
+    const blocked = day?.blocked === true || blockedSet.has(day?.date);
     const bandFloor = sleepFloorOf(profile, day?.date) || floor;
     const known = actionable.filter(m => Number.isFinite(ts(m.t)) && owlDay(m.t) === day.date);
 
@@ -175,6 +179,7 @@ export function weekRiskBands(week, profile, now) {
       latestEndMin: latest ? latest.endMin : null,
       latestEndClock: latest ? latest.endClock : null,
       floor: bandFloor,
+      blocked,
       belowFloor: overMinutes > 0,
       overMinutes,
       current,
@@ -182,7 +187,10 @@ export function weekRiskBands(week, profile, now) {
     };
   });
 
-  const worst = bands.reduce(
+  // 禁看夜已排在休息名单外，不再计入「越线晚数」与「最晚到几点」的汇总告警；
+  // 轨道本身的 segments/belowFloor 仍保留，供界面半透明展示（方便用户随时点开解除禁看）。
+  const activeBands = bands.filter(b => !b.blocked);
+  const worst = activeBands.reduce(
     (acc, band) =>
       band.latestEndMin != null && (!acc || band.latestEndMin > acc.latestEndMin) ? band : acc,
     null
@@ -205,7 +213,7 @@ export function weekRiskBands(week, profile, now) {
           latestEndClock: worst.latestEndClock
         }
       : null,
-    riskNights: bands.filter(b => b.belowFloor).length,
+    riskNights: activeBands.filter(b => b.belowFloor).length,
     /** 本周开球时间未定的场次数（不归属任何一晚） */
     tbdCount
   };

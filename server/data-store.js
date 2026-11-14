@@ -14,10 +14,12 @@
 
 import { accessSync, constants, existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
 import { ts, MATCH_DURATION_MS } from '../src/core/engine.js';
+import { mergeFixtures, buildFixturesDiff } from '../src/data/index.js';
+
+export { mergeFixtures };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -149,7 +151,7 @@ export function activeFixturesPath() {
 }
 
 /**
- * 内置快照 + 用户数据按 id 合并。
+ * 内置快照 + 用户数据按 id 合并（实现已收敛到 src/data/index.js 供桌面与移动端共用）。
  *
  * 旧实现是「用户文件存在就完全替代内置」，后果不是丢比分，而是**永久锁住出厂赛程**：
  * 老用户同步过一次之后，之后任何新版本带进内置快照的新场次（UCL 淘汰赛对阵、
@@ -164,62 +166,8 @@ export function activeFixturesPath() {
  *    会被用户文件里那条上个版本抄下来的旧值挡住，且同步从不写这两个字段 → 永不纠正。
  *    所以从 schemaVersion 2 起，用户文件只存**差分**（writer='sparse'），
  *    并对每个字段记写入时刻；合并时用内置 rev 与之比较，谁新听谁的。
- *    见 mergeFixtures 的 opts。
+ *    见 src/data/index.js 中的 mergeFixtures。
  */
-/** 旧式「整份副本」用户文件里可以信任的字段（都是同步真正会写的结果字段） */
-const DENSE_TRUSTED_FIELDS = ['sc', 'st', 'tbd'];
-
-/** 去掉内部的 at 映射，别让它漏给消费方（界面/测试都不认识这个字段） */
-function stripMeta(m) {
-  if (!m || !m.at) return m;
-  const { at, ...rest } = m;
-  return rest;
-}
-
-/**
- * @param {object[]} builtin 内置快照
- * @param {object[]} user    用户数据（sparse 差分或旧式整份副本）
- * @param {object}   [opts]
- * @param {'sparse'|'dense'} [opts.writer='dense'] 用户文件的写盘方式
- * @param {string|null} [opts.builtinRev=null] 内置快照的修订时刻（ISO）
- */
-export function mergeFixtures(builtin, user, opts = {}) {
-  if (!Array.isArray(user) || user.length === 0) return builtin || [];
-  if (!Array.isArray(builtin) || builtin.length === 0) return user.map(stripMeta);
-  const { writer = 'dense', builtinRev = null } = opts;
-  const revTs = builtinRev ? Date.parse(builtinRev) : NaN;
-  const byId = new Map();
-  for (const m of builtin) {
-    if (m && m.id) byId.set(m.id, m);
-  }
-  for (const m of user) {
-    if (!m || !m.id) continue;
-    const base = byId.get(m.id);
-    if (!base) {
-      byId.set(m.id, stripMeta(m));
-      continue;
-    }
-    const at = m.at || {};
-    const next = { ...base };
-    for (const [k, v] of Object.entries(m)) {
-      if (k === 'id' || k === 'at') continue;
-      // 旧式整份副本：t/r 分不清「同步写的」还是「抄内置的」，只信结果字段
-      if (writer !== 'sparse' && !DENSE_TRUSTED_FIELDS.includes(k)) continue;
-      /**
-       * 时间戳裁决（sparse）：内置这次修订比该字段的写入时刻**更新** → 内置胜。
-       * 这是「内置人工更正被用户副本遮蔽」的根治点：
-       * 用户文件里那条 23:00 是上个版本同步留下的，内置已改成 20:00 时应当以新为准。
-       */
-      if (writer === 'sparse' && Number.isFinite(revTs)) {
-        const fieldTs = at[k] ? Date.parse(at[k]) : NaN;
-        if (Number.isFinite(fieldTs) && revTs > fieldTs) continue;
-      }
-      next[k] = v;
-    }
-    byId.set(m.id, next);
-  }
-  return [...byId.values()];
-}
 
 function parseFixtures(raw) {
   try {
@@ -298,43 +246,11 @@ export function saveFixtures(next) {
   }
   const now = new Date().toISOString();
   let out;
-  const changedFields = [];
+  let changedFields;
   try {
     const builtin = parseFixtures(readFileSync(BUILT_IN, 'utf8'));
-    const builtinById = new Map(builtin.filter(m => m && m.id).map(m => [m.id, m]));
-    const prevById = new Map();
-    if (existsSync(p)) {
-      for (const row of parseFixtures(readFileSync(p, 'utf8'))) {
-        if (row && row.id) prevById.set(row.id, row);
-      }
-    }
-    out = [];
-    for (const m of next || []) {
-      if (!m || !m.id) continue;
-      const base = builtinById.get(m.id);
-      // 内置没有这条（历史遗留/人为导入）：整条保留，否则读回来就丢了
-      if (!base) {
-        out.push(m);
-        continue;
-      }
-      const prev = prevById.get(m.id);
-      const diff = { id: m.id };
-      const at = {};
-      let dirty = 0;
-      for (const k of Object.keys(m)) {
-        if (k === 'id' || k === 'at') continue;
-        if (m[k] === base[k]) continue;
-        diff[k] = m[k];
-        dirty++;
-        // 值没变过的字段沿用上一次的写入时刻
-        at[k] = prev && prev[k] === m[k] && prev.at?.[k] ? prev.at[k] : now;
-        changedFields.push(`${m.id}.${k}`);
-      }
-      if (dirty) {
-        diff.at = at;
-        out.push(diff);
-      }
-    }
+    const prevUser = existsSync(p) ? parseFixtures(readFileSync(p, 'utf8')) : [];
+    ({ out, changedFields } = buildFixturesDiff(builtin, next, prevUser, now));
   } catch (err) {
     return { ok: false, reason: `计算差分失败：${err.message}`, path: p };
   }

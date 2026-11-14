@@ -207,7 +207,11 @@ export function selectIcsMatches(matches, { range = 'tonight', nowTs = Date.now(
     return pool.filter(m => owlDayOf(m.t) === night);
   }
   if (range === 'week') {
-    if (weekIds && weekIds.size) return pool.filter(m => weekIds.has(m.id));
+    if (weekIds instanceof Set) return pool.filter(m => weekIds.has(m.id));
+    if (Array.isArray(weekIds)) {
+      const set = new Set(weekIds);
+      return pool.filter(m => set.has(m.id));
+    }
     if (!weekStartStr) return [];
     const days = weekDayList(weekStartStr);
     return pool.filter(m => days.includes(owlDayOf(m.t)));

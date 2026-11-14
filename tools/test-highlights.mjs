@@ -15,7 +15,8 @@ import {
   buildTeamResolver,
   pickHighlightEvent,
   cacheEntryFresh,
-  resolveHighlights
+  resolveHighlights,
+  resetHighlightsCache
 } from '../server/highlights.js';
 import { sourceUrlFor, replayQuery, highlightQuery, highlightSources } from '../src/core/watch-sources.js';
 import { createServer } from '../server/index.js';
@@ -213,6 +214,26 @@ console.log('六、resolveHighlights：抓取 / 解析 / 失败降级');
     { ...baseOpts, fetchJSON: async () => json }
   );
   ok('UCL 不在集锦联赛配置内（走官方平台）', unsupported.ok === false && unsupported.reason === 'unsupported-league');
+
+  // 并发限流：同时发起两次未命中缓存的请求时，第二次必须等待 minRequestIntervalMs 间隔
+  resetHighlightsCache();
+  const callTimes = [];
+  const rateOpts = {
+    ...baseOpts,
+    rules: { highlights: { enabled: true, minRequestIntervalMs: 60 } },
+    cache: {},
+    fetchJSON: async () => {
+      callTimes.push(Date.now());
+      return json;
+    }
+  };
+  await Promise.all([
+    resolveHighlights(match, rateOpts),
+    resolveHighlights({ ...match, id: 'PL-8-ARS-CHE', r: 8 }, { ...rateOpts, cache: {} })
+  ]);
+  const gapMs = callTimes.length === 2 ? callTimes[1] - callTimes[0] : -1;
+  ok('★ 并发集锦请求按最小间隔排队（await 前预占槽位）', gapMs >= 45, `times=${callTimes.join(',')}, gap=${gapMs}ms`);
+  resetHighlightsCache();
 }
 
 /* ================================================================== */

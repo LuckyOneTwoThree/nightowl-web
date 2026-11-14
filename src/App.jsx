@@ -36,6 +36,7 @@ import StopLossBanner from './components/StopLossBanner.jsx';
 import MorningDigest from './components/MorningDigest.jsx';
 import DigestSessionBar from './components/DigestSessionBar.jsx';
 import ScheduleChanges from './components/ScheduleChanges.jsx';
+import { filterRelevantChanges } from './core/schedule-change.js';
 import {
   getMorningDigest,
   morningDigestNight
@@ -603,16 +604,46 @@ export default function App() {
   );
 
   /**
-   * 「本周精选」的场次 ID（供设置里的日历导出使用）。
-   * 只在设置抽屉打开时才算：用户不导出就不该为它多跑一次背包规划。
+   * 「本周精选」的场次 ID（供设置里的日历导出与「计划有变」关联过滤复用）。
+   * 只在设置抽屉打开或存在未关闭的赛程变动时计算，避免平时多跑一次背包规划。
    * 已经在「本周规划」视图时直接复用，避免同一份数据算两遍。
    */
+  const needCurrentWeekBest =
+    settingsOpen || !!(scheduleChanges?.items?.length && dismissedChangesAt !== scheduleChanges.at);
   // biome-ignore lint/correctness/useExhaustiveDependencies: 同 week：靠 dataRev/minuteKey 失效
   const weekBestIds = useMemo(() => {
-    if (!settingsOpen) return null;
-    const w = view === 'week' && week ? week : computeWeek(Date.now(), prefs);
+    if (!needCurrentWeekBest) return null;
+    const currentWeekKey = mondayOfWall(nightOf(Date.now()));
+    const w =
+      view === 'week' && week && weekOffset === 0
+        ? week
+        : computeWeek(Date.now(), prefs, {
+            weekOffset: 0,
+            overrides: weekOverridesByWeek[currentWeekKey] || EMPTY_WEEK_OVERRIDES
+          });
     return new Set(w.plan.best.map(e => e.m.id));
-  }, [settingsOpen, view, week, prefs, dataRev, minuteKey]);
+  }, [needCurrentWeekBest, view, week, weekOffset, prefs, weekOverridesByWeek, dataRev, minuteKey]);
+
+  const visibleScheduleChanges = useMemo(() => {
+    if (!scheduleChanges?.items?.length) return null;
+    const ids = new Set();
+    if (tonight.hero?.m.id) ids.add(tonight.hero.m.id);
+    for (const e of tonight.extras || []) {
+      if (e?.m?.id) ids.add(e.m.id);
+    }
+    if (weekBestIds) {
+      for (const id of weekBestIds) ids.add(id);
+    }
+    for (const item of normalizeQueue(watchLater)) {
+      if (item.status === 'pending') ids.add(item.id);
+    }
+    const filtered = filterRelevantChanges(scheduleChanges, {
+      followedTeams: prefs.followedTeams,
+      followedLeagues: prefs.followedLeagues,
+      matchIds: [...ids]
+    });
+    return filtered?.items?.length ? filtered : null;
+  }, [scheduleChanges, tonight, weekBestIds, watchLater, prefs.followedTeams, prefs.followedLeagues]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: 靠 dataRev 失效；body 读模块级 fixtures
   const scheduleRows = useMemo(
@@ -620,9 +651,9 @@ export default function App() {
     [view, prefs, filters, dataRev]
   );
 
-  // ---- 顶栏「进行中」计数（随 30 秒时钟刷新）----
-  // biome-ignore lint/correctness/useExhaustiveDependencies: clockTs 是刻度触发器；liveCountAt 内部读 Date.now()
-  const liveCount = useMemo(() => liveCountAt(Date.now()), [clockTs]);
+  // ---- 顶栏「进行中」计数（随 30 秒时钟与数据修订版本刷新）----
+  // biome-ignore lint/correctness/useExhaustiveDependencies: clockTs/dataRev 是刷新触发器；liveCountAt 内部读 Date.now() 与最新 fixtures
+  const liveCount = useMemo(() => liveCountAt(Date.now()), [clockTs, dataRev]);
 
   // 按 dataRev 重建：保鲜同步后右栏也要拿到新记录（含比分），不能停在构建期快照
   // ⚠️ 必须在下面的「首屏锁定」effect 之前声明 —— 该 effect 的依赖数组里含 matchMap，
@@ -749,26 +780,35 @@ export default function App() {
   // 必须由 App 统一计算，不能每个面板各自判断（旧实现正是这样漏掉积分榜和球队页的）。
   // biome-ignore lint/correctness/useExhaustiveDependencies: 靠 dataRev/clockTs 失效；body 读 getFixtures()
   const morningDigestAuto = useMemo(
-    () => getMorningDigest(watchLater, getFixtures(), clockTs, prefs.sleepWakeTime),
-    [watchLater, dataRev, clockTs, prefs.sleepWakeTime]
+    () =>
+      getMorningDigest(watchLater, getFixtures(), clockTs, prefs.sleepWakeTime, {
+        weekendEnabled: prefs.sleepWeekendEnabled,
+        weekendWakeTime: prefs.sleepWeekendWakeTime
+      }),
+    [watchLater, dataRev, clockTs, prefs.sleepWakeTime, prefs.sleepWeekendEnabled, prefs.sleepWeekendWakeTime]
   );
   // biome-ignore lint/correctness/useExhaustiveDependencies: 同上（强制版）
   const morningDigestAll = useMemo(
-    () => getMorningDigest(watchLater, getFixtures(), clockTs, prefs.sleepWakeTime, { force: true }),
-    [watchLater, dataRev, clockTs, prefs.sleepWakeTime]
+    () =>
+      getMorningDigest(watchLater, getFixtures(), clockTs, prefs.sleepWakeTime, {
+        force: true,
+        weekendEnabled: prefs.sleepWeekendEnabled,
+        weekendWakeTime: prefs.sleepWeekendWakeTime
+      }),
+    [watchLater, dataRev, clockTs, prefs.sleepWakeTime, prefs.sleepWeekendEnabled, prefs.sleepWeekendWakeTime]
   );
   useEffect(() => {
     if (
       !prefs.sleepEnabled || !morningDigestAuto.canShow || morningDigestOpen ||
       morningDismissed.night === morningDigestAuto.night ||
-      settingsOpen || onboardingOpen || splashOpen || updateModalOpen || standingsState
+      settingsOpen || onboardingOpen || splashOpen || updateModalOpen || standingsState || paletteOpen
     ) {
       return;
     }
     setMorningDigestOpen(true);
   }, [
     prefs.sleepEnabled, morningDigestAuto, morningDigestOpen, morningDismissed,
-    settingsOpen, onboardingOpen, splashOpen, updateModalOpen, standingsState
+    settingsOpen, onboardingOpen, splashOpen, updateModalOpen, standingsState, paletteOpen
   ]);
   const closeMorningDigest = useCallback(() => {
     const night = morningDigestAll.night || morningDigestNight(clockTs);
@@ -1009,11 +1049,11 @@ export default function App() {
         <main className="flex min-h-0 flex-1 overflow-hidden">
           {/* 左栏：决策与列表 */}
           <section className="flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] 2xl:w-[390px] shrink-0 flex-col overflow-hidden border-r border-line-hairline bg-surface-panel p-4">
-          {/* 计划有变（FR-05）：一次同步检测到的改期/延期，关闭后本轮不再出现 */}
-          {scheduleChanges && dismissedChangesAt !== scheduleChanges.at && (
+          {/* 计划有变（FR-05）：一次同步检测到的与用户相关的改期/延期，关闭后本轮不再出现 */}
+          {visibleScheduleChanges && dismissedChangesAt !== scheduleChanges?.at && (
             <div className="mb-2 shrink-0">
               <ScheduleChanges
-                changes={scheduleChanges}
+                changes={visibleScheduleChanges}
                 onDismiss={dismissScheduleChanges}
                 onSelect={select}
               />

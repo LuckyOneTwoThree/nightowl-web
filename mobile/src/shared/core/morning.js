@@ -6,7 +6,7 @@
  */
 
 import { nightOf } from './engine.js';
-import { parseClockTime } from './sleep.js';
+import { isWeekendNight, parseClockTime } from './sleep.js';
 import { queueWithMatches } from './queue.js';
 
 const DAY_MS = 86400000;
@@ -16,8 +16,20 @@ function beijingMinutes(now) {
   return d.getUTCHours() * 60 + d.getUTCMinutes();
 }
 
-export function isMorningDigestWindow(now, wakeTime) {
-  const wake = parseClockTime(wakeTime);
+function effectiveWakeTime(now, wakeTime, options = {}) {
+  const night = options.night || morningDigestNight(now);
+  if (
+    options.weekendEnabled &&
+    isWeekendNight(night) &&
+    parseClockTime(options.weekendWakeTime) != null
+  ) {
+    return options.weekendWakeTime;
+  }
+  return wakeTime;
+}
+
+export function isMorningDigestWindow(now, wakeTime, options = {}) {
+  const wake = parseClockTime(effectiveWakeTime(now, wakeTime, options));
   if (wake == null) return false;
   const mins = beijingMinutes(now);
   return mins >= wake && mins < 23 * 60;
@@ -34,7 +46,7 @@ export function morningDigestNight(now) {
 export function getMorningDigest(queue, fixtures, now, wakeTime, options = {}) {
   const force = options.force === true;
   const night = morningDigestNight(now);
-  if (!force && !isMorningDigestWindow(now, wakeTime)) {
+  if (!force && !isMorningDigestWindow(now, wakeTime, { ...options, night })) {
     return { night, items: [], canShow: false };
   }
   const items = queueWithMatches(queue, fixtures, now).filter(e => e.item.night === night);

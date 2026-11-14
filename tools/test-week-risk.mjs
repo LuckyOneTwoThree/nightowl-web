@@ -305,6 +305,33 @@ console.log('五、双轨作息底线');
 }
 
 console.log('');
+console.log('六、禁看夜（blockedNights）不计入越线统计与最晚告警');
+{
+  const DATES = ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08'];
+  const days = DATES.map((date, i) => ({ date, cost: 0, matches: [], blocked: i === 2 }));
+  const mk = (id, t) => ({ id, t, h: 'AAA', a: 'BBB', l: 'PL', st: 'sched' });
+  const matches = [
+    // 周三夜 02:00 → 04:00（原本最晚且越线，但被标记 blocked）
+    mk('wed-late', '2026-11-05T02:00'),
+    // 周四夜 22:00 → 00:00（未越线）
+    mk('thu-early', '2026-11-05T22:00')
+  ];
+  const prof = { enabled: true, wakeTime: '07:30', weekendEnabled: false, minSleep: 7 };
+  const risk = weekRiskBands({ days, matches, overrides: { blockedNights: ['2026-11-04'] } }, prof, ts('2026-11-01T12:00'));
+
+  ok('禁看夜保留自身 segments 但标 blocked=true', risk.bands[2].blocked === true && risk.bands[2].segments.length === 1);
+  ok('riskNights 排除禁看夜', risk.riskNights === 0, String(risk.riskNights));
+  ok('worst 排除禁看夜（指向周四 00:00）', risk.worst?.date === '2026-11-05' && risk.worst?.latestEndClock === '00:00', JSON.stringify(risk.worst));
+
+  const allBlocked = weekRiskBands(
+    { days: DATES.map(date => ({ date, cost: 0, matches: [], blocked: true })), matches },
+    prof,
+    ts('2026-11-01T12:00')
+  );
+  ok('全周禁看时 worst=null 且 riskNights=0', allBlocked.worst === null && allBlocked.riskNights === 0);
+}
+
+console.log('');
 console.log(`通过 ${pass} 项，失败 ${fail} 项`);
 if (fail) {
   console.log('');

@@ -62,6 +62,15 @@ console.log('一、授权与复用');
 
   const bad = proxy.allowHost('not a host!!');
   ok('非法主机名被拒', bad.ok === false, JSON.stringify(bad));
+
+  const mixed = proxy.allowHost('HLS.Example.COM');
+  ok('混合大小写授权命中已存在域名（大小写无关）', mixed.ok === true && mixed.already === true);
+  ok('混合大小写检查 isAllowed 返回 true', proxy.isAllowed('Hls.Example.Com') === true);
+  const revokeMixed = proxy.revokeHost('HLS.EXAMPLE.COM');
+  ok(
+    '混合大小写 revokeHost 成功移除',
+    revokeMixed.ok === true && revokeMixed.removed === true && !proxy.isAllowed('hls.example.com')
+  );
 }
 
 /* ================================================================== */

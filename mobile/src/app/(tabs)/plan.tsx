@@ -85,6 +85,7 @@ export default function PlanScreen() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const byWeek = useWeekOverridesStore(state => state.byWeek);
+  const setPin = useWeekOverridesStore(state => state.setPin);
   const togglePin = useWeekOverridesStore(state => state.togglePin);
   const toggleExclude = useWeekOverridesStore(state => state.toggleExclude);
   const toggleBlockNight = useWeekOverridesStore(state => state.toggleBlockNight);
@@ -121,35 +122,29 @@ export default function PlanScreen() {
   /* 一周风险带：哪晚最重、到几点、是否越过睡眠底线。
      参照线用「起床时间 − 最低睡眠」，和 P0 的睡眠账本同源；没设作息时 core 会给默认值
      并标 assumed，界面必须说明这是默认线，不能冒充用户自己的作息。 */
-  const risk = useMemo(() => {
-    const computed = weekRiskBands(
+  const risk = useMemo(
+    () =>
+      weekRiskBands(
+        week,
+        {
+          enabled: prefs.sleepEnabled,
+          wakeTime: prefs.sleepWakeTime,
+          weekendEnabled: prefs.sleepWeekendEnabled,
+          weekendWakeTime: prefs.sleepWeekendWakeTime,
+          minSleep: prefs.sleepMinHours,
+        },
+        now
+      ) as unknown as WeekRisk,
+    [
       week,
-      {
-        enabled: prefs.sleepEnabled,
-        wakeTime: prefs.sleepWakeTime,
-        weekendEnabled: prefs.sleepWeekendEnabled,
-        weekendWakeTime: prefs.sleepWeekendWakeTime,
-        minSleep: prefs.sleepMinHours,
-      },
-      now
-    ) as unknown as WeekRisk;
-    if (weekOffset < 0 || activeOverrides.blockedNights.length === 0) return computed;
-    const blockedSet = new Set(activeOverrides.blockedNights);
-    return {
-      ...computed,
-      bands: computed.bands.map(b => ({ ...b, blocked: blockedSet.has(b.date) })),
-    };
-  }, [
-    week,
-    prefs.sleepEnabled,
-    prefs.sleepWakeTime,
-    prefs.sleepWeekendEnabled,
-    prefs.sleepWeekendWakeTime,
-    prefs.sleepMinHours,
-    now,
-    weekOffset,
-    activeOverrides.blockedNights,
-  ]);
+      prefs.sleepEnabled,
+      prefs.sleepWakeTime,
+      prefs.sleepWeekendEnabled,
+      prefs.sleepWeekendWakeTime,
+      prefs.sleepMinHours,
+      now,
+    ]
+  );
 
   const hasAnyMatches = week.actionableDays.some(day => day.count > 0);
 
@@ -472,7 +467,7 @@ export default function PlanScreen() {
                     animateLayout();
                     if (isPinned) togglePin(activeWeekKey, entry.m.id, currentWeekStart);
                     toggleExclude(activeWeekKey, entry.m.id, currentWeekStart);
-                    togglePin(activeWeekKey, altId, currentWeekStart);
+                    setPin(activeWeekKey, altId, true, currentWeekStart);
                     toast.success('已切换同开球替换场次');
                   }}
                   onOpenAlt={openMatch}

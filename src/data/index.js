@@ -17,17 +17,18 @@
  *      ICS 日历、赛程变更通知全部以它为键，改 id 会让这些历史数据**全量孤立失效**。
  *    · `r` 是**展示字段**，由保鲜同步按权威源（openfootball 的 `round`）校正。
  *      2026-11-05 那次校正修了 26 场西甲，于是出现「id 段 4、r 为 6」的受控不一致 ——
- *      这是**预期状态**，不是数据损坏。详见 docs/DEEP-REVIEW-2026-11-05-b.md 的 P1-1。
+ *      这是**预期状态**，不是数据损坏。详见 docs/archive/DEEP-REVIEW-2026-11-05-b.md 的 P1-1。
  */
 
 import fixtures from './fixtures.json' with { type: 'json' };
+import fixturesMeta from './fixtures-meta.json' with { type: 'json' };
 import teams from './teams.json' with { type: 'json' };
 import rivalries from './rivalries.json' with { type: 'json' };
 import storylines from './storylines.json' with { type: 'json' };
 import recommendations from './recommendations.json' with { type: 'json' };
 import quips from './quips.json' with { type: 'json' };
 
-export { fixtures, teams, rivalries, storylines, recommendations, quips };
+export { fixtures, fixturesMeta, teams, rivalries, storylines, recommendations, quips };
 
 /** 联赛中文名。SCG 是数据集中唯一的非联赛赛事（德国超级杯），单独归为「其他」以便筛选器兜住 */
 export const LEAGUE_NAMES = {
@@ -147,4 +148,106 @@ export function setFixtures(next) {
   }
   _fixtures = clean;
   return true;
+}
+
+/* ------------------------------------------------------------------ */
+/* 赛程差分合并与计算（桌面 server 与移动端共用）                        */
+/* ------------------------------------------------------------------ */
+
+/** 旧式「整份副本」用户文件里可以信任的字段（都是同步真正会写的结果字段） */
+const DENSE_TRUSTED_FIELDS = ['sc', 'st', 'tbd'];
+
+/** 去掉内部的 at 映射，别让它漏给消费方（界面/测试都不认识这个字段） */
+function stripMeta(m) {
+  if (!m || !m.at) return m;
+  const { at: _at, ...rest } = m;
+  return rest;
+}
+
+/**
+ * 内置快照 + 用户数据按 id 合并（桌面 server 与移动端共用）。
+ *
+ * @param {object[]} builtin 内置快照
+ * @param {object[]} user    用户数据（sparse 差分或旧式整份副本）
+ * @param {object}   [opts]
+ * @param {'sparse'|'dense'} [opts.writer='dense'] 用户文件的写盘方式
+ * @param {string|null} [opts.builtinRev=null] 内置快照的修订时刻（ISO）
+ */
+export function mergeFixtures(builtin, user, opts = {}) {
+  if (!Array.isArray(user) || user.length === 0) return builtin || [];
+  if (!Array.isArray(builtin) || builtin.length === 0) return user.map(stripMeta);
+  const { writer = 'dense', builtinRev = null } = opts;
+  const revTs = builtinRev ? Date.parse(builtinRev) : NaN;
+  const byId = new Map();
+  for (const m of builtin) {
+    if (m && m.id) byId.set(m.id, m);
+  }
+  for (const m of user) {
+    if (!m || !m.id) continue;
+    const base = byId.get(m.id);
+    if (!base) {
+      byId.set(m.id, stripMeta(m));
+      continue;
+    }
+    const at = m.at || {};
+    const next = { ...base };
+    for (const [k, v] of Object.entries(m)) {
+      if (k === 'id' || k === 'at') continue;
+      // 旧式整份副本：t/r 分不清「同步写的」还是「抄内置的」，只信结果字段
+      if (writer !== 'sparse' && !DENSE_TRUSTED_FIELDS.includes(k)) continue;
+      // 时间戳裁决（sparse）：内置这次修订比该字段的写入时刻更新 → 内置胜
+      if (writer === 'sparse' && Number.isFinite(revTs)) {
+        const fieldTs = at[k] ? Date.parse(at[k]) : NaN;
+        if (Number.isFinite(fieldTs) && revTs > fieldTs) continue;
+      }
+      next[k] = v;
+    }
+    byId.set(m.id, next);
+  }
+  return [...byId.values()];
+}
+
+/**
+ * 计算全量赛程相对于内置快照的稀疏差分，保留未变字段的原始写入时刻。
+ *
+ * @param {object[]} builtin  内置快照
+ * @param {object[]} next     最新全量赛程
+ * @param {object[]} [prevUser] 上一次落盘的用户差分
+ * @param {string}   [nowIso]   当前写入时刻 ISO
+ * @returns {{ out: object[], changedFields: string[] }}
+ */
+export function buildFixturesDiff(builtin, next, prevUser = [], nowIso = new Date().toISOString()) {
+  const builtinById = new Map((builtin || []).filter(m => m && m.id).map(m => [m.id, m]));
+  const prevById = new Map((prevUser || []).filter(row => row && row.id).map(row => [row.id, row]));
+  const out = [];
+  const changedFields = [];
+
+  for (const m of next || []) {
+    if (!m || !m.id) continue;
+    const base = builtinById.get(m.id);
+    // 内置没有这条（历史遗留/人为导入）：整条保留，否则读回来就丢了
+    if (!base) {
+      out.push(stripMeta(m));
+      continue;
+    }
+    const prev = prevById.get(m.id);
+    const diff = { id: m.id };
+    const at = {};
+    let dirty = 0;
+    for (const k of Object.keys(m)) {
+      if (k === 'id' || k === 'at') continue;
+      if (m[k] === base[k]) continue;
+      diff[k] = m[k];
+      dirty++;
+      // 值没变过的字段沿用上一次的写入时刻
+      at[k] = prev && prev[k] === m[k] && prev.at?.[k] ? prev.at[k] : nowIso;
+      changedFields.push(`${m.id}.${k}`);
+    }
+    if (dirty) {
+      diff.at = at;
+      out.push(diff);
+    }
+  }
+
+  return { out, changedFields };
 }

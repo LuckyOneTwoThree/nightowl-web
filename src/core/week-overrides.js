@@ -40,13 +40,12 @@ export function hasAnyWeekOverride(ov) {
   return n.pinnedIds.length > 0 || n.excludedIds.length > 0 || n.blockedNights.length > 0;
 }
 
-export function togglePinnedMatch(ov, matchId) {
+export function setPinnedMatch(ov, matchId, pinned = true) {
   const cur = normalizeWeekOverrides(ov);
   if (!matchId) return cur;
   const id = String(matchId).trim();
   if (!id) return cur;
-  const has = cur.pinnedIds.includes(id);
-  if (has) {
+  if (!pinned) {
     return {
       ...cur,
       pinnedIds: cur.pinnedIds.filter(x => x !== id),
@@ -54,9 +53,17 @@ export function togglePinnedMatch(ov, matchId) {
   }
   return {
     ...cur,
-    pinnedIds: [...cur.pinnedIds, id],
+    pinnedIds: cur.pinnedIds.includes(id) ? cur.pinnedIds : [...cur.pinnedIds, id],
     excludedIds: cur.excludedIds.filter(x => x !== id),
   };
+}
+
+export function togglePinnedMatch(ov, matchId) {
+  const cur = normalizeWeekOverrides(ov);
+  if (!matchId) return cur;
+  const id = String(matchId).trim();
+  if (!id) return cur;
+  return setPinnedMatch(cur, id, !cur.pinnedIds.includes(id));
 }
 
 export function toggleExcludedMatch(ov, matchId) {

@@ -37,3 +37,35 @@ export function summarizeChanges(changes) {
     detail: parts.join(' · ')
   };
 }
+
+/**
+ * 按 PRD FR-05 过滤与排序与用户相关的赛程变动：
+ * 关注球队 / 计划精选 / 补看队列中的比赛优先，并过滤完全无关联赛的噪音。
+ *
+ * 兼容数组与服务端 `{ items, count, ... }` 结构。
+ */
+export function filterRelevantChanges(
+  changes,
+  { followedTeams = [], followedLeagues = [], matchIds = [] } = {}
+) {
+  const isEnvelope = !Array.isArray(changes) && changes && Array.isArray(changes.items);
+  const list = Array.isArray(changes) ? changes : isEnvelope ? changes.items : [];
+
+  const teamSet = new Set(Array.isArray(followedTeams) ? followedTeams : []);
+  const leagueSet = new Set(Array.isArray(followedLeagues) ? followedLeagues : []);
+  const idSet = new Set(Array.isArray(matchIds) ? matchIds : []);
+
+  const isCore = c => !!c && (idSet.has(c.id) || teamSet.has(c.h) || teamSet.has(c.a));
+  const noFilterActive = teamSet.size === 0 && leagueSet.size === 0 && idSet.size === 0;
+  const hasNarrowedLeagues = leagueSet.size > 0 && leagueSet.size < 6;
+
+  const filtered = (
+    noFilterActive
+      ? [...list]
+      : list.filter(c => isCore(c) || (hasNarrowedLeagues && !!c && leagueSet.has(c.league)))
+  ).sort((a, b) => (isCore(b) ? 1 : 0) - (isCore(a) ? 1 : 0));
+
+  if (Array.isArray(changes)) return filtered;
+  if (isEnvelope) return { ...changes, items: filtered, count: filtered.length };
+  return changes;
+}

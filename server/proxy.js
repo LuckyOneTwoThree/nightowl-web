@@ -41,16 +41,18 @@ export class ProxyError extends Error {
 
 /** 域名是否在白名单内 */
 export function isHostAllowed(hostname, rules, sessionAllowed = null) {
+  const host = typeof hostname === 'string' ? hostname.trim().toLowerCase() : '';
+  if (!host) return false;
   const p = rules.proxy || {};
   const exact = p.allowedHosts || [];
   const suffixes = p.allowedHostSuffixes || [];
   return (
-    exact.includes(hostname) ||
+    exact.some(h => typeof h === 'string' && h.trim().toLowerCase() === host) ||
     suffixes.some(s => {
-      const clean = s.startsWith('.') ? s.slice(1) : s;
-      return hostname === clean || hostname.endsWith(`.${clean}`);
+      const clean = String(s || '').trim().toLowerCase().replace(/^\./, '');
+      return clean ? host === clean || host.endsWith(`.${clean}`) : false;
     }) ||
-    (sessionAllowed ? sessionAllowed.has(hostname) : false)
+    (sessionAllowed ? sessionAllowed.has(host) : false)
   );
 }
 
@@ -249,10 +251,13 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
 
   /** 显式撤销某个域名的会话授权 */
   const revokeHost = host => {
-    const had = sessionAllowed.has(host);
-    sessionAllowed.delete(host);
-    sessionHeaders.delete(host);
-    sessionGrantedAt.delete(host);
+    const clean = typeof host === 'string' ? host.trim().toLowerCase() : '';
+    const had = !!clean && sessionAllowed.has(clean);
+    if (clean) {
+      sessionAllowed.delete(clean);
+      sessionHeaders.delete(clean);
+      sessionGrantedAt.delete(clean);
+    }
     return { ok: true, removed: had };
   };
 
@@ -267,21 +272,22 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
 
   const allowHost = (host, headers = null) => {
     pruneSessions();
-    if (!isValidHost(host, !!(rules.proxy && rules.proxy.allowLoopbackHosts))) {
+    const cleanHost = typeof host === 'string' ? host.trim().toLowerCase() : '';
+    if (!isValidHost(cleanHost, !!(rules.proxy && rules.proxy.allowLoopbackHosts))) {
       return { ok: false, reason: '非法主机名（IP 字面量 / localhost / 内网名一律拒绝）' };
     }
-    if (sessionAllowed.has(host) && !headers) {
-      sessionGrantedAt.set(host, Date.now()); // 复用即续期
+    if (sessionAllowed.has(cleanHost) && !headers) {
+      sessionGrantedAt.set(cleanHost, Date.now()); // 复用即续期
       return { ok: true, already: true };
     }
-    if (!sessionAllowed.has(host) && sessionAllowed.size >= MAX_SESSION_HOSTS) {
+    if (!sessionAllowed.has(cleanHost) && sessionAllowed.size >= MAX_SESSION_HOSTS) {
       return {
         ok: false,
         reason: `会话白名单已达上限（${MAX_SESSION_HOSTS}），可等待过期回收或调用 /api/proxy/revoke 清空`
       };
     }
-    sessionAllowed.add(host);
-    sessionGrantedAt.set(host, Date.now());
+    sessionAllowed.add(cleanHost);
+    sessionGrantedAt.set(cleanHost, Date.now());
 
     if (headers && typeof headers === 'object') {
       const clean = {};
@@ -289,7 +295,7 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
         const v = headers[k];
         if (typeof v === 'string' && v.trim()) clean[k] = v.trim();
       }
-      if (Object.keys(clean).length) sessionHeaders.set(host, clean);
+      if (Object.keys(clean).length) sessionHeaders.set(cleanHost, clean);
     }
     return { ok: true };
   };

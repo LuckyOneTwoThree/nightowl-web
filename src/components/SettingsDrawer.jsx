@@ -6,7 +6,7 @@ import { queueWithMatches } from '../core/queue.js';
 import { requestScoreSync, SYNC_STATUS_BUSY } from '../api/score-sync.js';
 import { clearLineMemory, loadLineMemory } from './line-memory-storage.js';
 import { buildIcs, selectIcsMatches, ICS_RANGES } from '../core/ics.js';
-import { weekStartBJ } from '../core/engine.js';
+import { mondayOfWall, nightOf } from '../core/engine.js';
 import { BrandLogo, Button, Chip, Fieldset, Hint, Meta, Segmented, Switch, TogglePill } from './atoms.jsx';
 import { hm } from '../core/format.js';
 import { IconClose, IconReset } from './icons.jsx';
@@ -130,7 +130,7 @@ export default function SettingsDrawer({
       const matches = selectIcsMatches(getFixtures(), {
         range: icsRange,
         nowTs: now,
-        weekStartStr: icsRange === 'week' ? weekStartBJ(now).str : null,
+        weekStartStr: icsRange === 'week' ? mondayOfWall(nightOf(now)) : null,
         followedTeams: prefs.followedTeams,
         weekIds: icsRange === 'week' ? weekIds : null
       });

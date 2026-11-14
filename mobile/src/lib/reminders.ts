@@ -201,6 +201,8 @@ async function runReminderSync(prefs: Prefs): Promise<ReminderResult> {
     }
 
     const list = [...candidates.values()]
+      // 手动提醒优先：先剔除已有且对齐的手动提醒，避免占用自动提醒的 30 条上限名额。
+      .filter(match => !manualMatchIds.has(match.id))
       .filter(match => ts(match.t) - LEAD_MS > now)
       .sort((a, b) => ts(a.t) - ts(b.t))
       .slice(0, MAX_REMINDERS);
@@ -213,8 +215,6 @@ async function runReminderSync(prefs: Prefs): Promise<ReminderResult> {
 
     let scheduled = 0;
     for (const match of list) {
-      // 手动提醒优先：已对齐到最新开球时间的手动提醒不再重复排程。
-      if (manualMatchIds.has(match.id)) continue;
       const when = new Date(ts(match.t) - LEAD_MS);
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -269,16 +269,24 @@ export async function scheduleTestNotification(
   }
 }
 
-export async function scheduleMatchReminder(match: Match): Promise<boolean> {
-  if (!notificationsAvailable()) return false;
-  if (!match || match.tbd || match.st !== 'sched') return false;
+export type ManualReminderStatus =
+  | { ok: true }
+  | { ok: false; reason: 'unavailable' | 'ineligible' | 'permission-denied' | 'too-late' | 'error' };
+
+export async function scheduleMatchReminderWithStatus(
+  match: Match
+): Promise<ManualReminderStatus> {
+  if (!notificationsAvailable()) return { ok: false, reason: 'unavailable' };
+  if (!match || match.tbd || match.st !== 'sched') return { ok: false, reason: 'ineligible' };
   try {
     const Notifications = await import('expo-notifications');
     await configure(Notifications);
     const granted = await requestNotificationPermission();
-    if (!granted) return false;
+    if (!granted) return { ok: false, reason: 'permission-denied' };
     const when = new Date(ts(match.t) - LEAD_MS);
-    if (!Number.isFinite(when.getTime()) || when.getTime() <= Date.now()) return false;
+    if (!Number.isFinite(when.getTime()) || when.getTime() <= Date.now()) {
+      return { ok: false, reason: 'too-late' };
+    }
 
     // 幂等且跟随改期：同一场若已有提醒但开球时间已变，先清掉旧提醒再按新时间重排。
     const existing = await Notifications.getAllScheduledNotificationsAsync();
@@ -293,7 +301,7 @@ export async function scheduleMatchReminder(match: Match): Promise<boolean> {
         }
       }
     }
-    if (alreadyUpToDate) return true;
+    if (alreadyUpToDate) return { ok: true };
 
     await Notifications.scheduleNotificationAsync({
       content: {
@@ -307,10 +315,15 @@ export async function scheduleMatchReminder(match: Match): Promise<boolean> {
         channelId: CHANNEL_ID,
       },
     });
-    return true;
+    return { ok: true };
   } catch {
-    return false;
+    return { ok: false, reason: 'error' };
   }
+}
+
+export async function scheduleMatchReminder(match: Match): Promise<boolean> {
+  const result = await scheduleMatchReminderWithStatus(match);
+  return result.ok;
 }
 
 export async function hasScheduledMatchReminder(matchId: string): Promise<boolean> {

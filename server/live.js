@@ -197,8 +197,19 @@ export function extractLiveFromSummary(summary, match, league, now = Date.now(),
 /* 缓存与主入口                                                        */
 /* ------------------------------------------------------------------ */
 
+const MAX_LIVE_CACHE = 200;
 const liveCache = new Map();
 const inFlight = new Map();
+
+function cacheLiveResult(matchId, nowTs, data) {
+  if (liveCache.has(matchId)) liveCache.delete(matchId);
+  while (liveCache.size >= MAX_LIVE_CACHE) {
+    const oldestKey = liveCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    liveCache.delete(oldestKey);
+  }
+  liveCache.set(matchId, { at: nowTs, data });
+}
 
 /** 测试用：清空实时缓存 */
 export function resetLiveCache() {
@@ -270,7 +281,7 @@ export async function resolveLive(match, opts = {}) {
       });
     } catch {
       const fallback = extractLiveFromScoreboard(ev, match, match.l, now);
-      if (fallback.ok) liveCache.set(match.id, { at: now, data: fallback });
+      if (fallback.ok) cacheLiveResult(match.id, now, fallback);
       return fallback;
     }
 
@@ -281,11 +292,11 @@ export async function resolveLive(match, opts = {}) {
 
     if (!data.ok) {
       const fallback = extractLiveFromScoreboard(ev, match, match.l, now);
-      if (fallback.ok) liveCache.set(match.id, { at: now, data: fallback });
+      if (fallback.ok) cacheLiveResult(match.id, now, fallback);
       return fallback;
     }
 
-    liveCache.set(match.id, { at: now, data });
+    cacheLiveResult(match.id, now, data);
     return { ...data, cached: false };
   })();
 

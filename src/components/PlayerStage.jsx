@@ -516,7 +516,9 @@ export default function PlayerStage({
     return [...orderedLines.slice(0, 2), orderedLines[activeIdx]];
   }, [orderedLines, theaterLinesExpanded, activeLineId]);
 
+  const fetchSeqRef = useRef(0);
   const stopPlayback = useCallback(() => {
+    fetchSeqRef.current += 1;
     setStreamUrl(null);
     setStreamKind(null);
     setActiveLineId(null);
@@ -754,8 +756,12 @@ export default function PlayerStage({
       const currentMatch = matchRef.current;
       if (!currentMatch) return;
 
+      const seq = ++fetchSeqRef.current;
+
       if (reset) {
         stopPlayback();
+        // stopPlayback 会自增序号，这里重取一次确保当前请求持有最新序号
+        fetchSeqRef.current = seq;
         setLines([]);
         setLiveInfo(null);
         setTheaterLinesExpanded(false);
@@ -775,7 +781,8 @@ export default function PlayerStage({
         if (!res.ok) throw new Error(String(res.status));
         const data = await res.json();
 
-        // 避免网络异步返回时用户已切到其他场次
+        // 避免慢请求（切场或同场并发刷新）覆盖更新的线路状态
+        if (seq !== fetchSeqRef.current) return;
         if (matchRef.current?.id !== currentMatch.id) return;
 
         setLiveInfo(data);
@@ -789,6 +796,7 @@ export default function PlayerStage({
           if (direct) selectLine(direct);
         }
       } catch (err) {
+        if (seq !== fetchSeqRef.current) return;
         if (matchRef.current?.id !== currentMatch.id) return;
         // fetch 本身失败 = 本地服务没起来，不是「源站推流受限」。
         // 归因错了会让用户一直点「重新检索」，而真正该做的是重启应用。
@@ -796,7 +804,7 @@ export default function PlayerStage({
         setServiceDown(true);
         console.warn('[PlayerStage] 获取直播线路失败:', err.message);
       } finally {
-        if (matchRef.current?.id === currentMatch.id) {
+        if (seq === fetchSeqRef.current && matchRef.current?.id === currentMatch.id) {
           setLoadingLines(false);
         }
       }

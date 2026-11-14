@@ -88,19 +88,20 @@ export default function ScheduleScreen() {
     }
   }, [params.nav, params.q, params.date]);
 
+  const todayTs = useMemo(() => Date.parse(`${today}T12:00:00Z`), [today]);
   const dates = useMemo(
-    () => Array.from({ length: 15 }, (_, index) => owlDayOffset(index - 2, now)),
-    [now]
+    () => Array.from({ length: 15 }, (_, index) => owlDayOffset(index - 2, todayTs)),
+    [todayTs]
   );
 
   const rows = useMemo(() => {
     if (mode === 'standings' || filters.leagues.length === 0) return [] as Row[];
-    return computeScheduleRows(now, prefs, {
+    return computeScheduleRows(0, prefs, {
       leagues: filters.leagues,
       onlyFollowed: filters.onlyFollowed,
       query: filters.query,
     }) as Row[];
-  }, [mode, now, prefs, filters, rev]);
+  }, [mode, prefs, filters, rev]);
 
   // 日期条计数必须与当前筛选后的列表同口径：
   // 只看意甲时，日期卡不应继续显示全季 23 场。

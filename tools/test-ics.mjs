@@ -91,6 +91,22 @@ console.log('二、筛选范围');
   // NOW 是 11-01（周日），这一周是 10-26 ~ 11-01；F3 落在下一周，不该被导出
   ok('★ 本周范围只覆盖本周夜猫日', week.map(x => x.id).join(',') === 'F1,F2', week.map(x => x.id).join(','));
 
+  const weekEmptySet = selectIcsMatches(matches, {
+    range: 'week',
+    nowTs: NOW,
+    weekStartStr: '2026-10-26',
+    weekIds: new Set()
+  });
+  ok('★ 显式传入空 weekIds Set 时返回空，不回退导出全周', weekEmptySet.length === 0, String(weekEmptySet.length));
+
+  const weekPicked = selectIcsMatches(matches, {
+    range: 'week',
+    nowTs: NOW,
+    weekStartStr: '2026-10-26',
+    weekIds: new Set(['F2', 'F3'])
+  });
+  ok('传入 weekIds Set 时仅导出集合内未来且时间确定的场次', weekPicked.map(x => x.id).join(',') === 'F2,F3', weekPicked.map(x => x.id).join(','));
+
   const followed = selectIcsMatches(matches, {
     range: 'followed',
     nowTs: NOW,

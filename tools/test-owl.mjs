@@ -33,6 +33,7 @@ import { isActionable } from '../src/core/actionable.js';
 import {
   EMPTY_WEEK_OVERRIDES,
   normalizeWeekOverrides,
+  setPinnedMatch,
   togglePinnedMatch,
   toggleExcludedMatch,
   toggleBlockedNight,
@@ -839,6 +840,12 @@ console.log('十二、周计划交互微调（固定 / 换掉 / 禁看夜）');
   ov = togglePinnedMatch(ov, 'M2');
   ok('★ 固定一场原本被跳过的比赛会自动移出 excludedIds',
     ov.pinnedIds.includes('M2') && !ov.excludedIds.includes('M2'));
+  const idemPinned = setPinnedMatch(ov, 'M2', true);
+  ok('★ setPinnedMatch(..., true) 对已固定场次幂等且不重复',
+    idemPinned.pinnedIds.filter(id => id === 'M2').length === 1);
+  const unpinned = setPinnedMatch(ov, 'M2', false);
+  ok('★ setPinnedMatch(..., false) 取消固定',
+    !unpinned.pinnedIds.includes('M2'));
   const pruned = pruneWeekOverridesMap(
     { '2026-11-02': ov, '2026-11-09': ov, '2026-11-16': normalizeWeekOverrides({}) },
     '2026-11-09'

@@ -6,7 +6,7 @@
  * 于是 openfootball 一直被标为 kickoffTrusted: false，它的开球时间从未被采信。
  *
  * 本模块把当地墙钟按「联赛基础偏移 + 欧洲夏令时」换算成北京墙钟，
- * 让 openfootball 升级为可信时间源，从而能清除 tbd 占位（见 OPTIMIZATION-PLAN.md P1）。
+ * 让 openfootball 升级为可信时间源，从而能清除 tbd 占位（见 docs/archive/OPTIMIZATION-PLAN.md P1）。
  *
  * 口径：北京墙钟串 'YYYY-MM-DDTHH:mm'（与 fixtures / engine.ts() 一致）。
  */

@@ -229,12 +229,26 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
    * 只在服务端算得出：只有这里同时握有「同步前」与「同步后」两份 fixtures。
    * 渲染层读取它并提示「计划有变」，关掉提示由渲染层自己记状态，服务端不做已读。
    */
+  let syncRunSeq = 0;
   let lastChanges = null;
-  const recordChanges = (before, after, label) => {
+  let lastChangesRunId = 0;
+  const recordChanges = (before, after, label, { mergePrev = false, runId = 0 } = {}) => {
     try {
       const items = diffFixtures(before, after);
       if (!items.length) return;
-      lastChanges = { at: Date.now(), label, items: items.slice(0, 20), count: items.length };
+      let combined = items;
+      if (mergePrev && runId && lastChangesRunId === runId && Array.isArray(lastChanges?.items)) {
+        const byId = new Map();
+        for (const item of lastChanges.items) {
+          if (item?.id) byId.set(item.id, item);
+        }
+        for (const item of items) {
+          if (item?.id) byId.set(item.id, item);
+        }
+        combined = [...byId.values()];
+      }
+      lastChangesRunId = runId;
+      lastChanges = { at: Date.now(), label, items: combined.slice(0, 100), count: combined.length };
       log.log?.(`[changes] ${label}检测到 ${items.length} 场赛程变动`);
     } catch (err) {
       log.warn?.(`[changes] 差异计算失败（不影响同步）: ${err?.message || err}`);
@@ -580,7 +594,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
             } else {
               const saved = saveFixturesImpl(next) || { ok: false, reason: '写盘结果缺失' };
               written = { ...saved, changed };
-              if (saved.ok === true) recordChanges(fixtures, next, '手动同步');
+              if (saved.ok === true) recordChanges(fixtures, next, '手动同步', { runId: ++syncRunSeq });
               // 只有真正写盘成功才把新数据回传前端。
               // 否则前端会拿未落盘的比分替换内存数据 —— 界面显示已更新，重启后却回滚。
               if (saved.ok === true) nextFixtures = next;
@@ -724,7 +738,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
   };
 
   /** 执行一轮同步并落盘；返回下一阶段应使用的 fixtures 与本阶段结果。 */
-  const runSyncStage = async (fixtures, sources, label) => {
+  const runSyncStage = async (fixtures, sources, label, { mergeChanges = false, runId = 0 } = {}) => {
     const startedAt = Date.now();
     const result = await syncScoresImpl({ fixtures, rules, sources, log });
     let written = { ok: true, changed: 0, note: '没有需要写入的补丁' };
@@ -739,7 +753,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
         written = { ok: false, reason: '校验未通过，已放弃写盘', issues: issues.slice(0, 5) };
       } else {
         const saved = saveFixturesImpl(next) || { ok: false, reason: '写盘结果缺失' };
-        if (saved.ok === true) recordChanges(fixtures, next, label);
+        if (saved.ok === true) recordChanges(fixtures, next, label, { mergePrev: mergeChanges, runId });
         // ⚠️ 不能不看 saved.ok 就报「完成」：数据目录不可写时 saveFixtures 返回
         //    {ok:false, reason}，此时日志在撒谎、lastSync.applied 也错报为 true。
         written = { ...saved, changed };
@@ -794,10 +808,11 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
         error: `[${label}] ${message}`
       });
     };
+    const runId = ++syncRunSeq;
     try {
       fixtures = await loadFixturesImpl();
       try {
-        const stage = await runSyncStage(fixtures, ['espn'], '后台快检');
+        const stage = await runSyncStage(fixtures, ['espn'], '后台快检', { runId });
         fixtures = stage.fixtures;
         stages.push(stage.info);
       } catch (err) {
@@ -808,7 +823,8 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
         const stage = await runSyncStage(
           fixtures,
           espnOk ? ['openfootball'] : undefined,
-          espnOk ? '后台补全' : '后台完整保鲜'
+          espnOk ? '后台补全' : '后台完整保鲜',
+          { mergeChanges: true, runId }
         );
         fixtures = stage.fixtures;
         stages.push(stage.info);

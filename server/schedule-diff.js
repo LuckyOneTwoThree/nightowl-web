@@ -34,13 +34,44 @@ export function diffFixtures(before, after, opts = {}) {
     const prev = prevById.get(next.id);
     if (!prev) continue; // 新增场次不在本阶段范围（数据只走脚本）
 
-    // 1) 开球时间
+    // 1) 状态变化优先：避免「延期且改占位时间」被误报成普通改期，且完赛录分不计入变动
+    if (prev.st !== next.st) {
+      if (next.st === 'pp') {
+        changes.push({
+          id: next.id,
+          league: next.l,
+          h: next.h,
+          a: next.a,
+          kind: 'postponed',
+          from: prev.st,
+          to: next.st
+        });
+        continue;
+      }
+      if (prev.st === 'pp' && next.st === 'sched') {
+        changes.push({
+          id: next.id,
+          league: next.l,
+          h: next.h,
+          a: next.a,
+          kind: 'resumed',
+          from: prev.st,
+          to: next.st
+        });
+        continue;
+      }
+      // prev.st === 'sched' && next.st === 'done'（比分补上）不算计划变化
+      if (next.st === 'done') continue;
+    }
+
+    // 2) 开球时间变化或待定敲定（tbd → false 即使开球恰好等于原占位时刻也算正式公布）
     const prevTs = ts(prev.t);
     const nextTs = ts(next.t);
     const wasTbd = !!prev.tbd;
+    const nowConfirmed = wasTbd && !next.tbd;
     const timeMoved =
       Number.isFinite(prevTs) && Number.isFinite(nextTs) && Math.abs(nextTs - prevTs) >= threshold;
-    if (timeMoved) {
+    if (timeMoved || (nowConfirmed && Number.isFinite(nextTs))) {
       changes.push({
         id: next.id,
         league: next.l,
@@ -52,17 +83,6 @@ export function diffFixtures(before, after, opts = {}) {
         // 从「待定」变成「确定」是好事，文案要区分，不该读成改期
         fromTbd: wasTbd
       });
-      continue;
-    }
-
-    // 2) 状态：延期 / 恢复
-    if (prev.st !== next.st) {
-      if (next.st === 'pp') {
-        changes.push({ id: next.id, league: next.l, h: next.h, a: next.a, kind: 'postponed', from: prev.st, to: next.st });
-      } else if (prev.st === 'pp' && next.st === 'sched') {
-        changes.push({ id: next.id, league: next.l, h: next.h, a: next.a, kind: 'resumed', from: prev.st, to: next.st });
-      }
-      // prev.st === 'sched' && next.st === 'done'（比分补上）不算计划变化
     }
   }
 

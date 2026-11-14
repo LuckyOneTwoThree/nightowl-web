@@ -6,6 +6,7 @@ import {
   EMPTY_WEEK_OVERRIDES,
   normalizeWeekOverrides,
   pruneWeekOverridesMap,
+  setPinnedMatch,
   toggleBlockedNight,
   toggleExcludedMatch,
   togglePinnedMatch,
@@ -21,6 +22,12 @@ type WeekOverridesStore = {
   byWeek: Record<string, WeekOverrideEntry>;
   hydrated: boolean;
   getForWeek: (weekKey: string) => WeekOverrideEntry;
+  setPin: (
+    weekKey: string,
+    matchId: string | number,
+    pinned: boolean,
+    minWeekKey?: string | null
+  ) => boolean;
   togglePin: (weekKey: string, matchId: string | number, minWeekKey?: string | null) => boolean;
   toggleExclude: (weekKey: string, matchId: string | number, minWeekKey?: string | null) => boolean;
   toggleBlockNight: (weekKey: string, dateKey: string, minWeekKey?: string | null) => boolean;
@@ -36,6 +43,19 @@ export const useWeekOverridesStore = create<WeekOverridesStore>()(
       getForWeek: weekKey => {
         if (!weekKey) return EMPTY_WEEK_OVERRIDES as unknown as WeekOverrideEntry;
         return normalizeWeekOverrides(get().byWeek[weekKey]) as WeekOverrideEntry;
+      },
+      setPin: (weekKey, matchId, pinned, minWeekKey = null) => {
+        if (!weekKey) return false;
+        const current = normalizeWeekOverrides(get().byWeek[weekKey]) as WeekOverrideEntry;
+        const next = setPinnedMatch(current, String(matchId), pinned) as WeekOverrideEntry;
+        const pinnedNow = next.pinnedIds.includes(String(matchId));
+        set(state => ({
+          byWeek: pruneWeekOverridesMap(
+            { ...state.byWeek, [weekKey]: next },
+            minWeekKey as null | undefined
+          ) as Record<string, WeekOverrideEntry>,
+        }));
+        return pinnedNow;
       },
       togglePin: (weekKey, matchId, minWeekKey = null) => {
         if (!weekKey) return false;

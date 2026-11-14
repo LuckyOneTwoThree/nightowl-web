@@ -322,14 +322,16 @@ export async function probeChannels(force = false) {
   await Promise.all(
     TV_SPORTS_CHANNELS.map(async ch => {
       let ok = false;
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 6000);
       try {
-        const ac = new AbortController();
-        const timer = setTimeout(() => ac.abort(), 6000);
         const r = await fetch(ch.url, { signal: ac.signal });
-        clearTimeout(timer);
         ok = r.ok;
+        await r.body?.cancel?.().catch(() => {});
       } catch {
         ok = false;
+      } finally {
+        clearTimeout(timer);
       }
       results.set(ch.id, ok);
     })

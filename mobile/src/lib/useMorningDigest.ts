@@ -9,6 +9,8 @@ const KEY = 'nightowl:morningDigest:v1';
 type Prefs = {
   sleepEnabled: boolean;
   sleepWakeTime: string;
+  sleepWeekendEnabled?: boolean;
+  sleepWeekendWakeTime?: string;
 };
 
 export function useMorningDigest(
@@ -42,12 +44,21 @@ export function useMorningDigest(
   }, []);
 
   const autoDigest = useMemo(
-    () => getMorningDigest(items, fixtures, now, prefs.sleepWakeTime),
-    [items, fixtures, now, prefs.sleepWakeTime]
+    () =>
+      getMorningDigest(items, fixtures, now, prefs.sleepWakeTime, {
+        weekendEnabled: prefs.sleepWeekendEnabled,
+        weekendWakeTime: prefs.sleepWeekendWakeTime,
+      }),
+    [items, fixtures, now, prefs.sleepWakeTime, prefs.sleepWeekendEnabled, prefs.sleepWeekendWakeTime]
   );
   const allDigest = useMemo(
-    () => getMorningDigest(items, fixtures, now, prefs.sleepWakeTime, { force: true }),
-    [items, fixtures, now, prefs.sleepWakeTime]
+    () =>
+      getMorningDigest(items, fixtures, now, prefs.sleepWakeTime, {
+        force: true,
+        weekendEnabled: prefs.sleepWeekendEnabled,
+        weekendWakeTime: prefs.sleepWeekendWakeTime,
+      }),
+    [items, fixtures, now, prefs.sleepWakeTime, prefs.sleepWeekendEnabled, prefs.sleepWeekendWakeTime]
   );
 
   useEffect(() => {

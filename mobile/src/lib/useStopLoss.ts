@@ -51,27 +51,11 @@ export function useStopLossPrompt(
   const statesRef = useRef(states);
   statesRef.current = states;
   const [loaded, setLoaded] = useState(false);
+  const hasLoadedRef = useRef(false);
   const [context, setContext] = useState<StopLossContext | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const addWatchLater = useWatchLaterStore(state => state.add);
   const markWatchLaterWatched = useWatchLaterStore(state => state.markWatched);
-
-  useEffect(() => {
-    let alive = true;
-    AsyncStorage.getItem(KEY)
-      .then(raw => {
-        if (!alive || !raw) return;
-        const saved = JSON.parse(raw) as Record<string, NightState>;
-        if (saved && typeof saved === 'object') setStates(saved);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (alive) setLoaded(true);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   const writeState = useCallback((night: string, state: NightState) => {
     const next = { ...statesRef.current, [night]: state };
@@ -92,12 +76,11 @@ export function useStopLossPrompt(
     setNotice(null);
   }, [enabled]);
 
-  // 首页与比赛详情各自持有 hook；重新聚焦时同步一次持久化状态，
-  // 避免另一个页面已经提示/跳过，当前页面仍按旧状态重复弹卡。
+  // 首次挂载读取 + 后续重新聚焦（enabled 由 false→true）同步一次持久化状态，
+  // 避免首页与比赛详情各自持有的 hook 之间状态漂移；同时避免挂载期双读与 loaded 抖动。
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled && hasLoadedRef.current) return;
     let alive = true;
-    setLoaded(false);
     AsyncStorage.getItem(KEY)
       .then(raw => {
         if (!alive || !raw) return;
@@ -106,7 +89,10 @@ export function useStopLossPrompt(
       })
       .catch(() => {})
       .finally(() => {
-        if (alive) setLoaded(true);
+        if (alive) {
+          hasLoadedRef.current = true;
+          setLoaded(true);
+        }
       });
     return () => {
       alive = false;

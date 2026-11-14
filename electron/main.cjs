@@ -641,14 +641,30 @@ if (!gotLock) {
   // 桌面设置必须在窗口创建前读出来：关闭行为与自启都在生命周期事件里当场判断
   loadDesktopSettings();
 
+  let updateCheckTimer = null;
+  let updatePollTimer = null;
+
   app.on('second-instance', () => {
     // 从托盘隐藏后再次启动，也要把窗口叫回来
+    showMainWindow();
+  });
+
+  app.on('activate', () => {
+    // macOS 点击 Dock 图标时唤回隐藏在后台/托盘的主窗口
     showMainWindow();
   });
 
   app.on('before-quit', () => {
     // 放行 close 事件：否则 closeToTray 会把「退出」变成「隐藏」
     isQuitting = true;
+    if (updateCheckTimer) {
+      clearTimeout(updateCheckTimer);
+      updateCheckTimer = null;
+    }
+    if (updatePollTimer) {
+      clearInterval(updatePollTimer);
+      updatePollTimer = null;
+    }
   });
 
   app.whenReady().then(async () => {
@@ -678,12 +694,13 @@ if (!gotLock) {
     if (!hiddenStart) win.show();
 
     // 启动 2 秒后静默检测一次更新（首屏渲染完毕即检，告别长时间盲区）
-    setTimeout(() => {
+    updateCheckTimer = setTimeout(() => {
+      updateCheckTimer = null;
       triggerUpdateCheck(true);
     }, 2000);
 
     // 后台每 45 分钟自动轮询一次更新
-    setInterval(() => {
+    updatePollTimer = setInterval(() => {
       triggerUpdateCheck(true);
     }, 45 * 60 * 1000);
 

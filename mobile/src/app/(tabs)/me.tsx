@@ -65,13 +65,13 @@ export default function MeScreen() {
   const removeWatchLater = useWatchLaterStore(state => state.remove);
   const markWatchLaterWatched = useWatchLaterStore(state => state.markWatched);
   const toggleWatchLater = useWatchLaterStore(state => state.toggle);
+  const now = useNow(60_000);
   const queueEntries = useMemo(
-    () => queueWithMatches(watchLaterItems, getFixtures(), Date.now(), { includeWatched: true }),
-    [watchLaterItems, rev]
+    () => queueWithMatches(watchLaterItems, getFixtures(), now, { includeWatched: true }),
+    [watchLaterItems, rev, now]
   );
   const pendingQueueEntries = queueEntries.filter(entry => entry.item.status === 'pending');
   const watchedQueueEntries = queueEntries.filter(entry => entry.item.status === 'watched');
-  const now = useNow(60_000);
   const requestMorningDigest = useMorningDigestStore(state => state.requestOpen);
   const source = useAppStore(state => state.source);
   const { syncing, syncError, lastCheckedAt } = useSyncState();

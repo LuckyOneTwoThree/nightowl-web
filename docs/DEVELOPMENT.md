@@ -55,6 +55,7 @@ npm run test:sources       # 数据源健康度（联网）
 cd mobile
 npm install
 npm start                  # Expo 开发服务器；prestart 自动同步共享层与队徽
+npm run check              # verify:shared + verify:pipeline + audit:touch(44dp) + typecheck
 npm run typecheck          # tsc --noEmit
 npm run verify:shared      # 共享层漂移检查（提交前必跑）
 npm run verify:pipeline    # 手抄数据管道差异清单校验（提交前必跑）
@@ -62,6 +63,8 @@ npm run export:android     # 验证 Android JS bundle 可产出（不是 APK）
 npm run eas:dev            # development APK（通知 / PiP / HLS 真机调试）
 npm run eas:preview        # 内测 APK（arm64，用于真机验收）
 ```
+
+> **Android UI / 性能约定**：深色列表行禁用原生 `android_ripple`（易产生半透明抖动噪点），改用平滑背景高亮；团队选择器等高频交互页采用页面内批处理状态 + `memo` 单元格与 `Set` 查重，不直写持久化存储。
 
 ### 共享层
 

@@ -1,6 +1,6 @@
 {
   "_readme": "手机端数据管道是桌面端的手抄分支（存在有意差异）。本清单让差异可见：任一侧改动都会让 verify:pipeline 失败；确认两端仍等价后运行 npm run sync:pipeline -- --write 更新哈希。",
-  "generatedAt": "2026-11-05T06:48:21.448Z",
+  "generatedAt": "2026-11-14T13:01:33.572Z",
   "pairs": [
     {
       "desktop": "server/scores.js",
@@ -51,27 +51,27 @@
       "desktop": "server/live.js",
       "mobile": "mobile/src/data/live.js",
       "reason": "实时比分解析；缓存介质不同（内存 / AsyncStorage）",
-      "desktopSha": "3431df501992e8b70f63c3cda9acefeaba09a7bb81aaa5d51e3ce06feec67a04",
-      "mobileSha": "7c407acbd71d2159fdf8c2417db82a2bbe1caca15535ac2efb98d714a645cfac",
-      "desktopLines": 299,
-      "mobileLines": 299
+      "desktopSha": "a08d83ce192d83490d7aacd91c36dc04de22bff3c3a77265e3ac06233d3754e0",
+      "mobileSha": "66ea628f74f75952bc762e037a9f59aff2755a2f335142998f6da2a77f1d1d60",
+      "desktopLines": 310,
+      "mobileLines": 310
     },
     {
       "desktop": "server/highlights.js",
       "mobile": "mobile/src/data/highlights.js",
       "reason": "集锦解析；磁盘缓存 vs AsyncStorage，URL 校验实现不同",
-      "desktopSha": "bbb6262a4561e2f4649443d27a5b111d6c1e924d793201183a38000171a2c49b",
-      "mobileSha": "fef8cab928eaa3b56702131785ab2ed3b8d158d125f868dfb14810e39520c78c",
-      "desktopLines": 391,
-      "mobileLines": 379
+      "desktopSha": "a297a1a2d781ee7ffbf0a310c3f9b2cb3e65183963758a2f6945795747d72a20",
+      "mobileSha": "fa4f4668db67a353648d90332f45a5b2fff60b60f3f76c14a9d026a852e1b7c6",
+      "desktopLines": 395,
+      "mobileLines": 383
     },
     {
       "desktop": "server/scraper.js",
       "mobile": "mobile/src/data/scraper.js",
       "reason": "直播源抓取；手机不内置签名频道（TV_SPORTS_CHANNELS=[]）",
-      "desktopSha": "f0ba2588f2f8d03e72530088601f641514a334346074b3fb6a8f7ac1a1d6159d",
+      "desktopSha": "a622717d9e71267b887249a4bab342f43af61c300ae5a549ea246e796ffc2251",
       "mobileSha": "40fa99d134628e21845f39e3571d44a4296a34db0b0f767319d75bdc3da1be73",
-      "desktopLines": 494,
+      "desktopLines": 496,
       "mobileLines": 496
     }
   ]

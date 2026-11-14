@@ -82,4 +82,4 @@ console.log(`    ${r6.ms.toFixed(4)} ms / 次（×2000 取平均）`);
 console.log(`    全季 1897 行全算 = ${(r6.ms * N).toFixed(1)} ms（若误用 children 模式）`);
 
 console.log('\n' + '═'.repeat(64));
-console.log('结论见 docs/OPTIMIZATION-PLAN.md');
+console.log('结论见 docs/archive/OPTIMIZATION-PLAN.md');

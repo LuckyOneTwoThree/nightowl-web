@@ -274,9 +274,10 @@ function writeDiskCache(cache, persist = true) {
   }
 }
 
-/** 测试用：清空内存缓存 */
+/** 测试用：清空内存缓存与限流时间戳 */
 export function resetHighlightsCache() {
   diskCache = null;
+  lastFetchAt = 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -286,9 +287,12 @@ export function resetHighlightsCache() {
 let lastFetchAt = 0;
 async function waitForSlot(minIntervalMs) {
   if (!(minIntervalMs > 0)) return;
-  const wait = lastFetchAt + minIntervalMs - Date.now();
+  const now = Date.now();
+  const nextSlot = lastFetchAt > 0 ? Math.max(now, lastFetchAt + minIntervalMs) : now;
+  const wait = nextSlot - now;
+  // 先预占槽位再等待：并发请求同时进入时按序排队，而不是一起等待后同时发出
+  lastFetchAt = nextSlot;
   if (wait > 0) await new Promise(r => setTimeout(r, wait));
-  lastFetchAt = Date.now();
 }
 
 /* ------------------------------------------------------------------ */

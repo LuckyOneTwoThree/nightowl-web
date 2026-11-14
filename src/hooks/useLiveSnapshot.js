@@ -29,39 +29,64 @@ export function useLiveSnapshot({ matchId = null, state = null, intervalMs = 300
   // 用 ref 保存「当前应该关心哪一场」，让 load 不必随 matchId 重建（interval 会被重置）
   const activeRef = useRef({ matchId, state });
   activeRef.current = { matchId, state };
-  // 已经有快照时不再显示骨架屏：手动刷新和轮询都不该让画面闪
+  // 已有快照时不再显示骨架屏：手动刷新和轮询都不该让画面闪
   const hasDataRef = useRef(false);
-  // 同一时刻只允许一个在途请求：轮询与「手动刷新」撞在一起时不要打两次上游
-  const inFlightRef = useRef(false);
+  // 按场次与序号追踪在途请求：切场时不互相阻塞，同场手动刷新可抢占后台轮询
+  const reqIdRef = useRef(0);
+  const inFlightRef = useRef({ matchId: null, manual: false, reqId: 0, controller: null });
 
   const load = useCallback(async ({ manual = false } = {}) => {
     const { matchId: id, state: st } = activeRef.current;
     if (!id || st !== 'live') return;
-    if (inFlightRef.current) return;
 
-    inFlightRef.current = true;
+    const cur = inFlightRef.current;
+    if (cur.matchId === id) {
+      if (!manual || cur.manual) return;
+      // 同场轮询在途时点手动刷新：中止旧轮询，让 refresh=1 立即发出
+      cur.controller?.abort();
+    } else if (cur.matchId) {
+      // 已切到新场次：中止上一场的在途请求，不能挡住当前场首屏拉取
+      cur.controller?.abort();
+    }
+
+    const reqId = ++reqIdRef.current;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    inFlightRef.current = { matchId: id, manual, reqId, controller };
+
     if (!hasDataRef.current) setLoading(true);
     if (manual) setRefreshing(true);
 
     try {
-      const res = await fetch(`/api/live?matchId=${encodeURIComponent(id)}${manual ? '&refresh=1' : ''}`);
+      const res = await fetch(
+        `/api/live?matchId=${encodeURIComponent(id)}${manual ? '&refresh=1' : ''}`,
+        controller ? { signal: controller.signal } : undefined
+      );
       if (!res.ok) throw new Error(String(res.status));
       const json = await res.json();
-      // 过期响应：已切场或已终场就丢弃
-      if (activeRef.current.matchId !== id || activeRef.current.state !== 'live') return;
+      // 过期响应：已切场、已终场或已被更新的请求接管就丢弃
+      if (
+        inFlightRef.current.reqId !== reqId ||
+        activeRef.current.matchId !== id ||
+        activeRef.current.state !== 'live'
+      ) {
+        return;
+      }
       const next = json?.ok ? json : null;
       hasDataRef.current = !!next;
       setData(next);
-    } catch {
+    } catch (err) {
+      if (err?.name === 'AbortError' || inFlightRef.current.reqId !== reqId) return;
       if (activeRef.current.matchId === id && activeRef.current.state === 'live') {
         hasDataRef.current = false;
         setData(null);
       }
     } finally {
-      inFlightRef.current = false;
-      if (activeRef.current.matchId === id) {
-        setLoading(false);
-        setRefreshing(false);
+      if (inFlightRef.current.reqId === reqId) {
+        inFlightRef.current = { matchId: null, manual: false, reqId: 0, controller: null };
+        if (activeRef.current.matchId === id) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     }
   }, []);
@@ -76,7 +101,13 @@ export function useLiveSnapshot({ matchId = null, state = null, intervalMs = 300
     if (!matchId || state !== 'live') return undefined;
     load();
     const timer = setInterval(() => load(), intervalMs);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      if (inFlightRef.current.matchId === matchId) {
+        inFlightRef.current.controller?.abort();
+        inFlightRef.current = { matchId: null, manual: false, reqId: 0, controller: null };
+      }
+    };
   }, [matchId, state, intervalMs, load]);
 
   const refresh = useCallback(() => load({ manual: true }), [load]);

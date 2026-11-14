@@ -448,7 +448,9 @@ export default function WeekView({
           {risk.floor.assumed ? '（未设作息，按默认画）' : ''} ·
           {risk.riskNights > 0
             ? ` ${risk.riskNights} 晚越过底线${risk.worst ? `，最晚到 ${risk.worst.latestEndClock}` : ''}`
-            : ' 全周未越线'}
+            : !risk.worst && risk.bands.some(b => !b.empty)
+              ? ' 有比赛夜已禁看'
+              : ' 全周未越线'}
           {risk.tbdCount > 0 ? ` · 另有 ${risk.tbdCount} 场开球待定未计入` : ''}
         </div>
       )}
