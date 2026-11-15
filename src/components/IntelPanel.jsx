@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { hm, bjClock } from '../core/format.js';
 import { planSecondHalfCutIn } from '../core/second-half.js';
+import { sleepProfileFromPrefs } from '../core/sleep.js';
 import { RADAR_MAX_WATCHED, RADAR_VERDICT_META } from '../core/radar.js';
 import { storylines, teamName, TEAM_MAP } from '../data/index.js';
 import DiaryStampBar from './DiaryStampBar.jsx';
@@ -400,14 +401,9 @@ function SleepCostSection({
   const style = TIER_MAP[tier.label] || TIER_MAP.S0;
   const queued = watchLaterState === 'pending';
   const watched = watchLaterState === 'watched';
-  const sleepProfile = {
-    enabled: Boolean(prefs?.sleepEnabled),
-    wakeTime: prefs?.sleepWakeTime || '07:30',
-    weekendEnabled: prefs?.sleepWeekendEnabled !== false,
-    weekendWakeTime: prefs?.sleepWeekendWakeTime || '09:00',
-    minSleep: prefs?.sleepMinHours ?? 7
-  };
-  const cutInPlan = planSecondHalfCutIn(match, sleepProfile, now ?? Date.now());
+  const refNow = now ?? Date.now();
+  const cutInPlan = planSecondHalfCutIn(match, sleepProfileFromPrefs(prefs), refNow);
+  const canScheduleCutIn = cutInPlan.alarmAt != null && cutInPlan.alarmAt > refNow + 15_000;
   const cutInOn = !!radarState?.cutInIds?.includes(match.id);
   const radarOn = !!radarState?.watchIds?.includes(match.id);
   const radarVerdict = radarState?.verdicts?.[match.id] || null;
@@ -487,11 +483,13 @@ function SleepCostSection({
             </div>
           )}
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            {onToggleCutIn && (
+            {onToggleCutIn && (canScheduleCutIn || cutInOn) ? (
               <Button variant={cutInOn ? 'default' : 'ghost'} size="xs" onClick={() => onToggleCutIn(match.id)}>
                 {cutInOn ? "已设 60' 提醒" : "设 60' 切入提醒"}
               </Button>
-            )}
+            ) : onToggleCutIn ? (
+              <Meta>已临近 60' 切入窗口，可直接观赛</Meta>
+            ) : null}
             {onToggleRadar && (
               <Button
                 variant={radarOn ? 'default' : 'ghost'}

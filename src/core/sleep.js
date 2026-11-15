@@ -117,6 +117,57 @@ export function normalizeSleepProfile(profile = {}) {
   };
 }
 
+/**
+ * 从应用偏好对象提取规范化的睡眠档案入参（桌面 / 手机统一口径）。
+ * 说明：`defaultPrefs()` 默认开启 `sleepWeekendEnabled: true`，但独立未传字段时按 `false` 处理。
+ */
+export function sleepProfileFromPrefs(prefs) {
+  return {
+    enabled: prefs?.sleepEnabled === true,
+    wakeTime: prefs?.sleepWakeTime || SLEEP_DEFAULTS.wakeTime,
+    weekendEnabled: prefs?.sleepWeekendEnabled === true,
+    weekendWakeTime: prefs?.sleepWeekendWakeTime || SLEEP_DEFAULTS.weekendWakeTime,
+    minSleep: prefs?.sleepMinHours ?? SLEEP_DEFAULTS.minSleep
+  };
+}
+
+/**
+ * 从 `/api/calendar/plan.ics` 查询参数解析个人睡眠档案（同时兼容新版标准名与旧版别名）。
+ * @param {URLSearchParams} searchParams
+ */
+export function sleepProfileFromSearchParams(searchParams) {
+  if (!searchParams || typeof searchParams.get !== 'function') {
+    return normalizeSleepProfile({});
+  }
+  const sleepEnabledParam = searchParams.get('sleepEnabled');
+  const wakeTimeParam = searchParams.get('wakeTime') || searchParams.get('wakeWorkday');
+  const weekendWakeParam = searchParams.get('weekendWakeTime') || searchParams.get('wakeWeekend');
+  const weekendEnabledParam = searchParams.get('weekendEnabled');
+  const minSleepParam = searchParams.get('minSleep') ?? searchParams.get('sleepGoal');
+
+  const enabled =
+    sleepEnabledParam === '0' || sleepEnabledParam === 'false'
+      ? false
+      : sleepEnabledParam === '1' ||
+        sleepEnabledParam === 'true' ||
+        Boolean(wakeTimeParam || weekendWakeParam || minSleepParam);
+
+  const weekendEnabled =
+    weekendEnabledParam == null
+      ? SLEEP_DEFAULTS.weekendEnabled
+      : weekendEnabledParam !== '0' && weekendEnabledParam !== 'false';
+
+  const hasMinSleep = minSleepParam != null && String(minSleepParam).trim() !== '';
+
+  return normalizeSleepProfile({
+    enabled,
+    wakeTime: wakeTimeParam || SLEEP_DEFAULTS.wakeTime,
+    weekendEnabled,
+    weekendWakeTime: weekendWakeParam || SLEEP_DEFAULTS.weekendWakeTime,
+    minSleep: hasMinSleep ? Number(minSleepParam) : SLEEP_DEFAULTS.minSleep
+  });
+}
+
 /** 根据所属夜（owlDay）解析当夜生效的起床时间（工作日 vs 周末） */
 export function resolveWakeTimeForNight(nightStr, profile) {
   const p = normalizeSleepProfile(profile);

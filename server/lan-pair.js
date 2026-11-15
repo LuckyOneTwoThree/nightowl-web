@@ -25,28 +25,44 @@ function safeEqualText(a, b) {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
+const VIRTUAL_IFACE_RE = /^(utun|tun|tap|wg|tailscale|docker|br-|veth|vboxnet|vmnet|wsl|vethernet|loopback|lo)/i;
+
+function scoreLanCandidate(ifaceName, ip) {
+  const isVirtual = VIRTUAL_IFACE_RE.test(String(ifaceName || '')) || ip.startsWith('169.254.') || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip);
+  let subnetScore = 1;
+  if (ip.startsWith('192.168.')) subnetScore = 30;
+  else if (ip.startsWith('10.')) subnetScore = 20;
+  else if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) subnetScore = 10;
+  return (isVirtual ? 0 : 100) + subnetScore;
+}
+
+/**
+ * 列出本机局域网候选 IPv4（物理网卡与常见私有网段优先，过滤或降权虚拟隧道/容器网卡）
+ */
+export function listLanCandidates() {
+  const ifaces = os.networkInterfaces();
+  const entries = [];
+  for (const [ifaceName, list] of Object.entries(ifaces)) {
+    for (const info of list || []) {
+      if (!info || info.family !== 'IPv4' || info.internal) continue;
+      if (info.address.startsWith('169.254.')) continue;
+      entries.push({ ip: info.address, score: scoreLanCandidate(ifaceName, info.address) });
+    }
+  }
+  entries.sort((a, b) => b.score - a.score);
+  return [...new Set(entries.map(e => e.ip))];
+}
+
 /**
  * 探测本机最合适的局域网 IPv4（未联网时回退 127.0.0.1）
  */
 export function detectLanIp() {
-  const ifaces = os.networkInterfaces();
-  const candidates = [];
-  for (const entries of Object.values(ifaces)) {
-    for (const info of entries || []) {
-      if (!info || info.family !== 'IPv4' || info.internal) continue;
-      candidates.push(info.address);
-    }
-  }
-  const preferred =
-    candidates.find(ip => ip.startsWith('192.168.')) ||
-    candidates.find(ip => ip.startsWith('10.')) ||
-    candidates.find(ip => /^172\.(1[6-9]|2\d|3[01])\./.test(ip)) ||
-    candidates[0];
-  return preferred || '127.0.0.1';
+  const candidates = listLanCandidates();
+  return candidates[0] || '127.0.0.1';
 }
 
 /**
- * 脱敏桌面端线路：绝不下发 127.0.0.1/api/proxy 地址给手机，标注 proxyRequired 让手机端自动直连重抓
+ * 脱敏桌面端线路：绝不下发 127.0.0.1/api/proxy 地址给手机，标注 proxyRequired 与 isDirect 供手机端直连起播或重抓
  */
 export function sanitizeHandoffLines(rawLines = []) {
   if (!Array.isArray(rawLines)) return [];
@@ -54,8 +70,9 @@ export function sanitizeHandoffLines(rawLines = []) {
   for (const line of rawLines) {
     if (!line || !line.url) continue;
     const rawUrl = String(line.url);
-    const label = String(line.label || line.name || '线路');
+    const label = String(line.name || line.label || '线路');
     const id = line.id ? String(line.id) : label;
+    const kind = line.kind ? String(line.kind) : 'm3u8';
     if (rawUrl.includes('/api/proxy') || rawUrl.includes('127.0.0.1')) {
       let originUrl = rawUrl;
       try {
@@ -66,16 +83,24 @@ export function sanitizeHandoffLines(rawLines = []) {
       }
       out.push({
         id,
+        name: label,
         label,
         url: originUrl.startsWith('http') ? originUrl : null,
+        kind,
+        isDirect: false,
         proxyRequired: true
       });
     } else {
+      const proxyRequired = Boolean(line.proxyRequired);
+      const isDirect = !proxyRequired && line.isDirect !== false;
       out.push({
         id,
+        name: label,
         label,
         url: rawUrl,
-        proxyRequired: Boolean(line.proxyRequired)
+        kind,
+        isDirect,
+        proxyRequired
       });
     }
   }
@@ -147,6 +172,7 @@ export function createLanPairManager() {
       active: true,
       mode: active.mode,
       host: active.displayHost,
+      candidates: active.candidates || [active.displayHost],
       port: active.port,
       pin: active.pin,
       token: active.token,
@@ -169,7 +195,8 @@ export function createLanPairManager() {
   } = {}) {
     await stopSession();
 
-    const resolvedDisplayHost = displayHost || (bindHost !== '0.0.0.0' ? bindHost : detectLanIp());
+    const candidates = listLanCandidates();
+    const resolvedDisplayHost = displayHost || (bindHost !== '0.0.0.0' ? bindHost : candidates[0] || '127.0.0.1');
     const token = crypto.randomBytes(12).toString('hex');
     const pin = String(crypto.randomInt(100000, 1000000));
     const effectiveTtl = Number.isFinite(ttlMs) && ttlMs > 0 ? Math.min(ttlMs, PAIR_TTL_MS) : PAIR_TTL_MS;
@@ -307,6 +334,7 @@ export function createLanPairManager() {
       timer,
       mode: mode === 'handoff' ? 'handoff' : 'sync',
       displayHost: resolvedDisplayHost,
+      candidates: candidates.length ? candidates : [resolvedDisplayHost],
       port: listeningPort,
       token,
       pin,

@@ -3,7 +3,8 @@ import { getFixtures, setFixtures, storylines, teamName } from './data/index.js'
 import { countdown as engineCountdown, ts, MATCH_DURATION_MS, sleepTier, mondayOfWall, nightOf } from './core/engine.js';
 import { hm, humanCountdownShort } from './core/format.js';
 import { STANDINGS_LEAGUES } from './core/standings.js';
-import { loadPrefs, savePrefs } from './lib/prefs-storage.js';
+import { loadPrefs, loadPrefsUpdatedAt, savePrefs } from './lib/prefs-storage.js';
+import { sleepProfileFromPrefs } from './core/sleep.js';
 import { normalizeQueue, queueStatusOf } from './core/queue.js';
 import { isPrematchDue, prematchNotification } from './core/notifications.js';
 import {
@@ -66,8 +67,11 @@ import {
 } from './core/week-overrides.js';
 import {
   loadWeekOverrides,
-  saveWeekOverrides
+  loadWeekUpdatedAt,
+  saveWeekOverrides,
+  saveWeekUpdatedAt
 } from './components/week-overrides-storage.js';
+import { loadRevealed, saveRevealed } from './components/reveal-storage.js';
 import { VIEW_COMMANDS, ACTION_COMMANDS, buildMatchCommands } from './core/command-palette.js';
 import { planSecondHalfCutIn } from './core/second-half.js';
 import {
@@ -139,9 +143,9 @@ export default function App() {
   // ---- 偏好（本地存储）----
   const [prefs, setPrefsState] = useState(() => loadPrefs());
 
-  const setPrefs = useCallback(next => {
+  const setPrefs = useCallback((next, opts) => {
     setPrefsState(next);
-    savePrefs(next);
+    savePrefs(next, opts);
   }, []);
 
   // ---- 明早补看（本地单机，只存比赛 ID / 夜晚 / 状态，不存比分）----
@@ -252,6 +256,7 @@ export default function App() {
   // 周视图看哪一周：0=本周，正数未来、负数过去。只移动锚点，可排性仍用真实 now（见 core/owl.js）
   const [weekOffset, setWeekOffset] = useState(0);
   const [weekOverridesByWeek, setWeekOverridesByWeek] = useState(() => loadWeekOverrides());
+  const [weekUpdatedAtByWeek, setWeekUpdatedAtByWeek] = useState(() => loadWeekUpdatedAt());
   const [activeMatchId, setActiveMatchId] = useState(() => {
     if (boot.matchId) return boot.matchId;
     try {
@@ -263,17 +268,19 @@ export default function App() {
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [revealed, setRevealed] = useState(() => new Set());
+  const [revealed, setRevealed] = useState(() => loadRevealed());
 
   const startLanPairSession = useCallback(
-    async ({ mode = 'sync', handoff = null } = {}) => {
-      lastPairOptsRef.current = { mode, handoff };
+    async ({ mode = 'sync', handoff = null, displayHost = null } = {}) => {
+      lastPairOptsRef.current = { mode, handoff, displayHost };
       setLanPairLoading(true);
       setLanPairNotice(null);
       try {
         const bundle = buildSyncBundle(
           {
+            prefsUpdatedAt: loadPrefsUpdatedAt(),
             prefs: prefsRef.current,
+            weekUpdatedAtByWeek,
             weekOverridesByWeek,
             watchLater,
             revealedIds: [...revealed],
@@ -284,7 +291,7 @@ export default function App() {
         const res = await fetch('/api/pair/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode, handoff, bundle })
+          body: JSON.stringify({ mode, handoff, displayHost, bundle })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || data.ok === false) {
@@ -298,7 +305,7 @@ export default function App() {
         setLanPairLoading(false);
       }
     },
-    [weekOverridesByWeek, watchLater, revealed, diary]
+    [weekOverridesByWeek, weekUpdatedAtByWeek, watchLater, revealed, diary]
   );
 
   const openLanPair = useCallback(
@@ -328,13 +335,23 @@ export default function App() {
         if (data.latestMergedAt && data.latestMergedAt > lastAppliedMergedAtRef.current && data.merged) {
           lastAppliedMergedAtRef.current = data.latestMergedAt;
           const m = data.merged;
-          if (m.prefs) setPrefs({ ...prefsRef.current, ...m.prefs });
+          if (m.prefs) {
+            setPrefs(
+              { ...prefsRef.current, ...m.prefs },
+              Number.isFinite(m.prefsUpdatedAt) ? { updatedAt: m.prefsUpdatedAt } : undefined
+            );
+          }
           if (m.weekOverridesByWeek) {
             const minKey = mondayOfWall(nightOf(Date.now()));
             setWeekOverridesByWeek(saveWeekOverrides(m.weekOverridesByWeek, minKey));
+            if (m.weekUpdatedAtByWeek) {
+              setWeekUpdatedAtByWeek(saveWeekUpdatedAt(m.weekUpdatedAtByWeek, minKey));
+            }
           }
           if (Array.isArray(m.watchLater)) commitWatchLater(m.watchLater);
-          if (Array.isArray(m.revealedIds)) setRevealed(prev => new Set([...prev, ...m.revealedIds]));
+          if (Array.isArray(m.revealedIds)) {
+            setRevealed(prev => saveRevealed(new Set([...prev, ...m.revealedIds])));
+          }
           if (m.diary) handleImportDiary(m.diary);
           setLanPairNotice('已收到手机端同步数据，并完成双向无损合并');
         }
@@ -517,17 +534,19 @@ export default function App() {
     setSplashOpen(true);
   }, []);
 
-  // 防剧透开关变化时清空已揭晓状态，避免"关掉又打开还留着旧揭晓"
-  // biome-ignore lint/correctness/useExhaustiveDependencies: 开关变化即清空已揭晓状态；body 只调 setState
+  // 防剧透开关真实变化时清空已揭晓状态（跳过首次挂载以免擦除持久化状态）
+  const prevSpoilerFreeRef = useRef(prefs.spoilerFree);
   useEffect(() => {
-    setRevealed(new Set());
+    if (prevSpoilerFreeRef.current === prefs.spoilerFree) return;
+    prevSpoilerFreeRef.current = prefs.spoilerFree;
+    setRevealed(saveRevealed([]));
   }, [prefs.spoilerFree]);
 
   const reveal = useCallback(id => {
     setRevealed(prev => {
       const next = new Set(prev);
       next.add(id);
-      return next;
+      return saveRevealed(next);
     });
   }, []);
 
@@ -711,26 +730,20 @@ export default function App() {
     const night = nightOf(now);
     const list = getFixtures();
     const byId = new Map(list.map(m => [m.id, m]));
-    const sleepProfile = {
-      enabled: Boolean(prefs.sleepEnabled),
-      wakeTime: prefs.sleepWakeTime || '07:30',
-      weekendEnabled: prefs.sleepWeekendEnabled !== false,
-      weekendWakeTime: prefs.sleepWeekendWakeTime || '09:00',
-      minSleep: prefs.sleepMinHours ?? 7
-    };
+    const sleepProfile = sleepProfileFromPrefs(prefs);
 
-    const nextFired = [...(radarState.firedKeys || [])];
-    let firedDirty = false;
+    const cutInFiredKeys = [];
+    const existingFired = new Set(radarState.firedKeys || []);
 
     for (const id of radarState.cutInIds || []) {
       const m = byId.get(id);
       if (!m) continue;
       const fireKey = `${night}|${id}|cutin`;
-      if (nextFired.includes(fireKey)) continue;
+      if (existingFired.has(fireKey)) continue;
       const plan = planSecondHalfCutIn(m, sleepProfile, now);
       if (plan.eligible && now >= plan.alarmAt - 60000 && now <= plan.cutInAt) {
-        nextFired.push(fireKey);
-        firedDirty = true;
+        cutInFiredKeys.push(fireKey);
+        existingFired.add(fireKey);
         api?.notify?.({
           title: '下半场 60\' 切入窗口将到',
           body: `${teamName(m.h)} vs ${teamName(m.a)} 即将进入 60 分钟下半场阶段，准备切入观赛。`,
@@ -741,88 +754,105 @@ export default function App() {
       }
     }
 
-    if (firedDirty) {
-      setRadarState(prev => saveRadarState({ ...prev, firedKeys: nextFired }));
+    const targets = radarState.enabled ? (radarState.watchIds || []).slice(0, 2) : [];
+    const expiredUpdates = [];
+    const activeToFetch = [];
+
+    for (const id of targets) {
+      const m = byId.get(id);
+      if (!m) continue;
+      const radarKey = `${night}|${id}|radar`;
+      if (existingFired.has(radarKey)) continue;
+      if (isRadarWindowExpired(m, now)) {
+        expiredUpdates.push({ id, radarKey });
+        continue;
+      }
+      if (!isRadarWindowActive(m, now)) continue;
+      const lastPoll = radarPollTsRef.current.get(id) || 0;
+      if (now - lastPoll < 180_000) continue;
+      activeToFetch.push({ id, m, radarKey });
     }
 
-    if (!radarState.enabled) return undefined;
-    const targets = (radarState.watchIds || []).slice(0, 2);
-    if (targets.length === 0) return undefined;
+    if (cutInFiredKeys.length > 0 || expiredUpdates.length > 0) {
+      const expiredIdSet = new Set(expiredUpdates.map(u => u.id));
+      const expiredKeys = expiredUpdates.map(u => u.radarKey);
+      setRadarState(prev => {
+        const nextVerdicts = { ...(prev.verdicts || {}) };
+        for (const { id } of expiredUpdates) {
+          nextVerdicts[id] = nextVerdicts[id] || {
+            verdict: RADAR_VERDICT.UNAVAILABLE,
+            minuteLabel: null,
+            updatedAt: now
+          };
+        }
+        return saveRadarState({
+          ...prev,
+          firedKeys: [...(prev.firedKeys || []), ...cutInFiredKeys, ...expiredKeys],
+          watchIds: (prev.watchIds || []).filter(w => !expiredIdSet.has(w)),
+          verdicts: nextVerdicts
+        });
+      });
+    }
+
+    if (activeToFetch.length === 0) return undefined;
 
     const ac = new AbortController();
     let cancelled = false;
+    const followedParam = encodeURIComponent((prefs.followedTeams || []).join(','));
 
-    (async () => {
-      for (const id of targets) {
-        if (cancelled) break;
-        const m = byId.get(id);
-        if (!m) continue;
-        const radarKey = `${night}|${id}|radar`;
-        if (nextFired.includes(radarKey)) continue;
-
-        if (isRadarWindowExpired(m, now)) {
-          setRadarState(prev =>
-            saveRadarState({
-              ...prev,
-              firedKeys: [...(prev.firedKeys || []), radarKey],
-              watchIds: (prev.watchIds || []).filter(w => w !== id),
-              verdicts: {
-                ...(prev.verdicts || {}),
-                [id]: prev.verdicts?.[id] || {
-                  verdict: RADAR_VERDICT.UNAVAILABLE,
-                  minuteLabel: null,
-                  updatedAt: now
-                }
-              }
-            })
-          );
-          continue;
-        }
-
-        if (!isRadarWindowActive(m, now)) continue;
-        const lastPoll = radarPollTsRef.current.get(id) || 0;
-        if (now - lastPoll < 180_000) continue;
-        radarPollTsRef.current.set(id, now);
-
+    void Promise.all(
+      activeToFetch.map(async ({ id, m, radarKey }) => {
         try {
-          const followedParam = encodeURIComponent((prefs.followedTeams || []).join(','));
           const r = await fetch(`/api/radar?matchId=${encodeURIComponent(id)}&followedTeams=${followedParam}`, {
             signal: ac.signal
           });
-          if (!r.ok || cancelled) continue;
+          if (!r.ok || cancelled) return null;
           const dto = await r.json();
-          if (!dto?.verdict || cancelled) continue;
-
-          if (dto.verdict !== RADAR_VERDICT.UNAVAILABLE) {
-            const meta = RADAR_VERDICT_META[dto.verdict] || RADAR_VERDICT_META[RADAR_VERDICT.WORTH_WAKING];
-            setRadarState(prev =>
-              saveRadarState({
-                ...prev,
-                firedKeys: [...(prev.firedKeys || []), radarKey],
-                watchIds: (prev.watchIds || []).filter(w => w !== id),
-                verdicts: {
-                  ...(prev.verdicts || {}),
-                  [id]: {
-                    verdict: dto.verdict,
-                    minuteLabel: dto.minuteLabel || null,
-                    updatedAt: Date.now()
-                  }
-                }
-              })
-            );
-            api?.notify?.({
-              title: `${meta.notifyTitle} · ${teamName(m.h)} vs ${teamName(m.a)}`,
-              body: meta.notifyBody,
-              matchId: id,
-              kind: 'radar',
-              silentWhenFocused: false
-            });
-          }
+          if (!dto?.verdict || cancelled) return null;
+          // 仅在真实拿到有效响应后记入 180s 节流时间戳，防止 abort 或网络闪断误锁 3 分钟
+          radarPollTsRef.current.set(id, Date.now());
+          return { id, m, radarKey, dto };
         } catch {
-          // 离线或服务不可用时保持静默等待
+          return null;
         }
+      })
+    ).then(results => {
+      if (cancelled) return;
+      const resolved = results.filter(x => x && x.dto.verdict !== RADAR_VERDICT.UNAVAILABLE);
+      if (resolved.length === 0) return;
+
+      const resolvedIds = new Set(resolved.map(x => x.id));
+      const resolvedKeys = resolved.map(x => x.radarKey);
+      const updatedAt = Date.now();
+
+      setRadarState(prev => {
+        const nextVerdicts = { ...(prev.verdicts || {}) };
+        for (const { id, dto } of resolved) {
+          nextVerdicts[id] = {
+            verdict: dto.verdict,
+            minuteLabel: dto.minuteLabel || null,
+            updatedAt
+          };
+        }
+        return saveRadarState({
+          ...prev,
+          firedKeys: [...(prev.firedKeys || []), ...resolvedKeys],
+          watchIds: (prev.watchIds || []).filter(w => !resolvedIds.has(w)),
+          verdicts: nextVerdicts
+        });
+      });
+
+      for (const { id, m, dto } of resolved) {
+        const meta = RADAR_VERDICT_META[dto.verdict] || RADAR_VERDICT_META[RADAR_VERDICT.WORTH_WAKING];
+        api?.notify?.({
+          title: `${meta.notifyTitle} · ${teamName(m.h)} vs ${teamName(m.a)}`,
+          body: meta.notifyBody,
+          matchId: id,
+          kind: 'radar',
+          silentWhenFocused: false
+        });
       }
-    })();
+    });
 
     return () => {
       cancelled = true;
@@ -849,13 +879,17 @@ export default function App() {
 
   const updateActiveWeekOverrides = useCallback(
     updater => {
-      const minWeekKey = mondayOfWall(nightOf(Date.now()));
+      const nowMs = Date.now();
+      const minWeekKey = mondayOfWall(nightOf(nowMs));
       setWeekOverridesByWeek(prev => {
         const cur = prev[activeWeekKey] || EMPTY_WEEK_OVERRIDES;
         const nextForWeek = updater(cur);
         const nextMap = { ...prev, [activeWeekKey]: nextForWeek };
         return saveWeekOverrides(nextMap, minWeekKey);
       });
+      setWeekUpdatedAtByWeek(prev =>
+        saveWeekUpdatedAt({ ...prev, [activeWeekKey]: nowMs }, minWeekKey)
+      );
     },
     [activeWeekKey]
   );
@@ -1644,6 +1678,7 @@ export default function App() {
           session={lanPairSession}
           loading={lanPairLoading}
           syncNotice={lanPairNotice}
+          onSwitchHost={host => void startLanPairSession({ ...lastPairOptsRef.current, displayHost: host })}
           onRestart={() => void startLanPairSession(lastPairOptsRef.current)}
           onClose={closeLanPair}
         />

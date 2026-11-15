@@ -3,7 +3,7 @@ import { zhDate, hmCost, hm } from '../core/format.js';
 import { teamName, leagueName, leagueColor, getFixtures } from '../data/index.js';
 import { stateOf } from '../core/owl.js';
 import { owlDay, sleepTier, PRODUCT_PLAN_OPTS } from '../core/engine.js';
-import { sleepLedger, normalizeSleepProfile } from '../core/sleep.js';
+import { sleepLedger, normalizeSleepProfile, sleepProfileFromPrefs } from '../core/sleep.js';
 import { weekRiskBands, weekBestEmptyState } from '../core/week-risk.js';
 import { hasAnyWeekOverride } from '../core/week-overrides.js';
 import { detectCrunchPeriods } from '../core/crunch.js';
@@ -255,13 +255,7 @@ export default function WeekView({
    */
   const sleepGapHours = useMemo(() => {
     if (prefs?.sleepEnabled !== true) return null;
-    const profile = {
-      enabled: true,
-      wakeTime: prefs.sleepWakeTime,
-      weekendEnabled: prefs.sleepWeekendEnabled === true,
-      weekendWakeTime: prefs.sleepWeekendWakeTime,
-      minSleep: prefs.sleepMinHours
-    };
+    const profile = sleepProfileFromPrefs(prefs);
     let sum = 0;
     let known = 0;
     for (const e of plan.best) {
@@ -272,7 +266,7 @@ export default function WeekView({
       }
     }
     return known ? sum : null;
-  }, [plan.best, prefs?.sleepEnabled, prefs?.sleepWakeTime, prefs?.sleepWeekendEnabled, prefs?.sleepWeekendWakeTime, prefs?.sleepMinHours]);
+  }, [plan.best, prefs]);
 
   /* 周切换：只平移锚点，可排性仍按真实 now（口径见 core/owl.js 的 weekOffset）。
      历史周没有「还要熬到几点」的风险语义，风险带与底线结论一律不显示。 */
@@ -288,19 +282,8 @@ export default function WeekView({
      结论行与时间轴共用同一份计算 —— 早先这里另有一套「精选有几晚低于底线」的摘要，
      分母只算精选、而轴上画的是全周，同屏两个「低于底线」会让人不知道该信哪个。 */
   const risk = useMemo(
-    () =>
-      weekRiskBands(
-        week,
-        {
-          enabled: prefs.sleepEnabled,
-          wakeTime: prefs.sleepWakeTime,
-          weekendEnabled: prefs.sleepWeekendEnabled === true,
-          weekendWakeTime: prefs.sleepWeekendWakeTime,
-          minSleep: prefs.sleepMinHours
-        },
-        now
-      ),
-    [week, prefs.sleepEnabled, prefs.sleepWakeTime, prefs.sleepWeekendEnabled, prefs.sleepWeekendWakeTime, prefs.sleepMinHours, now]
+    () => weekRiskBands(week, sleepProfileFromPrefs(prefs), now),
+    [week, prefs, now]
   );
   const hasScheduledMatches = risk.bands.some(b => !b.empty);
 
@@ -364,20 +347,8 @@ export default function WeekView({
 
   const sleepProfileForIcs = useMemo(() => {
     if (prefs?.sleepEnabled !== true) return null;
-    return normalizeSleepProfile({
-      enabled: true,
-      wakeTime: prefs.sleepWakeTime,
-      weekendEnabled: prefs.sleepWeekendEnabled === true,
-      weekendWakeTime: prefs.sleepWeekendWakeTime,
-      minSleep: prefs.sleepMinHours
-    });
-  }, [
-    prefs?.sleepEnabled,
-    prefs?.sleepWakeTime,
-    prefs?.sleepWeekendEnabled,
-    prefs?.sleepWeekendWakeTime,
-    prefs?.sleepMinHours
-  ]);
+    return normalizeSleepProfile(sleepProfileFromPrefs(prefs));
+  }, [prefs]);
 
   const handleDownloadPlanIcs = () => {
     try {
@@ -402,9 +373,13 @@ export default function WeekView({
       const ids = plan.best.map(e => e.m.id).join(',');
       const origin = typeof window !== 'undefined' && window.location.host ? window.location.origin : 'http://127.0.0.1:3100';
       const qs = new URLSearchParams({ ids });
-      if (prefs?.sleepWakeTime) qs.set('wakeWorkday', prefs.sleepWakeTime);
-      if (prefs?.sleepWeekendWakeTime) qs.set('wakeWeekend', prefs.sleepWeekendWakeTime);
-      if (prefs?.sleepMinHours != null) qs.set('sleepGoal', String(prefs.sleepMinHours));
+      if (prefs?.sleepEnabled === true) {
+        qs.set('sleepEnabled', '1');
+        if (prefs.sleepWakeTime) qs.set('wakeTime', prefs.sleepWakeTime);
+        qs.set('weekendEnabled', prefs.sleepWeekendEnabled !== false ? '1' : '0');
+        if (prefs.sleepWeekendWakeTime) qs.set('weekendWakeTime', prefs.sleepWeekendWakeTime);
+        if (prefs.sleepMinHours != null) qs.set('minSleep', String(prefs.sleepMinHours));
+      }
       const url = `${origin}/api/calendar/plan.ics?${qs.toString()}`;
       if (navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(url);

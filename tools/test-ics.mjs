@@ -12,11 +12,13 @@
 import {
   bjStamp,
   buildIcs,
+  buildPlanIcs,
   escapeText,
   foldLine,
   selectIcsMatches,
   utcStamp
 } from '../src/core/ics.js';
+import { sleepProfileFromSearchParams } from '../src/core/sleep.js';
 
 let pass = 0;
 let fail = 0;
@@ -148,6 +150,18 @@ console.log('三、日历正文');
   // 已开赛的场次即使被传进来也不落进日历
   const ics = buildIcs({ matches: [m('F4', '2026-11-01T12:00'), m('F1', '2026-11-01T23:00')], now: NOW });
   ok('混入已开赛场次时只导出未来的那场', !ics.includes('F4@nightowl-terrace') && ics.includes('F1@nightowl-terrace'));
+}
+{
+  const sp = sleepProfileFromSearchParams(
+    new URLSearchParams('sleepEnabled=1&wakeTime=07:00&weekendEnabled=1&weekendWakeTime=09:30&minSleep=7.5')
+  );
+  ok('★ plan.ics 标准参数正确映射为可用睡眠档案', sp.enabled === true && sp.valid === true && sp.wakeTime === '07:00' && sp.weekendEnabled === true && sp.weekendWakeTime === '09:30' && sp.minSleep === 7.5);
+  const legacy = sleepProfileFromSearchParams(
+    new URLSearchParams('wakeWorkday=06:45&wakeWeekend=08:30&sleepGoal=6.5')
+  );
+  ok('★ plan.ics 兼容旧参数别名并默认开启档案', legacy.enabled === true && legacy.wakeTime === '06:45' && legacy.weekendWakeTime === '08:30' && legacy.minSleep === 6.5);
+  const planIcs = buildPlanIcs([m('F2', '2026-11-02T03:00')], sp, { now: NOW });
+  ok('★ buildPlanIcs 携带可用睡眠档案后输出止损或余眠描述', planIcs.includes('建议止损') || planIcs.includes('个人余眠'));
 }
 
 console.log('');

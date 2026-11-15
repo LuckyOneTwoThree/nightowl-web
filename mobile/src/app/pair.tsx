@@ -24,7 +24,8 @@ import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 
 type HandoffLine = {
   id: string;
-  name: string;
+  name?: string;
+  label?: string;
   url?: string;
   kind?: string;
   isDirect?: boolean;
@@ -35,13 +36,34 @@ type SyncResponse = {
   ok: boolean;
   error?: string;
   merged?: {
+    prefsUpdatedAt?: number;
     prefs?: Partial<Prefs>;
+    weekUpdatedAtByWeek?: Record<string, number>;
     weekOverridesByWeek?: Record<string, unknown>;
     watchLater?: unknown[];
     revealedIds?: string[];
     diary?: unknown;
   };
 };
+
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = 8000
+): Promise<Response> {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: ac.signal });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('连接桌面端超时（请确认同一 Wi-Fi 且未被防火墙拦截）');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 type InfoResponse = {
   ok: boolean;
@@ -98,7 +120,8 @@ export default function PairScreen() {
   }>();
 
   const prefs = usePrefs();
-  const setPrefs = usePrefsStore(state => state.setPrefs);
+  const prefsUpdatedAt = usePrefsStore(state => state.prefsUpdatedAt);
+  const applySyncedPrefs = usePrefsStore(state => state.applySyncedPrefs);
   const watchLater = useWatchLaterStore(state => state.items);
   const replaceItems = useWatchLaterStore(state => state.replaceItems);
   const revealedMap = useAppStore(state => state.revealedIds);
@@ -106,6 +129,7 @@ export default function PairScreen() {
   const diary = useDiaryStore(state => state.diary);
   const importDiary = useDiaryStore(state => state.importDiary);
   const weekOverridesByWeek = useWeekOverridesStore(state => state.byWeek);
+  const weekUpdatedAtByWeek = useWeekOverridesStore(state => state.updatedAtByWeek);
   const replaceByWeek = useWeekOverridesStore(state => state.replaceByWeek);
   const startPlayer = usePlayerStore(state => state.start);
 
@@ -171,7 +195,7 @@ export default function PairScreen() {
       let resolvedMode: 'sync' | 'handoff' = mode;
       let hasHandoff = false;
       try {
-        const infoRes = await fetch(`${baseUrl}/pair/info`, { method: 'GET', headers });
+        const infoRes = await fetchWithTimeout(`${baseUrl}/pair/info`, { method: 'GET', headers });
         const infoJson = (await infoRes.json().catch(() => ({}))) as InfoResponse;
         if (infoRes.ok && infoJson.ok) {
           if (infoJson.mode === 'handoff') resolvedMode = 'handoff';
@@ -180,7 +204,10 @@ export default function PairScreen() {
           throw new Error(infoJson.error || '配对口令无效或会话已过期');
         }
       } catch (err) {
-        if (err instanceof Error && (err.message.includes('口令') || err.message.includes('过期'))) {
+        if (
+          err instanceof Error &&
+          (err.message.includes('口令') || err.message.includes('过期') || err.message.includes('超时'))
+        ) {
           throw err;
         }
       }
@@ -189,7 +216,9 @@ export default function PairScreen() {
       const revealedList = Object.keys(revealedMap).filter(k => revealedMap[k]);
       const localBundle = buildSyncBundle(
         {
+          prefsUpdatedAt,
           prefs,
+          weekUpdatedAtByWeek,
           weekOverridesByWeek,
           watchLater,
           revealedIds: revealedList,
@@ -198,7 +227,7 @@ export default function PairScreen() {
         Date.now()
       );
 
-      const syncRes = await fetch(`${baseUrl}/pair/sync`, {
+      const syncRes = await fetchWithTimeout(`${baseUrl}/pair/sync`, {
         method: 'POST',
         headers,
         body: JSON.stringify(localBundle),
@@ -209,10 +238,10 @@ export default function PairScreen() {
       }
 
       const merged = syncJson.merged;
-      if (merged.prefs) setPrefs(merged.prefs);
+      if (merged.prefs) applySyncedPrefs(merged.prefs, merged.prefsUpdatedAt);
       if (merged.weekOverridesByWeek) {
         const minKey = mondayOfWall(nightOf(Date.now())) as string;
-        replaceByWeek(merged.weekOverridesByWeek, minKey);
+        replaceByWeek(merged.weekOverridesByWeek, minKey, merged.weekUpdatedAtByWeek);
       }
       if (Array.isArray(merged.watchLater)) {
         replaceItems(merged.watchLater);
@@ -226,7 +255,7 @@ export default function PairScreen() {
 
       // 3. 如为「回被窝手机接力」，继续拉取播控接力信息并跳去播放/选线
       if (resolvedMode === 'handoff' || hasHandoff) {
-        const handoffRes = await fetch(`${baseUrl}/pair/handoff`, { method: 'GET', headers });
+        const handoffRes = await fetchWithTimeout(`${baseUrl}/pair/handoff`, { method: 'GET', headers });
         const handoffJson = (await handoffRes.json().catch(() => ({}))) as HandoffResponse;
         if (handoffRes.ok && handoffJson.ok && handoffJson.handoff?.matchId) {
           const { matchId, lines = [] } = handoffJson.handoff;
@@ -235,7 +264,7 @@ export default function PairScreen() {
             .filter(line => line.isDirect && line.url && !line.proxyRequired)
             .map(line => ({
               id: line.id,
-              name: line.name,
+              name: line.name || line.label || '桌面线路',
               url: String(line.url),
               kind: line.kind || 'm3u8',
               isDirect: true,

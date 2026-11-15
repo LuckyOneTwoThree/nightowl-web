@@ -17,7 +17,8 @@ const KEY = {
   sleepWakeTime: 'sleepWakeTime',
   sleepWeekendEnabled: 'sleepWeekendEnabled',
   sleepWeekendWakeTime: 'sleepWeekendWakeTime',
-  sleepMinHours: 'sleepMinHours'
+  sleepMinHours: 'sleepMinHours',
+  updatedAt: 'nightowl:prefs_updated_at:v1'
 };
 
 function readJSON(key, fallback) {
@@ -81,7 +82,18 @@ export function loadPrefs() {
   };
 }
 
-export function savePrefs(p) {
+export function loadPrefsUpdatedAt() {
+  try {
+    const raw = localStorage.getItem(KEY.updatedAt);
+    if (!raw) return 0;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function savePrefs(p, { updatedAt = Date.now() } = {}) {
   try {
     localStorage.setItem(KEY.teams, JSON.stringify(p.followedTeams));
     localStorage.setItem(KEY.leagues, JSON.stringify(p.followedLeagues));
@@ -94,6 +106,9 @@ export function savePrefs(p) {
     localStorage.setItem(KEY.sleepWeekendEnabled, JSON.stringify(p.sleepWeekendEnabled !== false));
     localStorage.setItem(KEY.sleepWeekendWakeTime, String(p.sleepWeekendWakeTime || '09:00'));
     localStorage.setItem(KEY.sleepMinHours, String(Number.isFinite(p.sleepMinHours) ? p.sleepMinHours : 7));
+    if (Number.isFinite(updatedAt) && updatedAt >= 0) {
+      localStorage.setItem(KEY.updatedAt, String(updatedAt));
+    }
   } catch {
     // 存储不可用时静默降级：本次会话仍可用，只是不持久化
   }

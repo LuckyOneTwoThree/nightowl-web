@@ -33,8 +33,10 @@ export const DEFAULT_PREFS: Prefs = {
 
 type PrefsStore = {
   prefs: Prefs;
+  prefsUpdatedAt: number;
   hydrated: boolean;
   setPrefs: (patch: Partial<Prefs>) => void;
+  applySyncedPrefs: (patch: Partial<Prefs>, updatedAt?: number) => void;
   toggleTeam: (id: string) => void;
   toggleLeague: (code: string) => void;
   setBudget: (hours: number) => void;
@@ -45,14 +47,30 @@ type PrefsStore = {
 
 export const usePrefsStore = create<PrefsStore>()(
   persist(
-    set => ({
+    (set, get) => ({
       prefs: DEFAULT_PREFS,
+      prefsUpdatedAt: 0,
       hydrated: false,
       setPrefs: patch => {
-        if (patch.spoilerFree !== undefined) {
+        if (patch.spoilerFree !== undefined && patch.spoilerFree !== get().prefs.spoilerFree) {
           useAppStore.getState().clearRevealed();
         }
-        set(state => ({ prefs: { ...state.prefs, ...patch } }));
+        set(state => ({
+          prefs: { ...state.prefs, ...patch },
+          prefsUpdatedAt: Date.now(),
+        }));
+      },
+      applySyncedPrefs: (patch, updatedAt) => {
+        if (patch.spoilerFree !== undefined && patch.spoilerFree !== get().prefs.spoilerFree) {
+          useAppStore.getState().clearRevealed();
+        }
+        set(state => ({
+          prefs: { ...state.prefs, ...patch },
+          prefsUpdatedAt:
+            typeof updatedAt === 'number' && Number.isFinite(updatedAt) && updatedAt >= 0
+              ? updatedAt
+              : state.prefsUpdatedAt,
+        }));
       },
       toggleTeam: id =>
         set(state => {
@@ -60,7 +78,7 @@ export const usePrefsStore = create<PrefsStore>()(
           const followedTeams = existing.includes(id)
             ? existing.filter(team => team !== id)
             : [...existing, id];
-          return { prefs: { ...state.prefs, followedTeams } };
+          return { prefs: { ...state.prefs, followedTeams }, prefsUpdatedAt: Date.now() };
         }),
       toggleLeague: code =>
         set(state => {
@@ -68,10 +86,13 @@ export const usePrefsStore = create<PrefsStore>()(
           const followedLeagues = existing.includes(code)
             ? existing.filter(league => league !== code)
             : [...existing, code];
-          return { prefs: { ...state.prefs, followedLeagues } };
+          return { prefs: { ...state.prefs, followedLeagues }, prefsUpdatedAt: Date.now() };
         }),
       setBudget: hours =>
-        set(state => ({ prefs: { ...state.prefs, weeklyBudget: hours } })),
+        set(state => ({
+          prefs: { ...state.prefs, weeklyBudget: hours },
+          prefsUpdatedAt: Date.now(),
+        })),
       finishOnboarding: () =>
         set(state => ({ prefs: { ...state.prefs, onboardingDone: true } })),
       restartOnboarding: () =>
@@ -81,12 +102,17 @@ export const usePrefsStore = create<PrefsStore>()(
     {
       name: 'nightowl:prefs:v1',
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: state => ({ prefs: state.prefs }),
+      partialize: state => ({ prefs: state.prefs, prefsUpdatedAt: state.prefsUpdatedAt }),
       merge: (persisted, current) => {
-        const saved = persisted as { prefs?: Partial<Prefs> } | undefined;
+        const saved = persisted as { prefs?: Partial<Prefs>; prefsUpdatedAt?: number } | undefined;
+        const ts =
+          typeof saved?.prefsUpdatedAt === 'number' && Number.isFinite(saved.prefsUpdatedAt)
+            ? saved.prefsUpdatedAt
+            : 0;
         return {
           ...current,
           prefs: { ...DEFAULT_PREFS, ...(saved?.prefs || {}) },
+          prefsUpdatedAt: ts,
         };
       },
       onRehydrateStorage: () => state => {

@@ -1,14 +1,6 @@
-import { formatSleepHours, sleepLedger } from '../core/sleep.js';
+import { formatSleepHours, sleepLedger, sleepProfileFromPrefs } from '../core/sleep.js';
 
-export function sleepProfileFromPrefs(prefs) {
-  return {
-    enabled: prefs?.sleepEnabled === true,
-    wakeTime: prefs?.sleepWakeTime || '07:30',
-    weekendEnabled: prefs?.sleepWeekendEnabled === true,
-    weekendWakeTime: prefs?.sleepWeekendWakeTime || '09:00',
-    minSleep: prefs?.sleepMinHours ?? 7
-  };
-}
+export { sleepProfileFromPrefs };
 
 export function sleepLedgerFor(match, prefs) {
   if (!match?.t || match.tbd || match.st === 'done' || match.st === 'pp') return null;

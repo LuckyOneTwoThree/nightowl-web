@@ -61,6 +61,7 @@ import { computeMatchStats } from '@core/stats.js';
 import { completedWatchHint, unrevealedTonightIds, WATCH_HINT_LEVEL } from '@core/reveal.js';
 import { summarizeDrama } from '@core/drama.js';
 import { planSecondHalfCutIn } from '@core/second-half.js';
+import { sleepProfileFromPrefs } from '@core/sleep.js';
 import {
   canSimulateMatch,
   SANDBOX_DISCLAIMER,
@@ -257,18 +258,9 @@ export default function MatchScreen() {
 
   const state = match ? (stateOf(match, now) as string) : 'sched';
   const cutInPlan = match
-    ? planSecondHalfCutIn(
-        match,
-        {
-          enabled: Boolean(prefs.sleepEnabled),
-          wakeTime: prefs.sleepWakeTime || '07:30',
-          weekendEnabled: prefs.sleepWeekendEnabled !== false,
-          weekendWakeTime: prefs.sleepWeekendWakeTime || '09:00',
-          minSleep: prefs.sleepMinHours ?? 7,
-        },
-        now
-      )
+    ? planSecondHalfCutIn(match, sleepProfileFromPrefs(prefs), now)
     : { eligible: false as const };
+  const canScheduleCutIn = cutInPlan.eligible && cutInPlan.alarmAt != null && cutInPlan.alarmAt > now + 15_000;
   const isDone = match
     ? state === 'finished' || state === 'ended_pending' || match.st === 'done'
     : false;
@@ -706,35 +698,41 @@ export default function MatchScreen() {
               <Text style={styles.cutInBoundary}>
                 手机端支持定点 60&apos; 本地唤醒；实时悬念雷达受省电调度限制仅桌面端支持。
               </Text>
-              <Pressable
-                onPress={() => {
-                  void (async () => {
-                    if (cutInSet) {
-                      await cancelSecondHalfCutInReminder(match.id);
-                      setCutInSet(false);
-                      toast.success("已取消 60' 切入唤醒");
-                      return;
-                    }
-                    if (cutInPlan.alarmAt == null) return;
-                    const res = await scheduleSecondHalfCutInReminder(match, cutInPlan.alarmAt);
-                    if (res.ok) {
-                      setCutInSet(true);
-                      toast.success(`已设 ${bjClock(cutInPlan.alarmAt, false)} 半场切入提醒`);
-                    } else if (res.reason === 'permission-denied') {
-                      toast.error('请先允许通知权限后再设唤醒');
-                    } else {
-                      toast.error('当前环境或时间窗口不可排程提醒');
-                    }
-                  })();
-                }}
-                accessibilityRole="button"
-                style={[styles.cutInBtn, cutInSet && styles.cutInBtnOn]}
-              >
-                <Bell size={14} color={cutInSet ? colors.accent : colors.textSecondary} />
-                <Text style={[styles.cutInBtnText, cutInSet && styles.cutInBtnTextOn]}>
-                  {cutInSet ? "已排程 60' 切入闹钟 · 取消" : "开启 60' 半场切入闹钟"}
+              {canScheduleCutIn || cutInSet ? (
+                <Pressable
+                  onPress={() => {
+                    void (async () => {
+                      if (cutInSet) {
+                        await cancelSecondHalfCutInReminder(match.id);
+                        setCutInSet(false);
+                        toast.success("已取消 60' 切入唤醒");
+                        return;
+                      }
+                      if (cutInPlan.alarmAt == null) return;
+                      const res = await scheduleSecondHalfCutInReminder(match, cutInPlan.alarmAt);
+                      if (res.ok) {
+                        setCutInSet(true);
+                        toast.success(`已设 ${bjClock(cutInPlan.alarmAt, false)} 半场切入提醒`);
+                      } else if (res.reason === 'permission-denied') {
+                        toast.error('请先允许通知权限后再设唤醒');
+                      } else {
+                        toast.error('当前环境或时间窗口不可排程提醒');
+                      }
+                    })();
+                  }}
+                  accessibilityRole="button"
+                  style={[styles.cutInBtn, cutInSet && styles.cutInBtnOn]}
+                >
+                  <Bell size={14} color={cutInSet ? colors.accent : colors.textSecondary} />
+                  <Text style={[styles.cutInBtnText, cutInSet && styles.cutInBtnTextOn]}>
+                    {cutInSet ? "已排程 60' 切入闹钟 · 取消" : "开启 60' 半场切入闹钟"}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Text style={styles.cutInBoundary}>
+                  已进入 55&apos;–60&apos; 临近切入窗口，可直接进场观赛。
                 </Text>
-              </Pressable>
+              )}
             </View>
           ) : null}
 

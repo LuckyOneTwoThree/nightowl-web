@@ -16,7 +16,7 @@
  */
 
 import { MATCH_DURATION_MS, ts } from './engine.js';
-import { sleepLedger } from './sleep.js';
+import { sleepLedger, sleepProfileFromPrefs } from './sleep.js';
 
 export const DECISION_VERDICT = Object.freeze({
   RECOMMENDED: 'recommended',
@@ -56,16 +56,6 @@ function endAtOf(match) {
   const kickoff = ts(match?.t);
   if (!Number.isFinite(kickoff)) return null;
   return kickoff + MATCH_DURATION_MS;
-}
-
-function sleepProfileFrom(prefs) {
-  return {
-    enabled: prefs?.sleepEnabled === true,
-    wakeTime: prefs?.sleepWakeTime,
-    weekendEnabled: prefs?.sleepWeekendEnabled === true,
-    weekendWakeTime: prefs?.sleepWeekendWakeTime,
-    minSleep: prefs?.sleepMinHours
-  };
 }
 
 /**
@@ -141,7 +131,7 @@ export function decisionStrip({
   }
   if (endAt == null) return base;
 
-  const profile = sleepProfileFrom(prefs);
+  const profile = sleepProfileFromPrefs(prefs);
   let costMinutes = null;
   let remainingMinutes = null;
   let sleepKnown = false;

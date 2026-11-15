@@ -9,6 +9,7 @@ import {
   snoozeStopLoss,
   stopLossNightKey,
 } from '@core/stop-loss.js';
+import { sleepProfileFromPrefs } from '@core/sleep.js';
 import type { Match } from '@/types';
 import type { Prefs } from '@/state/prefs';
 import { useWatchLaterStore } from '@/state/queue';
@@ -103,14 +104,7 @@ export function useStopLossPrompt(
     if (!enabled || blocked || !loaded || !match || !prefs.sleepEnabled || context) return;
     const night = stopLossNightKey(match);
     if (!night) return;
-    const profile = {
-      enabled: true,
-      wakeTime: prefs.sleepWakeTime,
-      weekendEnabled: prefs.sleepWeekendEnabled,
-      weekendWakeTime: prefs.sleepWeekendWakeTime,
-      minSleep: prefs.sleepMinHours,
-    };
-    const prompt = shouldStopLossPrompt(match, profile, now, states[night] as any);
+    const prompt = shouldStopLossPrompt(match, sleepProfileFromPrefs(prefs), now, states[night] as any);
     if (!prompt) return;
     setContext({ ...prompt, match } as StopLossContext);
     setNotice(null);

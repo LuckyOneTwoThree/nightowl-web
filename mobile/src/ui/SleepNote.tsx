@@ -1,7 +1,7 @@
 import { StyleSheet, Text, type StyleProp, type TextStyle } from 'react-native';
 
 import type { Match } from '@/types';
-import { formatSleepHours, sleepLedger } from '@core/sleep.js';
+import { formatSleepHours, sleepLedger, sleepProfileFromPrefs } from '@core/sleep.js';
 import type { Prefs } from '@/state/prefs';
 
 import { colors, fontSize, weight } from './theme';
@@ -13,13 +13,7 @@ type SleepPrefs = Pick<
 
 export function sleepLedgerFor(match: Match | null | undefined, prefs: SleepPrefs) {
   if (!match?.t || match.tbd || !prefs.sleepEnabled || match.st === 'done' || match.st === 'pp') return null;
-  const ledger = sleepLedger(match.t, {
-    enabled: prefs.sleepEnabled,
-    wakeTime: prefs.sleepWakeTime,
-    weekendEnabled: prefs.sleepWeekendEnabled,
-    weekendWakeTime: prefs.sleepWeekendWakeTime,
-    minSleep: prefs.sleepMinHours,
-  });
+  const ledger = sleepLedger(match.t, sleepProfileFromPrefs(prefs));
   if (!ledger.valid || !ledger.ready || (ledger.endTs ?? 0) < Date.now()) return null;
   return ledger;
 }

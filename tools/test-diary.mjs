@@ -27,9 +27,13 @@ check('upsertDiaryEntry enforces 60 char note cap and removeDiaryEntry removes i
   assert.equal(diary.entries.f1.note.length, DIARY_NOTE_MAX_LEN);
   diary = upsertDiaryEntry(diary, { matchId: 'f2', mode: 'second_half', stamp: 'sleepy', note: '沉闷' }, 2000);
   assert.equal(Object.keys(diary.entries).length, 2);
-  diary = removeDiaryEntry(diary, 'f2');
+  diary = removeDiaryEntry(diary, 'f2', 2500);
   assert.equal(Object.keys(diary.entries).length, 1);
   assert.equal(diary.entries.f2, undefined);
+  assert.equal(diary.deleted.f2, 2500);
+  diary = upsertDiaryEntry(diary, { matchId: 'f2', mode: 'replay', stamp: 'epic' }, 3000);
+  assert.equal(diary.entries.f2.stamp, 'epic');
+  assert.equal(diary.deleted, undefined);
 });
 
 check('normalizeDiary trims entries above 500 keeping newest updatedAt', () => {

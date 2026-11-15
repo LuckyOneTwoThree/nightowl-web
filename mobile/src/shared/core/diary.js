@@ -70,6 +70,22 @@ function trimToMaxEntries(entriesObj) {
   return next;
 }
 
+function sanitizeDeletedMap(rawDeleted, entries) {
+  if (!rawDeleted || typeof rawDeleted !== 'object' || Array.isArray(rawDeleted)) return {};
+  const pairs = [];
+  for (const [k, tsVal] of Object.entries(rawDeleted)) {
+    if (typeof k !== 'string' || !k) continue;
+    const t = Number(tsVal);
+    if (!Number.isFinite(t) || t <= 0) continue;
+    if (entries[k] && (entries[k].updatedAt || 0) > t) continue;
+    pairs.push([k, t]);
+  }
+  pairs.sort((a, b) => b[1] - a[1]);
+  const out = {};
+  for (const [k, t] of pairs.slice(0, DIARY_MAX_ENTRIES)) out[k] = t;
+  return out;
+}
+
 /**
  * 规范化 diary 对象
  * @param {any} raw
@@ -86,10 +102,16 @@ export function normalizeDiary(raw) {
     const clean = normalizeEntry(k, val);
     if (clean) entries[clean.matchId] = clean;
   }
-  return {
+  const trimmedEntries = trimToMaxEntries(entries);
+  const deleted = sanitizeDeletedMap(raw?.deleted, trimmedEntries);
+  const out = {
     version: DIARY_VERSION,
-    entries: trimToMaxEntries(entries)
+    entries: trimmedEntries
   };
+  if (Object.keys(deleted).length > 0) {
+    out.deleted = deleted;
+  }
+  return out;
 }
 
 /**
@@ -116,24 +138,38 @@ export function upsertDiaryEntry(diary, patch, nowTs = Date.now()) {
       updatedAt
     }
   };
-  return {
+  const nextDeleted = base.deleted ? { ...base.deleted } : {};
+  delete nextDeleted[patch.matchId];
+  const out = {
     version: DIARY_VERSION,
     entries: trimToMaxEntries(entries)
   };
+  if (Object.keys(nextDeleted).length > 0) {
+    out.deleted = nextDeleted;
+  }
+  return out;
 }
 
 /**
- * 移除指定场次的印章记录
+ * 移除指定场次的印章记录（写入删除墓碑以防局域网同步误恢复）
  */
-export function removeDiaryEntry(diary, matchId) {
+export function removeDiaryEntry(diary, matchId, nowTs = Date.now()) {
   const base = normalizeDiary(diary);
-  if (!matchId || !(matchId in base.entries)) return base;
+  if (!matchId || typeof matchId !== 'string') return base;
+  const hadEntry = matchId in base.entries;
   const entries = { ...base.entries };
-  delete entries[matchId];
-  return {
+  if (hadEntry) delete entries[matchId];
+  const deleted = { ...(base.deleted || {}) };
+  const prevDel = deleted[matchId] || 0;
+  const delTs = Number.isFinite(nowTs) ? Math.max(prevDel, nowTs) : prevDel;
+  if (hadEntry || delTs > 0) {
+    deleted[matchId] = delTs;
+  }
+  return normalizeDiary({
     version: DIARY_VERSION,
-    entries
-  };
+    entries,
+    deleted
+  });
 }
 
 function resolvePersona(safeSummary, outcomeSummary) {

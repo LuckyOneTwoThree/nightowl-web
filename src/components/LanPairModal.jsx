@@ -55,6 +55,7 @@ export default function LanPairModal({
   session,
   loading = false,
   syncNotice = null,
+  onSwitchHost = null,
   onRestart,
   onClose
 }) {
@@ -165,6 +166,29 @@ export default function LanPairModal({
                       复制地址
                     </button>
                   </div>
+                  {Array.isArray(session.candidates) && session.candidates.length > 1 && onSwitchHost && (
+                    <div className="flex flex-wrap items-center gap-1 border-t border-line-hairline pt-2">
+                      <Meta className="mr-1">网卡切换</Meta>
+                      {session.candidates.slice(0, 4).map(ip => {
+                        const selected = ip === session.host;
+                        return (
+                          <button
+                            key={ip}
+                            type="button"
+                            disabled={loading || selected}
+                            onClick={() => onSwitchHost(ip)}
+                            className={`rounded px-1.5 py-0.5 font-num text-2xs tabular-nums transition-colors cursor-pointer ${
+                              selected
+                                ? 'bg-accent/15 text-accent font-medium'
+                                : 'bg-surface-panel text-text-secondary hover:text-text-primary'
+                            }`}
+                          >
+                            {ip}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div className="rounded-lg border border-line-hairline bg-surface-card p-2.5 text-2xs leading-relaxed text-text-secondary">

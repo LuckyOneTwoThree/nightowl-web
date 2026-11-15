@@ -57,6 +57,17 @@ function sanitizeWeekOverridesMap(rawMap) {
   return out;
 }
 
+function sanitizeWeekUpdatedAtMap(rawMap) {
+  if (!rawMap || typeof rawMap !== 'object' || Array.isArray(rawMap)) return {};
+  const out = {};
+  for (const [weekKey, tsVal] of Object.entries(rawMap)) {
+    if (typeof weekKey !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(weekKey)) continue;
+    const t = Number(tsVal);
+    if (Number.isFinite(t) && t >= 0) out[weekKey] = t;
+  }
+  return out;
+}
+
 function sanitizeRevealedIds(raw) {
   if (!Array.isArray(raw)) return [];
   return [...new Set(raw.filter(x => typeof x === 'string' && x.trim()).map(x => x.trim()))];
@@ -67,14 +78,16 @@ function sanitizeRevealedIds(raw) {
  */
 export function buildSyncBundle(input = {}, nowTs = Date.now()) {
   const exportedAt = Number.isFinite(input.exportedAt) ? input.exportedAt : nowTs;
+  const weekOverridesUpdatedAt = Number.isFinite(input.weekOverridesUpdatedAt)
+    ? input.weekOverridesUpdatedAt
+    : exportedAt;
   return {
     version: SYNC_SCHEMA_VERSION,
     exportedAt,
     prefsUpdatedAt: Number.isFinite(input.prefsUpdatedAt) ? input.prefsUpdatedAt : exportedAt,
     prefs: sanitizePrefs(input.prefs),
-    weekOverridesUpdatedAt: Number.isFinite(input.weekOverridesUpdatedAt)
-      ? input.weekOverridesUpdatedAt
-      : exportedAt,
+    weekOverridesUpdatedAt,
+    weekUpdatedAtByWeek: sanitizeWeekUpdatedAtMap(input.weekUpdatedAtByWeek),
     weekOverridesByWeek: sanitizeWeekOverridesMap(input.weekOverridesByWeek),
     watchLater: normalizeQueue(input.watchLater, nowTs),
     revealedIds: sanitizeRevealedIds(input.revealedIds),
@@ -107,32 +120,47 @@ export function mergeSyncBundles(localRaw, remoteRaw, nowTs = Date.now()) {
   const prefs = remoteNewerPrefs ? remote.prefs : local.prefs;
   const prefsUpdatedAt = Math.max(local.prefsUpdatedAt, remote.prefsUpdatedAt);
 
-  // 2. weekOverridesByWeek（按 weekOverridesUpdatedAt LWW；若精确同时间戳则并集合并）
+  // 2. weekOverridesByWeek（按 weekKey 细粒度 LWW；同时间戳时并集合并；支持重置墓碑传播）
   const weekKeys = new Set([
     ...Object.keys(local.weekOverridesByWeek),
-    ...Object.keys(remote.weekOverridesByWeek)
+    ...Object.keys(remote.weekOverridesByWeek),
+    ...Object.keys(local.weekUpdatedAtByWeek),
+    ...Object.keys(remote.weekUpdatedAtByWeek)
   ]);
   const weekOverridesByWeek = {};
-  const remoteNewerWeek = remote.weekOverridesUpdatedAt > local.weekOverridesUpdatedAt;
-  const equalWeekTs = remote.weekOverridesUpdatedAt === local.weekOverridesUpdatedAt;
+  const weekUpdatedAtByWeek = {};
   for (const wk of weekKeys) {
     const lv = local.weekOverridesByWeek[wk];
     const rv = remote.weekOverridesByWeek[wk];
-    if (!lv) {
-      weekOverridesByWeek[wk] = rv;
-    } else if (!rv) {
-      weekOverridesByWeek[wk] = lv;
-    } else if (equalWeekTs) {
-      weekOverridesByWeek[wk] = normalizeWeekOverrides({
-        pinnedIds: [...lv.pinnedIds, ...rv.pinnedIds],
-        excludedIds: [...lv.excludedIds, ...rv.excludedIds],
-        blockedNights: [...lv.blockedNights, ...rv.blockedNights]
-      });
-    } else {
-      weekOverridesByWeek[wk] = remoteNewerWeek ? rv : lv;
+    const hasExplicitL = Object.prototype.hasOwnProperty.call(local.weekUpdatedAtByWeek, wk);
+    const hasExplicitR = Object.prototype.hasOwnProperty.call(remote.weekUpdatedAtByWeek, wk);
+    const lTs = hasExplicitL ? local.weekUpdatedAtByWeek[wk] : local.weekOverridesUpdatedAt;
+    const rTs = hasExplicitR ? remote.weekUpdatedAtByWeek[wk] : remote.weekOverridesUpdatedAt;
+    const maxWkTs = Math.max(lTs || 0, rTs || 0);
+    if (hasExplicitL || hasExplicitR) weekUpdatedAtByWeek[wk] = maxWkTs;
+
+    if (lv && rv) {
+      if (rTs === lTs) {
+        weekOverridesByWeek[wk] = normalizeWeekOverrides({
+          pinnedIds: [...lv.pinnedIds, ...rv.pinnedIds],
+          excludedIds: [...lv.excludedIds, ...rv.excludedIds],
+          blockedNights: [...lv.blockedNights, ...rv.blockedNights]
+        });
+      } else {
+        weekOverridesByWeek[wk] = rTs > lTs ? rv : lv;
+      }
+    } else if (lv && !rv) {
+      // 对侧显式重置了该周且时间戳更新 → 尊重重置，不从本机复活
+      if (!(hasExplicitR && rTs > lTs)) weekOverridesByWeek[wk] = lv;
+    } else if (!lv && rv) {
+      if (!(hasExplicitL && lTs > rTs)) weekOverridesByWeek[wk] = rv;
     }
   }
-  const weekOverridesUpdatedAt = Math.max(local.weekOverridesUpdatedAt, remote.weekOverridesUpdatedAt);
+  const weekOverridesUpdatedAt = Math.max(
+    local.weekOverridesUpdatedAt,
+    remote.weekOverridesUpdatedAt,
+    ...Object.values(weekUpdatedAtByWeek)
+  );
 
   // 3. watchLater 并集 + `watched > pending` 单向状态收敛 + 上限裁剪
   const qMap = new Map();
@@ -167,15 +195,38 @@ export function mergeSyncBundles(localRaw, remoteRaw, nowTs = Date.now()) {
   // 4. revealedIds 只增不减 Union
   const mergedRevealed = [...new Set([...local.revealedIds, ...remote.revealedIds])];
 
-  // 5. diary 按 updatedAt 取较新条目
-  const diaryEntries = { ...local.diary.entries };
-  for (const [matchId, rEntry] of Object.entries(remote.diary.entries)) {
-    const lEntry = diaryEntries[matchId];
-    if (!lEntry || (rEntry.updatedAt || 0) > (lEntry.updatedAt || 0)) {
-      diaryEntries[matchId] = rEntry;
+  // 5. diary 按 updatedAt / deleted 墓碑取较新动作
+  const diaryEntries = {};
+  const diaryDeleted = {};
+  const diaryIds = new Set([
+    ...Object.keys(local.diary.entries),
+    ...Object.keys(remote.diary.entries),
+    ...Object.keys(local.diary.deleted || {}),
+    ...Object.keys(remote.diary.deleted || {})
+  ]);
+  for (const matchId of diaryIds) {
+    const lEntry = local.diary.entries[matchId];
+    const rEntry = remote.diary.entries[matchId];
+    const bestEntry =
+      !lEntry
+        ? rEntry
+        : !rEntry
+          ? lEntry
+          : (rEntry.updatedAt || 0) > (lEntry.updatedAt || 0)
+            ? rEntry
+            : lEntry;
+    const delTs = Math.max(local.diary.deleted?.[matchId] || 0, remote.diary.deleted?.[matchId] || 0);
+    if (delTs > 0 && (!bestEntry || delTs >= (bestEntry.updatedAt || 0))) {
+      diaryDeleted[matchId] = delTs;
+    } else if (bestEntry) {
+      diaryEntries[matchId] = bestEntry;
     }
   }
-  const mergedDiary = normalizeDiary({ version: 1, entries: diaryEntries });
+  const mergedDiary = normalizeDiary({
+    version: 1,
+    entries: diaryEntries,
+    ...(Object.keys(diaryDeleted).length > 0 ? { deleted: diaryDeleted } : {})
+  });
 
   return {
     version: SYNC_SCHEMA_VERSION,
@@ -183,6 +234,7 @@ export function mergeSyncBundles(localRaw, remoteRaw, nowTs = Date.now()) {
     prefsUpdatedAt,
     prefs,
     weekOverridesUpdatedAt,
+    weekUpdatedAtByWeek,
     weekOverridesByWeek,
     watchLater: mergedWatchLater,
     revealedIds: mergedRevealed,

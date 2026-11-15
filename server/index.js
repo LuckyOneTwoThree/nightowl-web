@@ -34,7 +34,7 @@ import {
 import { summarizeDrama } from '../src/core/drama.js';
 import { evaluateRadarSuspense, RADAR_VERDICT } from '../src/core/radar.js';
 import { buildPlanIcs } from '../src/core/ics.js';
-import { SLEEP_DEFAULTS, normalizeSleepProfile } from '../src/core/sleep.js';
+import { sleepProfileFromSearchParams } from '../src/core/sleep.js';
 import { buildSyncBundle } from '../src/core/sync-bundle.js';
 import { createLanPairManager, PAIR_MAX_BODY_BYTES } from './lan-pair.js';
 import { rivalries, storylines, REC_MAP } from '../src/data/index.js';
@@ -795,11 +795,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
           const weeklyBudget = Number.isFinite(budgetNum) ? budgetNum : 4.0;
           const remindNum = Number(searchParams.get('remind'));
           const reminderMinutes = Number.isFinite(remindNum) ? remindNum : 30;
-          const sleepProfile = normalizeSleepProfile({
-            wakeWorkday: searchParams.get('wakeWorkday') || SLEEP_DEFAULTS.wakeWorkday,
-            wakeWeekend: searchParams.get('wakeWeekend') || SLEEP_DEFAULTS.wakeWeekend,
-            sleepGoalHours: searchParams.get('sleepGoal') ? Number(searchParams.get('sleepGoal')) : SLEEP_DEFAULTS.sleepGoalHours
-          });
+          const sleepProfile = sleepProfileFromSearchParams(searchParams);
 
           let picks = [];
           if (explicitIds.length > 0) {
@@ -883,8 +879,13 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
           cachedLocalBundle = buildSyncBundle(body.bundle || {});
           latestPairMerged = null;
           latestPairMergedAt = 0;
+          const safeDisplayHost =
+            typeof body.displayHost === 'string' && /^[a-zA-Z0-9.-]{1,64}$/.test(body.displayHost.trim())
+              ? body.displayHost.trim()
+              : null;
           const status = await lanPairMgr.startSession({
             mode: body.mode === 'handoff' ? 'handoff' : 'sync',
+            displayHost: safeDisplayHost,
             ttlMs: body.ttlMs,
             getLocalBundle: () => cachedLocalBundle,
             onMergedBundle: merged => {
@@ -904,6 +905,9 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
       if (pathname === '/api/pair/stop' && req.method === 'POST') {
         if (rejectForeignOrigin(req, res)) return;
         await lanPairMgr.stopSession();
+        cachedLocalBundle = null;
+        latestPairMerged = null;
+        latestPairMergedAt = 0;
         sendJSON(res, 200, { ok: true, active: false });
         return;
       }

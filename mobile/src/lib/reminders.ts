@@ -5,12 +5,18 @@ import { getFixtures, leagueName, teamName } from '@data/index.js';
 import { computeTonight } from '@core/owl.js';
 import { ts } from '@core/engine.js';
 import { hm } from '@core/format.js';
+import {
+  isLateNightCutInEligible,
+  SECOND_HALF_OFFSET_MIN,
+  WAKE_LEAD_MIN,
+} from '@core/second-half.js';
 
 import type { Prefs } from '@/state/prefs';
 import type { Match } from '@/types';
 
 const CHANNEL_ID = 'prematch';
 const LEAD_MS = 15 * 60 * 1000;
+const SECOND_HALF_ALARM_OFFSET_MS = (SECOND_HALF_OFFSET_MIN - WAKE_LEAD_MIN) * 60 * 1000;
 const HORIZON_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_REMINDERS = 30;
 
@@ -94,7 +100,7 @@ export async function cancelAllMatchReminders(): Promise<void> {
     const existing = await Notifications.getAllScheduledNotificationsAsync();
     for (const item of existing) {
       const kind = item.content.data?.kind;
-      if (kind === 'prematch' || kind === 'manual') {
+      if (kind === 'prematch' || kind === 'manual' || kind === 'second-half') {
         await Notifications.cancelScheduledNotificationAsync(item.identifier);
       }
     }
@@ -110,7 +116,10 @@ export async function cancelMatchReminder(matchId: string): Promise<boolean> {
     const existing = await Notifications.getAllScheduledNotificationsAsync();
     for (const item of existing) {
       const data = item.content.data || {};
-      if (data.matchId === matchId && (data.kind === 'prematch' || data.kind === 'manual')) {
+      if (
+        data.matchId === matchId &&
+        (data.kind === 'prematch' || data.kind === 'manual' || data.kind === 'second-half')
+      ) {
         await Notifications.cancelScheduledNotificationAsync(item.identifier);
       }
     }
@@ -118,6 +127,25 @@ export async function cancelMatchReminder(matchId: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function scheduleSecondHalfDateNotification(
+  Notifications: NotificationsModule,
+  match: Match,
+  alarmAt: number
+) {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: `下半场 60' 切入唤醒 · ${teamName(match.h)} vs ${teamName(match.a)}`,
+      body: `${leagueName(match.l)} 即将进入第 60 分钟下半场阶段，现在醒来看关键末尾即可。`,
+      data: { matchId: match.id, kind: 'second-half', kickoff: match.t },
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date: new Date(alarmAt),
+      channelId: CHANNEL_ID,
+    },
+  });
 }
 
 async function runReminderSync(prefs: Prefs): Promise<ReminderResult> {
@@ -132,12 +160,30 @@ async function runReminderSync(prefs: Prefs): Promise<ReminderResult> {
     const fixtureMap = new Map<string, Match>(fixtures.map(m => [m.id, m]));
     const existing = await Notifications.getAllScheduledNotificationsAsync();
 
-    // 无论全局自动提醒开关是否开启，都先对已有的单场手动提醒做改期/失效校准：
+    // 无论全局自动提醒开关是否开启，都先对已有的单场手动/半场切入提醒做改期/失效校准：
     // 1. 比赛已完赛 / 延期 / 变更为 TBD -> 取消旧提醒
-    // 2. 比赛改期（kickoff !== match.t） -> 取消旧提醒并按新开球时间重排
+    // 2. 比赛改期（kickoff !== match.t） -> 取消旧提醒并按新时间重排
     const manualMatchIds = new Set<string>();
     for (const item of existing) {
       const data = item.content.data || {};
+      if (data.kind === 'second-half') {
+        const matchId = typeof data.matchId === 'string' ? data.matchId : '';
+        const currentMatch = matchId ? fixtureMap.get(matchId) : undefined;
+        if (!currentMatch || !isLateNightCutInEligible(currentMatch)) {
+          await Notifications.cancelScheduledNotificationAsync(item.identifier);
+          continue;
+        }
+        const nextAlarmMs = ts(currentMatch.t) + SECOND_HALF_ALARM_OFFSET_MS;
+        if (!Number.isFinite(nextAlarmMs) || nextAlarmMs <= now) {
+          await Notifications.cancelScheduledNotificationAsync(item.identifier);
+          continue;
+        }
+        if (data.kickoff !== currentMatch.t) {
+          await Notifications.cancelScheduledNotificationAsync(item.identifier);
+          await scheduleSecondHalfDateNotification(Notifications, currentMatch, nextAlarmMs);
+        }
+        continue;
+      }
       if (data.kind !== 'manual') continue;
       const matchId = typeof data.matchId === 'string' ? data.matchId : '';
       const currentMatch = matchId ? fixtureMap.get(matchId) : undefined;
@@ -392,18 +438,7 @@ export async function scheduleSecondHalfCutInReminder(
     const granted = await requestNotificationPermission();
     if (!granted) return { ok: false, reason: 'permission-denied' };
     await cancelSecondHalfCutInReminder(match.id);
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: `下半场 60' 切入唤醒 · ${teamName(match.h)} vs ${teamName(match.a)}`,
-        body: `${leagueName(match.l)} 即将进入第 60 分钟下半场阶段，现在醒来看关键末尾即可。`,
-        data: { matchId: match.id, kind: 'second-half', kickoff: match.t },
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: when,
-        channelId: CHANNEL_ID,
-      },
-    });
+    await scheduleSecondHalfDateNotification(Notifications, match, when.getTime());
     return { ok: true };
   } catch {
     return { ok: false, reason: 'error' };
