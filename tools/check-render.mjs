@@ -551,13 +551,24 @@ app.whenReady().then(async () => {
       (() => {
         const panel = document.getElementById('intel-panel');
         const sections = [...(panel?.querySelectorAll('[data-fold]') || [])].map(b => b.closest('section'));
-        return sections.length >= 1 && sections.every(s => {
-          const st = s ? getComputedStyle(s) : null;
-          return st && parseFloat(st.borderTopWidth) >= 1;
-        });
+        const sample = sections[0] ? getComputedStyle(sections[0]) : null;
+        return {
+          count: sections.length,
+          ok: sections.length >= 1 && sections.every(s => {
+            const st = s ? getComputedStyle(s) : null;
+            // Windows 125%/150% DPI 下 1px CSS 边框按物理像素取整后会返回 0.8px / 0.67px，
+            // 不能写死 >= 1，应校验确实存在可见边框与圆角。
+            return st && st.borderTopStyle !== 'none' && parseFloat(st.borderTopWidth) > 0 && parseFloat(st.borderTopLeftRadius) > 0;
+          }),
+          sample: sample ? {
+            borderTopStyle: sample.borderTopStyle,
+            borderTopWidth: sample.borderTopWidth,
+            borderTopLeftRadius: sample.borderTopLeftRadius
+          } : null
+        };
       })()
     `);
-    ok('★ 第三层抽屉具备独立微卡片边框分隔', foldCardsFramed);
+    ok('★ 第三层抽屉具备独立微卡片边框分隔', foldCardsFramed.ok, JSON.stringify(foldCardsFramed));
 
     // 点击与读取必须分成两次执行：React 的 setState 在下一帧才生效，
     // 同一次 executeJavaScript 里点完立刻读，只会读到折叠前的 DOM。
@@ -812,7 +823,7 @@ app.whenReady().then(async () => {
         return true;
       })()
     `);
-    await sleep(350);
+    await sleep(450);
     const fullUcl = await win.webContents.executeJavaScript(
       `document.querySelector('[aria-labelledby="standings-title"]')?.querySelectorAll('[data-team-id]').length || 0`
     );
@@ -1243,7 +1254,7 @@ app.whenReady().then(async () => {
         return !!all;
       })()
     `);
-    await sleep(350);
+    await sleep(450);
     await win.webContents.executeJavaScript(`
       (() => {
         const el = document.querySelector('input[placeholder^="搜索球队"]');
@@ -1407,7 +1418,7 @@ app.whenReady().then(async () => {
         return { inlinePicker, clicked: !!btn };
       })()
     `);
-    await sleep(350);
+    await sleep(450);
     const teamsModalOpenCheck = await win.webContents.executeJavaScript(`
       (() => ({
         open: !!document.querySelector('[aria-labelledby="followed-teams-modal-title"]'),
@@ -1508,7 +1519,7 @@ app.whenReady().then(async () => {
         return !!btn;
       })()
     `);
-    await sleep(350);
+    await sleep(450);
 
     const resetClicked = await win.webContents.executeJavaScript(`
       (() => {
@@ -1563,7 +1574,7 @@ app.whenReady().then(async () => {
         return true;
       })()
     `);
-    await sleep(350);
+    await sleep(450);
     const updateStack = await win.webContents.executeJavaScript(`
       (() => {
         const modal = document.querySelector('[aria-label="版本更新"]');
@@ -1764,7 +1775,7 @@ app.whenReady().then(async () => {
           return !!tab;
         })()
       `);
-      await sleep(350);
+      await sleep(450);
       await win.webContents.executeJavaScript(`
         (() => {
           const btn = [...document.querySelectorAll('#intel-panel button')].find(b => (b.textContent || '').includes('查看完整积分榜'));
