@@ -228,9 +228,9 @@ export default function SeasonReportModal({
         className="flex max-h-[min(760px,90vh)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-line-hairline bg-surface-panel shadow-pop"
       >
         <header className="flex items-start justify-between gap-3 border-b border-line-hairline px-5 py-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <Chip tone="gold">本地黑金战报</Chip>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Chip tone="accent">本地黑金战报</Chip>
               <h2 id="season-report-title" className="text-base font-semibold text-text-primary">
                 我的熬夜赛季账单
               </h2>
@@ -244,7 +244,7 @@ export default function SeasonReportModal({
             type="button"
             onClick={onClose}
             aria-label="关闭"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
           >
             <IconClose size={16} />
           </button>
@@ -424,7 +424,7 @@ export default function SeasonReportModal({
         </div>
 
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-line-hairline px-5 py-3">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="default" size="xs" onClick={handleExportPng}>
               导出战报 PNG
             </Button>

@@ -116,9 +116,11 @@ export function Meta({ children, className = '', num = false }) {
 
 /** 状态标签：只用于**有语义**的状态（档位 / 直播 / 主队 / 警告） */
 export function Chip({ tone = 'neutral', children, className = '' }) {
+  const accentStyle = 'bg-accent/15 border border-accent/30 text-accent';
   const tones = {
     neutral: 'bg-surface-raised border border-line-hairline text-text-muted',
-    accent: 'bg-accent/15 border border-accent/30 text-accent',
+    accent: accentStyle,
+    gold: accentStyle,
     live: 'bg-live/10 border border-live/30 text-live',
     warn: 'bg-warn/15 border border-warn/30 text-warn',
     danger: 'bg-danger/15 border border-danger/30 text-danger',
@@ -126,7 +128,7 @@ export function Chip({ tone = 'neutral', children, className = '' }) {
   };
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs font-medium leading-snug ${
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-2xs font-medium leading-snug ${
         tones[tone] || tones.neutral
       } ${className}`}
     >
@@ -284,7 +286,7 @@ export function Button({
   return (
     <button
       type={type}
-      className={`no-drag inline-flex items-center justify-center gap-1.5 rounded-md transition-all duration-150 active:translate-y-px active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 disabled:active:translate-y-0 disabled:active:scale-100 ${
+      className={`no-drag inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md transition-all duration-150 active:translate-y-px active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-45 disabled:active:translate-y-0 disabled:active:scale-100 ${
         variants[variant] || variants.default
       } ${sizes[size] || sizes.sm} ${className}`}
       {...rest}

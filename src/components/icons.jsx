@@ -46,6 +46,7 @@ import {
   Table2,
   Timer,
   TriangleAlert,
+  UserRound,
   Volume2,
   X
 } from 'lucide-react';
@@ -73,6 +74,7 @@ function mk(Comp, size) {
 export const IconTonight = mk(Moon, 14);
 export const IconWeek = mk(BarChart3, 14);
 export const IconSchedule = mk(CalendarDays, 14);
+export const IconMe = mk(UserRound, 14);
 export const IconStandings = mk(Table2, 14);
 export const IconSettings = mk(Settings, 14);
 

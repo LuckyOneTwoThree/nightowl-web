@@ -604,7 +604,7 @@ export default function MatchScreen() {
                   <Text style={styles.stateText}>已结束</Text>
                 </View>
                 <Pressable onPress={() => setWatchOpen(true)} hitSlop={16}>
-                  <Text style={styles.stateAction}>看集锦</Text>
+                  <Text style={styles.stateAction} numberOfLines={1}>看集锦</Text>
                 </Pressable>
               </>
             ) : isPostponed ? (
@@ -622,7 +622,7 @@ export default function MatchScreen() {
                 </View>
                 <View style={styles.stateActions}>
                   <Pressable onPress={() => setWatchOpen(true)} hitSlop={16}>
-                    <Text style={styles.stateSecondary}>观看入口</Text>
+                    <Text style={styles.stateSecondary} numberOfLines={1}>观看入口</Text>
                   </Pressable>
                 </View>
               </>
@@ -636,12 +636,12 @@ export default function MatchScreen() {
                 </View>
                 <View style={styles.stateActions}>
                   <Pressable onPress={() => setWatchOpen(true)} hitSlop={16}>
-                    <Text style={styles.stateSecondary}>观看入口</Text>
+                    <Text style={styles.stateSecondary} numberOfLines={1}>观看入口</Text>
                   </Pressable>
                   {reminded ? (
                     <View style={styles.stateReminded}>
                       <CheckCircle2 size={14} color={colors.accent} />
-                      <Text style={styles.stateRemindedText}>提醒已开启</Text>
+                      <Text style={styles.stateRemindedText} numberOfLines={1}>提醒已开启</Text>
                     </View>
                   ) : (
                     <Pressable
@@ -650,7 +650,7 @@ export default function MatchScreen() {
                       style={styles.stateReminderChip}
                     >
                       <Bell size={13} color={colors.textSecondary} />
-                      <Text style={styles.stateReminderText}>提醒</Text>
+                      <Text style={styles.stateReminderText} numberOfLines={1}>提醒</Text>
                     </Pressable>
                   )}
                 </View>
@@ -724,7 +724,7 @@ export default function MatchScreen() {
                   style={[styles.cutInBtn, cutInSet && styles.cutInBtnOn]}
                 >
                   <Bell size={14} color={cutInSet ? colors.accent : colors.textSecondary} />
-                  <Text style={[styles.cutInBtnText, cutInSet && styles.cutInBtnTextOn]}>
+                  <Text style={[styles.cutInBtnText, cutInSet && styles.cutInBtnTextOn]} numberOfLines={1}>
                     {cutInSet ? "已排程 60' 切入闹钟 · 取消" : "开启 60' 半场切入闹钟"}
                   </Text>
                 </Pressable>
@@ -1810,8 +1810,10 @@ const styles = StyleSheet.create({
   },
   stateStrip: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.xs,
     borderRadius: radius.control,
     borderWidth: 1,
     borderColor: colors.hairline,
@@ -1823,10 +1825,11 @@ const styles = StyleSheet.create({
     borderColor: withAlpha(colors.live, 0.35),
     backgroundColor: withAlpha(colors.live, 0.10),
   },
-  stateLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  stateActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  stateLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  stateActions: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   stateReminderChip: {
-    height: 32,
+    minHeight: 32,
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,

@@ -73,12 +73,15 @@ export function Chip({
 const styles = StyleSheet.create({
   base: {
     minHeight: 32,
+    maxWidth: '100%',
+    flexShrink: 0,
     borderRadius: radius.pill,
+    borderWidth: 1,
     paddingHorizontal: spacing.sm + 2,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
   },
-  label: { fontSize: fontSize.xs, fontWeight: weight.label },
+  label: { fontSize: fontSize.xs, fontWeight: weight.label, flexShrink: 1 },
   pressed: { opacity: 0.75 },
 });

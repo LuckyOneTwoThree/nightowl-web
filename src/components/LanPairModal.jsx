@@ -98,9 +98,9 @@ export default function LanPairModal({
         className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-line-hairline bg-surface-panel shadow-pop"
       >
         <header className="flex items-start justify-between gap-3 border-b border-line-hairline px-5 py-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <Chip tone="gold">{isHandoff ? '被窝手机接力' : '零云端局域网同步'}</Chip>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Chip tone="accent">{isHandoff ? '被窝手机接力' : '零云端局域网同步'}</Chip>
               <h2 id="lan-pair-title" className="text-base font-semibold text-text-primary">
                 {isHandoff ? '把这场比赛无缝交棒给手机' : '局域网一扫同步'}
               </h2>
@@ -116,7 +116,7 @@ export default function LanPairModal({
             type="button"
             onClick={onClose}
             aria-label="关闭配对窗口"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
           >
             <IconClose size={16} />
           </button>
@@ -143,7 +143,7 @@ export default function LanPairModal({
                 <QrSvgBox value={session.pairUri} />
               </div>
 
-              <div className="min-w-0 flex-1 space-y-2.5 text-xs">
+              <div className="w-full min-w-0 flex-1 space-y-2.5 text-xs">
                 <div className="rounded-lg border border-line-hairline bg-surface-card p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <Meta>一次性 6 位配对口令</Meta>
@@ -215,11 +215,11 @@ export default function LanPairModal({
           )}
         </div>
 
-        <footer className="flex items-center justify-between gap-2 border-t border-line-hairline px-5 py-3">
-          <Meta className="text-text-faint">
+        <footer className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-line-hairline px-5 py-3">
+          <Meta className="min-w-0 flex-1 leading-relaxed text-text-faint">
             {copied || '仅暴露 /pair/info /pair/sync /pair/handoff，绝不暴露流代理'}
           </Meta>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <Button variant="ghost" size="xs" onClick={onRestart} disabled={loading}>
               重新生成
             </Button>

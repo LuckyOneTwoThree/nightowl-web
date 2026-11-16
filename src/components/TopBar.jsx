@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { bjClock, bjDate } from '../core/format.js';
 import { teamName } from '../data/index.js';
 import { BrandLogo, Crest, LiveDot } from './atoms.jsx';
-import { IconSchedule, IconSearch, IconSettings, IconStandings, IconTonight, IconWeek, IconWinClose, IconWinMax, IconWinMin, IconWinRestore } from './icons.jsx';
+import { IconMe, IconSchedule, IconSearch, IconSettings, IconStandings, IconTonight, IconWeek, IconWinClose, IconWinMax, IconWinMin, IconWinRestore } from './icons.jsx';
 
 /**
  * 自绘窗口按钮（仅桌面版的 Windows/Linux —— macOS 用系统交通灯）
@@ -55,7 +55,8 @@ function WindowControls() {
 const VIEWS = [
   { id: 'tonight', label: '今晚观赛', icon: <IconTonight /> },
   { id: 'week', label: '本周规划', icon: <IconWeek /> },
-  { id: 'schedule', label: '赛程日历', icon: <IconSchedule /> }
+  { id: 'schedule', label: '赛程日历', icon: <IconSchedule /> },
+  { id: 'me', label: '我的看台', icon: <IconMe /> }
 ];
 
 
@@ -84,9 +85,12 @@ export default function TopBar({
   view,
   onViewChange,
   liveCount,
+  pendingQueueCount = 0,
   prefs,
   dataHealth = null,
   onOpenSettings,
+  onOpenSettingsTab,
+  onOpenMyTeams,
   updateAvailable = false,
   updateVersion = null,
   onOpenUpdate,
@@ -112,10 +116,10 @@ export default function TopBar({
 
   return (
     <header
-      className="drag-region relative flex h-[52px] min-h-[52px] select-none items-center justify-between border-b border-line-hairline bg-surface-panel/95 px-5 backdrop-blur-xl shadow-sm"
+      className="drag-region relative flex h-[52px] min-h-[52px] select-none items-center justify-between border-b border-line-hairline bg-surface-panel/95 px-3.5 xl:px-5 backdrop-blur-xl shadow-sm"
       style={{ paddingLeft: isMacDesktop ? 80 : undefined }}
     >
-      <div className="flex min-w-0 items-center gap-5">
+      <div className="flex min-w-0 items-center gap-3 xl:gap-5">
         <div className="flex shrink-0 items-center gap-2.5">
           <BrandLogo size={26} rounded="md" withGlow={false} />
           <span className="whitespace-nowrap text-sm font-bold tracking-tight text-text-primary">
@@ -123,10 +127,11 @@ export default function TopBar({
           </span>
         </div>
 
-        <nav className="no-drag flex shrink-0 items-center gap-1" aria-label="视图切换" role="tablist">
+        <nav className="no-drag flex shrink-0 items-center gap-0.5 xl:gap-1" aria-label="视图切换" role="tablist">
           {VIEWS.map(it => {
             const active = it.id === view;
             const showLiveBadge = it.id === 'tonight' && liveCount > 0;
+            const showQueueBadge = it.id === 'me' && pendingQueueCount > 0;
             return (
               <button
                 key={it.id}
@@ -134,7 +139,7 @@ export default function TopBar({
                 role="tab"
                 aria-selected={active}
                 onClick={() => onViewChange(it.id)}
-                className={`relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs transition-all active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none ${
+                className={`relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 xl:px-3 py-1.5 text-xs transition-all active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none ${
                   active
                     ? 'bg-surface-raised font-semibold text-text-primary shadow-card'
                     : 'text-text-muted hover:bg-surface-raised/60 hover:text-text-primary'
@@ -149,6 +154,14 @@ export default function TopBar({
                   >
                     <LiveDot />
                     {liveCount}
+                  </span>
+                )}
+                {showQueueBadge && (
+                  <span
+                    className="ml-0.5 inline-flex items-center rounded-full bg-accent/15 px-1.5 py-px font-num text-2xs font-semibold tabular-nums text-accent"
+                    title={`${pendingQueueCount} 场待补看`}
+                  >
+                    {pendingQueueCount > 9 ? '9+' : pendingQueueCount}
                   </span>
                 )}
                 {active && (
@@ -180,8 +193,8 @@ export default function TopBar({
         {dataHealth && dataHealth.state !== 'unknown' && (
           <button
             type="button"
-            onClick={onOpenSettings}
-            title="数据同步与保鲜状态，点击查看详情"
+            onClick={() => (onOpenSettingsTab ? onOpenSettingsTab('system') : onOpenSettings?.())}
+            title="数据同步与保鲜状态，点击查看服务与诊断"
             className={`inline-flex max-w-[160px] shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none ${
               dataHealth.state === 'error'
                 ? 'border-danger/30 bg-danger/10 text-danger'
@@ -229,7 +242,8 @@ export default function TopBar({
         {primaryTeam ? (
           <button
             type="button"
-            onClick={onOpenSettings}
+            onClick={() => (onOpenMyTeams ? onOpenMyTeams() : onOpenSettings?.())}
+            title="点击前往「我的看台」管理关注球队"
             className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1 text-xs text-text-primary transition-colors hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
           >
             <Crest id={primaryTeam} size={16} />
@@ -241,7 +255,8 @@ export default function TopBar({
         ) : (
           <button
             type="button"
-            onClick={onOpenSettings}
+            onClick={() => (onOpenMyTeams ? onOpenMyTeams() : onOpenSettings?.())}
+            title="点击前往「我的看台」设置关注球队"
             className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
           >
             设置关注球队
@@ -255,7 +270,7 @@ export default function TopBar({
             type="button"
             onClick={onOpenUpdate}
             title={updateVersion ? `新版本 v${updateVersion} 可用，点击查看` : '有新版本可用，点击查看'}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-accent/45 bg-accent/15 px-2.5 py-1 text-2xs font-medium text-accent transition-colors hover:bg-accent/25 focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-accent/45 bg-accent/15 px-2.5 py-1 text-2xs font-medium text-accent transition-colors hover:bg-accent/25 focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
           >
             <span className="inline-flex h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
             {updateVersion ? `新版本 v${updateVersion}` : '新版本'}
@@ -264,7 +279,7 @@ export default function TopBar({
 
         <button
           type="button"
-          onClick={onOpenSettings}
+          onClick={() => (onOpenSettingsTab ? onOpenSettingsTab('rules') : onOpenSettings?.())}
           className="relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
         >
           <IconSettings />

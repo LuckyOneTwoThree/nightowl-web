@@ -75,6 +75,16 @@ app.whenReady().then(async () => {
         if (m.headerH == null) failures.push(`${f.label} ${w}×${h} 页面未渲染（找不到 header）`);
         if (overflow > 1) failures.push(`${f.label} ${w}×${h} 横向溢出 ${overflow}px`);
         m.scrollables.forEach(s => console.log(`    滚动容器 h=${s.h} scrollH=${s.sh}  ${s.cls}`));
+
+        /* 同步测量「我的看台」第 4 视图在不同宽度下是否存在横向溢出 */
+        await win.webContents.executeJavaScript(`(() => {
+          const tab = [...document.querySelectorAll('nav button')].find(b => (b.textContent || '').includes('我的看台'));
+          tab?.click();
+          return !!tab;
+        })()`).catch(() => {});
+        await sleep(300);
+        const meOverflow = await win.webContents.executeJavaScript(`document.documentElement.scrollWidth - document.documentElement.clientWidth`).catch(() => 999);
+        if (meOverflow > 1) failures.push(`${f.label} ${w}×${h} 我的看台横向溢出 ${meOverflow}px`);
       } catch (e) {
         console.log('  !! 失败:', e.message);
         // 门禁的意义是「坏了要红」：测不出来算失败，不算跳过

@@ -991,8 +991,9 @@ app.whenReady().then(async () => {
         };
       })()
     `);
-    ok('★ 1120 最小窗口顶栏不换行', compact.navHeights.length === 3 &&
-      compact.navHeights.every(h => h <= 34), JSON.stringify(compact.navHeights));
+    ok('★ 1120 最小窗口顶栏不换行', compact.navHeights.length === 4 &&
+      compact.navHeights.every(h => h <= 34) && (compact.headerH ?? 99) <= 54,
+      JSON.stringify({ headerH: compact.headerH, navHeights: compact.navHeights }));
     ok('★ 1120 最小窗口有可用列表高度',
       !compact.list || compact.list.h >= 80, JSON.stringify(compact.list));
 
@@ -1272,26 +1273,92 @@ app.whenReady().then(async () => {
       })()
     `);
     await sleep(400);
-    const settingsThemeRemoved = await win.webContents.executeJavaScript(`
+    const settingsRulesCheck = await win.webContents.executeJavaScript(`
       (() => {
         const aside = document.querySelector('aside');
         const text = aside?.innerText || '';
         return {
           open: !!aside,
           hasThemeSection: text.includes('界面主题') || text.includes('日间演播室'),
-          hasFollowSection: text.includes('关注球队'),
           hasSleepSection: text.includes('个人睡眠'),
           hasSleepTime: !!aside?.querySelector('input[type="time"]'),
+          hasThreeTabs: text.includes('观赛与睡眠') && text.includes('关注与补看') && text.includes('系统与数据')
+        };
+      })()
+    `);
+    await win.webContents.executeJavaScript(`
+      (() => {
+        const tab = [...document.querySelectorAll('aside button')].find(
+          b => (b.textContent || '').trim() === '关注与补看'
+        );
+        tab?.click();
+        return !!tab;
+      })()
+    `);
+    await sleep(200);
+    const settingsQuickCheck = await win.webContents.executeJavaScript(`
+      (() => {
+        const text = document.querySelector('aside')?.innerText || '';
+        return {
+          hasFollowSection: text.includes('关注球队'),
           hasWatchLater: text.includes('明早补看')
         };
       })()
     `);
-    ok('★ 设置中不再出现浅色主题入口',
-      settingsThemeRemoved.open && !settingsThemeRemoved.hasThemeSection &&
-        settingsThemeRemoved.hasFollowSection &&
-        settingsThemeRemoved.hasSleepSection && settingsThemeRemoved.hasSleepTime &&
-        settingsThemeRemoved.hasWatchLater,
-      JSON.stringify(settingsThemeRemoved));
+    ok('★ 设置收口为三页签且不再出现浅色主题入口',
+      settingsRulesCheck.open && !settingsRulesCheck.hasThemeSection &&
+        settingsRulesCheck.hasThreeTabs &&
+        settingsRulesCheck.hasSleepSection && settingsRulesCheck.hasSleepTime &&
+        settingsQuickCheck.hasFollowSection && settingsQuickCheck.hasWatchLater,
+      JSON.stringify({ ...settingsRulesCheck, ...settingsQuickCheck }));
+
+    /* 切回「我的看台」第四主视图做独立渲染验收（再继续后续设置抽屉测试） */
+    await win.webContents.executeJavaScript(`
+      (() => {
+        const esc = new KeyboardEvent('keydown', { key: 'Escape' });
+        window.dispatchEvent(esc);
+      })()
+    `);
+    await sleep(250);
+    await win.webContents.executeJavaScript(`
+      (() => {
+        const tab = [...document.querySelectorAll('nav button')].find(
+          b => (b.textContent || '').includes('我的看台')
+        );
+        tab?.click();
+        return !!tab;
+      })()
+    `);
+    await sleep(300);
+    const meViewCheck = await win.webContents.executeJavaScript(`
+      (() => {
+        const text = document.body.innerText || '';
+        return {
+          hasHeading: text.includes('我的看台') && document.querySelectorAll('h2').length >= 1,
+          hasWatchLater: text.includes('明早补看台'),
+          hasDiary: text.includes('观赛日记与熬夜战报'),
+          hasTeams: text.includes('关注球队与联赛'),
+          hasSync: text.includes('跨端同步与系统日历'),
+          overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+        };
+      })()
+    `);
+    ok('★ 「我的看台」第四主视图渲染完整且无横向溢出',
+      meViewCheck.hasHeading && meViewCheck.hasWatchLater && meViewCheck.hasDiary &&
+        meViewCheck.hasTeams && meViewCheck.hasSync && meViewCheck.overflow <= 1,
+      JSON.stringify(meViewCheck));
+
+    await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = [...document.querySelectorAll('button')].find(
+          b => (b.textContent || '').includes('偏好与数据')
+        );
+        btn?.focus();
+        btn?.click();
+        return !!btn;
+      })()
+    `);
+    await sleep(350);
 
     const resetClicked = await win.webContents.executeJavaScript(`
       (() => {
@@ -2050,6 +2117,14 @@ app.whenReady().then(async () => {
           })()
         `);
         await sleep(400);
+        await win2.webContents.executeJavaScript(`
+          (() => {
+            const tab = [...document.querySelectorAll('aside button')].find(x => (x.textContent || '').trim() === '关注与补看');
+            tab?.click();
+            return !!tab;
+          })()
+        `);
+        await sleep(250);
         const digestLauncher2 = await win2.webContents.executeJavaScript(`
           (() => {
             const btn = [...document.querySelectorAll('aside button')].find(x => (x.textContent || '').trim() === '看摘要');

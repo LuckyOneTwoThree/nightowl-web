@@ -33,6 +33,14 @@ export const VIEW_COMMANDS = [
     subtitle: '全季赛程与筛选',
     keywords: ['赛程', 'schedule', '日历'],
     action: { type: 'view', view: 'schedule' }
+  },
+  {
+    id: 'view:me',
+    kind: '导航',
+    title: '我的看台',
+    subtitle: '主队管理、明早补看、赛季账单与手机接力',
+    keywords: ['我的', '看台', '个人', '主队', '补看', 'me'],
+    action: { type: 'view', view: 'me' }
   }
 ];
 

@@ -209,15 +209,15 @@ export default function MorningDigest({
         </div>
 
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-line-hairline px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Meta>{done > 0 ? `${done} 场已看` : '不着急，稍后也能从补看队列进入'}</Meta>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Meta className="leading-snug">{done > 0 ? `${done} 场已看` : '不着急，稍后也能从补看队列进入'}</Meta>
             {onOpenSeasonReport && (
               <Button variant="ghost" size="xs" onClick={onOpenSeasonReport}>
                 赛季账单
               </Button>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             {allRevealed ? (
               <Meta>已全部揭晓</Meta>
             ) : (

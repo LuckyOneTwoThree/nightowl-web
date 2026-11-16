@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { selectionFeedback } from '@/lib/feedback';
-import { colors, fontSize, radius, weight } from './theme';
+import { colors, fontSize, radius, spacing, weight } from './theme';
 
 type Option = { key: string; label: string };
 
@@ -32,7 +32,14 @@ export function SegmentedControl({ options, value, onChange }: Props) {
               pressed && styles.pressed,
             ]}
           >
-            <Text style={[styles.label, active && styles.activeLabel]}>{option.label}</Text>
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
+              style={[styles.label, active && styles.activeLabel]}
+            >
+              {option.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -51,6 +58,7 @@ const styles = StyleSheet.create({
   item: {
     flex: 1,
     minHeight: 32,
+    paddingHorizontal: spacing.sm,
     borderRadius: radius.control,
     alignItems: 'center',
     justifyContent: 'center',

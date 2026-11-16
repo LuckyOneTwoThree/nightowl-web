@@ -89,6 +89,7 @@ console.log('二、搜索');
 
   ok('「设置」命中偏好操作', searchPalette(items, '设置')[0]?.action?.type === 'settings');
   ok('「今晚」命中今晚导航', searchPalette(items, '今晚')[0]?.action?.view === 'tonight');
+  ok('「我的看台」命中个人导航', searchPalette(items, '我的看台')[0]?.action?.view === 'me');
   ok('「sync」命中同步操作', searchPalette(items, 'sync')[0]?.action?.type === 'sync');
   ok('无匹配返回空数组', searchPalette(items, 'zzzzzz').length === 0);
   ok('limit 生效', searchPalette(items, '0', 2).length <= 2);

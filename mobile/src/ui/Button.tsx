@@ -65,6 +65,9 @@ export function Button({
         icon
       )}
       <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.82}
         style={[
           styles.label,
           variant === 'primary' && styles.primaryLabel,
@@ -81,13 +84,14 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    height: 46,
+    minHeight: 46,
     borderRadius: radius.control,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
   },
   primary: { backgroundColor: colors.accent },
   secondary: {
@@ -97,7 +101,7 @@ const styles = StyleSheet.create({
   danger: { backgroundColor: colors.dangerSoft },
   pressed: { opacity: 0.82 },
   disabled: { opacity: 0.45 },
-  label: { fontSize: fontSize.md, fontWeight: weight.title },
+  label: { fontSize: fontSize.md, fontWeight: weight.title, flexShrink: 1 },
   primaryLabel: { color: colors.accentInk },
   secondaryLabel: { color: colors.textSecondary },
   ghostLabel: { color: colors.accent },

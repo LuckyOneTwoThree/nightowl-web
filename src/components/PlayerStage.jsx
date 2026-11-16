@@ -1449,17 +1449,17 @@ export default function PlayerStage({
 
       {!streamUrl && !railMode && (
         <div className="mt-auto flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-line-hairline pt-3">
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {onStartHandoff && !finished && (
               <button
                 type="button"
                 onClick={triggerHandoff}
-                className="rounded-md border border-accent/35 bg-accent/10 px-2 py-0.5 text-2xs font-medium text-accent transition-colors hover:bg-accent/20 cursor-pointer"
+                className="shrink-0 whitespace-nowrap rounded-md border border-accent/35 bg-accent/10 px-2 py-0.5 text-2xs font-medium text-accent transition-colors hover:bg-accent/20 cursor-pointer"
               >
                 手机接力看
               </button>
             )}
-            <Meta>官方平台直达</Meta>
+            <Meta className="whitespace-nowrap">官方平台直达</Meta>
           </div>
           <Hint
             content="官方平台直达链接跳转官方站点或站内搜索；本机代理仅转发公开直播线路，不托管、不录制任何音视频内容。"
@@ -1470,7 +1470,7 @@ export default function PlayerStage({
 
       {streamUrl && (
         <div className="mt-auto flex shrink-0 flex-wrap items-center justify-between gap-1.5 border-t border-line-hairline pt-3">
-          <span className="inline-flex items-center gap-1.5">
+          <span className="inline-flex flex-wrap items-center gap-1.5">
             <Hint content={SHORTCUT_HINT} align="start">
               <IconKeyboard size={12} />
             </Hint>
@@ -1478,7 +1478,7 @@ export default function PlayerStage({
               type="button"
               onClick={cycleSleepTimer}
               title="点击切换睡眠定时（关闭/15/30/45/60分钟）"
-              className={`rounded-md border px-1.5 py-0.5 font-num text-2xs tabular-nums transition-colors cursor-pointer ${
+              className={`shrink-0 whitespace-nowrap rounded-md border px-1.5 py-0.5 font-num text-2xs tabular-nums transition-colors cursor-pointer ${
                 sleepRemainingLabel
                   ? 'border-accent/40 bg-accent/10 text-accent'
                   : 'border-line-hairline text-text-secondary hover:border-accent/30 hover:text-text-primary'
@@ -1491,7 +1491,7 @@ export default function PlayerStage({
                 type="button"
                 onClick={triggerHandoff}
                 title="生成局域网二维码，无缝交棒给手机继续播"
-                className="rounded-md border border-line-hairline px-1.5 py-0.5 text-2xs text-text-secondary transition-colors hover:border-accent/40 hover:text-accent cursor-pointer"
+                className="shrink-0 whitespace-nowrap rounded-md border border-line-hairline px-1.5 py-0.5 text-2xs text-text-secondary transition-colors hover:border-accent/40 hover:text-accent cursor-pointer"
               >
                 手机接力
               </button>
@@ -1596,11 +1596,11 @@ export default function PlayerStage({
                 )}
               </div>
               <div className="shrink-0">
-                <div className="flex items-center justify-end gap-1.5">
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
                   <button
                     type="button"
                     onClick={cycleSleepTimer}
-                    className={`rounded-md border px-2 py-1 font-num text-2xs tabular-nums transition-colors cursor-pointer ${
+                    className={`shrink-0 whitespace-nowrap rounded-md border px-2 py-1 font-num text-2xs tabular-nums transition-colors cursor-pointer ${
                       sleepRemainingLabel
                         ? 'border-accent/40 bg-accent/10 text-accent'
                         : 'border-line-hairline text-text-secondary hover:border-accent/30 hover:text-text-primary'
@@ -1629,9 +1629,9 @@ export default function PlayerStage({
               aria-label="全部线路"
               className="w-full scroll-mt-4 rounded-xl border border-line-hairline bg-surface-card p-3 shadow-card focus:outline-none"
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-2">
-                  <span className="text-xs font-medium text-text-primary">全部线路</span>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="inline-flex shrink-0 items-center gap-2">
+                  <span className="whitespace-nowrap text-xs font-medium text-text-primary">全部线路</span>
                   <Meta num>{orderedLines.length} 条</Meta>
                   {directLines.length > 1 && (
                     <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
@@ -1639,11 +1639,11 @@ export default function PlayerStage({
                     </Button>
                   )}
                 </span>
-                <span className="flex items-center gap-3">
+                <span className="flex flex-wrap items-center justify-end gap-2">
                   <button
                     type="button"
                     onClick={cycleSleepTimer}
-                    className={`rounded-md border px-2 py-1 font-num text-2xs tabular-nums transition-colors cursor-pointer ${
+                    className={`shrink-0 whitespace-nowrap rounded-md border px-2 py-1 font-num text-2xs tabular-nums transition-colors cursor-pointer ${
                       sleepRemainingLabel
                         ? 'border-accent/40 bg-accent/10 text-accent'
                         : 'border-line-hairline text-text-secondary hover:border-accent/30 hover:text-text-primary'

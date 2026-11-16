@@ -253,16 +253,16 @@ export default function UpdateModal({
         </div>
 
         {/* 底部按钮操作栏 */}
-        <div className="flex items-center justify-between rounded-b-2xl border-t border-line-hairline bg-surface-panel px-5 py-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-b-2xl border-t border-line-hairline bg-surface-panel px-5 py-3.5">
           <button
             type="button"
             onClick={handleOpenReleasePage}
-            className="text-2xs text-text-muted underline underline-offset-4 hover:text-accent transition-colors cursor-pointer"
+            className="shrink-0 whitespace-nowrap text-2xs text-text-muted underline underline-offset-4 hover:text-accent transition-colors cursor-pointer"
           >
             GitHub Release 页面
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {status === 'available' && isDesktop && !isMac && (
               <Button variant="primary" onClick={onDownload}>
                 立即下载更新

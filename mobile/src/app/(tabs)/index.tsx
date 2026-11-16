@@ -881,7 +881,7 @@ function HeroCard({
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={[styles.ctaText, weak && styles.ctaTextSecondary]}>
+              <Text style={[styles.ctaText, weak && styles.ctaTextSecondary]} numberOfLines={1}>
                 {weak ? '查看详情' : '查看比赛'}
               </Text>
               <ChevronRight
@@ -919,6 +919,7 @@ function HeroCard({
                 color={isQueued || decision.strip.verdict === 'defer' ? colors.accent : colors.textSecondary}
               />
               <Text
+                numberOfLines={1}
                 style={[
                   styles.ctaQueueText,
                   (isQueued || decision.strip.verdict === 'defer') && styles.ctaQueueTextHighlight,
@@ -1264,7 +1265,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   cta: {
-    height: 44,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.control,
     backgroundColor: colors.accent,
     flexDirection: 'row',
@@ -1272,9 +1274,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
   },
-  ctaFlex: { flex: 1 },
+  ctaFlex: { flex: 1, minWidth: 0 },
   ctaQueue: {
-    height: 44,
+    minHeight: 44,
+    flexShrink: 0,
     paddingHorizontal: spacing.md,
     borderRadius: radius.control,
     borderWidth: 1,
@@ -1363,9 +1366,9 @@ const styles = StyleSheet.create({
   },
   sleepHint: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 16 },
   sleepWarn: { color: colors.warn, fontSize: fontSize.xs, lineHeight: 16, fontWeight: weight.title },
-  sleepActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
-  sleepPrimary: { flex: 1, height: 44 },
-  sleepGhost: { height: 44, paddingHorizontal: spacing.md },
+  sleepActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
+  sleepPrimary: { flexGrow: 1, flexShrink: 1, minHeight: 44 },
+  sleepGhost: { minHeight: 44, paddingHorizontal: spacing.md },
   section: { gap: spacing.sm },
   list: {
     borderRadius: radius.card,

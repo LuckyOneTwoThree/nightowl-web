@@ -64,7 +64,7 @@ export function DiaryStampCard({
                 accessibilityState={{ selected: on }}
                 style={[styles.modeBtn, on && styles.modeBtnOn]}
               >
-                <Text style={[styles.modeText, on && styles.modeTextOn]}>
+                <Text style={[styles.modeText, on && styles.modeTextOn]} numberOfLines={1}>
                   {MODE_META[mode].shortLabel}
                 </Text>
               </Pressable>
@@ -76,7 +76,7 @@ export function DiaryStampCard({
               accessibilityRole="button"
               style={styles.reportBtn}
             >
-              <Text style={styles.reportText}>赛季账单</Text>
+              <Text style={styles.reportText} numberOfLines={1}>赛季账单</Text>
             </Pressable>
           ) : null}
         </View>
@@ -115,7 +115,7 @@ export function DiaryStampCard({
                         : styles.stampMuted),
               ]}
             >
-              <Text style={[styles.stampText, active && styles.stampTextActive]}>
+              <Text style={[styles.stampText, active && styles.stampTextActive]} numberOfLines={1}>
                 {meta.glyph} {meta.label}
               </Text>
             </Pressable>

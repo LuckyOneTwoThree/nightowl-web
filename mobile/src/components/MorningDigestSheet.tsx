@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
   matchTitle: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.title },
   score: { color: colors.text, fontSize: fontSize.md, fontWeight: weight.title, fontVariant: ['tabular-nums'] },
   scoreHidden: { color: colors.textFaint, letterSpacing: 1 },
-  actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing.sm },
   footer: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.hairline, paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },
-  footerActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
+  footerActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing.sm },
 });

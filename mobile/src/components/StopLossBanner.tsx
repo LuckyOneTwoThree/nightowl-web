@@ -41,7 +41,7 @@ export function StopLossBanner({ context, notice, onSleep, onSnooze, onIgnore }:
             accessibilityLabel="再看十五分钟"
             style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
           >
-            <Text style={styles.secondaryText}>再看 15 分钟</Text>
+            <Text style={styles.secondaryText} numberOfLines={1}>再看 15 分钟</Text>
           </Pressable>
           <Pressable
             onPress={onIgnore}
@@ -49,7 +49,7 @@ export function StopLossBanner({ context, notice, onSleep, onSnooze, onIgnore }:
             accessibilityLabel="继续看，今晚不再提醒"
             style={({ pressed }) => [styles.ghost, pressed && styles.pressed]}
           >
-            <Text style={styles.ghostText}>继续看</Text>
+            <Text style={styles.ghostText} numberOfLines={1}>继续看</Text>
           </Pressable>
           <Pressable
             onPress={onSleep}
@@ -57,7 +57,7 @@ export function StopLossBanner({ context, notice, onSleep, onSnooze, onIgnore }:
             accessibilityLabel="现在睡，加入明早补看"
             style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
           >
-            <Text style={styles.primaryText}>现在睡</Text>
+            <Text style={styles.primaryText} numberOfLines={1}>现在睡</Text>
           </Pressable>
         </View>
       </View>
@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: fontSize.base, fontWeight: weight.title },
   body: { color: colors.textSecondary, fontSize: fontSize.sm, lineHeight: 19 },
   notice: { color: colors.warn, fontSize: fontSize.xs, marginTop: 2 },
-  actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.sm },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.sm },
   primary: {
     minHeight: 44,
     borderRadius: radius.control,

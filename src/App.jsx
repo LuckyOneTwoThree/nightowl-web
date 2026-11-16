@@ -26,6 +26,7 @@ import CommandPalette from './components/CommandPalette.jsx';
 import TonightView, { INDEX_HINT } from './components/TonightView.jsx';
 import WeekView from './components/WeekView.jsx';
 import ScheduleView from './components/ScheduleView.jsx';
+import MeView from './components/MeView.jsx';
 import IntelPanel from './components/IntelPanel.jsx';
 import StandingsModal from './components/StandingsModal.jsx';
 import SeasonReportModal from './components/SeasonReportModal.jsx';
@@ -107,7 +108,7 @@ function buildMatchMap() {
   return map;
 }
 
-const VALID_VIEWS = ['tonight', 'week', 'schedule'];
+const VALID_VIEWS = ['tonight', 'week', 'schedule', 'me'];
 
 /** 读取 URL 深链（?view=week&match=PL-12-ARS-MCI），使三个视图可直接分享/刷新定位 */
 function initialFromUrl() {
@@ -407,11 +408,18 @@ export default function App() {
 
   /* 浮层开关收口在 App；焦点进场与归还由各弹窗自己的 useDialogFocus 负责 ——
      一处实现，新增弹窗不需要再回到这里登记。 */
-  const openSettings = useCallback(() => {
+  const [settingsTab, setSettingsTab] = useState('rules');
+  const [focusTeamsSeq, setFocusTeamsSeq] = useState(0);
+  const openSettings = useCallback((tab = 'rules') => {
+    setSettingsTab(typeof tab === 'string' ? tab : 'rules');
     setSettingsOpen(true);
   }, []);
   const closeSettings = useCallback(() => {
     setSettingsOpen(false);
+  }, []);
+  const openMyTeams = useCallback(() => {
+    setView('me');
+    setFocusTeamsSeq(n => n + 1);
   }, []);
   const openPalette = useCallback(() => {
     setPaletteOpen(true);
@@ -923,7 +931,7 @@ export default function App() {
    * 已经在「本周规划」视图时直接复用，避免同一份数据算两遍。
    */
   const needCurrentWeekBest =
-    settingsOpen || !!(scheduleChanges?.items?.length && dismissedChangesAt !== scheduleChanges.at);
+    settingsOpen || view === 'me' || !!(scheduleChanges?.items?.length && dismissedChangesAt !== scheduleChanges.at);
   // biome-ignore lint/correctness/useExhaustiveDependencies: 同 week：靠 dataRev/minuteKey 失效
   const weekBestIds = useMemo(() => {
     if (!needCurrentWeekBest) return null;
@@ -968,6 +976,10 @@ export default function App() {
   // ---- 顶栏「进行中」计数（随 30 秒时钟与数据修订版本刷新）----
   // biome-ignore lint/correctness/useExhaustiveDependencies: clockTs/dataRev 是刷新触发器；liveCountAt 内部读 Date.now() 与最新 fixtures
   const liveCount = useMemo(() => liveCountAt(Date.now()), [clockTs, dataRev]);
+  const pendingQueueCount = useMemo(
+    () => normalizeQueue(watchLater).filter(item => item.status === 'pending').length,
+    [watchLater]
+  );
 
   // 按 dataRev 重建：保鲜同步后右栏也要拿到新记录（含比分），不能停在构建期快照
   // ⚠️ 必须在下面的「首屏锁定」effect 之前声明 —— 该 effect 的依赖数组里含 matchMap，
@@ -1163,6 +1175,7 @@ export default function App() {
     setDigestSession(createDigestSession(ids, firstPending));
     closeMorningDigest();
     setActiveMatchId(firstPending);
+    setView(prev => (prev === 'me' ? 'tonight' : prev));
   }, [morningDigestAll.items, queueWatchedIds, closeMorningDigest]);
 
   const exitDigestSession = useCallback(() => setDigestSession(null), []);
@@ -1232,6 +1245,10 @@ export default function App() {
   }, [tonight.focal, clockTs]);
 
   const select = useCallback(id => setActiveMatchId(id), []);
+  const selectAndLeaveMe = useCallback(id => {
+    setActiveMatchId(id);
+    setView(prev => (prev === 'me' ? 'tonight' : prev));
+  }, []);
 
   /**
    * 切场把右栏拉回顶部。
@@ -1371,9 +1388,12 @@ export default function App() {
             view={view}
             onViewChange={setView}
             liveCount={liveCount}
+            pendingQueueCount={pendingQueueCount}
             prefs={prefs}
             dataHealth={dataHealth}
-            onOpenSettings={openSettings}
+            onOpenSettings={() => openSettings('rules')}
+            onOpenSettingsTab={openSettings}
+            onOpenMyTeams={openMyTeams}
             onOpenPalette={openPalette}
             updateAvailable={updateAvailable}
             updateVersion={updateState.info?.version}
@@ -1385,8 +1405,31 @@ export default function App() {
           />
         </div>
 
-        {/* 主工作区：左栏黄金比例（330-390px） + 右栏核心主舞台（~75%） */}
+        {/* 主工作区：左栏黄金比例（330-390px） + 右栏核心主舞台（~75%）；「我的看台」全画幅双栏工作台 */}
         <main className="flex min-h-0 flex-1 overflow-hidden">
+          {!miniMode && view === 'me' ? (
+            <MeView
+              prefs={prefs}
+              onPrefsChange={setPrefs}
+              now={clockTs}
+              watchLater={watchLater}
+              onRemoveWatchLater={removeWatchLater}
+              onMarkWatchLaterWatched={markWatchLaterWatched}
+              onToggleWatchLater={toggleWatchLater}
+              onOpenMorningDigest={() => setMorningDigestOpen(true)}
+              diary={diary}
+              revealed={revealed}
+              onOpenSeasonReport={openSeasonReport}
+              onOpenLanPair={() => openLanPair({ mode: 'sync', handoff: null })}
+              onOpenSettings={openSettings}
+              onOpenMatch={selectAndLeaveMe}
+              onGoTonight={() => setView('tonight')}
+              weekIds={weekBestIds}
+              focusTeamsSeq={focusTeamsSeq}
+              radarEnabled={radarState.enabled}
+            />
+          ) : (
+            <>
           {/* 左栏：决策与列表 */}
           <section className={miniMode ? 'hidden' : 'flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] 2xl:w-[390px] shrink-0 flex-col overflow-hidden border-r border-line-hairline bg-surface-panel p-4'}>
           {/* 计划有变（FR-05）：一次同步检测到的与用户相关的改期/延期，关闭后本轮不再出现 */}
@@ -1551,6 +1594,8 @@ export default function App() {
               />
             </div>
           </section>
+            </>
+          )}
         </main>
       </div>
 
@@ -1575,7 +1620,7 @@ export default function App() {
           onMarkRead={markWatchLaterWatched}
           onOpenMatch={id => {
             closeMorningDigest();
-            select(id);
+            selectAndLeaveMe(id);
           }}
           onClose={closeMorningDigest}
           onStartSession={startDigestSession}
@@ -1602,9 +1647,11 @@ export default function App() {
       <div inert={inertFor('settings') || undefined}>
         <SettingsDrawer
           open={settingsOpen}
+          initialTab={settingsTab}
           prefs={prefs}
           onPrefsChange={setPrefs}
           onClose={closeSettings}
+          onOpenMeView={() => setView('me')}
           onRerunOnboarding={rerunOnboarding}
           onReplaySplash={replaySplash}
           onDataRefresh={refreshData}
@@ -1667,7 +1714,7 @@ export default function App() {
           prefs={prefs}
           revealedIds={revealed}
           onImportDiary={handleImportDiary}
-          onOpenMatch={id => select(id)}
+          onOpenMatch={id => selectAndLeaveMe(id)}
           onClose={closeSeasonReport}
         />
       </div>

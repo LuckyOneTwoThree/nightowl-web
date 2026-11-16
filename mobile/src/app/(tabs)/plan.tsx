@@ -939,6 +939,7 @@ const styles = StyleSheet.create({
   },
   overrideBar: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
@@ -948,12 +949,14 @@ const styles = StyleSheet.create({
   },
   overrideSummary: {
     flex: 1,
+    minWidth: 0,
     color: colors.accent,
     fontSize: fontSize.xs,
     fontWeight: weight.title,
   },
   overrideResetBtn: {
     minHeight: 32,
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -984,19 +987,22 @@ const styles = StyleSheet.create({
   ratio: { color: colors.textFaint, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   filterBar: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
     minHeight: 34,
     paddingHorizontal: spacing.md,
+    paddingVertical: 4,
     borderRadius: radius.control,
     borderWidth: 1,
     borderColor: withAlpha(colors.accent, 0.28),
     backgroundColor: withAlpha(colors.accent, 0.06),
   },
-  filterText: { flex: 1, color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
+  filterText: { flex: 1, minWidth: 0, color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
   blockNightChip: {
     minHeight: 32,
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -1012,7 +1018,7 @@ const styles = StyleSheet.create({
   },
   blockNightText: { color: colors.textSecondary, fontSize: fontSize.xs, fontWeight: weight.title },
   blockNightTextActive: { color: colors.warn },
-  filterClear: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 4 },
+  filterClear: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 4 },
   filterClearText: { color: colors.textMuted, fontSize: fontSize.xs },
   list: {
     borderRadius: radius.card,
@@ -1023,7 +1029,7 @@ const styles = StyleSheet.create({
   },
   emptyCard: { alignItems: 'center', gap: spacing.xs },
   emptyTitle: { color: colors.textSecondary, fontSize: fontSize.sm, textAlign: 'center' },
-  addBudget: { marginTop: spacing.sm, height: 44 },
+  addBudget: { marginTop: spacing.sm, minHeight: 44 },
   pickCard: {
     flexDirection: 'row',
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -1113,6 +1119,7 @@ const styles = StyleSheet.create({
   groupAltIndex: { color: colors.textMuted, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   groupSwapBtn: {
     minHeight: 32,
+    flexShrink: 0,
     paddingHorizontal: spacing.sm,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1122,6 +1129,7 @@ const styles = StyleSheet.create({
   groupSwapText: { color: colors.accent, fontSize: fontSize.xs, fontWeight: weight.title },
   pickActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: spacing.sm,
@@ -1130,6 +1138,7 @@ const styles = StyleSheet.create({
   },
   pickActionBtn: {
     minHeight: 32,
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -1210,6 +1219,7 @@ const styles = StyleSheet.create({
   },
   altPinBtn: {
     minHeight: 32,
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -1242,6 +1252,7 @@ const styles = StyleSheet.create({
   crunchMeta: { color: colors.warn, fontSize: fontSize.xs, fontVariant: ['tabular-nums'] },
   crunchBtn: {
     minHeight: 44,
+    flexShrink: 0,
     paddingHorizontal: spacing.md,
     borderRadius: radius.control,
     borderWidth: 1,

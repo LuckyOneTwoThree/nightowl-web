@@ -308,10 +308,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.md,
     paddingVertical: 3,
   },
-  kvLabel: { color: colors.textSecondary, fontSize: fontSize.xs },
+  kvLabel: { color: colors.textSecondary, fontSize: fontSize.xs, flexShrink: 0 },
   kvValue: {
+    flexShrink: 1,
+    textAlign: 'right',
     color: colors.text,
     fontSize: fontSize.xs,
     fontVariant: ['tabular-nums'],
@@ -323,6 +326,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'flex-end',
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,

@@ -476,7 +476,7 @@ function SleepCostSection({
           </div>
           {verdictMeta && (
             <div className="mt-1 flex items-center gap-1.5 text-2xs text-accent">
-              <Chip tone={verdictMeta.tone === 'gold' ? 'gold' : verdictMeta.tone === 'teal' ? 'resource' : 'neutral'}>
+              <Chip tone={verdictMeta.tone === 'gold' ? 'accent' : verdictMeta.tone === 'teal' ? 'resource' : 'neutral'}>
                 {verdictMeta.label}
               </Chip>
               {radarVerdict.minuteLabel && <Meta num>{radarVerdict.minuteLabel}</Meta>}

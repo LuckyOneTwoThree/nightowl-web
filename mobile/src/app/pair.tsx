@@ -17,9 +17,9 @@ import { useWeekOverridesStore } from '@/state/weekOverrides';
 import type { Match } from '@/types';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
-import { Chip } from '@/ui/Chip';
 import { Screen } from '@/ui/Screen';
 import { SectionHeader } from '@/ui/SectionHeader';
+import { SegmentedControl } from '@/ui/SegmentedControl';
 import { colors, fontSize, radius, spacing, weight } from '@/ui/theme';
 
 type HandoffLine = {
@@ -378,20 +378,20 @@ export default function PairScreen() {
             style={styles.pinInput}
           />
 
-          <View style={styles.modeRow}>
-            <Chip
-              selected={mode === 'sync'}
-              onPress={() => setMode('sync')}
-            >
-              双向数据同步
-            </Chip>
-            <Chip
-              selected={mode === 'handoff'}
-              onPress={() => setMode('handoff')}
-            >
-              接力桌面正在看的比赛
-            </Chip>
-          </View>
+          <Text style={styles.fieldLabel}>配对模式</Text>
+          <SegmentedControl
+            value={mode}
+            onChange={v => setMode(v === 'handoff' ? 'handoff' : 'sync')}
+            options={[
+              { key: 'sync', label: '双向数据同步' },
+              { key: 'handoff', label: '接力当前比赛' },
+            ]}
+          />
+          <Text style={styles.modeHint}>
+            {mode === 'handoff'
+              ? '合并偏好、补看与印章后，自动切入桌面端正在播放或查看的本场比赛。'
+              : '与桌面端双向合并主队关注、本周规划微调、补看清单与观赛印章。'}
+          </Text>
 
           {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
           {statusMsg ? <Text style={styles.statusText}>{statusMsg}</Text> : null}
@@ -472,11 +472,10 @@ const styles = StyleSheet.create({
     fontWeight: weight.title,
     letterSpacing: 6,
   },
-  modeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    paddingTop: spacing.xs,
+  modeHint: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    lineHeight: 17,
   },
   errorText: { color: colors.danger, fontSize: fontSize.xs, lineHeight: 18 },
   statusText: { color: colors.resource, fontSize: fontSize.xs, lineHeight: 18 },
