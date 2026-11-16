@@ -10,7 +10,6 @@ import fixtures from '../src/data/fixtures.json' with { type: 'json' };
 import { computeMatchStats, computeTeamForm, computeSeasonStats, computeHeadToHead } from '../src/core/stats.js';
 import { computeTonight, computeWeek, computeScheduleRows, defaultScheduleFilters, liveCountAt, sameNightPicks, dayCounts } from '../src/core/owl.js';
 import { evalOne } from '../src/core/owl.js';
-import { ts } from '../src/core/engine.js';
 
 setFixtures(fixtures);
 const ALL = getFixtures();

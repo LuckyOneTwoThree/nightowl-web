@@ -11,8 +11,6 @@
  */
 import * as espn from '../server/sources/espn.js';
 import * as openfootball from '../server/sources/openfootball.js';
-import { mergeEvents } from '../server/sources/index.js';
-import { localToBeijingWall, isEuroDST } from '../server/sources/tz.mjs';
 
 const LEAGUES_TO_TEST = process.argv[2] ? [process.argv[2]] : ['PL', 'PD', 'SA', 'BL', 'FL'];
 

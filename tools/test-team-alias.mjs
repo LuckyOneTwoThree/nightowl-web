@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { buildNameIndex, normName, loadTeams, resolveByName, fetchJSON } from '../server/sources/normalize.js';
 import { LEAGUES as OF_LEAGUES } from '../server/sources/openfootball.js';
-import { LEAGUES as ESPN_LEAGUES, toTeamId } from '../server/sources/espn.js';
+import { toTeamId } from '../server/sources/espn.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');

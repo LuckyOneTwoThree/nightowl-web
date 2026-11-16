@@ -96,63 +96,64 @@ const MIRROR_BASES = [
 let activeMirror = MIRROR_BASES[0];
 const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
-/** 抓取聚合站全量赛程与房间列表（带多镜像自动容灾） */
+let scheduleInFlight = null;
+const sourcesInFlight = new Map();
+
+/** 抓取聚合站全量赛程与房间列表（带多镜像自动容灾 + 并发 in-flight 去重） */
 export async function fetchSchedule(force = false) {
   const now = Date.now();
   if (!force && cache.schedule.time && now - cache.schedule.time < SCHEDULE_TTL_MS) {
     return cache.schedule.data;
   }
+  if (!force && scheduleInFlight) {
+    return scheduleInFlight;
+  }
 
-  let html = null;
-  let lastErr = null;
+  const run = (async () => {
+    let html = null;
+    let lastErr = null;
 
-  for (const base of MIRROR_BASES) {
-    try {
-      const res = await fetch(base, {
-        headers: { "User-Agent": USER_AGENT },
-        signal: AbortSignal.timeout(6000)
-      });
-      if (res.ok) {
-        html = await res.text();
-        activeMirror = base;
-        break;
+    for (const base of MIRROR_BASES) {
+      try {
+        const res = await fetch(base, {
+          headers: { "User-Agent": USER_AGENT },
+          signal: AbortSignal.timeout(6000)
+        });
+        if (res.ok) {
+          html = await res.text();
+          activeMirror = base;
+          break;
+        }
+      } catch (e) {
+        lastErr = e;
       }
-    } catch (e) {
-      lastErr = e;
     }
-  }
 
-  if (!html) {
-    throw new Error(`获取赛程失败，全部镜像均不可达: ${lastErr?.message || '未知错误'}`);
-  }
-
-  const games = parseScheduleHtml(html, activeMirror);
-
-  /**
-   * 结构性探活（P3）
-   *
-   * 聚合站改版（改一个 CSS 类名）时，三个正则会同时失效，解析出 0 条。
-   * 此前 0 条与「今天确实没比赛」走同一条路径：返回空数组，上层静默降级成
-   * 「本场暂无直播线路」—— 用户分不清是没匹配还是抓取挂了，而抓取其实早坏了。
-   *
-   * 判据：页面足够长（>2000 字符 = 真实首页），且存在**多个** /live/N/play 链接
-   * （≥3 个），却一条都没解析出来 → 判定解析失败。
-   *
-   * 为什么要求「多个」而非「存在」：真正的无比赛日首页也可能在页脚放一两个
-   * 回放/推荐链接，单个链接不足以区分「改版」与「今天没比赛」；
-   * 而改版时整页几十个比赛链接全都失去 group-game-item 外壳，数量上远超阈值。
-   */
-  if (games.length === 0 && html.length > 2000) {
-    const liveLinks = html.match(/\/live\/\d+\/play/gi) || [];
-    if (liveLinks.length >= 3) {
-      throw new Error(
-        `页面结构已变化：HTML 含 ${html.length} 字符、${liveLinks.length} 个直播链接，但正则未匹配到任何场次（疑似站点改版）`
-      );
+    if (!html) {
+      throw new Error(`获取赛程失败，全部镜像均不可达: ${lastErr?.message || '未知错误'}`);
     }
-  }
 
-  cache.schedule = { time: now, data: games };
-  return games;
+    const games = parseScheduleHtml(html, activeMirror);
+
+    if (games.length === 0 && html.length > 2000) {
+      const liveLinks = html.match(/\/live\/\d+\/play/gi) || [];
+      if (liveLinks.length >= 3) {
+        throw new Error(
+          `页面结构已变化：HTML 含 ${html.length} 字符、${liveLinks.length} 个直播链接，但正则未匹配到任何场次（疑似站点改版）`
+        );
+      }
+    }
+
+    cache.schedule = { time: Date.now(), data: games };
+    return games;
+  })();
+
+  if (!force) scheduleInFlight = run;
+  try {
+    return await run;
+  } finally {
+    if (scheduleInFlight === run) scheduleInFlight = null;
+  }
 }
 
 /**
@@ -199,15 +200,19 @@ export function parseScheduleHtml(html, baseUrl = "") {
   return games;
 }
 
-/** 逆向解密 88看球/JRS 房间接口提取原始线路 */
+/** 逆向解密 88看球/JRS 房间接口提取原始线路（带并发 in-flight 去重） */
 export async function fetchGameSources(gameId, force = false) {
   const now = Date.now();
   const cached = cache.sources.get(gameId);
   if (!force && cached && now - cached.time < SOURCE_TTL_MS) {
     return cached.data;
   }
+  if (!force && sourcesInFlight.has(gameId)) {
+    return sourcesInFlight.get(gameId);
+  }
 
-  let json = null;
+  const run = (async () => {
+    let json = null;
   let lastErr = null;
 
   for (const base of [activeMirror, ...MIRROR_BASES.filter(b => b !== activeMirror)]) {
@@ -293,13 +298,21 @@ export async function fetchGameSources(gameId, force = false) {
     });
   }
 
-  cache.sources.set(gameId, { time: now, data: lines });
-  // FIFO 淘汰：Map 保持插入顺序，超限时删最旧的一条
-  if (cache.sources.size > MAX_SOURCE_CACHE) {
-    const oldest = cache.sources.keys().next().value;
-    if (oldest !== undefined) cache.sources.delete(oldest);
+    cache.sources.set(gameId, { time: Date.now(), data: lines });
+    // FIFO 淘汰：Map 保持插入顺序，超限时删最旧的一条
+    if (cache.sources.size > MAX_SOURCE_CACHE) {
+      const oldest = cache.sources.keys().next().value;
+      if (oldest !== undefined) cache.sources.delete(oldest);
+    }
+    return lines;
+  })();
+
+  if (!force) sourcesInFlight.set(gameId, run);
+  try {
+    return await run;
+  } finally {
+    if (sourcesInFlight.get(gameId) === run) sourcesInFlight.delete(gameId);
   }
-  return lines;
 }
 
 /**

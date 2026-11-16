@@ -86,7 +86,7 @@ export default function TonightScreen() {
     }, [])
   );
   const source = useAppStore(state => state.source);
-  const now = useNow(30_000);
+  const now = useNow(30_000, focused);
   const { syncing, quickSyncing, syncError } = useSyncState();
   const setPrefs = usePrefsStore(state => state.setPrefs);
   const [showFinished, setShowFinished] = useState(false);

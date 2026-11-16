@@ -101,9 +101,10 @@ export default function IntelPanel({
   const stories = useMemo(() => (match ? storylinesOf(match, storylines) : []), [match]);
   const identity = useMemo(() => (match ? seasonIdentityOf(match) : null), [match]);
   const stats = useMemo(() => (match ? computeMatchStats(match, null, { excludeIds: excludedIds }) : null), [match, excludedIds]);
+  const minuteNow = Math.floor((now || Date.now()) / 60_000) * 60_000;
   const standings = useMemo(
-    () => (match ? computeMatchStandings(match, null, { nowTs: now, excludeIds: excludedIds }) : null),
-    [match, now, excludedIds]
+    () => (match ? computeMatchStandings(match, null, { nowTs: minuteNow, excludeIds: excludedIds }) : null),
+    [match, minuteNow, excludedIds]
   );
 
   if (!match || !ev || !tier || !narrative || !identity) {

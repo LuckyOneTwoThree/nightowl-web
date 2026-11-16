@@ -253,11 +253,10 @@ async function runReminderSync(prefs: Prefs): Promise<ReminderResult> {
       .sort((a, b) => ts(a.t) - ts(b.t))
       .slice(0, MAX_REMINDERS);
 
-    for (const item of existing) {
-      if (item.content.data?.kind === 'prematch') {
-        await Notifications.cancelScheduledNotificationAsync(item.identifier);
-      }
-    }
+    // 先安排新版赛前提醒，全部成功后再取消旧批提醒，避免中途异常导致全量提醒丢失
+    const previousIdentifiers = existing
+      .filter(item => item.content.data?.kind === 'prematch')
+      .map(item => item.identifier);
 
     let scheduled = 0;
     for (const match of list) {
@@ -277,6 +276,14 @@ async function runReminderSync(prefs: Prefs): Promise<ReminderResult> {
         },
       });
       scheduled += 1;
+    }
+
+    for (const identifier of previousIdentifiers) {
+      try {
+        await Notifications.cancelScheduledNotificationAsync(identifier);
+      } catch {
+        /* 单条历史清理失败不影响新批提醒 */
+      }
     }
 
     return { ok: true, scheduled };

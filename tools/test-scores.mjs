@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { planPatches, applyPatches, validateFixtures, ALLOWED_ST, activeSyncTargets, uclWeeklyTargets, seasonMonths, staleTbdMatches, autoBackfillDays } from '../server/scores.js';
 import { createServer, checkedPendingIds, pendingMatchIds } from '../server/index.js';
-import { mergeEvents } from '../server/sources/index.js';
+import { mergeEvents, fetchAllEvents } from '../server/sources/index.js';
 import { parseRound } from '../server/sources/openfootball.js';
 import { loadRules } from '../server/proxy.js';
 import { freshness, mergeFixtures, loadFixtures, saveFixtures, builtinSeason } from '../server/data-store.js';
@@ -945,11 +945,51 @@ console.log('十五、★ 字段级来源（内置更正能压过用户副本，
     const meta = JSON.parse(readFileSync(resolve(tmpDir, 'fixtures-meta.json'), 'utf8'));
     ok('★ meta 记下 writer=sparse 与内置 rev', meta.writer === 'sparse' && !!meta.builtinRev,
       JSON.stringify(meta));
+
+    // loadFixtures 内存缓存命中 & 损坏用户记录隔离
+    const cached1 = await loadFixtures();
+    const cached2 = await loadFixtures();
+    ok('★ loadFixtures 未变更时复用内存缓存（不重复读盘解析）', cached1 === cached2);
+
+    writeFileSync(resolve(tmpDir, 'fixtures.json'), JSON.stringify([
+      { id: target.id, st: 'LIVE', sc: 'x-y', at: { st: new Date(Date.now() + 60000).toISOString(), sc: new Date(Date.now() + 60000).toISOString() } }
+    ]));
+    await new Promise(r => setTimeout(r, 10));
+    const isolated = await loadFixtures();
+    const fallbackMatch = isolated.find(m => m.id === target.id);
+    ok('★ 读取期隔离损坏用户记录并回退至内置快照', fallbackMatch && fallbackMatch.st === target.st);
   } finally {
     if (prevEnv === undefined) delete process.env.NIGHTOWL_USER_DATA;
     else process.env.NIGHTOWL_USER_DATA = prevEnv;
     rmSync(tmpDir, { recursive: true, force: true });
   }
+}
+
+{
+  console.log('');
+  console.log('二十一、同步总时间预算截断保护');
+  let calls = 0;
+  const res = await fetchAllEvents({
+    leagues: ['PL', 'PD', 'SA', 'BL', 'FL'],
+    months: [],
+    targets: new Map([
+      ['PL', new Set(['20261101'])],
+      ['PD', new Set(['20261102'])],
+      ['SA', new Set(['20261103'])],
+      ['BL', new Set(['20261104'])]
+    ]),
+    order: ['espn'],
+    delayMs: 10,
+    maxDurationMs: 25,
+    runFetch: async () => {
+      calls += 1;
+      await new Promise(r => setTimeout(r, 30));
+      return [];
+    }
+  });
+  ok('达到整轮时间上限时主动截断并回报 remainingTargets（离线模拟慢请求）',
+    res.truncated === true && res.remainingTargets === 3 && calls === 1,
+    `calls=${calls} truncated=${res.truncated} remaining=${res.remainingTargets}`);
 }
 
 console.log('');

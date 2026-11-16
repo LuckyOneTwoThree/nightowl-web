@@ -266,7 +266,7 @@ function writeDiskCache(cache, persist = true) {
         .slice(0, keys.length - 500)
         .forEach(k => delete cache[k]);
     }
-    const tmp = `${path}.tmp`;
+    const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
     writeFileSync(tmp, JSON.stringify(cache), 'utf8');
     renameSync(tmp, path);
   } catch {
@@ -278,6 +278,7 @@ function writeDiskCache(cache, persist = true) {
 export function resetHighlightsCache() {
   diskCache = null;
   lastFetchAt = 0;
+  queuedSlots = 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -285,14 +286,27 @@ export function resetHighlightsCache() {
 /* ------------------------------------------------------------------ */
 
 let lastFetchAt = 0;
+let queuedSlots = 0;
+const MAX_WAIT_QUEUE = 8;
+
 async function waitForSlot(minIntervalMs) {
   if (!(minIntervalMs > 0)) return;
+  if (queuedSlots >= MAX_WAIT_QUEUE) {
+    throw Object.assign(new Error('集锦查询请求过多，已触发快速失败限流'), { rateLimited: true });
+  }
   const now = Date.now();
   const nextSlot = lastFetchAt > 0 ? Math.max(now, lastFetchAt + minIntervalMs) : now;
   const wait = nextSlot - now;
   // 先预占槽位再等待：并发请求同时进入时按序排队，而不是一起等待后同时发出
   lastFetchAt = nextSlot;
-  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  if (wait > 0) {
+    queuedSlots += 1;
+    try {
+      await new Promise(r => setTimeout(r, wait));
+    } finally {
+      queuedSlots = Math.max(0, queuedSlots - 1);
+    }
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -358,7 +372,7 @@ export async function resolveHighlights(match, opts = {}) {
     return {
       ok: false,
       videos: [],
-      reason: 'upstream-error',
+      reason: err?.rateLimited ? 'rate-limited' : 'upstream-error',
       message: String(err?.message || err)
     };
   }

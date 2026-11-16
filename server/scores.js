@@ -550,9 +550,10 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
     }
   }
 
-  const { events, bySource, errors } = await fetchAllEvents({
+  const { events, bySource, errors, truncated, remainingTargets, completedLeagues } = await fetchAllEvents({
     leagues, months: list, targets, order, log, season, timeoutMs: cfg.timeoutMs,
-    delayMs: Number.isFinite(cfg.requestDelayMs) ? cfg.requestDelayMs : 200
+    delayMs: Number.isFinite(cfg.requestDelayMs) ? cfg.requestDelayMs : 200,
+    maxDurationMs: Number.isFinite(cfg.maxDurationMs) ? cfg.maxDurationMs : 90_000
   });
 
   const { merged, conflicts } = mergeEvents(events, order);
@@ -563,6 +564,9 @@ export async function syncScores({ fixtures, rules, months, allMonths = false, s
     patches, merged, conflicts, unmatched, incompleteScore, timeRejected,
     bySource, errors,
     attempted,
+    truncated: !!truncated,
+    remainingTargets: remainingTargets || 0,
+    completedLeagues: completedLeagues || [],
     stats,
     months: list,
     targets,

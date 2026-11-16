@@ -2,9 +2,9 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, memo, useRef, useState
 import { flushSync } from 'react-dom';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
 import { shouldHideScore } from '../core/reveal.js';
-import { datePart, liveMinute, humanCountdown } from '../core/format.js';
+import { datePart, liveMinute } from '../core/format.js';
 import { teamName, leagueName } from '../data/index.js';
-import { ts, countdown as engineCountdown } from '../core/engine.js';
+import { ts } from '../core/engine.js';
 import { Button, Hint, IconButton, LiveDot, Meta, SectionLabel } from './atoms.jsx';
 import HighlightsPanel from './HighlightsPanel.jsx';
 import LiveMatchPanel from './LiveMatchPanel.jsx';
@@ -335,6 +335,42 @@ function LineEmptyState({ loading, state, isNearKickoff, scrapeError, serviceDow
  */
 const SLEEP_PRESETS = [0, 15, 30, 45, 60];
 
+function SleepTimerLabel({ deadlineTs }) {
+  const [leftSec, setLeftSec] = useState(() =>
+    deadlineTs ? Math.max(0, Math.ceil((deadlineTs - Date.now()) / 1000)) : 0
+  );
+
+  useEffect(() => {
+    if (!deadlineTs) {
+      setLeftSec(0);
+      return undefined;
+    }
+    const tick = () => setLeftSec(Math.max(0, Math.ceil((deadlineTs - Date.now()) / 1000)));
+    let timer = null;
+    const syncVisibility = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      if (typeof document === 'undefined' || document.visibilityState !== 'hidden') {
+        tick();
+        timer = setInterval(tick, 1000);
+      }
+    };
+    syncVisibility();
+    document?.addEventListener?.('visibilitychange', syncVisibility);
+    return () => {
+      if (timer) clearInterval(timer);
+      document?.removeEventListener?.('visibilitychange', syncVisibility);
+    };
+  }, [deadlineTs]);
+
+  if (!deadlineTs) return '睡眠定时';
+  const mm = String(Math.floor(leftSec / 60)).padStart(2, '0');
+  const ss = String(leftSec % 60).padStart(2, '0');
+  return `⏱ ${mm}:${ss}`;
+}
+
 export default function PlayerStage({
   match,
   state,
@@ -350,19 +386,28 @@ export default function PlayerStage({
   onToggleMiniMode,
   onStartHandoff
 }) {
-  // 秒级刷新只存在于本组件（倒计时文本与进行中的分钟数）。
-  // 若由 App 供秒级 now，每秒重渲染会波及整个视图树 —— 赛程视图会每秒
-  // 重建 2000+ 列表元素（见 App.jsx 的时间基准注释）。
+  // 分钟级状态时钟（liveMinute 与 30 分钟临近判定仅需半分钟粒度，后台失焦时自动停表），
+  // 秒级倒计时全部下沉到 KickoffCountdown / SleepTimerLabel 叶子组件，避免每秒整棵舞台重渲染。
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    let t = null;
+    const syncVisibility = () => {
+      if (t) {
+        clearInterval(t);
+        t = null;
+      }
+      if (typeof document === 'undefined' || document.visibilityState !== 'hidden') {
+        setNow(Date.now());
+        t = setInterval(() => setNow(Date.now()), 30000);
+      }
+    };
+    syncVisibility();
+    document?.addEventListener?.('visibilitychange', syncVisibility);
+    return () => {
+      if (t) clearInterval(t);
+      document?.removeEventListener?.('visibilitychange', syncVisibility);
+    };
   }, []);
-
-  const stageCountdown = useMemo(() => {
-    if (!match) return '--';
-    return humanCountdown(engineCountdown(ts(match.t), now));
-  }, [match, now]);
 
   const sources = useWatchSources();
   const [theaterMode, setTheaterMode] = useState(false);
@@ -389,14 +434,6 @@ export default function PlayerStage({
     setSleepDoneNotice(null);
     setSleepDeadlineTs(nextMin > 0 ? Date.now() + nextMin * 60_000 : null);
   }, [sleepTimerMin]);
-
-  const sleepRemainingLabel = useMemo(() => {
-    if (!sleepDeadlineTs) return null;
-    const leftSec = Math.max(0, Math.ceil((sleepDeadlineTs - now) / 1000));
-    const mm = String(Math.floor(leftSec / 60)).padStart(2, '0');
-    const ss = String(leftSec % 60).padStart(2, '0');
-    return `${mm}:${ss}`;
-  }, [sleepDeadlineTs, now]);
 
   /**
    * 无视频流时的侧轨折叠（P1-2）
@@ -717,27 +754,31 @@ export default function PlayerStage({
     artRef.current = art;
   }, []);
 
-  // M5: 睡眠定时到期：暂停当前播放并静音 + 本地提醒
+  // M5: 睡眠定时到期：改用精准 setTimeout 到期触发，不依赖秒级组件重渲染
   useEffect(() => {
-    if (!sleepDeadlineTs || now < sleepDeadlineTs) return;
-    setSleepDeadlineTs(null);
-    setSleepTimerMin(0);
-    const art = artRef.current;
-    if (art && !art.destroyed) {
-      try {
-        art.pause();
-        art.muted = true;
-      } catch {}
-    }
-    setSleepDoneNotice('睡眠定时已到：已自动暂停播放，早点休息');
-    try {
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        new Notification('夜猫看台 · 睡眠定时已到', {
-          body: '已为你暂停播放，晚安'
-        });
+    if (!sleepDeadlineTs) return undefined;
+    const delay = Math.max(0, sleepDeadlineTs - Date.now());
+    const timer = setTimeout(() => {
+      setSleepDeadlineTs(null);
+      setSleepTimerMin(0);
+      const art = artRef.current;
+      if (art && !art.destroyed) {
+        try {
+          art.pause();
+          art.muted = true;
+        } catch {}
       }
-    } catch {}
-  }, [now, sleepDeadlineTs]);
+      setSleepDoneNotice('睡眠定时已到：已自动暂停播放，早点休息');
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification('夜猫看台 · 睡眠定时已到', {
+            body: '已为你暂停播放，晚安'
+          });
+        }
+      } catch {}
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [sleepDeadlineTs]);
 
   /**
    * 播放中的作用域快捷键：F 全屏 · P 画中画 · M 静音 · 1–9 切换直链线路
@@ -980,7 +1021,9 @@ export default function PlayerStage({
     let enterTimer = null;
 
     const startPolling = () => {
+      if (pollInterval) return;
       pollInterval = setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
         fetchLines({ reset: false, autoPlay: true });
       }, 45000);
     };
@@ -1134,7 +1177,6 @@ export default function PlayerStage({
         <MatchCanvas
           match={match}
           state={state}
-          stageCountdown={stageCountdown}
           isNearKickoff={isNearKickoff}
           liveData={liveSnapshot}
           lines={orderedLines}
@@ -1189,14 +1231,14 @@ export default function PlayerStage({
                 )}
             </span>
           )}
-          {sleepRemainingLabel && (
+          {sleepDeadlineTs && (
             <button
               type="button"
               onClick={cycleSleepTimer}
               title="点击切换或关闭睡眠定时"
               className="rounded-md bg-white/[0.12] px-1.5 py-0.5 font-num text-2xs tabular-nums text-accent transition-colors hover:bg-white/[0.2]"
             >
-              ⏱ {sleepRemainingLabel}
+              <SleepTimerLabel deadlineTs={sleepDeadlineTs} />
             </button>
           )}
           {onToggleMiniMode && (
@@ -1481,12 +1523,12 @@ export default function PlayerStage({
               onClick={cycleSleepTimer}
               title="点击切换睡眠定时（关闭/15/30/45/60分钟）"
               className={`shrink-0 whitespace-nowrap rounded-md border px-1.5 py-0.5 font-num text-2xs tabular-nums transition-colors cursor-pointer ${
-                sleepRemainingLabel
+                sleepDeadlineTs
                   ? 'border-accent/40 bg-accent/10 text-accent'
                   : 'border-line-hairline text-text-secondary hover:border-accent/30 hover:text-text-primary'
               }`}
             >
-              {sleepRemainingLabel ? `⏱ ${sleepRemainingLabel}` : '睡眠定时'}
+              <SleepTimerLabel deadlineTs={sleepDeadlineTs} />
             </button>
             {onStartHandoff && (
               <button
@@ -1603,12 +1645,12 @@ export default function PlayerStage({
                     type="button"
                     onClick={cycleSleepTimer}
                     className={`shrink-0 whitespace-nowrap rounded-md border px-2 py-1 font-num text-2xs tabular-nums transition-colors cursor-pointer ${
-                      sleepRemainingLabel
+                      sleepDeadlineTs
                         ? 'border-accent/40 bg-accent/10 text-accent'
                         : 'border-line-hairline text-text-secondary hover:border-accent/30 hover:text-text-primary'
                     }`}
                   >
-                    {sleepRemainingLabel ? `⏱ ${sleepRemainingLabel}` : '睡眠定时'}
+                    <SleepTimerLabel deadlineTs={sleepDeadlineTs} />
                   </button>
                   {onStartHandoff && (
                     <Button variant="ghost" onClick={triggerHandoff}>
@@ -1646,12 +1688,12 @@ export default function PlayerStage({
                     type="button"
                     onClick={cycleSleepTimer}
                     className={`shrink-0 whitespace-nowrap rounded-md border px-2 py-1 font-num text-2xs tabular-nums transition-colors cursor-pointer ${
-                      sleepRemainingLabel
+                      sleepDeadlineTs
                         ? 'border-accent/40 bg-accent/10 text-accent'
                         : 'border-line-hairline text-text-secondary hover:border-accent/30 hover:text-text-primary'
                     }`}
                   >
-                    {sleepRemainingLabel ? `⏱ ${sleepRemainingLabel}` : '睡眠定时'}
+                    <SleepTimerLabel deadlineTs={sleepDeadlineTs} />
                   </button>
                   {onStartHandoff && (
                     <Button variant="ghost" onClick={triggerHandoff}>

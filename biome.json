@@ -6,6 +6,7 @@
       "tools/**",
       "server/**",
       "electron/**",
+      "mobile/src/**",
       "!**/*.css",
       "!**/*.json",
       "!**/*.md"
@@ -18,9 +19,32 @@
     "rules": {
       "preset": "none",
       "correctness": {
-        "useExhaustiveDependencies": "warn",
-        "noUnusedVariables": "warn"
+        "useExhaustiveDependencies": "error",
+        "useHookAtTopLevel": "error",
+        "noUnusedVariables": "error",
+        "noUnusedImports": "error",
+        "noUnreachable": "error"
+      },
+      "suspicious": {
+        "noDuplicateObjectKeys": "error",
+        "noDuplicateCase": "error",
+        "noDuplicateJsxProps": "error",
+        "noDuplicateParameters": "error",
+        "noDebugger": "error",
+        "noUnsafeNegation": "error"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["mobile/src/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "useExhaustiveDependencies": "warn"
+          }
+        }
+      }
+    }
+  ]
 }

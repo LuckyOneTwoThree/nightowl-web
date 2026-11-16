@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { requestScoreSync, SYNC_STATUS_BUSY } from '../api/score-sync.js';
-import { mondayOfWall, nightOf } from '../core/engine.js';
 import { hm } from '../core/format.js';
-import { buildIcs, ICS_RANGES, selectIcsMatches } from '../core/ics.js';
+import { ICS_RANGES } from '../core/ics.js';
 import { defaultPrefs } from '../core/prefs.js';
 import { queueWithMatches } from '../core/queue.js';
 import {
@@ -13,7 +12,9 @@ import {
   leagueName,
   teamName
 } from '../data/index.js';
+import { useBufferedRange } from '../hooks/useBufferedRange.js';
 import { useDialogFocus } from '../hooks/useDialogFocus.js';
+import { exportMatchesToIcs } from '../lib/export-ics.js';
 import { BrandLogo, Button, Chip, Fieldset, Hint, Meta, Segmented, Switch, TogglePill } from './atoms.jsx';
 import { IconClose, IconReset } from './icons.jsx';
 import { clearLineMemory, loadLineMemory } from './line-memory-storage.js';
@@ -132,28 +133,16 @@ export default function SettingsDrawer({
 
   const exportIcs = () => {
     setIcsMsg(null);
-    const now = Date.now();
     try {
-      const matches = selectIcsMatches(getFixtures(), {
+      const count = exportMatchesToIcs({
+        fixtures: getFixtures(),
         range: icsRange,
-        nowTs: now,
-        weekStartStr: icsRange === 'week' ? mondayOfWall(nightOf(now)) : null,
+        reminderMinutes: icsRemind,
         followedTeams: prefs.followedTeams,
-        weekIds: icsRange === 'week' ? weekIds : null
+        weekIds,
+        nowTs: Date.now()
       });
-      const ics = buildIcs({ matches, reminderMinutes: icsRemind, now });
-      const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const label = ICS_RANGES.find(r => r.id === icsRange)?.label || '导出';
-      const stamp = new Date(now).toISOString().slice(0, 10);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `夜猫看台-${label}-${stamp}.ics`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 3000);
-      setIcsMsg({ ok: true, text: `已导出 ${matches.length} 场` });
+      setIcsMsg({ ok: true, text: `已导出 ${count} 场` });
     } catch (err) {
       setIcsMsg({ ok: false, text: err?.message || '导出失败' });
     }
@@ -213,15 +202,17 @@ export default function SettingsDrawer({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: fresh 是「数据已刷新」的触发器；body 读 getFixtures()
   const snapshotInfo = useMemo(() => {
+    if (!open) return { count: '0', range: '—' };
     const list = getFixtures();
     const days = list.map(m => m.t.slice(0, 10)).sort();
     return {
       count: list.length.toLocaleString(),
       range: days.length ? `${days[0]} ~ ${days[days.length - 1]}` : '—'
     };
-  }, [fresh]);
+  }, [open, fresh]);
 
   const patch = p => onPrefsChange({ ...prefs, ...p });
+  const budgetSlider = useBufferedRange(prefs.weeklyBudget, v => patch({ weeklyBudget: v }));
   const toggleLeague = code =>
     patch({
       followedLeagues: prefs.followedLeagues.includes(code)
@@ -318,7 +309,7 @@ export default function SettingsDrawer({
                   <div className="flex items-baseline justify-between">
                     <span className="text-xs text-text-secondary">每周额度</span>
                     <span className="font-num text-sm font-semibold tabular-nums text-resource">
-                      {prefs.weeklyBudget.toFixed(1)} 小时
+                      {budgetSlider.value.toFixed(1)} 小时
                     </span>
                   </div>
                   <input
@@ -326,8 +317,11 @@ export default function SettingsDrawer({
                     min="0"
                     max="8"
                     step="0.5"
-                    value={prefs.weeklyBudget}
-                    onChange={e => patch({ weeklyBudget: Number(e.target.value) })}
+                    value={budgetSlider.value}
+                    onChange={e => budgetSlider.onChange(Number(e.target.value))}
+                    onPointerUp={budgetSlider.commit}
+                    onKeyUp={budgetSlider.commit}
+                    onBlur={budgetSlider.commit}
                     className="mt-2 w-full accent-resource"
                     aria-label="每周熬夜额度"
                   />
@@ -754,6 +748,12 @@ export default function SettingsDrawer({
                         </p>
                         <p className="mt-0.5">
                           上次同步 <span className="text-text-primary">{syncText}</span>
+                          {lastSync?.truncated && (
+                            <span className="text-warn">
+                              {' '}
+                              · 已达同步时限，尚余 {lastSync.remainingTargets} 项未查完
+                            </span>
+                          )}
                           {lastSync?.written?.ok === false && (
                             <span className="text-warn">
                               {' '}

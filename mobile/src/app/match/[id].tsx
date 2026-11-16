@@ -359,7 +359,6 @@ export default function MatchScreen() {
       : null;
   const countdown = engineCountdown(ts(match.t), now);
   const tier = intel.tier;
-  const color = tierColor(tier.tier);
 
   const share = () => {
     const timePart = isPostponed ? '延期' : isTbd ? '时间待定' : hm(match.t);

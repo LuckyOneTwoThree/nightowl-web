@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { completedWatchHint, shouldHideScore, WATCH_HINT_LEVEL } from '../core/reveal.js';
 import { summarizeDrama } from '../core/drama.js';
 import { hm, liveMinute } from '../core/format.js';
@@ -31,7 +32,7 @@ function parseWinner(sc) {
   return 'd';
 }
 
-export default function MatchRow({
+const MatchRow = memo(function MatchRow({
   m,
   state,
   active = false,
@@ -235,4 +236,6 @@ export default function MatchRow({
       </div>
     </div>
   );
-}
+});
+
+export default MatchRow;

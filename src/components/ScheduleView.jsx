@@ -186,6 +186,22 @@ export default function ScheduleView({
     set({ leagues: next.length === 0 ? [...LEAGUE_ORDER] : next });
   };
 
+  const minuteNow = Math.floor((now || Date.now()) / 60_000) * 60_000;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rows 变更（如同步保鲜后数据版本刷新）时须同步重建每行 evalOne + standingsCache
+  const evalMatch = useMemo(() => {
+    const all = getFixtures();
+    const standingsCache = new Map();
+    const byId = new Map();
+    return m => {
+      let hit = byId.get(m.id);
+      if (!hit) {
+        hit = evalOne(m, prefs, minuteNow, { fixtures: all, standingsCache });
+        byId.set(m.id, hit);
+      }
+      return hit;
+    };
+  }, [prefs, minuteNow, rows]);
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
       <h2 className="sr-only">赛程日历</h2>
@@ -520,7 +536,7 @@ export default function ScheduleView({
                     </div>
                   )}
                   {g.list.map(m => {
-                    const { ev, index } = evalOne(m, prefs);
+                    const { ev, index } = evalMatch(m);
                     return (
                       <div className="pb-1" key={m.id}>
                         <MatchRow
@@ -583,7 +599,7 @@ export default function ScheduleView({
               }
 
               const m = row.m;
-              const { ev, index } = evalOne(m, prefs);
+              const { ev, index } = evalMatch(m);
               return (
                 <div className="pb-1">
                   <MatchRow

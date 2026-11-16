@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildSeasonReport, STAMP_META } from '../core/diary.js';
-import { mondayOfWall, nightOf } from '../core/engine.js';
 import { hm } from '../core/format.js';
-import { buildIcs, ICS_RANGES, selectIcsMatches } from '../core/ics.js';
+import { ICS_RANGES } from '../core/ics.js';
 import { queueWithMatches } from '../core/queue.js';
 import {
   FOLLOWABLE_LEAGUES,
@@ -13,6 +12,8 @@ import {
   TEAM_MAP,
   teamName
 } from '../data/index.js';
+import { useBufferedRange } from '../hooks/useBufferedRange.js';
+import { exportMatchesToIcs } from '../lib/export-ics.js';
 import { Button, Chip, Crest, Meta, RemovableChip, Segmented, Switch, TogglePill } from './atoms.jsx';
 import TeamPicker from './TeamPicker.jsx';
 
@@ -69,12 +70,14 @@ export default function MeView({
     return () => clearTimeout(t);
   }, [focusTeamsSeq]);
 
+  const budgetSlider = useBufferedRange(prefs.weeklyBudget, v => patch({ weeklyBudget: v }));
+  const minuteNow = Math.floor((now || Date.now()) / 60_000) * 60_000;
   const queueEntries = useMemo(
     () =>
-      queueWithMatches(watchLater, fixtures, now, { includeWatched: true }).sort((a, b) =>
+      queueWithMatches(watchLater, fixtures, minuteNow, { includeWatched: true }).sort((a, b) =>
         String(a.match?.t || '').localeCompare(String(b.match?.t || ''))
       ),
-    [watchLater, fixtures, now]
+    [watchLater, fixtures, minuteNow]
   );
   const pendingQueue = useMemo(
     () => queueEntries.filter(entry => entry.item.status === 'pending'),
@@ -110,28 +113,16 @@ export default function MeView({
 
   const exportIcs = () => {
     setIcsMsg(null);
-    const tsNow = Date.now();
     try {
-      const matches = selectIcsMatches(fixtures, {
+      const count = exportMatchesToIcs({
+        fixtures,
         range: icsRange,
-        nowTs: tsNow,
-        weekStartStr: icsRange === 'week' ? mondayOfWall(nightOf(tsNow)) : null,
+        reminderMinutes: icsRemind,
         followedTeams: prefs.followedTeams,
-        weekIds: icsRange === 'week' ? weekIds : null
+        weekIds,
+        nowTs: Date.now()
       });
-      const ics = buildIcs({ matches, reminderMinutes: icsRemind, now: tsNow });
-      const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const label = ICS_RANGES.find(r => r.id === icsRange)?.label || '导出';
-      const stamp = new Date(tsNow).toISOString().slice(0, 10);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `夜猫看台-${label}-${stamp}.ics`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 3000);
-      setIcsMsg({ ok: true, text: `已导出 ${matches.length} 场` });
+      setIcsMsg({ ok: true, text: `已导出 ${count} 场` });
     } catch (err) {
       setIcsMsg({ ok: false, text: err?.message || '导出失败' });
     }
@@ -563,7 +554,7 @@ export default function MeView({
                   <div className="flex items-baseline justify-between">
                     <span className="text-xs text-text-secondary">每周熬夜额度</span>
                     <span className="font-num text-sm font-semibold tabular-nums text-resource">
-                      {prefs.weeklyBudget.toFixed(1)} 小时
+                      {budgetSlider.value.toFixed(1)} 小时
                     </span>
                   </div>
                   <input
@@ -571,8 +562,11 @@ export default function MeView({
                     min="0"
                     max="8"
                     step="0.5"
-                    value={prefs.weeklyBudget}
-                    onChange={e => patch({ weeklyBudget: Number(e.target.value) })}
+                    value={budgetSlider.value}
+                    onChange={e => budgetSlider.onChange(Number(e.target.value))}
+                    onPointerUp={budgetSlider.commit}
+                    onKeyUp={budgetSlider.commit}
+                    onBlur={budgetSlider.commit}
                     className="mt-2 w-full accent-resource"
                     aria-label="每周熬夜额度"
                   />

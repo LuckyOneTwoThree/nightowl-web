@@ -1,23 +1,23 @@
 {
   "_readme": "手机端数据管道是桌面端的手抄分支（存在有意差异）。本清单让差异可见：任一侧改动都会让 verify:pipeline 失败；确认两端仍等价后运行 npm run sync:pipeline -- --write 更新哈希。",
-  "generatedAt": "2026-11-16T02:19:29.877Z",
+  "generatedAt": "2026-11-16T02:35:35.967Z",
   "pairs": [
     {
       "desktop": "server/scores.js",
       "mobile": "mobile/src/data/sync/scores.js",
       "reason": "手机多 quickSyncTargets（72h 下拉快检）；共享函数应保持同口径",
-      "desktopSha": "b9065dcf3abebf3deea2dd3c48ac690ee5e344f211bb7157584453f82c4e046f",
+      "desktopSha": "601b8ee9b5a4c4d54ff0f2b461be5652d0564a5f5cebdb0a3c2c353e27d76a7b",
       "mobileSha": "864cf2ccb77634c496d4791a913f6eb4d6cdc0aaab2bc69657d8457618ca014d",
-      "desktopLines": 623,
+      "desktopLines": 627,
       "mobileLines": 640
     },
     {
       "desktop": "server/sources/index.js",
       "mobile": "mobile/src/data/sync/sources.js",
       "reason": "端侧取数入口不同（桌面本地服务 / 手机直连 ESPN）",
-      "desktopSha": "95b2ed6ef7b3e30a84f0e523c15c311356825ebc5a390bbca281115a6e4d2c79",
+      "desktopSha": "a0c00cf0d1f6bcb896633afd4162a9715e6489ed4d293c1d4611582c1cf50147",
       "mobileSha": "de8881b4ba11301920237fd01fb623058b283c008d848f878221b93bfcc1ad45",
-      "desktopLines": 215,
+      "desktopLines": 250,
       "mobileLines": 216
     },
     {
@@ -60,18 +60,18 @@
       "desktop": "server/highlights.js",
       "mobile": "mobile/src/data/highlights.js",
       "reason": "集锦解析；磁盘缓存 vs AsyncStorage，URL 校验实现不同",
-      "desktopSha": "a297a1a2d781ee7ffbf0a310c3f9b2cb3e65183963758a2f6945795747d72a20",
+      "desktopSha": "a44c3915fee0c830a7abdac019e8cf25104171968369efa4dac76a7c124b6036",
       "mobileSha": "fa4f4668db67a353648d90332f45a5b2fff60b60f3f76c14a9d026a852e1b7c6",
-      "desktopLines": 395,
+      "desktopLines": 409,
       "mobileLines": 383
     },
     {
       "desktop": "server/scraper.js",
       "mobile": "mobile/src/data/scraper.js",
       "reason": "直播源抓取；手机不内置签名频道（TV_SPORTS_CHANNELS=[]）",
-      "desktopSha": "5f0ccc2e230428033d3754a80ae6349fdde4f8b8bb2b1786d5735025dbf80c41",
+      "desktopSha": "9735e453577e50cf482db3ad5e1a446e11c0cc2208a2e6d0410c6f5b711872ba",
       "mobileSha": "85343e91a46b686b29ffd818753a0b958284721ab4ef42f7ac97e1c6aaf7b1cc",
-      "desktopLines": 497,
+      "desktopLines": 510,
       "mobileLines": 497
     }
   ]

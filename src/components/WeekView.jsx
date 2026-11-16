@@ -11,6 +11,7 @@ import { buildPlanIcs } from '../core/ics.js';
 import { Chip, Crest, Hint, IndexTag, Meta, SectionLabel, SleepBadge, Stars } from './atoms.jsx';
 import { IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronUp, IconClose, IconWarn } from './icons.jsx';
 import MatchRow from './MatchRow.jsx';
+import { useBufferedRange } from '../hooks/useBufferedRange.js';
 import { useScrollMemory } from '../hooks/useScrollMemory.js';
 
 const WEEKDAY_SHORT = ['一', '二', '三', '四', '五', '六', '日'];
@@ -340,9 +341,11 @@ export default function WeekView({
     ? `${days[0].date.slice(5).replace('-', '/')} – ${days[days.length - 1].date.slice(5).replace('-', '/')}`
     : '';
 
+  const budgetSlider = useBufferedRange(plan.budget, onBudgetChange);
+  const minuteNow = Math.floor((now || Date.now()) / 60_000) * 60_000;
   const crunchReport = useMemo(
-    () => detectCrunchPeriods(prefs?.followedTeams || [], getFixtures(), now),
-    [prefs?.followedTeams, now]
+    () => detectCrunchPeriods(prefs?.followedTeams || [], getFixtures(), minuteNow),
+    [prefs?.followedTeams, minuteNow]
   );
 
   const sleepProfileForIcs = useMemo(() => {
@@ -551,7 +554,7 @@ export default function WeekView({
             <div className="flex items-center justify-between">
               <span className="text-2xs text-text-secondary">每周熬夜额度上限（按档位计）</span>
               <span className="font-num text-sm font-bold tabular-nums text-resource">
-                {plan.budget.toFixed(1)} 小时 / 周
+                {budgetSlider.value.toFixed(1)} 小时 / 周
               </span>
             </div>
 
@@ -560,8 +563,11 @@ export default function WeekView({
               min="0"
               max="8"
               step="0.5"
-              value={plan.budget}
-              onChange={e => onBudgetChange(Number(e.target.value))}
+              value={budgetSlider.value}
+              onChange={e => budgetSlider.onChange(Number(e.target.value))}
+              onPointerUp={budgetSlider.commit}
+              onKeyUp={budgetSlider.commit}
+              onBlur={budgetSlider.commit}
               className="mt-2 w-full accent-[rgb(var(--resource-rgb))]"
               aria-label="每周熬夜额度（小时，按档位计）"
             />
@@ -882,32 +888,25 @@ export default function WeekView({
                   {filteredAlt.map(e => (
                     <div
                       key={e.m.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => onSelect(e.m.id)}
-                      onKeyDown={ev => {
-                        if (ev.target !== ev.currentTarget) return;
-                        if (ev.key === 'Enter' || ev.key === ' ') {
-                          ev.preventDefault();
-                          onSelect(e.m.id);
-                        }
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg border border-transparent bg-surface-card px-2.5 py-1.5 text-left transition-colors hover:border-line-hairline hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
+                      className="flex w-full items-center gap-2 rounded-lg border border-transparent bg-surface-card px-2.5 py-1.5 text-left transition-colors hover:border-line-hairline hover:bg-surface-raised"
                     >
-                      <Meta num className="shrink-0">
-                        {e.m.t.slice(5, 10).replace('-', '/')} {e.m.t.split('T')[1]}
-                      </Meta>
-                      <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
-                        {teamName(e.m.h)} vs {teamName(e.m.a)}
-                      </span>
-                      <IndexTag value={e.index} />
+                      <button
+                        type="button"
+                        onClick={() => onSelect(e.m.id)}
+                        className="flex min-w-0 flex-1 items-center gap-2 rounded text-left focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
+                      >
+                        <Meta num className="shrink-0">
+                          {e.m.t.slice(5, 10).replace('-', '/')} {e.m.t.split('T')[1]}
+                        </Meta>
+                        <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
+                          {teamName(e.m.h)} vs {teamName(e.m.a)}
+                        </span>
+                        <IndexTag value={e.index} />
+                      </button>
                       {onTogglePinMatch && (
                         <button
                           type="button"
-                          onClick={ev => {
-                            ev.stopPropagation();
-                            onTogglePinMatch(e.m.id);
-                          }}
+                          onClick={() => onTogglePinMatch(e.m.id)}
                           className="shrink-0 rounded border border-accent/35 bg-surface-accent px-1.5 py-0.5 text-2xs font-medium text-accent transition-colors hover:bg-accent/20 cursor-pointer"
                         >
                           固定入选
@@ -1015,18 +1014,8 @@ function PickRow({ e, active, pinned = false, kickoffGroup, onSelect, onTogglePi
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onSelect(m.id)}
-      onKeyDown={ev => {
-        if (ev.target !== ev.currentTarget) return;
-        if (ev.key === 'Enter' || ev.key === ' ') {
-          ev.preventDefault();
-          onSelect(m.id);
-        }
-      }}
       aria-current={active ? 'true' : undefined}
-      className={`relative w-full overflow-hidden rounded-lg py-2 pr-2.5 pl-3 text-left transition-all focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
+      className={`relative w-full overflow-hidden rounded-lg py-2 pr-2.5 pl-3 text-left transition-all ${
         active
           ? 'border border-accent/45 bg-surface-raised shadow-card'
           : 'border border-transparent bg-surface-card hover:border-line-hairline hover:bg-surface-raised/70'
@@ -1039,75 +1028,50 @@ function PickRow({ e, active, pinned = false, kickoffGroup, onSelect, onTogglePi
       />
 
       <div className="flex gap-2.5">
-        <span className="w-10 shrink-0 pt-px font-num text-xs font-semibold tabular-nums text-text-secondary">
-          {m.t.split('T')[1]}
-        </span>
+        <button
+          type="button"
+          onClick={() => onSelect(m.id)}
+          className="flex min-w-0 flex-1 gap-2.5 rounded text-left focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer"
+        >
+          <span className="w-10 shrink-0 pt-px font-num text-xs font-semibold tabular-nums text-text-secondary">
+            {m.t.split('T')[1]}
+          </span>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className="shrink-0 text-2xs text-text-muted">{leagueName(m.l)}</span>
-            <SleepBadge match={m} compact />
-            {pinned && (
-              <span className="rounded bg-accent/15 px-1.5 py-px text-2xs font-medium text-accent">
-                已固定
-              </span>
-            )}
-            {conflictCount > 1 && (
-              <span className="inline-flex items-center gap-0.5 rounded bg-warn/12 px-1.5 py-px font-num text-2xs font-medium text-warn">
-                <IconWarn size={10} />
-                同时开球 ({conflictCount})
-              </span>
-            )}
-            <IndexTag value={e.index} className="ml-auto" />
-          </div>
-
-          <div className="mt-1.5 flex items-center gap-2">
-            <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
-              <span className="truncate text-xs font-medium text-text-primary">{teamName(m.h)}</span>
-              <Crest id={m.h} size={16} />
-            </div>
-            <span className="shrink-0 font-num text-2xs text-text-faint">vs</span>
-            <div className="flex min-w-0 flex-1 items-center gap-1.5">
-              <Crest id={m.a} size={16} />
-              <span className="truncate text-xs font-medium text-text-primary">{teamName(m.a)}</span>
-            </div>
-          </div>
-
-          <div className="mt-1 flex items-center gap-2">
-            <Stars star={e.ev.star} />
-            <span className="min-w-0 truncate text-2xs text-text-faint">{reason}</span>
-            <div className="ml-auto flex shrink-0 items-center gap-1.5">
-              {onTogglePin && (
-                <button
-                  type="button"
-                  onClick={ev => {
-                    ev.stopPropagation();
-                    onTogglePin(m.id);
-                  }}
-                  title={pinned ? '取消固定，交回算法排期' : '固定保留在精选'}
-                  className={`rounded border px-1.5 py-0.5 text-2xs leading-none transition-colors cursor-pointer ${
-                    pinned
-                      ? 'border-accent/45 bg-surface-accent text-accent hover:bg-accent/20'
-                      : 'border-line-hairline text-text-muted hover:border-accent/40 hover:text-accent'
-                  }`}
-                >
-                  {pinned ? '取消固定' : '固定'}
-                </button>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="shrink-0 text-2xs text-text-muted">{leagueName(m.l)}</span>
+              <SleepBadge match={m} compact />
+              {pinned && (
+                <span className="rounded bg-accent/15 px-1.5 py-px text-2xs font-medium text-accent">
+                  已固定
+                </span>
               )}
-              {onToggleExclude && !pinned && (
-                <button
-                  type="button"
-                  onClick={ev => {
-                    ev.stopPropagation();
-                    onToggleExclude(m.id);
-                  }}
-                  title="跳过这场，让系统换一场备选"
-                  className="rounded border border-line-hairline px-1.5 py-0.5 text-2xs leading-none text-text-muted transition-colors hover:border-warn/40 hover:text-warn cursor-pointer"
-                >
-                  换掉
-                </button>
+              {conflictCount > 1 && (
+                <span className="inline-flex items-center gap-0.5 rounded bg-warn/12 px-1.5 py-px font-num text-2xs font-medium text-warn">
+                  <IconWarn size={10} />
+                  同时开球 ({conflictCount})
+                </span>
               )}
+              <IndexTag value={e.index} className="ml-auto" />
+            </div>
+
+            <div className="mt-1.5 flex items-center gap-2">
+              <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+                <span className="truncate text-xs font-medium text-text-primary">{teamName(m.h)}</span>
+                <Crest id={m.h} size={16} />
+              </div>
+              <span className="shrink-0 font-num text-2xs text-text-faint">vs</span>
+              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                <Crest id={m.a} size={16} />
+                <span className="truncate text-xs font-medium text-text-primary">{teamName(m.a)}</span>
+              </div>
+            </div>
+
+            <div className="mt-1 flex items-center gap-2">
+              <Stars star={e.ev.star} />
+              <span className="min-w-0 truncate text-2xs text-text-faint">{reason}</span>
               <span
+                className="ml-auto shrink-0"
                 title={`开球 ${m.t.slice(5, 10).replace('-', '/')} ${m.t.split('T')[1]}${crossesMidnight ? ` · 归属 ${dateLabel}` : ''}`}
               >
                 <Meta num>
@@ -1116,7 +1080,36 @@ function PickRow({ e, active, pinned = false, kickoffGroup, onSelect, onTogglePi
               </span>
             </div>
           </div>
-        </div>
+        </button>
+
+        {(onTogglePin || (onToggleExclude && !pinned)) && (
+          <div className="flex shrink-0 flex-col items-end justify-end gap-1">
+            {onTogglePin && (
+              <button
+                type="button"
+                onClick={() => onTogglePin(m.id)}
+                title={pinned ? '取消固定，交回算法排期' : '固定保留在精选'}
+                className={`rounded border px-1.5 py-0.5 text-2xs leading-none transition-colors cursor-pointer ${
+                  pinned
+                    ? 'border-accent/45 bg-surface-accent text-accent hover:bg-accent/20'
+                    : 'border-line-hairline text-text-muted hover:border-accent/40 hover:text-accent'
+                }`}
+              >
+                {pinned ? '取消固定' : '固定'}
+              </button>
+            )}
+            {onToggleExclude && !pinned && (
+              <button
+                type="button"
+                onClick={() => onToggleExclude(m.id)}
+                title="跳过这场，让系统换一场备选"
+                className="rounded border border-line-hairline px-1.5 py-0.5 text-2xs leading-none text-text-muted transition-colors hover:border-warn/40 hover:text-warn cursor-pointer"
+              >
+                换掉
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

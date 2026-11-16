@@ -73,13 +73,22 @@ export function useLiveMatch(
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let waitingForeground = false;
+
+    const clearTimer = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
 
     const poll = async () => {
       if (cancelled) return;
       if (AppState.currentState !== 'active') {
-        timer = setTimeout(poll, 5000);
+        waitingForeground = true;
         return;
       }
+      waitingForeground = false;
 
       setLoading(true);
       try {
@@ -103,18 +112,33 @@ export function useLiveMatch(
       } finally {
         if (!cancelled) {
           setLoading(false);
-          if (intervalMs > 0) {
+          if (intervalMs > 0 && AppState.currentState === 'active') {
+            clearTimer();
             timer = setTimeout(poll, intervalMs);
+          } else if (AppState.currentState !== 'active') {
+            waitingForeground = true;
           }
         }
       }
     };
 
+    const sub = AppState.addEventListener('change', state => {
+      if (cancelled) return;
+      if (state === 'active' && waitingForeground) {
+        clearTimer();
+        void poll();
+      } else if (state !== 'active') {
+        waitingForeground = true;
+        clearTimer();
+      }
+    });
+
     poll();
 
     return () => {
       cancelled = true;
-      if (timer) clearTimeout(timer);
+      clearTimer();
+      sub.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId, kickoff, enabled, intervalMs, paused]);

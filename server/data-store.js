@@ -12,7 +12,7 @@
  * 桌面端由 main.cjs 把 app.getPath('userData') 注入 NIGHTOWL_USER_DATA。
  */
 
-import { accessSync, constants, existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
+import { accessSync, constants, existsSync, readFileSync, statSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -110,8 +110,25 @@ function saveUserMeta(season, extra = {}) {
   }
 }
 
+function statStamp(filePath) {
+  if (!filePath || !existsSync(filePath)) return 'missing';
+  try {
+    const s = statSync(filePath);
+    return `${s.mtimeMs}:${s.size}`;
+  } catch {
+    return 'err';
+  }
+}
+
+let fixturesCache = null; // { sig: string, data: Array }
+
+export function resetFixturesCache() {
+  fixturesCache = null;
+}
+
 /** 停用旧赛季用户数据：改名归档（不删除），返回归档路径或 null */
 function archiveUserFixtures(oldSeason) {
+  fixturesCache = null;
   const p = userFixturesPath();
   if (!p || !existsSync(p)) return null;
   const safe = String(oldSeason || 'unknown').replace(/[^\w.-]/g, '_');
@@ -215,37 +232,50 @@ function sanitizeLoadedFixtures(list, builtin = []) {
 
 export async function loadFixtures() {
   const userPath = userFixturesPath();
+  const metaPath = userMetaPath();
+  const sig = `${userPath || ''}|${statStamp(BUILT_IN)}|${statStamp(userPath)}|${statStamp(metaPath)}`;
+  if (fixturesCache && fixturesCache.sig === sig) {
+    return fixturesCache.data;
+  }
+
+  let result;
   if (!userPath || !existsSync(userPath)) {
-    return sanitizeLoadedFixtures(parseFixtures(await readFile(BUILT_IN, 'utf8')));
+    result = sanitizeLoadedFixtures(parseFixtures(await readFile(BUILT_IN, 'utf8')));
+  } else {
+    /**
+     * 跨赛季：**绝不合并**。
+     *
+     * 两侧赛季都已知且不同 → 以内置为准，并把上季用户文件改名归档
+     * （`fixtures-2026-27.bak.json`，不删除——里面是用户真金白银同步来的数据）。
+     * 任一未知（老用户没有 meta、或内置 meta 读不到）→ 按同一赛季处理，保持旧行为。
+     */
+    const builtinS = builtinSeason();
+    const userS = loadUserMeta()?.season ?? null;
+    if (builtinS && userS && builtinS !== userS) {
+      archiveUserFixtures(userS);
+      result = sanitizeLoadedFixtures(parseFixtures(await readFile(BUILT_IN, 'utf8')));
+    } else {
+      // 内置读不到（打包异常）时退回用户数据，而不是把界面清空
+      const [builtinRaw, userRaw] = await Promise.all([
+        readFile(BUILT_IN, 'utf8').catch(() => '[]'),
+        readFile(userPath, 'utf8')
+      ]);
+      const builtinParsed = parseFixtures(builtinRaw);
+      const meta = loadUserMeta();
+      const merged = mergeFixtures(builtinParsed, parseFixtures(userRaw), {
+        writer: meta?.writer === 'sparse' ? 'sparse' : 'dense',
+        builtinRev: builtinRev()
+      });
+      const sanitized = sanitizeLoadedFixtures(merged, builtinParsed);
+      // 合并结果为空说明两侧都坏了：宁可抛错让上层报「数据不可用」，也不要静默返回空数组
+      if (!sanitized.length) throw new Error('赛程数据为空（内置与用户数据都无法解析）');
+      result = sanitized;
+    }
   }
-  /**
-   * 跨赛季：**绝不合并**。
-   *
-   * 两侧赛季都已知且不同 → 以内置为准，并把上季用户文件改名归档
-   * （`fixtures-2026-27.bak.json`，不删除——里面是用户真金白银同步来的数据）。
-   * 任一未知（老用户没有 meta、或内置 meta 读不到）→ 按同一赛季处理，保持旧行为。
-   */
-  const builtinS = builtinSeason();
-  const userS = loadUserMeta()?.season ?? null;
-  if (builtinS && userS && builtinS !== userS) {
-    archiveUserFixtures(userS);
-    return sanitizeLoadedFixtures(parseFixtures(await readFile(BUILT_IN, 'utf8')));
-  }
-  // 内置读不到（打包异常）时退回用户数据，而不是把界面清空
-  const [builtinRaw, userRaw] = await Promise.all([
-    readFile(BUILT_IN, 'utf8').catch(() => '[]'),
-    readFile(userPath, 'utf8')
-  ]);
-  const builtinParsed = parseFixtures(builtinRaw);
-  const meta = loadUserMeta();
-  const merged = mergeFixtures(builtinParsed, parseFixtures(userRaw), {
-    writer: meta?.writer === 'sparse' ? 'sparse' : 'dense',
-    builtinRev: builtinRev()
-  });
-  const sanitized = sanitizeLoadedFixtures(merged, builtinParsed);
-  // 合并结果为空说明两侧都坏了：宁可抛错让上层报「数据不可用」，也不要静默返回空数组
-  if (!sanitized.length) throw new Error('赛程数据为空（内置与用户数据都无法解析）');
-  return sanitized;
+
+  const nextSig = `${userPath || ''}|${statStamp(BUILT_IN)}|${statStamp(userPath)}|${statStamp(metaPath)}`;
+  fixturesCache = { sig: nextSig, data: result };
+  return result;
 }
 
 /**
@@ -301,6 +331,7 @@ export function saveFixtures(next) {
     renameSync(tmp, p);
     // 盖章：这份用户数据属于哪个赛季、以什么方式写、对应哪个内置修订
     saveUserMeta(builtinSeason() || 'unknown', { writer: 'sparse', builtinRev: builtinRev() });
+    fixturesCache = null;
     return { ok: true, path: p, bytes: Buffer.byteLength(body), changedFields };
   } catch (err) {
     return { ok: false, reason: err.message, path: p };

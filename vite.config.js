@@ -34,6 +34,27 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: false
+    sourcemap: false,
+    rolldownOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+            return 'react-vendor';
+          }
+          if (id.includes('node_modules/lucide-react/')) {
+            return 'icons-vendor';
+          }
+          if (id.includes('node_modules/virtua/')) {
+            return 'virtua-vendor';
+          }
+          if (id.includes('node_modules/hls.js/')) {
+            return 'hls-vendor';
+          }
+          if (id.includes('node_modules/artplayer/')) {
+            return 'artplayer-vendor';
+          }
+        }
+      }
+    }
   }
 });

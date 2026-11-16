@@ -735,6 +735,9 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
             ms: Date.now() - startedAt,
             patches: result.patches.size,
             attempted: result.attempted !== false,
+            truncated: !!result.truncated,
+            remainingTargets: result.remainingTargets || 0,
+            completedLeagues: result.completedLeagues || [],
             applied: !!apply && written?.ok === true,
             written,
             errors: result.errors.length,
@@ -1002,6 +1005,8 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
       ms: list.reduce((sum, info) => sum + (info.ms || 0), 0),
       patches,
       attempted: list.some(info => info.attempted !== false),
+      truncated: list.some(info => info.truncated === true),
+      remainingTargets: list.reduce((sum, info) => sum + (info.remainingTargets || 0), 0),
       applied: list.some(info => info.applied),
       written: failedWrites.length
         ? { ok: false, changed, reason: failedWrites[0].written.reason || '写盘失败' }
@@ -1051,6 +1056,8 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
         ms: Date.now() - startedAt,
         patches: result.patches.size,
         attempted: result.attempted !== false,
+        truncated: !!result.truncated,
+        remainingTargets: result.remainingTargets || 0,
         applied,
         written,
         errors: result.errors.length,

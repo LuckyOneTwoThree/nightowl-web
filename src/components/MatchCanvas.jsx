@@ -1,11 +1,75 @@
-import { useMemo } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { shouldHideScore } from '../core/reveal.js';
-import { hm, zhDate, weekdayOf, datePart } from '../core/format.js';
-import { MATCH_DURATION_MS, ts } from '../core/engine.js';
+import { hm, humanCountdown, zhDate, weekdayOf, datePart } from '../core/format.js';
+import { countdown as engineCountdown, MATCH_DURATION_MS, ts } from '../core/engine.js';
 import { teamName, teamColor, leagueName } from '../data/index.js';
 import { eventSummary } from '../core/live-events.js';
 import { Button, Chip, Crest, LiveDot, Meta } from './atoms.jsx';
 import { IconPlay, IconReset, IconSignal } from './icons.jsx';
+
+/**
+ * 叶子级秒级倒计时子组件：把 1 秒定时器隔离在此叶子内，
+ * 避免父级 PlayerStage（1700+ 行）每秒整棵重渲染。
+ */
+function KickoffCountdown({ matchTime }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    let timer = null;
+    const tick = () => setNow(Date.now());
+    const syncVisibility = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      if (typeof document === 'undefined' || document.visibilityState !== 'hidden') {
+        tick();
+        timer = setInterval(tick, 1000);
+      }
+    };
+    syncVisibility();
+    document?.addEventListener?.('visibilitychange', syncVisibility);
+    return () => {
+      if (timer) clearInterval(timer);
+      document?.removeEventListener?.('visibilitychange', syncVisibility);
+    };
+  }, []);
+
+  const text = useMemo(() => humanCountdown(engineCountdown(ts(matchTime), now)), [matchTime, now]);
+  const isWithin2Hours = /^(0[01]:\d{2}:\d{2}|02:00:00)$/.test(text);
+
+  if (isWithin2Hours) {
+    return (
+      <>
+        <div
+          aria-live="polite"
+          aria-label={`倒计时 ${text}`}
+          className="flex items-center gap-1 font-num tabular-nums"
+        >
+          {text.split(':').map((unit, idx) => (
+            <span key={idx} className="inline-flex items-center gap-1">
+              {idx > 0 && <span className="text-xl font-bold text-text-faint">:</span>}
+              <span className="inline-flex min-w-[44px] items-center justify-center rounded-lg border border-line-control bg-surface-panel/80 px-2 py-1 text-2xl font-bold leading-none tracking-tight text-text-primary shadow-inner sm:text-3xl">
+                {unit}
+              </span>
+            </span>
+          ))}
+        </div>
+        <span className="mt-1.5 font-num text-xs text-text-muted">距开球</span>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <span className="font-num text-display font-bold leading-none tracking-tight text-text-primary">
+        {hm(matchTime)}
+      </span>
+      <span aria-live="polite" className="mt-1.5 font-num text-xs tabular-nums text-text-muted">
+        距开球 {text}
+      </span>
+    </>
+  );
+}
 
 /**
  * 赛前 / 进行中 / 终场的 Match Center 画布
@@ -16,10 +80,9 @@ import { IconPlay, IconReset, IconSignal } from './icons.jsx';
  *   · 进行中 / 终场：大比分（支持防剧透揭晓）与实时状态
  *   · 底部保留完整主操作状态机（播放 / 打开线路 / 检测线路 / 查看线路 / 情报 / 看回顾 / 看集锦）
  */
-export default function MatchCanvas({
+const MatchCanvas = memo(function MatchCanvas({
   match,
   state,
-  stageCountdown,
   isNearKickoff = false,
   liveData,
   lines,
@@ -67,8 +130,6 @@ export default function MatchCanvas({
   const actionLabel = canPlayNow ? (directLine ? '播放' : hasLines ? '打开线路' : '检测线路') : '查看线路';
   const ActionIcon = canPlayNow ? (directLine ? <IconPlay /> : hasLines ? <IconSignal /> : <IconReset />) : <IconSignal />;
   const runPrimary = canPlayNow ? (directLine || hasLines ? onPlay : onRefreshLines) : onShowLines;
-
-  const isWithin2Hours = /^(0[01]:\d{2}:\d{2}|02:00:00)$/.test(stageCountdown || '');
 
   const lastEvent = live && liveData?.events?.length ? liveData.events[liveData.events.length - 1] : null;
   const ticker = lastEvent
@@ -190,41 +251,8 @@ export default function MatchCanvas({
                 <span className="font-num text-2xl font-semibold text-text-muted">--:--</span>
                 <span className="mt-1.5 text-xs font-medium text-text-muted">时间待定</span>
               </>
-            ) : isWithin2Hours ? (
-              <>
-                <div
-                  aria-live="polite"
-                  aria-label={`倒计时 ${stageCountdown}`}
-                  className="flex items-center gap-1 font-num tabular-nums"
-                >
-                  {stageCountdown.split(':').map((unit, idx) => (
-                    <span key={idx} className="inline-flex items-center gap-1">
-                      {idx > 0 && <span className="text-xl font-bold text-text-faint">:</span>}
-                      <span className="inline-flex min-w-[44px] items-center justify-center rounded-lg border border-line-control bg-surface-panel/80 px-2 py-1 text-2xl font-bold leading-none tracking-tight text-text-primary shadow-inner sm:text-3xl">
-                        {unit}
-                      </span>
-                    </span>
-                  ))}
-                </div>
-                <span className="mt-1.5 font-num text-xs text-text-muted">
-                  距开球
-                </span>
-              </>
             ) : (
-              <>
-                <span className="font-num text-display font-bold leading-none tracking-tight text-text-primary">
-                  {hm(match.t)}
-                </span>
-                {/* 同屏去重：指数、睡眠档位、星级是「决定层」结论，左栏 Hero 卡已完整给出。
-                    舞台只负责「这场什么时候踢、现在能不能看」，重复一遍大号数字只会让
-                    首屏出现四个 27.2 —— 需要解释指数时，右栏情报面板的分解表才是该去的地方。 */}
-                <span
-                  aria-live="polite"
-                  className="mt-1.5 font-num text-xs tabular-nums text-text-muted"
-                >
-                  距开球 {stageCountdown}
-                </span>
-              </>
+              <KickoffCountdown matchTime={match.t} />
             )}
           </div>
 
@@ -282,4 +310,6 @@ export default function MatchCanvas({
       </div>
     </div>
   );
-}
+});
+
+export default MatchCanvas;

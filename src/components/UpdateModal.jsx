@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDialogFocus } from '../hooks/useDialogFocus.js';
 import { compareSemver } from '../core/semver.js';
-import { BrandLogo, Button, Chip, Meta } from './atoms.jsx';
+import { BrandLogo, Button } from './atoms.jsx';
 import { IconClose, IconWarn } from './icons.jsx';
 import { openExternal } from '../lib/openExternal.js';
 

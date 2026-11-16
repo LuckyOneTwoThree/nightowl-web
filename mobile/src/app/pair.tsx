@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, Laptop, Smartphone, Wifi } from 'lucide-react-native';
@@ -163,15 +163,30 @@ export default function PairScreen() {
     else if (parsed.mode === 'sync') setMode('sync');
   };
 
-  const canSubmit = host.trim().length > 0 && port.trim().length > 0 && (pin.trim().length === 6 || token.trim().length > 0);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const parsedPortNum = Number(port.trim());
+  const portValid = Number.isInteger(parsedPortNum) && parsedPortNum >= 1 && parsedPortNum <= 65535;
+  const canSubmit = host.trim().length > 0 && portValid && (pin.trim().length === 6 || token.trim().length > 0);
 
   const handleSync = async () => {
     const cleanHost = host.trim();
     const cleanPort = port.trim();
+    const portNum = Number(cleanPort);
     const cleanPin = pin.trim();
     const cleanToken = token.trim();
     if (!cleanHost || !cleanPort) {
       setErrorMsg('请填写桌面端显示的局域网 IP 和端口');
+      return;
+    }
+    if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
+      setErrorMsg('请输入合法端口（1–65535）');
       return;
     }
     if (!cleanToken && cleanPin.length !== 6) {
@@ -183,7 +198,7 @@ export default function PairScreen() {
     setErrorMsg(null);
     setStatusMsg('正在连接桌面端临时配对服务…');
 
-    const baseUrl = `http://${cleanHost}:${cleanPort}`;
+    const baseUrl = `http://${cleanHost}:${portNum}`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -288,14 +303,16 @@ export default function PairScreen() {
         }
       }
 
+      if (!mountedRef.current) return;
       setStatusMsg('同步成功：已合并主队关注、本周微调、补看清单与观赛印章');
       toast.success('局域网同步完成');
     } catch (err) {
+      if (!mountedRef.current) return;
       const msg = err instanceof Error ? err.message : '无法连接到桌面端，请确认处于同一 Wi-Fi';
       setErrorMsg(msg);
       setStatusMsg(null);
     } finally {
-      setBusy(false);
+      if (mountedRef.current) setBusy(false);
     }
   };
 

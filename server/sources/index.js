@@ -65,11 +65,27 @@ const STRATEGY = {
  * 拉取所有源的事件
  * @returns {{ events: object[], bySource: object, errors: object[] }}
  */
-export async function fetchAllEvents({ leagues, months, targets, targetDates, season, order = DEFAULT_ORDER, log = console, timeoutMs, delayMs = 200 }) {
+export async function fetchAllEvents({
+  leagues,
+  months,
+  targets,
+  targetDates,
+  season,
+  order = DEFAULT_ORDER,
+  log = console,
+  timeoutMs,
+  delayMs = 200,
+  maxDurationMs = 90_000,
+  runFetch = null
+}) {
   const events = [];
   const bySource = {};
   const errors = [];
   const requests = [];
+  const startedAt = Date.now();
+  let truncated = false;
+  let remainingTargets = 0;
+  const completedLeagues = new Set();
 
   for (const sid of order) {
     const src = SOURCES[sid];
@@ -85,29 +101,48 @@ export async function fetchAllEvents({ leagues, months, targets, targetDates, se
     }
   }
 
-  // 串行 + 间隔：避免打爆上游（旧项目因并发过高被封过 IP）
-  for (const r of requests) {
+  // 串行 + 间隔 + 整轮时间预算：到达 maxDurationMs 后主动截断并返回已拿到的数据，避免一直挂起
+  for (let i = 0; i < requests.length; i++) {
+    if (Number.isFinite(maxDurationMs) && maxDurationMs > 0 && Date.now() - startedAt >= maxDurationMs) {
+      truncated = true;
+      remainingTargets = requests.length - i;
+      log.warn?.(`[sources] 同步达到时间预算 (${maxDurationMs}ms)，主动截断剩余 ${remainingTargets} 个请求`);
+      break;
+    }
+    const r = requests[i];
     bySource[r.sid].requests++;
     try {
-      // 单请求超时统一走 rules.scores.timeoutMs（未配置时各源自带默认值），
-      // 避免「配置了 30s 但 ESPN 恒用 25s」这类配置失效。
-      const evs = await r.strat.fetch(r.league, r.unit, { log, season, timeoutMs });
+      const evs = runFetch
+        ? await runFetch(r.sid, r.league, r.unit, { log, season, timeoutMs })
+        : await r.strat.fetch(r.league, r.unit, { log, season, timeoutMs });
       events.push(...evs);
       bySource[r.sid].events += evs.length;
       bySource[r.sid].ok++;
+      completedLeagues.add(r.league);
     } catch (err) {
       bySource[r.sid].failed++;
       const unitLabel = r.unit.kind === 'date' ? r.unit.date : (r.unit.kind === 'month' ? r.unit.ym : r.unit.kind);
       errors.push({ source: r.sid, league: r.league, unit: unitLabel, message: err.message });
       log.warn?.(`[sources] ${r.sid} ${r.league} ${unitLabel} 拉取失败：${err.message}`);
     }
-    // 串行 + 间隔：避免打爆上游（旧项目因并发过高被封过 IP）。
-    // 间隔可配（rules.scores.requestDelayMs），此前硬编码 200 而配置项写 400 从不生效 ——
-    // 「有旋钮但不接线」比没有旋钮更糟：调了没反应，还以为自己调过。
-    await new Promise(res => setTimeout(res, Math.max(0, delayMs)));
+    if (delayMs > 0 && i < requests.length - 1) {
+      const remainingBudget =
+        Number.isFinite(maxDurationMs) && maxDurationMs > 0
+          ? maxDurationMs - (Date.now() - startedAt)
+          : Infinity;
+      if (remainingBudget <= 0) continue;
+      await new Promise(res => setTimeout(res, Math.min(delayMs, remainingBudget)));
+    }
   }
 
-  return { events, bySource, errors };
+  return {
+    events,
+    bySource,
+    errors,
+    truncated,
+    remainingTargets,
+    completedLeagues: [...completedLeagues]
+  };
 }
 
 /** 跨源同一场比赛允许的开球时间偏差（实测最多约 24h，留一倍余量） */

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getFixtures, setFixtures, storylines, teamName } from './data/index.js';
 import { countdown as engineCountdown, ts, MATCH_DURATION_MS, sleepTier, mondayOfWall, nightOf } from './core/engine.js';
 import { hm, humanCountdownShort } from './core/format.js';
@@ -23,25 +23,26 @@ import { buildSyncBundle } from './core/sync-bundle.js';
 import { normalizePrefs } from './core/prefs.js';
 
 import TopBar from './components/TopBar.jsx';
-import CommandPalette from './components/CommandPalette.jsx';
 import TonightView, { INDEX_HINT } from './components/TonightView.jsx';
-import WeekView from './components/WeekView.jsx';
-import ScheduleView from './components/ScheduleView.jsx';
-import MeView from './components/MeView.jsx';
 import IntelPanel from './components/IntelPanel.jsx';
-import StandingsModal from './components/StandingsModal.jsx';
-import SeasonReportModal from './components/SeasonReportModal.jsx';
-import LanPairModal from './components/LanPairModal.jsx';
 import PlayerStage from './components/PlayerStage.jsx';
 import NextUpRail from './components/NextUpRail.jsx';
-import SettingsDrawer from './components/SettingsDrawer.jsx';
 import Onboarding, { shouldShowOnboarding, markOnboardingDone } from './components/Onboarding.jsx';
 import SplashScreen from './components/SplashScreen.jsx';
-import UpdateModal from './components/UpdateModal.jsx';
 import StopLossBanner from './components/StopLossBanner.jsx';
-import MorningDigest from './components/MorningDigest.jsx';
 import DigestSessionBar from './components/DigestSessionBar.jsx';
 import ScheduleChanges from './components/ScheduleChanges.jsx';
+
+const CommandPalette = lazy(() => import('./components/CommandPalette.jsx'));
+const WeekView = lazy(() => import('./components/WeekView.jsx'));
+const ScheduleView = lazy(() => import('./components/ScheduleView.jsx'));
+const MeView = lazy(() => import('./components/MeView.jsx'));
+const StandingsModal = lazy(() => import('./components/StandingsModal.jsx'));
+const SeasonReportModal = lazy(() => import('./components/SeasonReportModal.jsx'));
+const LanPairModal = lazy(() => import('./components/LanPairModal.jsx'));
+const SettingsDrawer = lazy(() => import('./components/SettingsDrawer.jsx'));
+const UpdateModal = lazy(() => import('./components/UpdateModal.jsx'));
+const MorningDigest = lazy(() => import('./components/MorningDigest.jsx'));
 import { filterRelevantChanges } from './core/schedule-change.js';
 import {
   getMorningDigest,
@@ -183,14 +184,23 @@ export default function App() {
     setDiary(saveDiary(nextDiary));
   }, []);
 
+  const radarStateRef = useRef(radarState);
+  radarStateRef.current = radarState;
+
   const handleToggleCutIn = useCallback(matchId => {
-    setRadarState(prev => toggleCutInId(prev, matchId).state);
+    const next = saveRadarState(toggleCutInId(radarStateRef.current, matchId).state);
+    radarStateRef.current = next;
+    setRadarState(next);
   }, []);
   const handleToggleRadar = useCallback(matchId => {
-    setRadarState(prev => toggleWatchRadarId(prev, matchId).state);
+    const next = saveRadarState(toggleWatchRadarId(radarStateRef.current, matchId).state);
+    radarStateRef.current = next;
+    setRadarState(next);
   }, []);
   const handleToggleRadarEnabled = useCallback(enabled => {
-    setRadarState(prev => saveRadarState({ ...prev, enabled }));
+    const next = saveRadarState({ ...radarStateRef.current, enabled });
+    radarStateRef.current = next;
+    setRadarState(next);
   }, []);
   const openSeasonReport = useCallback(() => setSeasonReportOpen(true), []);
   const closeSeasonReport = useCallback(() => setSeasonReportOpen(false), []);
@@ -334,6 +344,7 @@ export default function App() {
     if (!lanPairOpen) return undefined;
     let alive = true;
     const poll = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       try {
         const res = await fetch('/api/pair/status');
         if (!res.ok) return;
@@ -358,7 +369,9 @@ export default function App() {
           }
           if (Array.isArray(m.watchLater)) commitWatchLater(m.watchLater);
           if (Array.isArray(m.revealedIds)) {
-            setRevealed(prev => saveRevealed(new Set([...prev, ...m.revealedIds])));
+            const nextRevealed = saveRevealed(new Set([...revealedRef.current, ...m.revealedIds]));
+            revealedRef.current = nextRevealed;
+            setRevealed(nextRevealed);
           }
           if (m.diary) handleImportDiary(m.diary);
           setLanPairNotice('已收到手机端同步数据，并完成双向无损合并');
@@ -549,20 +562,24 @@ export default function App() {
     setSplashOpen(true);
   }, []);
 
-  // 防剧透开关真实变化时清空已揭晓状态（跳过首次挂载以免擦除持久化状态）
+  const revealedRef = useRef(revealed);
+  revealedRef.current = revealed;
+
   const prevSpoilerFreeRef = useRef(prefs.spoilerFree);
   useEffect(() => {
     if (prevSpoilerFreeRef.current === prefs.spoilerFree) return;
     prevSpoilerFreeRef.current = prefs.spoilerFree;
-    setRevealed(saveRevealed([]));
+    const cleared = saveRevealed([]);
+    revealedRef.current = cleared;
+    setRevealed(cleared);
   }, [prefs.spoilerFree]);
 
   const reveal = useCallback(id => {
-    setRevealed(prev => {
-      const next = new Set(prev);
-      next.add(id);
-      return saveRevealed(next);
-    });
+    const next = new Set(revealedRef.current);
+    next.add(id);
+    const saved = saveRevealed(next);
+    revealedRef.current = saved;
+    setRevealed(saved);
   }, []);
 
   // ---- 数据热更新（dataRev / refreshData / 竞态保护 / focus 校准收在 hook 里）----
@@ -647,22 +664,26 @@ export default function App() {
     });
   }, [refreshData, triggerSync]);
 
-  // 切换到「比赛日程」视图时，自检是否有已完赛但待录的场次（如昨日比分），若有则立即同步呈现
+  // 切换到「比赛日程」视图时，仅首次检查近 48 小时内刚完赛且未落比分的场次，避免上游长期缺分的老场次造成每次切页死循环全量同步
+  const scheduleSyncCheckedRef = useRef(false);
   useEffect(() => {
-    if (view === 'schedule') {
-      const currentList = getFixtures();
-      const hasUnsynced = currentList.some(m => m.st === 'sched' && !m.tbd && Date.now() > ts(m.t) + MATCH_DURATION_MS);
-      if (hasUnsynced) {
-        triggerSync();
-      }
+    if (view !== 'schedule' || scheduleSyncCheckedRef.current) return;
+    scheduleSyncCheckedRef.current = true;
+    const now = Date.now();
+    const hasRecentUnsynced = getFixtures().some(m => {
+      if (m.st !== 'sched' || m.tbd) return false;
+      const endTs = ts(m.t) + MATCH_DURATION_MS;
+      return now > endTs && now - endTs <= 48 * 3600_000;
+    });
+    if (hasRecentUnsynced) {
+      triggerSync();
     }
   }, [view, triggerSync]);
 
   useEffect(() => {
-    // 比赛窗口内（开球后 3 小时）每 5 分钟主动补一次：
-    // 服务端后台每 30 分钟一轮太慢，用户停留在「今晚」时刚终场的比分可能迟迟不落。
-    // 只覆盖刚开球/刚终场的窗口，避免全天高频扫描。
+    // 比赛窗口内（开球后 3 小时）每 5 分钟主动补一次；窗口隐藏/最小化托盘时暂停。
     const timer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       const now = Date.now();
       const hasActive = getFixtures().some(
         m => m.st === 'sched' && !m.tbd && now >= ts(m.t) && now - ts(m.t) <= 3 * 3600000
@@ -892,19 +913,24 @@ export default function App() {
   );
   const activeWeekOverrides = weekOverridesByWeek[activeWeekKey] || EMPTY_WEEK_OVERRIDES;
 
+  const weekOverridesRef = useRef(weekOverridesByWeek);
+  weekOverridesRef.current = weekOverridesByWeek;
+  const weekUpdatedAtRef = useRef(weekUpdatedAtByWeek);
+  weekUpdatedAtRef.current = weekUpdatedAtByWeek;
+
   const updateActiveWeekOverrides = useCallback(
     updater => {
       const nowMs = Date.now();
       const minWeekKey = mondayOfWall(nightOf(nowMs));
-      setWeekOverridesByWeek(prev => {
-        const cur = prev[activeWeekKey] || EMPTY_WEEK_OVERRIDES;
-        const nextForWeek = updater(cur);
-        const nextMap = { ...prev, [activeWeekKey]: nextForWeek };
-        return saveWeekOverrides(nextMap, minWeekKey);
-      });
-      setWeekUpdatedAtByWeek(prev =>
-        saveWeekUpdatedAt({ ...prev, [activeWeekKey]: nowMs }, minWeekKey)
-      );
+      const prevOverrides = weekOverridesRef.current;
+      const cur = prevOverrides[activeWeekKey] || EMPTY_WEEK_OVERRIDES;
+      const nextForWeek = updater(cur);
+      const savedOverrides = saveWeekOverrides({ ...prevOverrides, [activeWeekKey]: nextForWeek }, minWeekKey);
+      const savedUpdatedAt = saveWeekUpdatedAt({ ...weekUpdatedAtRef.current, [activeWeekKey]: nowMs }, minWeekKey);
+      weekOverridesRef.current = savedOverrides;
+      weekUpdatedAtRef.current = savedUpdatedAt;
+      setWeekOverridesByWeek(savedOverrides);
+      setWeekUpdatedAtByWeek(savedUpdatedAt);
     },
     [activeWeekKey]
   );
@@ -1416,26 +1442,28 @@ export default function App() {
             「我的看台」全画幅工作台期间用 CSS 隐藏右栏而不卸载 PlayerStage，防止正在播的直播断流 */}
         <main className="flex min-h-0 flex-1 overflow-hidden">
           {!miniMode && view === 'me' && (
-            <MeView
-              prefs={prefs}
-              onPrefsChange={setPrefs}
-              now={clockTs}
-              watchLater={watchLater}
-              onRemoveWatchLater={removeWatchLater}
-              onMarkWatchLaterWatched={markWatchLaterWatched}
-              onToggleWatchLater={toggleWatchLater}
-              onOpenMorningDigest={() => setMorningDigestOpen(true)}
-              diary={diary}
-              revealed={revealed}
-              onOpenSeasonReport={openSeasonReport}
-              onOpenLanPair={() => openLanPair({ mode: 'sync', handoff: null })}
-              onOpenSettings={openSettings}
-              onOpenMatch={selectAndLeaveMe}
-              onGoTonight={() => setView('tonight')}
-              weekIds={weekBestIds}
-              focusTeamsSeq={focusTeamsSeq}
-              radarEnabled={radarState.enabled}
-            />
+            <Suspense fallback={null}>
+              <MeView
+                prefs={prefs}
+                onPrefsChange={setPrefs}
+                now={clockTs}
+                watchLater={watchLater}
+                onRemoveWatchLater={removeWatchLater}
+                onMarkWatchLaterWatched={markWatchLaterWatched}
+                onToggleWatchLater={toggleWatchLater}
+                onOpenMorningDigest={() => setMorningDigestOpen(true)}
+                diary={diary}
+                revealed={revealed}
+                onOpenSeasonReport={openSeasonReport}
+                onOpenLanPair={() => openLanPair({ mode: 'sync', handoff: null })}
+                onOpenSettings={openSettings}
+                onOpenMatch={selectAndLeaveMe}
+                onGoTonight={() => setView('tonight')}
+                weekIds={weekBestIds}
+                focusTeamsSeq={focusTeamsSeq}
+                radarEnabled={radarState.enabled}
+              />
+            </Suspense>
           )}
           {/* 左栏：决策与列表 */}
           <section
@@ -1474,38 +1502,42 @@ export default function App() {
             )}
 
             {view === 'week' && week && (
-              <WeekView
-                week={week}
-                prefs={prefs}
-                now={clockTs}
-                activeMatchId={activeMatchId}
-                onSelect={select}
-                onBudgetChange={v => setPrefs({ ...prefs, weeklyBudget: v })}
-                weekOffset={weekOffset}
-                onWeekOffsetChange={setWeekOffset}
-                onTogglePinMatch={handleTogglePinMatch}
-                onToggleExcludeMatch={handleToggleExcludeMatch}
-                onToggleBlockNight={handleToggleBlockNight}
-                onResetWeekOverrides={handleResetWeekOverrides}
-                revealed={revealed}
-                onReveal={reveal}
-              />
+              <Suspense fallback={null}>
+                <WeekView
+                  week={week}
+                  prefs={prefs}
+                  now={clockTs}
+                  activeMatchId={activeMatchId}
+                  onSelect={select}
+                  onBudgetChange={v => setPrefs({ ...prefs, weeklyBudget: v })}
+                  weekOffset={weekOffset}
+                  onWeekOffsetChange={setWeekOffset}
+                  onTogglePinMatch={handleTogglePinMatch}
+                  onToggleExcludeMatch={handleToggleExcludeMatch}
+                  onToggleBlockNight={handleToggleBlockNight}
+                  onResetWeekOverrides={handleResetWeekOverrides}
+                  revealed={revealed}
+                  onReveal={reveal}
+                />
+              </Suspense>
             )}
 
             {view === 'schedule' && (
-              <ScheduleView
-                rows={scheduleRows}
-                filters={filters}
-                onFiltersChange={setFilters}
-                prefs={prefs}
-                onPrefsChange={setPrefs}
-                now={clockTs}
-                activeMatchId={activeMatchId}
-                onSelect={select}
-                revealed={revealed}
-                onReveal={reveal}
-                onOpenStandings={openStandings}
-              />
+              <Suspense fallback={null}>
+                <ScheduleView
+                  rows={scheduleRows}
+                  filters={filters}
+                  onFiltersChange={setFilters}
+                  prefs={prefs}
+                  onPrefsChange={setPrefs}
+                  now={clockTs}
+                  activeMatchId={activeMatchId}
+                  onSelect={select}
+                  revealed={revealed}
+                  onReveal={reveal}
+                  onOpenStandings={openStandings}
+                />
+              </Suspense>
             )}
           </div>
           {view === 'tonight' && tonight.slice.length < 3 && (
@@ -1627,138 +1659,154 @@ export default function App() {
         />
       )}
 
-      <div inert={inertFor('morning') || undefined}>
-        <MorningDigest
-          open={morningDigestOpen}
-          items={morningDigestAll.items}
-          watchedCount={morningWatchedCount}
-          revealed={revealed}
-          onReveal={reveal}
-          onMarkRead={markWatchLaterWatched}
-          onOpenMatch={id => {
-            closeMorningDigest();
-            selectAndLeaveMe(id);
-          }}
-          onClose={closeMorningDigest}
-          onStartSession={startDigestSession}
-          diary={diary}
-          onSaveDiary={handleSaveDiary}
-          onRemoveDiary={handleRemoveDiary}
-          onOpenSeasonReport={() => {
-            closeMorningDigest();
-            openSeasonReport();
-          }}
-        />
-      </div>
+      <Suspense fallback={null}>
+        {morningDigestOpen && (
+          <div inert={inertFor('morning') || undefined}>
+            <MorningDigest
+              open={morningDigestOpen}
+              items={morningDigestAll.items}
+              watchedCount={morningWatchedCount}
+              revealed={revealed}
+              onReveal={reveal}
+              onMarkRead={markWatchLaterWatched}
+              onOpenMatch={id => {
+                closeMorningDigest();
+                selectAndLeaveMe(id);
+              }}
+              onClose={closeMorningDigest}
+              onStartSession={startDigestSession}
+              diary={diary}
+              onSaveDiary={handleSaveDiary}
+              onRemoveDiary={handleRemoveDiary}
+              onOpenSeasonReport={() => {
+                closeMorningDigest();
+                openSeasonReport();
+              }}
+            />
+          </div>
+        )}
 
-      {paletteOpen && (
-        <div inert={inertFor('palette') || undefined}>
-          <CommandPalette
-            items={paletteItems}
-            onClose={closePalette}
-            onRun={runPaletteItem}
-          />
-        </div>
-      )}
+        {paletteOpen && (
+          <div inert={inertFor('palette') || undefined}>
+            <CommandPalette
+              items={paletteItems}
+              onClose={closePalette}
+              onRun={runPaletteItem}
+            />
+          </div>
+        )}
 
-      <div inert={inertFor('settings') || undefined}>
-        <SettingsDrawer
-          open={settingsOpen}
-          initialTab={settingsTab}
-          prefs={prefs}
-          onPrefsChange={setPrefs}
-          onClose={closeSettings}
-          onOpenMeView={() => setView('me')}
-          onRerunOnboarding={rerunOnboarding}
-          onReplaySplash={replaySplash}
-          onDataRefresh={refreshData}
-          updateState={updateState}
-          watchLater={watchLater}
-          onRemoveWatchLater={removeWatchLater}
-          onMarkWatchLaterWatched={markWatchLaterWatched}
-          onToggleWatchLater={toggleWatchLater}
-          onOpenMorningDigest={() => setMorningDigestOpen(true)}
-          weekIds={weekBestIds}
-          desktopSettings={desktopSettings}
-          onDesktopSettingsChange={updateDesktopSettings}
-          radarEnabled={radarState.enabled}
-          onRadarEnabledChange={handleToggleRadarEnabled}
-          onOpenSeasonReport={() => {
-            closeSettings();
-            openSeasonReport();
-          }}
-          onOpenLanPair={() => {
-            closeSettings();
-            openLanPair({ mode: 'sync', handoff: null });
-          }}
-          onOpenUpdateModal={() => {
-            openUpdateModal();
-            if (updateState.status === 'idle') {
-              handleCheckUpdate();
-            }
-          }}
-        />
-      </div>
+        {settingsOpen && (
+          <div inert={inertFor('settings') || undefined}>
+            <SettingsDrawer
+              open={settingsOpen}
+              initialTab={settingsTab}
+              prefs={prefs}
+              onPrefsChange={setPrefs}
+              onClose={closeSettings}
+              onOpenMeView={() => setView('me')}
+              onRerunOnboarding={rerunOnboarding}
+              onReplaySplash={replaySplash}
+              onDataRefresh={refreshData}
+              updateState={updateState}
+              watchLater={watchLater}
+              onRemoveWatchLater={removeWatchLater}
+              onMarkWatchLaterWatched={markWatchLaterWatched}
+              onToggleWatchLater={toggleWatchLater}
+              onOpenMorningDigest={() => setMorningDigestOpen(true)}
+              weekIds={weekBestIds}
+              desktopSettings={desktopSettings}
+              onDesktopSettingsChange={updateDesktopSettings}
+              radarEnabled={radarState.enabled}
+              onRadarEnabledChange={handleToggleRadarEnabled}
+              onOpenSeasonReport={() => {
+                closeSettings();
+                openSeasonReport();
+              }}
+              onOpenLanPair={() => {
+                closeSettings();
+                openLanPair({ mode: 'sync', handoff: null });
+              }}
+              onOpenUpdateModal={() => {
+                openUpdateModal();
+                if (updateState.status === 'idle') {
+                  handleCheckUpdate();
+                }
+              }}
+            />
+          </div>
+        )}
 
-      <div inert={inertFor('onboarding') || undefined}>
-        <Onboarding
-          open={onboardingVisible}
-          prefs={prefs}
-          onPrefsChange={setPrefs}
-          onClose={closeOnboarding}
-        />
-      </div>
+        {onboardingVisible && (
+          <div inert={inertFor('onboarding') || undefined}>
+            <Onboarding
+              open={onboardingVisible}
+              prefs={prefs}
+              onPrefsChange={setPrefs}
+              onClose={closeOnboarding}
+            />
+          </div>
+        )}
 
-      {splashOpen && <SplashScreen onClose={handleCloseSplash} />}
+        {splashOpen && <SplashScreen onClose={handleCloseSplash} />}
 
-      <div inert={inertFor('standings') || undefined}>
-        <StandingsModal
-          open={!!standingsState}
-          initialLeague={standingsState?.league}
-          match={standingsState?.matchId ? matchMap[standingsState.matchId] || null : null}
-          now={clockTs}
-          dataRev={dataRev}
-          spoilerFree={prefs.spoilerFree}
-          revealed={revealed}
-          onClose={closeStandings}
-        />
-      </div>
+        {!!standingsState && (
+          <div inert={inertFor('standings') || undefined}>
+            <StandingsModal
+              open={!!standingsState}
+              initialLeague={standingsState?.league}
+              match={standingsState?.matchId ? matchMap[standingsState.matchId] || null : null}
+              now={clockTs}
+              dataRev={dataRev}
+              spoilerFree={prefs.spoilerFree}
+              revealed={revealed}
+              onClose={closeStandings}
+            />
+          </div>
+        )}
 
-      <div inert={inertFor('season') || undefined}>
-        <SeasonReportModal
-          open={seasonReportOpen}
-          diary={diary}
-          prefs={prefs}
-          revealedIds={revealed}
-          onImportDiary={handleImportDiary}
-          onOpenMatch={id => selectAndLeaveMe(id)}
-          onClose={closeSeasonReport}
-        />
-      </div>
+        {seasonReportOpen && (
+          <div inert={inertFor('season') || undefined}>
+            <SeasonReportModal
+              open={seasonReportOpen}
+              diary={diary}
+              prefs={prefs}
+              revealedIds={revealed}
+              onImportDiary={handleImportDiary}
+              onOpenMatch={id => selectAndLeaveMe(id)}
+              onClose={closeSeasonReport}
+            />
+          </div>
+        )}
 
-      <div inert={inertFor('lanPair') || undefined}>
-        <LanPairModal
-          open={lanPairOpen}
-          session={lanPairSession}
-          loading={lanPairLoading}
-          syncNotice={lanPairNotice}
-          onSwitchHost={host => void startLanPairSession({ ...lastPairOptsRef.current, displayHost: host })}
-          onRestart={() => void startLanPairSession(lastPairOptsRef.current)}
-          onClose={closeLanPair}
-        />
-      </div>
+        {lanPairOpen && (
+          <div inert={inertFor('lanPair') || undefined}>
+            <LanPairModal
+              open={lanPairOpen}
+              session={lanPairSession}
+              loading={lanPairLoading}
+              syncNotice={lanPairNotice}
+              onSwitchHost={host => void startLanPairSession({ ...lastPairOptsRef.current, displayHost: host })}
+              onRestart={() => void startLanPairSession(lastPairOptsRef.current)}
+              onClose={closeLanPair}
+            />
+          </div>
+        )}
 
-      <div inert={inertFor('update') || undefined}>
-        <UpdateModal
-          open={updateModalOpen}
-          onClose={closeUpdateModal}
-          currentVersion={__APP_VERSION__}
-          updateState={updateState}
-          onCheck={handleCheckUpdate}
-          onDownload={handleDownloadUpdate}
-          onInstall={handleInstallUpdate}
-        />
-      </div>
+        {updateModalOpen && (
+          <div inert={inertFor('update') || undefined}>
+            <UpdateModal
+              open={updateModalOpen}
+              onClose={closeUpdateModal}
+              currentVersion={__APP_VERSION__}
+              updateState={updateState}
+              onCheck={handleCheckUpdate}
+              onDownload={handleDownloadUpdate}
+              onInstall={handleInstallUpdate}
+            />
+          </div>
+        )}
+      </Suspense>
 
       {/* 发现新版本时的轻量主动浮动提醒（避免用户不知道有更新） */}
       {updateAvailable && !toastDismissed && !updateModalOpen && !settingsOpen && !onboardingOpen && !splashOpen && !standingsState && !seasonReportOpen && !lanPairOpen && (

@@ -15,7 +15,6 @@
  * 运行：node tools/migrate-data.mjs
  */
 
-import { createRequire } from 'module';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, copyFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve, join } from 'path';
