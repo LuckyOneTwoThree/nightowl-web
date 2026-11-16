@@ -23,6 +23,7 @@ import { buildSyncBundle } from './core/sync-bundle.js';
 import { normalizePrefs } from './core/prefs.js';
 
 import TopBar from './components/TopBar.jsx';
+import CommandPalette from './components/CommandPalette.jsx';
 import TonightView, { INDEX_HINT } from './components/TonightView.jsx';
 import IntelPanel from './components/IntelPanel.jsx';
 import PlayerStage from './components/PlayerStage.jsx';
@@ -33,7 +34,6 @@ import StopLossBanner from './components/StopLossBanner.jsx';
 import DigestSessionBar from './components/DigestSessionBar.jsx';
 import ScheduleChanges from './components/ScheduleChanges.jsx';
 
-const CommandPalette = lazy(() => import('./components/CommandPalette.jsx'));
 const WeekView = lazy(() => import('./components/WeekView.jsx'));
 const ScheduleView = lazy(() => import('./components/ScheduleView.jsx'));
 const MeView = lazy(() => import('./components/MeView.jsx'));
