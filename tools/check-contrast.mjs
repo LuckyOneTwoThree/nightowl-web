@@ -154,6 +154,37 @@ if (badRefs.length) {
   console.log('  ✅ 所有 rgb(var(--…)) 均引用 -rgb 三元组');
 }
 
+/* 设计值一致性：--x（#hex）与 --x-rgb 三元组必须指向同一颜色。
+   历史 bug（2026-11-16）：--text-muted 调了 hex 但没同步 -rgb 三元组，
+   Tailwind 的 text-text-muted 全部仍渲旧色，而本门禁只测 hex 漏检。 */
+console.log('\n=== hex / rgb 三元组一致性 ===');
+const blockText = css.match(/:root,\s*\.dark\s*\{([\s\S]*?)\n\}/)[1];
+const tripletVars = {};
+for (const m of blockText.matchAll(/--([\w-]+)-rgb:\s*(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})\s*;/g)) {
+  tripletVars[m[1]] = [m[2], m[3], m[4]].map(Number);
+}
+const drift = [];
+for (const [name, hex] of Object.entries(darkVars)) {
+  if (!tripletVars[name]) continue;
+  const want = rgb(hex);
+  const got = tripletVars[name];
+  if (want[0] !== got[0] || want[1] !== got[1] || want[2] !== got[2]) {
+    drift.push(`--${name}: ${hex}（${want.join(' ')}）vs --${name}-rgb（${got.join(' ')}）`);
+  }
+}
+for (const name of Object.keys(tripletVars)) {
+  if (!darkVars[name]) drift.push(`--${name}-rgb 没有对应的 hex token`);
+}
+if (drift.length) {
+  fail++;
+  failures.push(...drift.map(x => `hex/rgb 漂移：${x}`));
+  console.log(`  ❌ 发现 ${drift.length} 处 hex 与 rgb 三元组不一致`);
+  drift.forEach(x => console.log(`     ${x}`));
+} else {
+  pass++;
+  console.log('  ✅ hex 与 rgb 三元组全部一致');
+}
+
 console.log('');
 console.log('────────────────────────────────────────────────────');
 console.log(`通过 ${pass} 项，失败 ${fail} 项`);

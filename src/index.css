@@ -104,7 +104,7 @@
      secondary/muted/faint 的对比度间隔从 1.70/1.14 变成 1.54/1.37（近似等比），
      且在 press 底（#232b3b）上仍有 6.40:1，远高于 AA 下限。 */
   --text-muted: #a4afc0;
-  --text-muted-rgb: 148 160 178;
+  --text-muted-rgb: 164 175 192;
   --text-faint: #8a95a6;
   --text-faint-rgb: 138 149 166;
 

@@ -477,6 +477,13 @@ export default function PlayerStage({
     return () => window.removeEventListener('nightowl:locate', onLocate);
   }, [railMode, compactLines]);
 
+  // 宽屏（≥1280）由右侧竖栏接管线路。清掉窄屏的横条展开态，
+  // 否则「1120 展开 → 拉宽 → 缩回 1120」会带着展开的横条回来（intelTop 372→589），
+  // 把情报面板重新推出首屏，默认收起就失去意义。
+  useEffect(() => {
+    if (wideStage) setCompactLinesOpen(false);
+  }, [wideStage]);
+
   // 广播行（赛前 / 有视频直播）里右栏高度跟随画面卡片：
   // 内容短于画面时拉伸补齐，长于画面时栏内滚动，避免任一侧露出大片空白。
   const videoCardRef = useRef(null);
