@@ -95,7 +95,8 @@ const MatchCanvas = memo(function MatchCanvas({
   onShowLines,
   onScrollToIntel,
   onScrollToRecap,
-  onScrollToHighlights
+  onScrollToHighlights,
+  topControls = null
 }) {
   const finished = state === 'finished' || state === 'ended_pending';
   const hasFinal = match.st === 'done';
@@ -164,8 +165,8 @@ const MatchCanvas = memo(function MatchCanvas({
       </div>
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col px-4 py-3 sm:px-5 sm:py-4">
-        {/* 顶栏：联赛 / 状态 / 开球信息 */}
-        <div className="flex items-center justify-between gap-2 pr-9">
+        {/* 顶栏：联赛 / 状态 / 开球信息 / 舞台工具按钮（同处 Flex 流，避免右上角悬浮控件遮挡开球时间） */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="inline-flex min-w-0 items-center gap-2">
             <span className="truncate text-xs text-text-secondary">
               {leagueName(match.l)} 第 {match.r} 轮
@@ -174,9 +175,17 @@ const MatchCanvas = memo(function MatchCanvas({
               {statusLabel}
             </Chip>
           </span>
-          <Meta num className="shrink-0">
-            {match.tbd ? '时间待定' : `${zhDate(datePart(match.t))} ${weekdayOf(datePart(match.t))} ${hm(match.t)}`}
-          </Meta>
+          <div className="flex shrink-0 items-center gap-2.5">
+            <Meta num data-canvas-kickoff className="shrink-0 whitespace-nowrap">
+              {match.tbd ? '时间待定' : `${zhDate(datePart(match.t))} ${weekdayOf(datePart(match.t))} ${hm(match.t)}`}
+            </Meta>
+            {topControls && (
+              <>
+                <span className="h-3.5 w-px shrink-0 bg-line-control/70" aria-hidden="true" />
+                <div className="flex shrink-0 items-center gap-1.5">{topControls}</div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* 主舞台：双方 + 大比分/开球时刻/倒计时 */}

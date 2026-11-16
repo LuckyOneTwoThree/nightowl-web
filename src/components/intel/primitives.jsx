@@ -60,7 +60,7 @@ export function Block({ icon, title, right, children, fold = null }) {
   }
 
   return (
-    <section>
+    <section className="flex flex-col rounded-xl border border-line-hairline bg-surface-card/55 px-3.5 py-2.5 transition-colors hover:border-line-control/70">
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
@@ -68,25 +68,32 @@ export function Block({ icon, title, right, children, fold = null }) {
           aria-expanded={open}
           aria-controls={bodyId}
           data-fold={title}
-          className="group flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-0.5 text-left text-xs font-semibold text-text-secondary transition-colors hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+          className="group flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 rounded-md py-0.5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
         >
-          <span className="shrink-0 text-text-faint">{icon}</span>
-          <span className="shrink-0">{title}</span>
-          {/* 收起时摘要必须出现：抽屉的代价是「用户不知道里面有没有东西」，
-              一行摘要就是那个入口承诺 */}
-          {!open && fold.summary && (
-            <span className="min-w-0 truncate text-2xs font-normal text-text-faint">
-              · {fold.summary}
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-surface-raised/80 text-text-muted">
+              {icon}
             </span>
-          )}
-          <span className="shrink-0 text-text-faint">
+            <span className="shrink-0 text-xs font-semibold text-text-primary transition-colors group-hover:text-accent">
+              {title}
+            </span>
+            {/* 收起时摘要必须出现：抽屉的代价是「用户不知道里面有没有东西」，
+                一行摘要就是那个入口承诺 */}
+            {!open && fold.summary && (
+              <span className="min-w-0 truncate text-2xs font-normal text-text-faint">
+                · {fold.summary}
+              </span>
+            )}
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-1 text-2xs font-normal text-text-faint transition-colors group-hover:text-text-secondary">
+            <span>{open ? '收起' : '展开'}</span>
             {open ? <IconChevronUp /> : <IconChevronDown />}
           </span>
         </button>
         {open ? right : null}
       </div>
       {open && (
-        <div id={bodyId} className="mt-1.5">
+        <div id={bodyId} className="mt-2.5 border-t border-line-hairline/75 pt-2.5">
           {children}
         </div>
       )}

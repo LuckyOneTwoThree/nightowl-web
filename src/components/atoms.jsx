@@ -106,9 +106,12 @@ export function Crest({ id, size = 28, className = '' }) {
  * 一屏几十个盒子互相争抢注意力。它们不需要"被点击的暗示"，降级成文字后
  * 版面立刻安静下来。需要状态语义的才用 Chip。
  */
-export function Meta({ children, className = '', num = false }) {
+export function Meta({ children, className = '', num = false, ...rest }) {
   return (
-    <span className={`text-2xs leading-none text-text-muted ${num ? 'font-num tabular-nums' : ''} ${className}`}>
+    <span
+      {...rest}
+      className={`text-2xs leading-none text-text-muted ${num ? 'font-num tabular-nums' : ''} ${className}`}
+    >
       {children}
     </span>
   );

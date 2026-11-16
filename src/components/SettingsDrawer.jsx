@@ -10,12 +10,13 @@ import {
   LEAGUE_NAMES,
   leagueColor,
   leagueName,
+  TEAM_MAP,
   teamName
 } from '../data/index.js';
 import { useBufferedRange } from '../hooks/useBufferedRange.js';
 import { useDialogFocus } from '../hooks/useDialogFocus.js';
 import { exportMatchesToIcs } from '../lib/export-ics.js';
-import { BrandLogo, Button, Chip, Fieldset, Hint, Meta, Segmented, Switch, TogglePill } from './atoms.jsx';
+import { BrandLogo, Button, Chip, Crest, Fieldset, Hint, Meta, RemovableChip, Segmented, Switch, TogglePill } from './atoms.jsx';
 import { IconClose, IconReset } from './icons.jsx';
 import { clearLineMemory, loadLineMemory } from './line-memory-storage.js';
 import TeamPicker from './TeamPicker.jsx';
@@ -65,6 +66,7 @@ export default function SettingsDrawer({
   onOpenSeasonReport,
   onOpenLanPair,
   onOpenMeView = null,
+  onManageTeams = null,
   returnFocusEl = null
 }) {
   const leagueCount = prefs.followedLeagues.length;
@@ -457,23 +459,55 @@ export default function SettingsDrawer({
                 title="关注球队"
                 hint={FOLLOWED_TEAM_RULE}
                 right={
-                  prefs.followedTeams.length > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => patch({ followedTeams: [] })}
-                      className="text-2xs text-text-faint transition-colors hover:text-text-primary"
-                    >
-                      清空
-                    </button>
-                  ) : null
+                  <div className="flex items-center gap-2">
+                    {prefs.followedTeams.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => patch({ followedTeams: [] })}
+                        className="text-2xs text-text-faint transition-colors hover:text-text-primary"
+                      >
+                        清空
+                      </button>
+                    )}
+                    {onManageTeams && (
+                      <Button variant="default" size="xs" onClick={onManageTeams}>
+                        添加 / 管理球队
+                      </Button>
+                    )}
+                  </div>
                 }
               >
-                <TeamPicker
-                  selected={prefs.followedTeams}
-                  onChange={v => patch({ followedTeams: v })}
-                  gridClass="grid-cols-5"
-                  listClass="max-h-56"
-                />
+                {onManageTeams ? (
+                  prefs.followedTeams.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {prefs.followedTeams.map(id => (
+                        <RemovableChip
+                          key={id}
+                          leading={<Crest id={id} size={14} />}
+                          onRemove={() =>
+                            patch({ followedTeams: prefs.followedTeams.filter(x => x !== id) })
+                          }
+                        >
+                          {TEAM_MAP[id]?.zh || id}
+                        </RemovableChip>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-line-hairline bg-surface-card/60 px-3 py-2 text-2xs text-text-muted">
+                      <span>暂未关注主队</span>
+                      <Button variant="ghost" size="xs" onClick={onManageTeams}>
+                        挑选主队
+                      </Button>
+                    </div>
+                  )
+                ) : (
+                  <TeamPicker
+                    selected={prefs.followedTeams}
+                    onChange={v => patch({ followedTeams: v })}
+                    gridClass="grid-cols-5"
+                    listClass="max-h-56"
+                  />
+                )}
               </Fieldset>
 
               <Fieldset

@@ -352,6 +352,27 @@ app.whenReady().then(async () => {
       JSON.stringify(railState)
     );
 
+    const canvasTopOverlap = await win.webContents.executeJavaScript(`
+      (() => {
+        const timeEl = document.querySelector('[data-canvas-kickoff]');
+        const miniBtn = document.querySelector('button[aria-label="小窗悬浮看球"]');
+        if (!timeEl || !miniBtn) return { checked: false };
+        const t = timeEl.getBoundingClientRect();
+        const m = miniBtn.getBoundingClientRect();
+        return {
+          checked: true,
+          timeRight: Math.round(t.right),
+          miniLeft: Math.round(m.left),
+          overlap: t.right > m.left + 0.5 && t.bottom > m.top + 0.5 && t.top < m.bottom - 0.5
+        };
+      })()
+    `);
+    ok(
+      '★ 比赛看板右上角小窗按钮与开球时间零遮挡',
+      canvasTopOverlap.checked && !canvasTopOverlap.overlap,
+      JSON.stringify(canvasTopOverlap)
+    );
+
     const railExpandClicked = await win.webContents.executeJavaScript(`
       (() => {
         const btn = document.querySelector('button[aria-label="展开线路与官方平台"]');
@@ -525,6 +546,18 @@ app.whenReady().then(async () => {
       tiered.foldCount >= 1 && tiered.allClosed,
       JSON.stringify(tiered.foldTitles)
     );
+
+    const foldCardsFramed = await win.webContents.executeJavaScript(`
+      (() => {
+        const panel = document.getElementById('intel-panel');
+        const sections = [...(panel?.querySelectorAll('[data-fold]') || [])].map(b => b.closest('section'));
+        return sections.length >= 1 && sections.every(s => {
+          const st = s ? getComputedStyle(s) : null;
+          return st && parseFloat(st.borderTopWidth) >= 1;
+        });
+      })()
+    `);
+    ok('★ 第三层抽屉具备独立微卡片边框分隔', foldCardsFramed);
 
     // 点击与读取必须分成两次执行：React 的 setState 在下一帧才生效，
     // 同一次 executeJavaScript 里点完立刻读，只会读到折叠前的 DOM。
@@ -1362,6 +1395,42 @@ app.whenReady().then(async () => {
       meViewCheck.hasHeading && meViewCheck.hasWatchLater && meViewCheck.hasDiary &&
         meViewCheck.hasTeams && meViewCheck.hasSync && meViewCheck.overflow <= 1,
       JSON.stringify(meViewCheck));
+
+    const teamsModalResult = await win.webContents.executeJavaScript(`
+      (() => {
+        const inlinePicker = !!document.querySelector('#me-teams-card input[aria-label="搜索球队"]');
+        const btn = [...document.querySelectorAll('#me-teams-card button')].find(b =>
+          ['添加球队', '管理球队'].includes((b.textContent || '').trim())
+        );
+        btn?.focus();
+        btn?.click();
+        return { inlinePicker, clicked: !!btn };
+      })()
+    `);
+    await sleep(350);
+    const teamsModalOpenCheck = await win.webContents.executeJavaScript(`
+      (() => ({
+        open: !!document.querySelector('[aria-labelledby="followed-teams-modal-title"]'),
+        bgInert: !!document.querySelector('main')?.parentElement?.hasAttribute('inert')
+      }))()
+    `);
+    await win.webContents.executeJavaScript(
+      `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); true`
+    );
+    await sleep(250);
+    const teamsModalCloseCheck = await win.webContents.executeJavaScript(`
+      (() => ({
+        closed: !document.querySelector('[aria-labelledby="followed-teams-modal-title"]'),
+        bgInert: !!document.querySelector('main')?.parentElement?.hasAttribute('inert'),
+        activeTag: document.activeElement?.tagName,
+        focusBack: ['添加球队', '管理球队'].includes((document.activeElement?.textContent || '').trim())
+      }))()
+    `);
+    ok('★ 「关注球队」不再内联展开且通过受管模态弹窗打开并归还焦点',
+      !teamsModalResult.inlinePicker && teamsModalResult.clicked &&
+        teamsModalOpenCheck.open && teamsModalOpenCheck.bgInert &&
+        teamsModalCloseCheck.closed && !teamsModalCloseCheck.bgInert && teamsModalCloseCheck.focusBack,
+      JSON.stringify({ teamsModalResult, teamsModalOpenCheck, teamsModalCloseCheck }));
 
     const seasonOpened = await win.webContents.executeJavaScript(`
       (() => {

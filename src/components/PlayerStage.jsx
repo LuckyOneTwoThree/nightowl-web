@@ -1140,6 +1140,43 @@ export default function PlayerStage({
     });
   };
 
+  const stageControls = (
+    <>
+      {sleepDeadlineTs && (
+        <button
+          type="button"
+          onClick={cycleSleepTimer}
+          title="点击切换或关闭睡眠定时"
+          className="rounded-md bg-white/[0.12] px-1.5 py-0.5 font-num text-2xs tabular-nums text-accent transition-colors hover:bg-white/[0.2]"
+        >
+          <SleepTimerLabel deadlineTs={sleepDeadlineTs} />
+        </button>
+      )}
+      {onToggleMiniMode && (
+        <button
+          type="button"
+          onClick={() => onToggleMiniMode(!miniMode)}
+          title={miniMode ? '还原主窗口' : '小窗悬浮看球'}
+          aria-label={miniMode ? '还原主窗口' : '小窗悬浮看球'}
+          className="inline-flex h-6 items-center justify-center rounded-md bg-white/[0.08] px-1.5 text-2xs text-text-secondary transition-colors hover:bg-white/[0.16] hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+        >
+          {miniMode ? '还原' : '小窗'}
+        </button>
+      )}
+      {!miniMode && (
+        <button
+          type="button"
+          onClick={() => setTheaterMode(v => !v)}
+          title={theaterMode ? '切换为协同模式' : '切换为宽屏剧场'}
+          aria-label={theaterMode ? '切换为协同模式' : '切换为宽屏剧场'}
+          className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-white/[0.08] text-text-secondary transition-colors hover:bg-white/[0.14] hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+        >
+          {theaterMode ? <IconTheaterOff /> : <IconTheaterOn />}
+        </button>
+      )}
+    </>
+  );
+
   const VideoScreen = (
     <div
       ref={videoCardRef}
@@ -1190,81 +1227,50 @@ export default function PlayerStage({
           onShowLines={showLines}
           onScrollToRecap={() => locateSection('match-recap', { focus: true })}
           onScrollToHighlights={() => locateSection('match-highlights', { focus: true })}
+          topControls={!miniMode ? stageControls : null}
         />
       )}
 
-      {/* 顶部对阵常驻条 —— 全应用唯一的对阵命名处 */}
-      <div
-        style={miniMode ? { WebkitAppRegion: 'drag' } : undefined}
-        className={`pointer-events-none absolute inset-x-0 top-0 z-overlay flex items-center justify-between gap-2 px-3.5 py-2.5 ${streamUrl || miniMode ? 'bg-gradient-to-b from-black/80 via-black/35 to-transparent' : ''}`}
-      >
-        <div className="flex min-w-0 items-baseline gap-2">
-          {(streamUrl || miniMode) && (
-            <>
-              <span className="truncate text-sm font-semibold text-text-primary">
-                {teamName(match.h)} vs {teamName(match.a)}
-              </span>
-              {!miniMode && (
-                <span className="shrink-0 text-2xs text-text-muted">
-                  {leagueName(match.l)} 第 {match.r} 轮
-                </span>
-              )}
-            </>
-          )}
-        </div>
+      {/* 顶部视频渐变常驻条：仅在播放视频或迷你小窗模式下悬浮覆盖画面；
+          非播放看板态的工具按钮已并入 MatchCanvas 顶栏文档流，防止遮挡开球时间。 */}
+      {(streamUrl || miniMode) && (
         <div
-          style={miniMode ? { WebkitAppRegion: 'no-drag' } : undefined}
-          className="pointer-events-auto flex shrink-0 items-center gap-2"
+          style={miniMode ? { WebkitAppRegion: 'drag' } : undefined}
+          className="pointer-events-none absolute inset-x-0 top-0 z-overlay flex items-center justify-between gap-2 bg-gradient-to-b from-black/80 via-black/35 to-transparent px-3.5 py-2.5"
         >
-          {live && streamUrl && (
-            <span className="inline-flex items-center gap-1.5">
-              <LiveDot />
-              <span className="font-num text-2xs font-medium tabular-nums text-live">
-                {liveSnapshot?.minuteLabel || `${minute}′`}
-              </span>
-              {liveSnapshot?.ok &&
-                liveSnapshot.state !== 'postponed' &&
-                !shouldHideScore(spoilerFree, revealed) && (
-                  <span className="font-num text-2xs font-semibold tabular-nums text-text-primary">
-                    {liveSnapshot.score?.h ?? '—'}-{liveSnapshot.score?.a ?? '—'}
-                  </span>
-                )}
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="truncate text-sm font-semibold text-text-primary">
+              {teamName(match.h)} vs {teamName(match.a)}
             </span>
-          )}
-          {sleepDeadlineTs && (
-            <button
-              type="button"
-              onClick={cycleSleepTimer}
-              title="点击切换或关闭睡眠定时"
-              className="rounded-md bg-white/[0.12] px-1.5 py-0.5 font-num text-2xs tabular-nums text-accent transition-colors hover:bg-white/[0.2]"
-            >
-              <SleepTimerLabel deadlineTs={sleepDeadlineTs} />
-            </button>
-          )}
-          {onToggleMiniMode && (
-            <button
-              type="button"
-              onClick={() => onToggleMiniMode(!miniMode)}
-              title={miniMode ? '还原主窗口' : '小窗悬浮看球'}
-              aria-label={miniMode ? '还原主窗口' : '小窗悬浮看球'}
-              className="inline-flex h-6 items-center justify-center rounded-md bg-white/[0.08] px-1.5 text-2xs text-text-secondary transition-colors hover:bg-white/[0.16] hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
-            >
-              {miniMode ? '还原' : '小窗'}
-            </button>
-          )}
-          {!miniMode && (
-            <button
-              type="button"
-              onClick={() => setTheaterMode(v => !v)}
-              title={theaterMode ? '切换为协同模式' : '切换为宽屏剧场'}
-              aria-label={theaterMode ? '切换为协同模式' : '切换为宽屏剧场'}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-white/[0.08] text-text-secondary transition-colors hover:bg-white/[0.14] hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
-            >
-              {theaterMode ? <IconTheaterOff /> : <IconTheaterOn />}
-            </button>
-          )}
+            {!miniMode && (
+              <span className="shrink-0 text-2xs text-text-muted">
+                {leagueName(match.l)} 第 {match.r} 轮
+              </span>
+            )}
+          </div>
+          <div
+            style={miniMode ? { WebkitAppRegion: 'no-drag' } : undefined}
+            className="pointer-events-auto flex shrink-0 items-center gap-2"
+          >
+            {live && streamUrl && (
+              <span className="inline-flex items-center gap-1.5">
+                <LiveDot />
+                <span className="font-num text-2xs font-medium tabular-nums text-live">
+                  {liveSnapshot?.minuteLabel || `${minute}′`}
+                </span>
+                {liveSnapshot?.ok &&
+                  liveSnapshot.state !== 'postponed' &&
+                  !shouldHideScore(spoilerFree, revealed) && (
+                    <span className="font-num text-2xs font-semibold tabular-nums text-text-primary">
+                      {liveSnapshot.score?.h ?? '—'}-{liveSnapshot.score?.a ?? '—'}
+                    </span>
+                  )}
+              </span>
+            )}
+            {stageControls}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 

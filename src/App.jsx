@@ -43,6 +43,7 @@ const LanPairModal = lazy(() => import('./components/LanPairModal.jsx'));
 const SettingsDrawer = lazy(() => import('./components/SettingsDrawer.jsx'));
 const UpdateModal = lazy(() => import('./components/UpdateModal.jsx'));
 const MorningDigest = lazy(() => import('./components/MorningDigest.jsx'));
+const FollowedTeamsModal = lazy(() => import('./components/FollowedTeamsModal.jsx'));
 import { filterRelevantChanges } from './core/schedule-change.js';
 import {
   getMorningDigest,
@@ -449,7 +450,7 @@ export default function App() {
   /* 浮层开关收口在 App；焦点进场与归还由各弹窗自己的 useDialogFocus 负责 ——
      一处实现，新增弹窗不需要再回到这里登记。 */
   const [settingsTab, setSettingsTab] = useState('rules');
-  const [focusTeamsSeq, setFocusTeamsSeq] = useState(0);
+  const [teamsModalOpen, setTeamsModalOpen] = useState(false);
   const openSettings = useCallback((tab = 'rules') => {
     setSettingsTab(typeof tab === 'string' ? tab : 'rules');
     setSettingsOpen(true);
@@ -458,8 +459,10 @@ export default function App() {
     setSettingsOpen(false);
   }, []);
   const openMyTeams = useCallback(() => {
-    setView('me');
-    setFocusTeamsSeq(n => n + 1);
+    setTeamsModalOpen(true);
+  }, []);
+  const closeMyTeams = useCallback(() => {
+    setTeamsModalOpen(false);
   }, []);
   const openPalette = useCallback(() => {
     setPaletteOpen(true);
@@ -1047,7 +1050,7 @@ export default function App() {
   // 于是提醒在用户看不见的情况下被永久用掉。
   const anyOverlayOpen = !!(
     settingsOpen || onboardingOpen || splashOpen || updateModalOpen
-    || standingsState || seasonReportOpen || lanPairOpen || morningDigestOpen || paletteOpen
+    || standingsState || seasonReportOpen || lanPairOpen || morningDigestOpen || paletteOpen || teamsModalOpen
   );
   const {
     stopLossContext,
@@ -1404,7 +1407,8 @@ export default function App() {
       season: seasonReportOpen,
       lanPair: lanPairOpen,
       palette: paletteOpen,
-      morning: morningDigestOpen
+      morning: morningDigestOpen,
+      teams: teamsModalOpen
     },
     splashOpen,
     closers: {
@@ -1415,7 +1419,8 @@ export default function App() {
       season: closeSeasonReport,
       lanPair: closeLanPair,
       palette: closePalette,
-      morning: closeMorningDigest
+      morning: closeMorningDigest,
+      teams: closeMyTeams
     }
   });
 
@@ -1477,10 +1482,10 @@ export default function App() {
                 onOpenSeasonReport={openSeasonReport}
                 onOpenLanPair={() => openLanPair({ mode: 'sync', handoff: null })}
                 onOpenSettings={openSettings}
+                onManageTeams={openMyTeams}
                 onOpenMatch={selectAndLeaveMe}
                 onGoTonight={() => setView('tonight')}
                 weekIds={weekBestIds}
-                focusTeamsSeq={focusTeamsSeq}
                 radarEnabled={radarState.enabled}
               />
             </Suspense>
@@ -1728,6 +1733,7 @@ export default function App() {
               onPrefsChange={setPrefs}
               onClose={closeSettings}
               onOpenMeView={() => setView('me')}
+              onManageTeams={openMyTeams}
               onRerunOnboarding={rerunOnboarding}
               onReplaySplash={replaySplash}
               onDataRefresh={refreshData}
@@ -1827,6 +1833,20 @@ export default function App() {
         </Suspense>
       )}
 
+      {teamsModalOpen && (
+        <Suspense fallback={null}>
+          <div inert={inertFor('teams') || undefined}>
+            <FollowedTeamsModal
+              open={teamsModalOpen}
+              selected={prefs.followedTeams}
+              onChange={v => setPrefs({ ...prefs, followedTeams: v })}
+              onClose={closeMyTeams}
+              returnFocusEl={triggerElFor('teams')}
+            />
+          </div>
+        </Suspense>
+      )}
+
       {updateModalOpen && (
         <Suspense fallback={null}>
           <div inert={inertFor('update') || undefined}>
@@ -1845,7 +1865,7 @@ export default function App() {
       )}
 
       {/* 发现新版本时的轻量主动浮动提醒（避免用户不知道有更新） */}
-      {updateAvailable && !toastDismissed && !updateModalOpen && !settingsOpen && !onboardingOpen && !splashOpen && !standingsState && !seasonReportOpen && !lanPairOpen && (
+      {updateAvailable && !toastDismissed && !updateModalOpen && !settingsOpen && !onboardingOpen && !splashOpen && !standingsState && !seasonReportOpen && !lanPairOpen && !teamsModalOpen && (
         <aside
           aria-label="版本更新提醒"
           className="fixed bottom-5 right-5 z-modal flex max-w-sm items-center gap-3 rounded-xl border border-accent/40 bg-surface-card/95 p-3.5 shadow-pop backdrop-blur-xl transition-all duration-300"

@@ -21,7 +21,9 @@ export function useDialogFocus(open, initialRef, fallbackReturnEl = null) {
       fallbackReturnEl && fallbackReturnEl !== document.body && fallbackReturnEl.isConnected
         ? fallbackReturnEl
         : null;
-    returnRef.current = active && active !== document.body ? active : fallback || active;
+    // 优先使用浮层栈在加 inert 之前捕获的触发元素：若弹窗内含 autoFocus 输入框，
+    // commit 阶段焦点已先一步进框，再用 activeElement 会误记成弹窗内部输入框本身。
+    returnRef.current = fallback || (active && active !== document.body ? active : null);
     // 有些弹窗的首个控件自带 autoFocus（首次引导里的搜索框），此时 initialRef 为空，
     // 不抢焦点，让输入框自己拿。
     initialRef?.current?.focus?.();

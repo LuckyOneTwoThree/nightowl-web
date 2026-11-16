@@ -211,32 +211,40 @@ export default function TopBar({
       <TopBarClock />
 
       <div className="no-drag flex shrink-0 items-center gap-1.5">
-        {dataHealth && dataHealth.state !== 'unknown' && (
-          <button
-            type="button"
-            onClick={() => (onOpenSettingsTab ? onOpenSettingsTab('system') : onOpenSettings?.())}
-            title="数据同步与保鲜状态，点击查看服务与诊断"
-            className={`inline-flex max-w-[160px] shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none ${
-              dataHealth.state === 'error'
-                ? 'border-danger/30 bg-danger/10 text-danger'
-                : dataHealth.state === 'warn'
-                  ? 'border-warn/30 bg-warn/10 text-warn'
-                  : 'border-line-hairline bg-surface-card text-text-secondary'
-            }`}
-          >
-            <span
-              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+        {dataHealth && dataHealth.state !== 'unknown' && (() => {
+          const compactOk = dataHealth.state === 'ok' && dataHealth.label !== '正在更新比分…';
+          return (
+            <button
+              type="button"
+              onClick={() => (onOpenSettingsTab ? onOpenSettingsTab('system') : onOpenSettings?.())}
+              title={`数据状态：${dataHealth.label}（点击查看服务与诊断）`}
+              aria-label={`数据状态：${dataHealth.label}`}
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border text-xs transition-colors hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none ${
+                compactOk ? 'h-7 w-7 justify-center xl:w-auto xl:px-2.5' : 'max-w-[160px] px-2.5 py-1'
+              } ${
                 dataHealth.state === 'error'
-                  ? 'bg-danger'
+                  ? 'border-danger/30 bg-danger/10 text-danger'
                   : dataHealth.state === 'warn'
-                    ? 'bg-warn'
-                    : 'bg-resource'
+                    ? 'border-warn/30 bg-warn/10 text-warn'
+                    : 'border-line-hairline bg-surface-card text-text-secondary'
               }`}
-              aria-hidden="true"
-            />
-            <span className="truncate font-medium">{dataHealth.label}</span>
-          </button>
-        )}
+            >
+              <span
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                  dataHealth.state === 'error'
+                    ? 'bg-danger'
+                    : dataHealth.state === 'warn'
+                      ? 'bg-warn'
+                      : 'bg-resource'
+                }`}
+                aria-hidden="true"
+              />
+              <span className={compactOk ? 'hidden truncate font-medium xl:inline' : 'truncate font-medium'}>
+                {dataHealth.label}
+              </span>
+            </button>
+          );
+        })()}
         <button
           type="button"
           onClick={onOpenPalette}
@@ -264,7 +272,7 @@ export default function TopBar({
           <button
             type="button"
             onClick={() => (onOpenMyTeams ? onOpenMyTeams() : onOpenSettings?.())}
-            title="点击前往「我的看台」管理关注球队"
+            title="管理关注球队"
             className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1 text-xs text-text-primary transition-colors hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
           >
             <Crest id={primaryTeam} size={16} />
@@ -277,7 +285,7 @@ export default function TopBar({
           <button
             type="button"
             onClick={() => (onOpenMyTeams ? onOpenMyTeams() : onOpenSettings?.())}
-            title="点击前往「我的看台」设置关注球队"
+            title="管理关注球队"
             className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-xs text-text-secondary transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
           >
             设置关注球队

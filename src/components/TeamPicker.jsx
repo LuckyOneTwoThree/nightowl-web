@@ -56,7 +56,7 @@ export default function TeamPicker({
     <div className="flex flex-col">
       {/* 已选：放在最前面，选完能立刻看到结果 */}
       {selected.length > 0 ? (
-        <div className="scrollbar-thin mb-2 flex max-h-16 flex-wrap gap-1.5 overflow-y-auto">
+        <div className="scrollbar-thin mb-2.5 flex max-h-20 flex-wrap gap-1.5 overflow-y-auto">
           {selected.map(id => (
             <RemovableChip key={id} leading={<Crest id={id} size={14} />} onRemove={() => toggle(id)}>
               {TEAM_MAP[id]?.zh || id}
@@ -64,9 +64,9 @@ export default function TeamPicker({
           ))}
         </div>
       ) : (
-        <div className="mb-2 flex items-center justify-between rounded-md bg-surface-panel/55 px-2.5 py-1.5 text-2xs text-text-muted">
+        <div className="mb-2.5 flex items-center justify-between rounded-lg border border-dashed border-line-hairline bg-surface-card/45 px-3 py-1.5 text-2xs text-text-muted">
           <span>暂未关注主队（主队比赛将获得夜猫指数加成与专属标记）</span>
-          <span className="text-text-faint">点击下方添加</span>
+          <span className="shrink-0 text-text-faint">点击下方添加</span>
         </div>
       )}
 
@@ -80,7 +80,7 @@ export default function TeamPicker({
           onChange={e => setQuery(e.target.value)}
           placeholder={placeholder}
           aria-label="搜索球队"
-          className="w-full rounded-md bg-surface-raised/50 py-1.5 pl-8 pr-7 text-xs text-text-primary placeholder:text-text-faint focus:ring-1 focus:ring-accent/50 focus:outline-none"
+          className="w-full rounded-lg border border-line-hairline bg-surface-raised/55 py-1.5 pl-8 pr-7 text-xs text-text-primary placeholder:text-text-faint focus:border-accent/50 focus:ring-1 focus:ring-accent/40 focus:outline-none"
         />
         {query && (
           <button

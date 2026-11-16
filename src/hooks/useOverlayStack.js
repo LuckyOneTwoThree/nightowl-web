@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 /** 浮层栈的固定顺序（与渲染顺序无关，只用于稳定排序与 Esc 目标识别） */
-const ORDER = ['settings', 'onboarding', 'update', 'standings', 'season', 'lanPair', 'palette', 'morning'];
+const ORDER = ['settings', 'onboarding', 'update', 'standings', 'season', 'lanPair', 'palette', 'morning', 'teams'];
 
 /**
  * 浮层栈：任一全屏浮层打开时背景 inert、Esc 只关最上层、打开顺序决定层级。
@@ -14,7 +14,7 @@ const ORDER = ['settings', 'onboarding', 'update', 'standings', 'season', 'lanPa
  *   3. 新打开但 effect 还没同步的浮层要追加到末尾，否则首帧被 inert 掉、焦点进不去。
  *
  * @param {object} p
- * @param {Record<string, boolean>} p.flags 各浮层是否打开（settings/onboarding/update/standings/season/lanPair/palette/morning）
+ * @param {Record<string, boolean>} p.flags 各浮层是否打开（settings/onboarding/update/standings/season/lanPair/palette/morning/teams）
  * @param {Record<string, Function>} p.closers 各浮层的关闭函数（同键名）
  * @param {boolean} [p.splashOpen] 开屏是否打开（只影响背景 inert，不参与栈）
  */

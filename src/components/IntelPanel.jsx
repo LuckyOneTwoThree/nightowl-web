@@ -212,9 +212,11 @@ export default function IntelPanel({
             </div>
           </div>
 
-          <div className="space-y-2 border-t border-line-hairline pt-3">
-            <NarrativeSection narrative={narrative} stories={stories} ev={ev} hideHeadline={isHeroMatch} fold />
-            <IdentitySection match={match} identity={identity} fold />
+          <div className="space-y-2.5 border-t border-line-hairline pt-3">
+            <div className="grid grid-cols-1 items-start gap-2.5 lg:grid-cols-2 [&>*:only-child]:lg:col-span-2">
+              <NarrativeSection narrative={narrative} stories={stories} ev={ev} hideHeadline={isHeroMatch} fold />
+              <IdentitySection match={match} identity={identity} fold />
+            </div>
             {onSaveDiary && (match.st === 'done' || match.st === 'live' || diaryEntry) && (
               <DiaryStampBar
                 compact
