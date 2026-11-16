@@ -4,7 +4,7 @@
  * 纯逻辑与默认值在 src/core/prefs.js（移动端共享）；这里只放浏览器 I/O，
  * 让 core 保持无 DOM / 无存储依赖，可在 Node 测试与移动端安全复用。
  */
-import { defaultPrefs } from '../core/prefs.js';
+import { defaultPrefs, normalizePrefs } from '../core/prefs.js';
 
 const KEY = {
   teams: 'followedTeams',
@@ -66,20 +66,23 @@ export function loadPrefs() {
   // 始终锁定暗色夜间主题
   applyTheme();
 
-  return {
-    followedTeams: Array.isArray(readJSON(KEY.teams, d.followedTeams)) ? readJSON(KEY.teams, d.followedTeams) : d.followedTeams,
-    // 空数组是合法状态（不关注任何联赛），但 null/非数组要兜回默认，避免算法拿到脏输入
-    followedLeagues: Array.isArray(leagues) ? leagues : d.followedLeagues,
-    weeklyBudget: readNumber(KEY.budget, d.weeklyBudget),
-    spoilerFree: readJSON(KEY.spoilerFree, d.spoilerFree) !== false,
-    notifyBefore15: readJSON(KEY.notify, d.notifyBefore15) !== false,
-    notifyLiveEvents: readJSON(KEY.liveNotify, d.notifyLiveEvents) !== false,
-    sleepEnabled: readJSON(KEY.sleepEnabled, d.sleepEnabled) === true,
-    sleepWakeTime: readString(KEY.sleepWakeTime, d.sleepWakeTime),
-    sleepWeekendEnabled: readJSON(KEY.sleepWeekendEnabled, d.sleepWeekendEnabled) !== false,
-    sleepWeekendWakeTime: readString(KEY.sleepWeekendWakeTime, d.sleepWeekendWakeTime),
-    sleepMinHours: readNumber(KEY.sleepMinHours, d.sleepMinHours)
-  };
+  return normalizePrefs(
+    {
+      followedTeams: Array.isArray(readJSON(KEY.teams, d.followedTeams)) ? readJSON(KEY.teams, d.followedTeams) : d.followedTeams,
+      // 空数组是合法状态（不关注任何联赛），但 null/非数组要兜回默认，避免算法拿到脏输入
+      followedLeagues: Array.isArray(leagues) ? leagues : d.followedLeagues,
+      weeklyBudget: readNumber(KEY.budget, d.weeklyBudget),
+      spoilerFree: readJSON(KEY.spoilerFree, d.spoilerFree) !== false,
+      notifyBefore15: readJSON(KEY.notify, d.notifyBefore15) !== false,
+      notifyLiveEvents: readJSON(KEY.liveNotify, d.notifyLiveEvents) !== false,
+      sleepEnabled: readJSON(KEY.sleepEnabled, d.sleepEnabled) === true,
+      sleepWakeTime: readString(KEY.sleepWakeTime, d.sleepWakeTime),
+      sleepWeekendEnabled: readJSON(KEY.sleepWeekendEnabled, d.sleepWeekendEnabled) !== false,
+      sleepWeekendWakeTime: readString(KEY.sleepWeekendWakeTime, d.sleepWeekendWakeTime),
+      sleepMinHours: readNumber(KEY.sleepMinHours, d.sleepMinHours)
+    },
+    d
+  );
 }
 
 export function loadPrefsUpdatedAt() {
@@ -93,7 +96,8 @@ export function loadPrefsUpdatedAt() {
   }
 }
 
-export function savePrefs(p, { updatedAt = Date.now() } = {}) {
+export function savePrefs(rawPrefs, { updatedAt = Date.now() } = {}) {
+  const p = normalizePrefs(rawPrefs);
   try {
     localStorage.setItem(KEY.teams, JSON.stringify(p.followedTeams));
     localStorage.setItem(KEY.leagues, JSON.stringify(p.followedLeagues));

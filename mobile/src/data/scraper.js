@@ -255,8 +255,9 @@ export async function fetchGameSources(gameId, force = false) {
 
   for (let i = 0; i < links.length; i++) {
     const item = links[i];
-    let streamUrl = item.url;
-    let name = item.name || ("线路 " + (i + 1));
+    if (!item || typeof item.url !== 'string' || !item.url.trim()) continue;
+    let streamUrl = item.url.trim();
+    let name = typeof item.name === 'string' && item.name.trim() ? item.name.trim() : ("线路 " + (i + 1));
     let isDirect = false;
     let kind = "other";
 

@@ -103,6 +103,11 @@ console.log('三、validateFixtures 列出全部 offender（不再只报第一�
   const listed = (stIssue.match(/PL-4-[A-Z]{3}-[A-Z]{3}=bogus/g) || []).length;
   ok('★ 列出了多个具体 offender（而非仅第一个）', listed >= 5, `列出 ${listed} 个：${stIssue.slice(0, 120)}`);
 
+  // st=done 但比分格式非法也必须被拦下
+  const badScoreRow = fixtures.map((m, i) => (i === 0 ? { ...m, st: 'done', sc: 'x-y' } : m));
+  const badScoreIssues = validateFixtures(badScoreRow);
+  ok('st=done 但比分非 H-A 格式同样被检出', badScoreIssues.some(i => /格式非法/.test(i)), badScoreIssues.join(' | '));
+
   // 超过 10 个时应提示总数
   const more = fixtures.map(m => ({ ...m, st: 'bogus' }));
   const issues2 = validateFixtures(more);

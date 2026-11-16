@@ -184,7 +184,7 @@ async function serveStatic(pathname, res) {
     const ext = extname(filePath).toLowerCase();
     // Vite 产物带内容哈希 → 可长期缓存；index.html 必须每次校验，
     // 否则界面更新后用户仍加载旧入口，指向已被替换的 assets。
-    const isHashedAsset = /^\/assets\//.test(rel) || /\.[0-9a-zA-Z_-]{8,}\./.test(rel);
+    const isHashedAsset = /^\/assets\//.test(rel);
     res.writeHead(200, {
       'Content-Type': MIME[ext] || 'application/octet-stream',
       'Content-Length': buf.length,
@@ -203,27 +203,48 @@ async function serveStatic(pathname, res) {
  * ⚠️ 限长必须按**字节**而不是字符串长度：多字节字符（中文 3 字节、emoji 4 字节）
  *    在 JS 字符串里只占 1-2 个码元，按 .length 限长实际允许的体积是上限的 2-3 倍。
  */
-function readJsonBody(req, limit = 8192) {
+function readJsonBody(req, limit = 8192, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let total = 0;
-    req.on('data', c => {
-      total += Buffer.byteLength(c);
-      chunks.push(c);
-      if (total > limit) {
-        reject(new Error('请求体超出限制'));
+    let settled = false;
+    const finish = (err, val) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (err) reject(err);
+      else resolve(val);
+    };
+    const timer = setTimeout(() => {
+      finish(new Error('读取请求体超时'));
+      try {
         req.destroy();
+      } catch {}
+    }, timeoutMs);
+    if (typeof timer.unref === 'function') timer.unref();
+
+    req.on('data', c => {
+      if (settled) return;
+      total += Buffer.byteLength(c);
+      if (total > limit) {
+        finish(new Error('请求体超出限制'));
+        try {
+          req.destroy();
+        } catch {}
+        return;
       }
+      chunks.push(c);
     });
     req.on('end', () => {
       try {
         const buf = Buffer.concat(chunks).toString('utf8');
-        resolve(buf ? JSON.parse(buf) : {});
+        finish(null, buf ? JSON.parse(buf) : {});
       } catch (e) {
-        reject(e);
+        finish(e);
       }
     });
-    req.on('error', reject);
+    req.on('error', err => finish(err));
+    req.on('aborted', () => finish(new Error('请求已中断')));
   });
 }
 
@@ -290,9 +311,13 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
    * 只放行本机回环来源（见 proxy.js 的 allowedLocalOrigin）。
    * 同源请求与非浏览器请求不带 Origin，直接放行。
    */
-  const rejectForeignOrigin = (req, res) => {
+  const rejectForeignOrigin = (req, res, { blockCrossSiteFetch = false } = {}) => {
     if (req.headers.origin && !allowedLocalOrigin(req, rules)) {
       sendJSON(res, 403, { error: `来源不在允许列表：${req.headers.origin}（仅允许本机回环来源）` });
+      return true;
+    }
+    if (blockCrossSiteFetch && String(req.headers['sec-fetch-site'] || '').toLowerCase() === 'cross-site') {
+      sendJSON(res, 403, { error: '禁止跨站触发此接口（Sec-Fetch-Site: cross-site）' });
       return true;
     }
     return false;
@@ -751,13 +776,26 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
 
       /* ---------------- 自动赛事直播源 ---------------- */
       if (pathname === '/api/live-sources') {
-        // 该接口会联网抓取并自动授权代理域名，必须校验来源，不能只依赖回环绑定。
-        if (rejectForeignOrigin(req, res)) return;
-        const matchId = searchParams.get('matchId') || '';
-        const h = searchParams.get('h') || '';
-        const a = searchParams.get('a') || '';
-        const date = searchParams.get('date') || '';
-        const t = searchParams.get('t') || '';
+        // 该接口会联网抓取并自动授权代理域名，只允许显式 POST 写语义并校验来源，
+        // 阻止外部网页通过 <img>/<link> 等无 Origin 跨站 GET 驱动本机抓流与白名单授权。
+        if (rejectForeignOrigin(req, res, { blockCrossSiteFetch: true })) return;
+        if (req.method !== 'POST') {
+          res.setHeader('Allow', 'POST');
+          sendJSON(res, 405, { ok: false, error: 'Method Not Allowed (use POST)', lines: [] });
+          return;
+        }
+        let body = {};
+        try {
+          body = await readJsonBody(req, 8192);
+        } catch (err) {
+          sendJSON(res, 400, { ok: false, error: `请求体无效：${err?.message || err}`, lines: [] });
+          return;
+        }
+        const matchId = typeof body.matchId === 'string' ? body.matchId : '';
+        const h = typeof body.h === 'string' ? body.h : '';
+        const a = typeof body.a === 'string' ? body.a : '';
+        const date = typeof body.date === 'string' ? body.date : '';
+        const t = typeof body.t === 'string' ? body.t : '';
 
         try {
           const result = await getLiveSourcesForMatch({ matchId, h, a, date, t });
@@ -782,6 +820,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
 
       /* ---------------- M5: 本周精选计划日历订阅 ---------------- */
       if (pathname === '/api/calendar/plan.ics' && req.method === 'GET') {
+        if (rejectForeignOrigin(req, res, { blockCrossSiteFetch: true })) return;
         try {
           const nowTs = Date.now();
           const fixtures = await loadFixturesImpl();
@@ -791,10 +830,13 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
           const leaguesParam = searchParams.get('leagues') || '';
           const followedTeams = teamsParam ? teamsParam.split(',').map(s => s.trim()).filter(Boolean) : [];
           const followedLeagues = leaguesParam ? leaguesParam.split(',').map(s => s.trim()).filter(Boolean) : [];
-          const budgetNum = Number(searchParams.get('budget'));
-          const weeklyBudget = Number.isFinite(budgetNum) ? budgetNum : 4.0;
-          const remindNum = Number(searchParams.get('remind'));
-          const reminderMinutes = Number.isFinite(remindNum) ? remindNum : 30;
+          // ⚠️ 必须先判空再 Number()：Number(null) === 0 会把未传 budget/remind 静默清零。
+          const rawBudget = searchParams.get('budget');
+          const budgetNum = rawBudget !== null && rawBudget !== '' ? Number(rawBudget) : NaN;
+          const weeklyBudget = Number.isFinite(budgetNum) ? Math.max(0, Math.min(8, budgetNum)) : 4.0;
+          const rawRemind = searchParams.get('remind');
+          const remindNum = rawRemind !== null && rawRemind !== '' ? Number(rawRemind) : NaN;
+          const reminderMinutes = Number.isFinite(remindNum) ? Math.max(0, Math.min(180, remindNum)) : 30;
           const sleepProfile = sleepProfileFromSearchParams(searchParams);
 
           let picks = [];
@@ -818,7 +860,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
               ...PRODUCT_PLAN_OPTS,
               nowTs
             });
-            picks = plan.picks || [];
+            picks = Array.isArray(plan?.best) ? plan.best.map(e => e.m) : [];
           }
 
           let icsText;
@@ -887,7 +929,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
             mode: body.mode === 'handoff' ? 'handoff' : 'sync',
             displayHost: safeDisplayHost,
             ttlMs: body.ttlMs,
-            getLocalBundle: () => cachedLocalBundle,
+            getLocalBundle: () => cachedLocalBundle || {},
             onMergedBundle: merged => {
               cachedLocalBundle = merged;
               latestPairMerged = merged;

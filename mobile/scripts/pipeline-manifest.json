@@ -1,13 +1,13 @@
 {
   "_readme": "手机端数据管道是桌面端的手抄分支（存在有意差异）。本清单让差异可见：任一侧改动都会让 verify:pipeline 失败；确认两端仍等价后运行 npm run sync:pipeline -- --write 更新哈希。",
-  "generatedAt": "2026-11-14T13:01:33.572Z",
+  "generatedAt": "2026-11-16T02:19:29.877Z",
   "pairs": [
     {
       "desktop": "server/scores.js",
       "mobile": "mobile/src/data/sync/scores.js",
       "reason": "手机多 quickSyncTargets（72h 下拉快检）；共享函数应保持同口径",
-      "desktopSha": "e6e95ee541b83642a0a3ea2e3eaa07eb13736de41bcb3f7ac6309f8e754bf7f7",
-      "mobileSha": "f7cb7afa29e06ca1d01f8193ab2da15af1a9c160b13a412b09caec527c006777",
+      "desktopSha": "b9065dcf3abebf3deea2dd3c48ac690ee5e344f211bb7157584453f82c4e046f",
+      "mobileSha": "864cf2ccb77634c496d4791a913f6eb4d6cdc0aaab2bc69657d8457618ca014d",
       "desktopLines": 623,
       "mobileLines": 640
     },
@@ -69,10 +69,10 @@
       "desktop": "server/scraper.js",
       "mobile": "mobile/src/data/scraper.js",
       "reason": "直播源抓取；手机不内置签名频道（TV_SPORTS_CHANNELS=[]）",
-      "desktopSha": "a622717d9e71267b887249a4bab342f43af61c300ae5a549ea246e796ffc2251",
-      "mobileSha": "40fa99d134628e21845f39e3571d44a4296a34db0b0f767319d75bdc3da1be73",
-      "desktopLines": 496,
-      "mobileLines": 496
+      "desktopSha": "5f0ccc2e230428033d3754a80ae6349fdde4f8b8bb2b1786d5735025dbf80c41",
+      "mobileSha": "85343e91a46b686b29ffd818753a0b958284721ab4ef42f7ac97e1c6aaf7b1cc",
+      "desktopLines": 497,
+      "mobileLines": 497
     }
   ]
 }

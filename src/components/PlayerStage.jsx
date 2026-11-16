@@ -817,15 +817,17 @@ export default function PlayerStage({
       setLoadingLines(true);
 
       try {
-        const query = new URLSearchParams({
-          matchId: currentMatch.id || '',
-          h: currentMatch.h || '',
-          a: currentMatch.a || '',
-          date: datePart(currentMatch.t) || '',
-          t: currentMatch.t || ''
+        const res = await fetch('/api/live-sources', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            matchId: currentMatch.id || '',
+            h: currentMatch.h || '',
+            a: currentMatch.a || '',
+            date: datePart(currentMatch.t) || '',
+            t: currentMatch.t || ''
+          })
         });
-
-        const res = await fetch(`/api/live-sources?${query}`);
         if (!res.ok) throw new Error(String(res.status));
         const data = await res.json();
 

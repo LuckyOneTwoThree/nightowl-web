@@ -9,12 +9,13 @@
  *   5. diary（观赛情绪印章）：按 matchId 比较 updatedAt 取较新条目，受 500 条上限约束。
  */
 
-import { defaultPrefs } from './prefs.js';
+import { defaultPrefs, extractValidPrefPatch, normalizePrefs } from './prefs.js';
 import { normalizeQueue, WATCH_LATER_LIMIT, WATCH_LATER_STATUS } from './queue.js';
 import { normalizeWeekOverrides } from './week-overrides.js';
 import { normalizeDiary } from './diary.js';
 
 export const SYNC_SCHEMA_VERSION = 1;
+export const MAX_FUTURE_CLOCK_SKEW_MS = 5 * 60 * 1000;
 
 export const ALLOWED_PREF_KEYS = Object.freeze([
   'followedTeams',
@@ -30,21 +31,14 @@ export const ALLOWED_PREF_KEYS = Object.freeze([
   'sleepMinHours'
 ]);
 
+function clampTimestamp(rawTs, nowTs) {
+  const n = Number(rawTs);
+  if (!Number.isFinite(n) || n < 0) return nowTs;
+  return Math.min(n, nowTs + MAX_FUTURE_CLOCK_SKEW_MS);
+}
+
 function sanitizePrefs(rawPrefs) {
-  const base = defaultPrefs();
-  if (!rawPrefs || typeof rawPrefs !== 'object') return base;
-  for (const key of ALLOWED_PREF_KEYS) {
-    if (key in rawPrefs && rawPrefs[key] !== undefined) {
-      base[key] = rawPrefs[key];
-    }
-  }
-  base.followedTeams = Array.isArray(base.followedTeams)
-    ? [...new Set(base.followedTeams.filter(x => typeof x === 'string' && x))]
-    : [];
-  base.followedLeagues = Array.isArray(base.followedLeagues)
-    ? [...new Set(base.followedLeagues.filter(x => typeof x === 'string' && x))]
-    : [];
-  return base;
+  return normalizePrefs(rawPrefs, defaultPrefs());
 }
 
 function sanitizeWeekOverridesMap(rawMap) {
@@ -77,21 +71,29 @@ function sanitizeRevealedIds(raw) {
  * 构建用于局域网同步的标准白名单数据包
  */
 export function buildSyncBundle(input = {}, nowTs = Date.now()) {
-  const exportedAt = Number.isFinite(input.exportedAt) ? input.exportedAt : nowTs;
-  const weekOverridesUpdatedAt = Number.isFinite(input.weekOverridesUpdatedAt)
-    ? input.weekOverridesUpdatedAt
-    : exportedAt;
+  const safeInput = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const exportedAt = clampTimestamp(
+    Number.isFinite(safeInput.exportedAt) ? safeInput.exportedAt : nowTs,
+    nowTs
+  );
+  const weekOverridesUpdatedAt = clampTimestamp(
+    Number.isFinite(safeInput.weekOverridesUpdatedAt) ? safeInput.weekOverridesUpdatedAt : exportedAt,
+    nowTs
+  );
   return {
     version: SYNC_SCHEMA_VERSION,
     exportedAt,
-    prefsUpdatedAt: Number.isFinite(input.prefsUpdatedAt) ? input.prefsUpdatedAt : exportedAt,
-    prefs: sanitizePrefs(input.prefs),
+    prefsUpdatedAt: clampTimestamp(
+      Number.isFinite(safeInput.prefsUpdatedAt) ? safeInput.prefsUpdatedAt : exportedAt,
+      nowTs
+    ),
+    prefs: sanitizePrefs(safeInput.prefs),
     weekOverridesUpdatedAt,
-    weekUpdatedAtByWeek: sanitizeWeekUpdatedAtMap(input.weekUpdatedAtByWeek),
-    weekOverridesByWeek: sanitizeWeekOverridesMap(input.weekOverridesByWeek),
-    watchLater: normalizeQueue(input.watchLater, nowTs),
-    revealedIds: sanitizeRevealedIds(input.revealedIds),
-    diary: normalizeDiary(input.diary)
+    weekUpdatedAtByWeek: sanitizeWeekUpdatedAtMap(safeInput.weekUpdatedAtByWeek),
+    weekOverridesByWeek: sanitizeWeekOverridesMap(safeInput.weekOverridesByWeek),
+    watchLater: normalizeQueue(safeInput.watchLater, nowTs),
+    revealedIds: sanitizeRevealedIds(safeInput.revealedIds),
+    diary: normalizeDiary(safeInput.diary)
   };
 }
 
@@ -114,11 +116,27 @@ export function normalizeSyncBundle(raw, nowTs = Date.now()) {
 export function mergeSyncBundles(localRaw, remoteRaw, nowTs = Date.now()) {
   const local = normalizeSyncBundle(localRaw, nowTs);
   const remote = normalizeSyncBundle(remoteRaw, nowTs);
+  const localPatch = extractValidPrefPatch(localRaw?.prefs);
+  const remotePatch = extractValidPrefPatch(remoteRaw?.prefs);
 
-  // 1. prefs LWW
-  const remoteNewerPrefs = remote.prefsUpdatedAt > local.prefsUpdatedAt;
-  const prefs = remoteNewerPrefs ? remote.prefs : local.prefs;
-  const prefsUpdatedAt = Math.max(local.prefsUpdatedAt, remote.prefsUpdatedAt);
+  // 1. prefs 字段级安全合并（带未来时钟夹逼；缺失/非法字段不覆写对端既有配置）
+  const localPrefsTs = clampTimestamp(local.prefsUpdatedAt, nowTs);
+  const remotePrefsTs = clampTimestamp(remote.prefsUpdatedAt, nowTs);
+  const remoteNewerPrefs = remotePrefsTs > localPrefsTs;
+  const mergedPrefs = { ...defaultPrefs(), ...localPatch };
+  for (const key of ALLOWED_PREF_KEYS) {
+    const hasLocal = key in localPatch;
+    const hasRemote = key in remotePatch;
+    if (remoteNewerPrefs) {
+      if (hasRemote) mergedPrefs[key] = remotePatch[key];
+      else if (hasLocal) mergedPrefs[key] = localPatch[key];
+    } else {
+      if (hasLocal) mergedPrefs[key] = localPatch[key];
+      else if (hasRemote) mergedPrefs[key] = remotePatch[key];
+    }
+  }
+  const prefs = normalizePrefs(mergedPrefs, local.prefs);
+  const prefsUpdatedAt = Math.max(localPrefsTs, remotePrefsTs);
 
   // 2. weekOverridesByWeek（按 weekKey 细粒度 LWW；同时间戳时并集合并；支持重置墓碑传播）
   const weekKeys = new Set([

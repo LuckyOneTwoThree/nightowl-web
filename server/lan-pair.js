@@ -15,7 +15,9 @@ import { buildSyncBundle, mergeSyncBundles } from '../src/core/sync-bundle.js';
 
 export const PAIR_TTL_MS = 120_000;
 export const PAIR_MAX_BODY_BYTES = 256 * 1024;
+export const PAIR_BODY_TIMEOUT_MS = 10_000;
 const MAX_PIN_ATTEMPTS = 5;
+const MAX_TOKEN_ATTEMPTS = 20;
 
 function safeEqualText(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || !a || !b) return false;
@@ -108,26 +110,44 @@ export function sanitizeHandoffLines(rawLines = []) {
 }
 
 function sendJson(res, status, data) {
+  if (res.writableEnded || res.destroyed) return;
   const body = JSON.stringify(data);
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Pair-Pin, X-Pair-Token',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+    'X-Content-Type-Options': 'nosniff'
   });
   res.end(body);
 }
 
-function readJsonBody(req, maxBytes = PAIR_MAX_BODY_BYTES) {
+function readJsonBody(req, maxBytes = PAIR_MAX_BODY_BYTES, timeoutMs = PAIR_BODY_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let total = 0;
+    let settled = false;
+    const finish = (err, val) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (err) reject(err);
+      else resolve(val);
+    };
+    const timer = setTimeout(() => {
+      finish(Object.assign(new Error('Request body timeout'), { status: 408 }));
+      try {
+        req.destroy();
+      } catch {}
+    }, timeoutMs);
+    if (typeof timer.unref === 'function') timer.unref();
+
     req.on('data', chunk => {
+      if (settled) return;
       total += chunk.length;
       if (total > maxBytes) {
-        reject(Object.assign(new Error('Payload too large'), { status: 413 }));
-        req.destroy();
+        finish(Object.assign(new Error('Payload too large'), { status: 413 }));
+        try {
+          req.destroy();
+        } catch {}
         return;
       }
       chunks.push(chunk);
@@ -135,12 +155,13 @@ function readJsonBody(req, maxBytes = PAIR_MAX_BODY_BYTES) {
     req.on('end', () => {
       try {
         const raw = Buffer.concat(chunks).toString('utf8');
-        resolve(raw ? JSON.parse(raw) : {});
+        finish(null, raw ? JSON.parse(raw) : {});
       } catch {
-        reject(Object.assign(new Error('Invalid JSON'), { status: 400 }));
+        finish(Object.assign(new Error('Invalid JSON'), { status: 400 }));
       }
     });
-    req.on('error', err => reject(err));
+    req.on('error', err => finish(err));
+    req.on('aborted', () => finish(Object.assign(new Error('Request aborted'), { status: 400 })));
   });
 }
 
@@ -156,10 +177,21 @@ export function createLanPairManager() {
     active = null;
     if (current.timer) clearTimeout(current.timer);
     await new Promise(resolve => {
-      try {
-        current.server.close(() => resolve());
-      } catch {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(fallbackTimer);
         resolve();
+      };
+      const fallbackTimer = setTimeout(finish, 500);
+      if (typeof fallbackTimer.unref === 'function') fallbackTimer.unref();
+      try {
+        current.server.closeIdleConnections?.();
+        current.server.close(() => finish());
+        current.server.closeAllConnections?.();
+      } catch {
+        finish();
       }
     });
   }
@@ -209,110 +241,144 @@ export function createLanPairManager() {
       : null;
 
     let failedPinAttempts = 0;
+    let failedTokenAttempts = 0;
+    let authRevoked = false;
+    let syncChain = Promise.resolve();
+    const runSerialized = fn => {
+      const next = syncChain.then(fn, fn);
+      syncChain = next.catch(() => {});
+      return next;
+    };
 
     const verifyAuth = (searchParams, req) => {
       const qToken = searchParams.get('token') || req.headers['x-pair-token'] || '';
       const qPin = searchParams.get('pin') || req.headers['x-pair-pin'] || '';
 
-      if (qToken && qPin) {
-        return safeEqualText(String(qToken), token) && safeEqualText(String(qPin), pin);
+      if (qPin) {
+        const pinOk = safeEqualText(String(qPin), pin);
+        const tokenOk = !qToken || safeEqualText(String(qToken), token);
+        if (pinOk && tokenOk) return { ok: true, revoke: false };
+        failedPinAttempts += 1;
+        const revoke = failedPinAttempts >= MAX_PIN_ATTEMPTS;
+        if (revoke) authRevoked = true;
+        return { ok: false, revoke };
       }
       if (qToken) {
-        return safeEqualText(String(qToken), token);
+        if (safeEqualText(String(qToken), token)) return { ok: true, revoke: false };
+        failedTokenAttempts += 1;
+        const revoke = failedTokenAttempts >= MAX_TOKEN_ATTEMPTS;
+        if (revoke) authRevoked = true;
+        return { ok: false, revoke };
       }
-      if (qPin) {
-        if (safeEqualText(String(qPin), pin)) return true;
-        failedPinAttempts += 1;
-        if (failedPinAttempts >= MAX_PIN_ATTEMPTS) {
-          void stopSession();
-        }
-        return false;
-      }
-      return false;
+      return { ok: false, revoke: false };
     };
 
     const server = http.createServer(async (req, res) => {
-      if (req.method === 'OPTIONS') {
-        res.writeHead(204, {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Headers': 'Content-Type, X-Pair-Pin, X-Pair-Token',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
-        });
-        res.end();
-        return;
-      }
-
-      const urlObj = new URL(req.url || '/', 'http://127.0.0.1');
-      const pathname = urlObj.pathname;
-
-      // 严格路由白名单：除 3 个 /pair/* 路由外全部 404
-      if (
-        pathname !== '/pair/info' &&
-        pathname !== '/pair/sync' &&
-        pathname !== '/pair/handoff'
-      ) {
-        sendJson(res, 404, { ok: false, error: 'Not Found' });
-        return;
-      }
-
-      if (!active || Date.now() >= active.expiresAt) {
-        await stopSession();
-        sendJson(res, 410, { ok: false, error: '配对会话已过期，请在桌面端重新生成' });
-        return;
-      }
-
-      if (!verifyAuth(urlObj.searchParams, req)) {
-        sendJson(res, 401, { ok: false, error: '配对口令或 Token 无效' });
-        return;
-      }
-
-      if (pathname === '/pair/info' && req.method === 'GET') {
-        const local = buildSyncBundle(await getLocalBundle());
-        sendJson(res, 200, {
-          ok: true,
-          mode: active.mode,
-          expiresAt: active.expiresAt,
-          ttlRemainingMs: Math.max(0, active.expiresAt - Date.now()),
-          summary: {
-            followedTeams: local.prefs.followedTeams.length,
-            watchLaterCount: local.watchLater.length,
-            revealedCount: local.revealedIds.length,
-            diaryCount: Object.keys(local.diary.entries).length
-          },
-          hasHandoff: Boolean(cleanHandoff?.matchId)
-        });
-        return;
-      }
-
-      if (pathname === '/pair/handoff' && req.method === 'GET') {
-        if (!cleanHandoff || !cleanHandoff.matchId) {
-          sendJson(res, 404, { ok: false, error: '当前桌面端未发起接力播控' });
+      try {
+        // 原生手机客户端不走浏览器 CORS；显式拒绝跨域预检，防局域网恶意网页探测端口
+        if (req.method === 'OPTIONS') {
+          res.writeHead(204, { 'Cache-Control': 'no-store' });
+          res.end();
           return;
         }
-        sendJson(res, 200, { ok: true, handoff: cleanHandoff });
-        return;
-      }
 
-      if (pathname === '/pair/sync' && req.method === 'POST') {
+        let urlObj;
         try {
-          const remoteBody = await readJsonBody(req, PAIR_MAX_BODY_BYTES);
-          const localBundle = buildSyncBundle(await getLocalBundle());
-          const merged = mergeSyncBundles(localBundle, remoteBody, Date.now());
-          if (typeof onMergedBundle === 'function') {
-            await onMergedBundle(merged);
-          }
-          sendJson(res, 200, { ok: true, merged });
-        } catch (err) {
-          sendJson(res, err?.status || 400, {
-            ok: false,
-            error: String(err?.message || '同步数据包无效')
-          });
+          urlObj = new URL(req.url || '/', 'http://127.0.0.1');
+        } catch {
+          sendJson(res, 400, { ok: false, error: 'Bad Request' });
+          return;
         }
-        return;
-      }
+        const pathname = urlObj.pathname;
 
-      sendJson(res, 405, { ok: false, error: 'Method Not Allowed' });
+        // 严格路由白名单：除 3 个 /pair/* 路由外全部 404
+        if (
+          pathname !== '/pair/info' &&
+          pathname !== '/pair/sync' &&
+          pathname !== '/pair/handoff'
+        ) {
+          sendJson(res, 404, { ok: false, error: 'Not Found' });
+          return;
+        }
+
+        const sessionRef = active;
+        if (!sessionRef || authRevoked || Date.now() >= sessionRef.expiresAt || sessionRef.server !== server) {
+          await stopSession();
+          sendJson(res, 410, { ok: false, error: '配对会话已过期，请在桌面端重新生成' });
+          return;
+        }
+
+        const auth = verifyAuth(urlObj.searchParams, req);
+        if (!auth.ok) {
+          sendJson(res, 401, { ok: false, error: '配对口令或 Token 无效' });
+          if (auth.revoke) {
+            setImmediate(() => {
+              void stopSession();
+            });
+          }
+          return;
+        }
+
+        if (pathname === '/pair/info' && req.method === 'GET') {
+          const rawLocal = await getLocalBundle();
+          const local = buildSyncBundle(rawLocal || {});
+          sendJson(res, 200, {
+            ok: true,
+            mode: sessionRef.mode,
+            expiresAt: sessionRef.expiresAt,
+            ttlRemainingMs: Math.max(0, sessionRef.expiresAt - Date.now()),
+            summary: {
+              followedTeams: local.prefs.followedTeams.length,
+              watchLaterCount: local.watchLater.length,
+              revealedCount: local.revealedIds.length,
+              diaryCount: Object.keys(local.diary.entries).length
+            },
+            hasHandoff: Boolean(cleanHandoff?.matchId)
+          });
+          return;
+        }
+
+        if (pathname === '/pair/handoff' && req.method === 'GET') {
+          if (!cleanHandoff || !cleanHandoff.matchId) {
+            sendJson(res, 404, { ok: false, error: '当前桌面端未发起接力播控' });
+            return;
+          }
+          sendJson(res, 200, { ok: true, handoff: cleanHandoff });
+          return;
+        }
+
+        if (pathname === '/pair/sync' && req.method === 'POST') {
+          try {
+            const remoteBody = await readJsonBody(req, PAIR_MAX_BODY_BYTES);
+            const merged = await runSerialized(async () => {
+              if (!active || active.server !== server) {
+                throw Object.assign(new Error('配对会话已结束'), { status: 410 });
+              }
+              const rawLocal = await getLocalBundle();
+              const localBundle = buildSyncBundle(rawLocal || {});
+              const nextMerged = mergeSyncBundles(localBundle, remoteBody, Date.now());
+              if (typeof onMergedBundle === 'function') {
+                await onMergedBundle(nextMerged);
+              }
+              return nextMerged;
+            });
+            sendJson(res, 200, { ok: true, merged });
+          } catch (err) {
+            sendJson(res, err?.status || 400, {
+              ok: false,
+              error: String(err?.message || '同步数据包无效')
+            });
+          }
+          return;
+        }
+
+        sendJson(res, 405, { ok: false, error: 'Method Not Allowed' });
+      } catch (err) {
+        sendJson(res, err?.status || 500, { ok: false, error: '配对服务内部异常' });
+      }
     });
+    server.requestTimeout = PAIR_BODY_TIMEOUT_MS + 2000;
+    server.headersTimeout = 5000;
 
     await new Promise((resolve, reject) => {
       server.once('error', reject);

@@ -65,20 +65,50 @@ function loadDesktopSettings() {
   }
 }
 
+function isAuthorizedIpcSender(event) {
+  try {
+    if (!mainWindow || mainWindow.isDestroyed()) return false;
+    if (event?.sender && event.sender !== mainWindow.webContents) return false;
+    const frameUrl = event?.senderFrame?.url;
+    if (!frameUrl) return false;
+    return new URL(frameUrl).origin === `http://${HOST}:${appPort}`;
+  } catch {
+    return false;
+  }
+}
+
+function handleAuthorized(channel, handler) {
+  ipcMain.handle(channel, (event, ...args) => {
+    if (!isAuthorizedIpcSender(event)) {
+      throw new Error(`Unauthorized IPC sender for ${channel}`);
+    }
+    return handler(event, ...args);
+  });
+}
+
+function onAuthorized(channel, handler) {
+  ipcMain.on(channel, (event, ...args) => {
+    if (!isAuthorizedIpcSender(event)) return;
+    handler(event, ...args);
+  });
+}
+
 function saveDesktopSettings(next) {
   desktopSettings = { ...desktopSettings, ...next };
   const file = desktopSettingsPath();
-  if (!file) return desktopSettings;
+  if (!file) return { settings: desktopSettings, saved: false, error: '未配置用户目录' };
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    // 原子写：写一半崩溃不会留下半截 JSON
-    const tmp = `${file}.tmp`;
+    // 原子写：唯一临时名，避免多进程/并发写碰撞
+    const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(desktopSettings, null, 2), 'utf8');
     fs.renameSync(tmp, file);
+    return { settings: desktopSettings, saved: true, error: null };
   } catch (err) {
-    console.warn('[main] 桌面设置写入失败:', err?.message || err);
+    const msg = err?.message || String(err);
+    console.warn('[main] 桌面设置写入失败:', msg);
+    return { settings: desktopSettings, saved: false, error: msg };
   }
-  return desktopSettings;
 }
 
 /**
@@ -86,8 +116,11 @@ function saveDesktopSettings(next) {
  *
  * macOS 用 openAsHidden（登录时不弹窗口）；Windows 用 --hidden 参数，
  * 由启动参数决定是否显示主窗口 —— 两个平台没有统一 API，必须分开处理。
- * 失败不回滚设置：系统可能拒绝（沙箱 / 企业策略），下次打开设置页会看到真实状态。
+ * 失败时把真实生效状态回传给设置界面，不掩盖系统拒绝。
  */
+let launchAtLoginApplied = true;
+let launchAtLoginError = null;
+
 function applyLaunchAtLogin(enabled) {
   try {
     if (process.platform === 'darwin') {
@@ -95,8 +128,15 @@ function applyLaunchAtLogin(enabled) {
     } else if (process.platform === 'win32') {
       app.setLoginItemSettings({ openAtLogin: !!enabled, args: ['--hidden'] });
     }
+    launchAtLoginApplied = true;
+    launchAtLoginError = null;
+    return { applied: true, error: null };
   } catch (err) {
-    console.warn('[main] 开机自启设置失败:', err?.message || err);
+    const msg = err?.message || String(err);
+    launchAtLoginApplied = false;
+    launchAtLoginError = msg;
+    console.warn('[main] 开机自启设置失败:', msg);
+    return { applied: false, error: msg };
   }
 }
 
@@ -327,8 +367,11 @@ function createTray() {
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: '打开应用', click: showMainWindow },
+        { type: 'separator' },
         { label: '今晚之选', click: () => navigateTo('tonight') },
+        { label: '赛程日历', click: () => navigateTo('schedule') },
         { label: '本周规划', click: () => navigateTo('week') },
+        { label: '我的看台', click: () => navigateTo('me') },
         { type: 'separator' },
         {
           label: '退出夜猫看台',
@@ -373,27 +416,50 @@ function setTrayTitle(text) {
   }
 }
 
-ipcMain.handle('desktop:settings:get', () => ({ ...desktopSettings, platform: process.platform }));
-ipcMain.handle('desktop:settings:set', (_event, patch) => {
+function buildDesktopSettingsPayload(extra = {}) {
+  return {
+    ...desktopSettings,
+    platform: process.platform,
+    trayAvailable: Boolean(tray),
+    launchAtLoginApplied,
+    launchAtLoginError,
+    ...extra
+  };
+}
+
+handleAuthorized('desktop:settings:get', () => buildDesktopSettingsPayload({ settingsSaved: true }));
+handleAuthorized('desktop:settings:set', (_event, patch) => {
   const next = {};
   if (typeof patch?.closeToTray === 'boolean') next.closeToTray = patch.closeToTray;
   if (typeof patch?.launchAtLogin === 'boolean') next.launchAtLogin = patch.launchAtLogin;
-  const saved = saveDesktopSettings(next);
-  if (typeof next.launchAtLogin === 'boolean') applyLaunchAtLogin(next.launchAtLogin);
-  return { ...saved, platform: process.platform };
+  const savedRes = saveDesktopSettings(next);
+  let loginRes = { applied: launchAtLoginApplied, error: launchAtLoginError };
+  if (typeof next.launchAtLogin === 'boolean') {
+    loginRes = applyLaunchAtLogin(next.launchAtLogin);
+    if (!loginRes.applied && next.launchAtLogin) {
+      // 系统拒绝自启时同步回滚，不假装生效
+      saveDesktopSettings({ launchAtLogin: false });
+    }
+  }
+  return buildDesktopSettingsPayload({
+    settingsSaved: savedRes.saved,
+    settingsError: savedRes.error,
+    launchAtLoginApplied: loginRes.applied,
+    launchAtLoginError: loginRes.error
+  });
 });
-ipcMain.on('desktop:tray:title', (_event, text) => setTrayTitle(text));
+onAuthorized('desktop:tray:title', (_event, text) => setTrayTitle(text));
 
 /* 自绘标题栏的窗口动作（渲染层 → 主进程） */
 let savedNormalBounds = null;
-ipcMain.on('win:minimize', () => mainWindow?.minimize());
-ipcMain.on('win:toggle-maximize', () => {
+onAuthorized('win:minimize', () => mainWindow?.minimize());
+onAuthorized('win:toggle-maximize', () => {
   if (!mainWindow) return;
   if (mainWindow.isMaximized()) mainWindow.unmaximize();
   else mainWindow.maximize();
 });
-ipcMain.on('win:close', () => mainWindow?.close());
-ipcMain.on('win:set-mini-mode', (_event, enabled) => {
+onAuthorized('win:close', () => mainWindow?.close());
+onAuthorized('win:set-mini-mode', (_event, enabled) => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (enabled) {
     if (!savedNormalBounds) {
@@ -412,7 +478,7 @@ ipcMain.on('win:set-mini-mode', (_event, enabled) => {
     }
   }
 });
-ipcMain.handle('win:open-external', async (_event, url) => {
+handleAuthorized('win:open-external', async (_event, url) => {
   if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return false;
   try {
     await shell.openExternal(url);
@@ -429,7 +495,7 @@ ipcMain.handle('win:open-external', async (_event, url) => {
  * 渲染层只传文案和 matchId；是否在前台抑制由主进程判断 ——
  * 用户正在看应用时，进球提醒只会打断，不应再弹一次系统通知。
  */
-ipcMain.on('app:notify', (_event, payload) => {
+onAuthorized('app:notify', (_event, payload) => {
   try {
     if (!Notification.isSupported() || !mainWindow || mainWindow.isDestroyed()) return;
 
@@ -609,7 +675,7 @@ function triggerUpdateCheck(silent = true) {
   });
 }
 
-ipcMain.on('updater:check', () => {
+onAuthorized('updater:check', () => {
   if (!app.isPackaged) {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('updater:event', {
@@ -624,7 +690,7 @@ ipcMain.on('updater:check', () => {
   triggerUpdateCheck(false);
 });
 
-ipcMain.on('updater:download', () => {
+onAuthorized('updater:download', () => {
   if (!app.isPackaged || !autoUpdater) return;
   autoUpdater.downloadUpdate().catch(err => {
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -636,7 +702,7 @@ ipcMain.on('updater:download', () => {
   });
 });
 
-ipcMain.on('updater:install', () => {
+onAuthorized('updater:install', () => {
   if (!app.isPackaged || !autoUpdater) return;
   if (!updateDownloaded) {
     // 状态漂移（渲染层以为已就绪、主进程其实没有）：直接装会无反应。

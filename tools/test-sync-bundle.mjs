@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { buildSyncBundle, mergeSyncBundles } from '../src/core/sync-bundle.js';
+import { buildSyncBundle, mergeSyncBundles, MAX_FUTURE_CLOCK_SKEW_MS } from '../src/core/sync-bundle.js';
+import { normalizePrefs } from '../src/core/prefs.js';
 import { removeDiaryEntry, upsertDiaryEntry } from '../src/core/diary.js';
 
 let passed = 0;
@@ -106,6 +107,57 @@ check('mergeSyncBundles merges weekOverridesByWeek per-week and propagates reset
   }, 7000);
   const afterReset = mergeSyncBundles(merged, resetRemote, 7100);
   assert.equal(afterReset.weekOverridesByWeek['2026-11-09'], undefined);
+});
+
+check('buildSyncBundle tolerates null input and mergeSyncBundles protects prefs types, partial updates, and clock skew', () => {
+  const nullBuilt = buildSyncBundle(null, 5000);
+  assert.equal(nullBuilt.exportedAt, 5000);
+  assert.equal(nullBuilt.prefs.weeklyBudget, 4);
+
+  const local = buildSyncBundle(
+    {
+      prefsUpdatedAt: 1000,
+      prefs: { followedTeams: ['ARS'], followedLeagues: ['PL', 'UCL'], weeklyBudget: 6, notifyBefore15: true }
+    },
+    2000
+  );
+
+  // 远端只带部分 prefs 且夹杂非法类型字段，不应以默认值覆写 followedLeagues，也不能放进字符串
+  const partialDirtyRemote = {
+    version: 1,
+    prefsUpdatedAt: 9_999_999_999_999,
+    prefs: {
+      weeklyBudget: 'oops',
+      sleepMinHours: -99,
+      notifyBefore15: 'yes',
+      sleepWakeTime: '99:99',
+      spoilerFree: false
+    }
+  };
+  const now = 3000;
+  const merged = mergeSyncBundles(local, partialDirtyRemote, now);
+  assert.equal(merged.prefs.weeklyBudget, 6);
+  assert.equal(merged.prefs.notifyBefore15, true);
+  assert.equal(merged.prefs.spoilerFree, false);
+  assert.deepEqual(merged.prefs.followedLeagues, ['PL', 'UCL']);
+  assert.equal(merged.prefs.sleepMinHours, 7);
+  assert.ok(merged.prefsUpdatedAt <= now + MAX_FUTURE_CLOCK_SKEW_MS);
+
+  // 未来时钟被夹逼后，随后超过容差窗口的本地更新仍可胜出
+  const laterLocal = buildSyncBundle(
+    {
+      prefsUpdatedAt: now + MAX_FUTURE_CLOCK_SKEW_MS + 1000,
+      prefs: { ...merged.prefs, weeklyBudget: 7.5 }
+    },
+    now + MAX_FUTURE_CLOCK_SKEW_MS + 2000
+  );
+  const merged2 = mergeSyncBundles(laterLocal, merged, now + MAX_FUTURE_CLOCK_SKEW_MS + 2000);
+  assert.equal(merged2.prefs.weeklyBudget, 7.5);
+
+  const clean = normalizePrefs({ weeklyBudget: 12, sleepMinHours: 2, sleepWakeTime: 'bad' });
+  assert.equal(clean.weeklyBudget, 8);
+  assert.equal(clean.sleepMinHours, 4);
+  assert.equal(clean.sleepWakeTime, '07:30');
 });
 
 console.log(`[test:sync-bundle] ${passed} passed`);

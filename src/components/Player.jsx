@@ -113,6 +113,9 @@ export default function Player({
         customType: {
           m3u8: (video, url) => {
             if (Hls.isSupported()) {
+              try {
+                hlsRef.current?.destroy?.();
+              } catch {}
               const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
               hls.on(Hls.Events.ERROR, (_evt, data) => {
                 if (data?.fatal) {

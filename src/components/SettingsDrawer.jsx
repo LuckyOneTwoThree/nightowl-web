@@ -655,6 +655,17 @@ export default function SettingsDrawer({
                     {!desktopSettings.closeToTray && (
                       <Meta className="text-text-faint">当前关闭窗口 = 直接退出，提醒链路会中断。</Meta>
                     )}
+                    {desktopSettings.closeToTray && desktopSettings.trayAvailable === false && (
+                      <Meta className="text-warn">系统托盘初始化失败，当前关闭窗口仍会直接退出应用。</Meta>
+                    )}
+                    {desktopSettings.launchAtLoginApplied === false && (
+                      <Meta className="text-warn">
+                        开机自启被系统拒绝或暂不可用{desktopSettings.launchAtLoginError ? `（${desktopSettings.launchAtLoginError}）` : ''}，已保持真实未启用状态。
+                      </Meta>
+                    )}
+                    {desktopSettings.settingsSaved === false && (
+                      <Meta className="text-warn">桌面设置写盘失败，重启后可能不会保留当前修改。</Meta>
+                    )}
                     {typeof Notification !== 'undefined' && Notification.permission === 'denied' && (
                       <Meta className="text-warn">
                         系统通知已被拒绝：请到「系统设置 → 通知」允许夜猫看台，否则提醒不会出现。

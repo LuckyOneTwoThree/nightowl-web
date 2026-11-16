@@ -9,6 +9,7 @@
 
 import http from 'node:http';
 import { createServer } from '../server/index.js';
+import { assertPublicDestination, createProxy, isPublicIp } from '../server/proxy.js';
 
 let pass = 0;
 let fail = 0;
@@ -88,6 +89,11 @@ const origin = http.createServer((req, res) => {
       'Accept-Ranges': 'bytes'
     });
     res.end(SEG_BODY);
+    return;
+  }
+  if (p === '/not-modified') {
+    res.writeHead(304, { ETag: '"v1-test"', 'Cache-Control': 'max-age=60' });
+    res.end();
     return;
   }
   if (p === '/boom') {
@@ -282,6 +288,86 @@ console.log('五、并发闸门');
     Array.from({ length: 12 }, () => fetch(P(`${ORIGIN}/seg1.ts`)).then(r => r.status))
   );
   ok('并发 12 个请求全部成功（未超上限被拒）', results.every(s => s === 200), JSON.stringify(results));
+}
+
+/* ================================================================== */
+console.log('');
+console.log('六、DNS 重绑定拦截与 304 条件请求透传');
+
+{
+  ok('isPublicIp 拒绝私网/回环/元数据/IPv4-mapped IP 并放行公网 IP',
+    !isPublicIp('127.0.0.1') && !isPublicIp('10.0.0.1') && !isPublicIp('169.254.169.254')
+    && !isPublicIp('172.16.0.1') && !isPublicIp('192.168.1.1') && !isPublicIp('::1')
+    && !isPublicIp('::ffff:127.0.0.1') && !isPublicIp('fc00::1') && isPublicIp('1.1.1.1'));
+
+  let blockedByDns = false;
+  try {
+    await assertPublicDestination('rebind.example.com', { proxy: {} }, async () => [{ address: '127.0.0.1', family: 4 }]);
+  } catch (err) {
+    blockedByDns = err?.status === 403 && err?.kind === 'blocked';
+  }
+  ok('★ 公网域名 DNS 解析到 127.0.0.1 时被代理拦截（403）', blockedByDns);
+
+  const dnsProxy = createProxy(
+    { proxy: { allowedHosts: [], allowedHostSuffixes: ['example.com'] } },
+    { warn() {}, error() {} },
+    new Set(),
+    { lookup: async () => [{ address: '169.254.169.254', family: 4 }] }
+  );
+  const dnsSrv = http.createServer(async (req, res) => {
+    try {
+      const u = new URL(req.url, 'http://127.0.0.1');
+      await dnsProxy.handle(u.searchParams, req, res);
+    } catch (err) {
+      res.writeHead(err.status || 500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ kind: err.kind, error: err.message }));
+    }
+  });
+  const dnsPort = await listen(dnsSrv);
+  const rDns = await fetch(`http://127.0.0.1:${dnsPort}/api/proxy?url=${encodeURIComponent('http://cdn.example.com/live.m3u8')}`);
+  ok('★ proxy.handle 在发起上游连接前拦下解析到 169.254.169.254 的域名', rDns.status === 403, String(rDns.status));
+  dnsSrv.close();
+
+  const r304 = await fetch(P(`${ORIGIN}/not-modified`), { headers: { 'If-None-Match': '"v1-test"' } });
+  ok('★ 上游返回 304 Not Modified 原样透传（不再误判 502）', r304.status === 304 && r304.headers.get('etag') === '"v1-test"', String(r304.status));
+}
+
+/* ================================================================== */
+console.log('');
+console.log('七、端点来源防护与 plan.ics 缺省参数');
+
+{
+  const rLiveGet = await fetch(`${PROXY}/api/live-sources?h=ARS&a=MCI`);
+  ok('★ /api/live-sources 拒绝 GET（防止无 Origin 跨站图片/链接触发）', rLiveGet.status === 405, String(rLiveGet.status));
+
+  const rLiveCross = await fetch(`${PROXY}/api/live-sources`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Sec-Fetch-Site': 'cross-site' },
+    body: JSON.stringify({ h: 'ARS', a: 'MCI' })
+  });
+  ok('/api/live-sources 拦截 Sec-Fetch-Site: cross-site（403）', rLiveCross.status === 403, String(rLiveCross.status));
+
+  const { mondayOfWall, nightOf } = await import('../src/core/engine.js');
+  const mon = mondayOfWall(nightOf(Date.now()));
+  // 当前夜猫周日夜凌晨 03:00（下周一凌晨，属于本周 night，成本 3.5h：budget=0 选不上，默认 4.0 能入选）
+  const weekSunLate = new Date(Date.parse(`${mon}T00:00:00Z`) + 7 * 86400_000).toISOString().slice(0, 10) + 'T03:00';
+  const srvIcs = createServer(rules, { warn() {}, error() {} }, {
+    loadFixtures: async () => [
+      { id: 'PL-99-ARS-MCI', l: 'PL', r: 99, t: weekSunLate, st: 'sched', h: 'ARS', a: 'MCI', tbd: false }
+    ]
+  });
+  const icsPort = await listen(srvIcs);
+  const icsCross = await fetch(`http://127.0.0.1:${icsPort}/api/calendar/plan.ics`, {
+    headers: { 'Sec-Fetch-Site': 'cross-site' }
+  });
+  ok('/api/calendar/plan.ics 拦截 Sec-Fetch-Site: cross-site（403）', icsCross.status === 403, String(icsCross.status));
+
+  const icsOk = await fetch(`http://127.0.0.1:${icsPort}/api/calendar/plan.ics?teams=ARS&leagues=PL`);
+  const icsBody = await icsOk.text();
+  ok('★ /api/calendar/plan.ics 省略 budget/remind 时沿用默认 4.0 与 30m（不变成 0）',
+    icsOk.status === 200 && icsBody.includes('BEGIN:VEVENT') && icsBody.includes('TRIGGER:-PT30M'),
+    `${icsOk.status} len=${icsBody.length}`);
+  srvIcs.close();
 }
 
 /* ================================================================== */

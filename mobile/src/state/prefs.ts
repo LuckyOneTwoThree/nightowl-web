@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { defaultPrefs } from '@core/prefs.js';
+import { defaultPrefs, extractValidPrefPatch, normalizePrefs } from '@core/prefs.js';
 import { useAppStore } from './app';
 
 export type Prefs = {
@@ -61,11 +61,17 @@ export const usePrefsStore = create<PrefsStore>()(
         }));
       },
       applySyncedPrefs: (patch, updatedAt) => {
-        if (patch.spoilerFree !== undefined && patch.spoilerFree !== get().prefs.spoilerFree) {
+        const cleanPatch = extractValidPrefPatch(patch);
+        const current = get().prefs;
+        const nextShared = normalizePrefs(cleanPatch, current);
+        if (nextShared.spoilerFree !== current.spoilerFree) {
           useAppStore.getState().clearRevealed();
         }
         set(state => ({
-          prefs: { ...state.prefs, ...patch },
+          prefs: {
+            ...state.prefs,
+            ...normalizePrefs(extractValidPrefPatch(patch), state.prefs),
+          },
           prefsUpdatedAt:
             typeof updatedAt === 'number' && Number.isFinite(updatedAt) && updatedAt >= 0
               ? updatedAt
@@ -111,7 +117,11 @@ export const usePrefsStore = create<PrefsStore>()(
             : 0;
         return {
           ...current,
-          prefs: { ...DEFAULT_PREFS, ...(saved?.prefs || {}) },
+          prefs: {
+            ...DEFAULT_PREFS,
+            ...(saved?.prefs || {}),
+            ...normalizePrefs(saved?.prefs, DEFAULT_PREFS),
+          },
           prefsUpdatedAt: ts,
         };
       },

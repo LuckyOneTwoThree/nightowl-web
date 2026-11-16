@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import net from 'node:net';
 import { createLanPairManager, listLanCandidates, sanitizeHandoffLines } from '../server/lan-pair.js';
 import { buildSyncBundle } from '../src/core/sync-bundle.js';
 import { generateQrMatrix } from '../src/lib/qr-svg.js';
@@ -45,9 +46,10 @@ await check('isolated LAN pair server rejects /api/proxy with 404 and validates 
   const proxyProbe = await fetch(`${base}/api/proxy?url=http://127.0.0.1:22`);
   assert.equal(proxyProbe.status, 404);
 
-  // 2. Unauthorized without token/pin -> 401
+  // 2. Unauthorized without token/pin -> 401 and no wildcard CORS header
   const unauth = await fetch(`${base}/pair/info`);
   assert.equal(unauth.status, 401);
+  assert.equal(unauth.headers.get('access-control-allow-origin'), null);
 
   // 3. Valid token -> 200 /pair/info
   const infoRes = await fetch(`${base}/pair/info?token=${status.token}`);
@@ -118,6 +120,62 @@ await check('generateQrMatrix produces valid ISO QR finder patterns for pairing 
   assert.equal(qr.modules[6][6], 1);
   assert.equal(qr.modules[1][1], 0);
   assert.equal(qr.modules[qr.size - 8][8], 1);
+});
+
+await check('qToken+qPin failures enforce PIN rate limit, concurrent /pair/sync does not lose updates, and slow POST does not hang stopSession', async () => {
+  // 1. qToken+qPin 分支失败也计入 PIN 尝试次数上限
+  const mgr1 = createLanPairManager();
+  const s1 = await mgr1.startSession({ bindHost: '127.0.0.1', port: 0, ttlMs: 30_000 });
+  const base1 = `http://127.0.0.1:${s1.port}`;
+  for (let i = 0; i < 5; i++) {
+    const r = await fetch(`${base1}/pair/info?token=badtoken&pin=000000`);
+    assert.equal(r.status, 401);
+  }
+  await new Promise(r => setTimeout(r, 30));
+  assert.equal(mgr1.getStatus().active, false);
+
+  // 2. 并发 /pair/sync 串行化不丢更新 + getLocalBundle 返回 null 不崩
+  let current = buildSyncBundle({ prefsUpdatedAt: 100, revealedIds: ['init'] });
+  const mgr2 = createLanPairManager();
+  const s2 = await mgr2.startSession({
+    bindHost: '127.0.0.1',
+    port: 0,
+    ttlMs: 30_000,
+    getLocalBundle: () => current,
+    onMergedBundle: async merged => {
+      await new Promise(r => setTimeout(r, 20));
+      current = merged;
+    }
+  });
+  const base2 = `http://127.0.0.1:${s2.port}`;
+  const [rA, rB] = await Promise.all([
+    fetch(`${base2}/pair/sync?token=${s2.token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildSyncBundle({ revealedIds: ['mA'] }))
+    }),
+    fetch(`${base2}/pair/sync?token=${s2.token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildSyncBundle({ revealedIds: ['mB'] }))
+    })
+  ]);
+  assert.equal(rA.status, 200);
+  assert.equal(rB.status, 200);
+  assert.deepEqual(current.revealedIds.sort(), ['init', 'mA', 'mB']);
+
+  // 3. 慢 POST 连接不阻塞 stopSession
+  await new Promise(resolve => {
+    const sock = net.createConnection({ host: '127.0.0.1', port: s2.port }, () => {
+      sock.write(`POST /pair/sync?token=${s2.token} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 100\r\n\r\n{"half":`);
+      setTimeout(resolve, 30);
+    });
+    sock.on('error', () => resolve());
+  });
+  const t0 = Date.now();
+  await mgr2.stopSession();
+  assert.ok(Date.now() - t0 < 800);
+  assert.equal(mgr2.getStatus().active, false);
 });
 
 console.log(`[test:lan-pair] ${passed} passed`);

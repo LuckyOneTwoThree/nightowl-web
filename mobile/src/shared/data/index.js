@@ -135,7 +135,9 @@ function isValidFixture(m) {
     && typeof m.h === 'string'
     && typeof m.a === 'string'
     && typeof m.l === 'string'
-    && typeof m.t === 'string' && m.t.length >= 10;
+    && typeof m.t === 'string' && m.t.length >= 10
+    && (m.st === 'sched' || m.st === 'done' || m.st === 'pp')
+    && (m.st !== 'done' || /^\d+-\d+$/.test(String(m.sc || '')));
 }
 
 /** 返回是否真的替换成功（过滤后为空一律拒绝，避免把界面清空） */

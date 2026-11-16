@@ -97,11 +97,13 @@ function saveUserMeta(season, extra = {}) {
   if (!p) return false;
   try {
     mkdirSync(dirname(p), { recursive: true });
+    const tmp = `${p}.${process.pid}.${Date.now()}.tmp`;
     writeFileSync(
-      p,
+      tmp,
       JSON.stringify({ season, savedAt: new Date().toISOString(), ...extra }),
       'utf8'
     );
+    renameSync(tmp, p);
     return true;
   } catch {
     return false;
@@ -178,10 +180,43 @@ function parseFixtures(raw) {
   }
 }
 
+function isValidLoadedMatch(m) {
+  return !!m
+    && typeof m.id === 'string' && m.id.length > 0
+    && typeof m.h === 'string'
+    && typeof m.a === 'string'
+    && typeof m.l === 'string'
+    && typeof m.t === 'string' && Number.isFinite(ts(m.t))
+    && (m.st === 'sched' || m.st === 'done' || m.st === 'pp')
+    && (m.st !== 'done' || /^\d+-\d+$/.test(String(m.sc || '')));
+}
+
+function sanitizeLoadedFixtures(list, builtin = []) {
+  const builtinById = new Map();
+  for (const m of builtin) {
+    if (isValidLoadedMatch(m)) builtinById.set(m.id, m);
+  }
+  const clean = [];
+  let quarantined = 0;
+  for (const m of list) {
+    if (isValidLoadedMatch(m)) {
+      clean.push(m);
+    } else {
+      quarantined += 1;
+      const fallback = m?.id ? builtinById.get(m.id) : null;
+      if (fallback) clean.push(fallback);
+    }
+  }
+  if (quarantined > 0) {
+    console.warn(`[data-store] 检测到 ${quarantined} 条非法或损坏的用户赛程记录，已隔离/回退至内置快照`);
+  }
+  return clean;
+}
+
 export async function loadFixtures() {
   const userPath = userFixturesPath();
   if (!userPath || !existsSync(userPath)) {
-    return parseFixtures(await readFile(BUILT_IN, 'utf8'));
+    return sanitizeLoadedFixtures(parseFixtures(await readFile(BUILT_IN, 'utf8')));
   }
   /**
    * 跨赛季：**绝不合并**。
@@ -194,21 +229,23 @@ export async function loadFixtures() {
   const userS = loadUserMeta()?.season ?? null;
   if (builtinS && userS && builtinS !== userS) {
     archiveUserFixtures(userS);
-    return parseFixtures(await readFile(BUILT_IN, 'utf8'));
+    return sanitizeLoadedFixtures(parseFixtures(await readFile(BUILT_IN, 'utf8')));
   }
   // 内置读不到（打包异常）时退回用户数据，而不是把界面清空
   const [builtinRaw, userRaw] = await Promise.all([
     readFile(BUILT_IN, 'utf8').catch(() => '[]'),
     readFile(userPath, 'utf8')
   ]);
+  const builtinParsed = parseFixtures(builtinRaw);
   const meta = loadUserMeta();
-  const merged = mergeFixtures(parseFixtures(builtinRaw), parseFixtures(userRaw), {
+  const merged = mergeFixtures(builtinParsed, parseFixtures(userRaw), {
     writer: meta?.writer === 'sparse' ? 'sparse' : 'dense',
     builtinRev: builtinRev()
   });
+  const sanitized = sanitizeLoadedFixtures(merged, builtinParsed);
   // 合并结果为空说明两侧都坏了：宁可抛错让上层报「数据不可用」，也不要静默返回空数组
-  if (!merged.length) throw new Error('赛程数据为空（内置与用户数据都无法解析）');
-  return merged;
+  if (!sanitized.length) throw new Error('赛程数据为空（内置与用户数据都无法解析）');
+  return sanitized;
 }
 
 /**
@@ -257,8 +294,8 @@ export function saveFixtures(next) {
 
   const body = JSON.stringify(out);
   try {
-    // 原子写：先写临时文件再重命名，避免写一半崩溃导致数据损坏
-    const tmp = `${p}.tmp`;
+    // 原子写：使用进程+时间戳唯一临时文件再重命名，避免多进程/并发写相互踩踏
+    const tmp = `${p}.${process.pid}.${Date.now()}.tmp`;
     mkdirSync(dirname(p), { recursive: true });
     writeFileSync(tmp, body, 'utf8');
     renameSync(tmp, p);

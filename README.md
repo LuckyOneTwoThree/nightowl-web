@@ -10,7 +10,7 @@
   <br />
 
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Android-2b6cb0?style=flat-square" alt="platform" />
-  <img src="https://img.shields.io/badge/release-v0.1.49-2f855a?style=flat-square" alt="release" />
+  <img src="https://img.shields.io/badge/release-v0.2.0-2f855a?style=flat-square" alt="release" />
   <img src="https://img.shields.io/badge/electron-33-47848f?style=flat-square" alt="electron" />
   <img src="https://img.shields.io/badge/expo%20sdk-58-000020?style=flat-square" alt="expo" />
   <img src="https://img.shields.io/badge/react-19-149eca?style=flat-square" alt="react" />
@@ -201,7 +201,7 @@ npm run build && npm run server   # 生产构建 + 本地服务：127.0.0.1:3100
 npm run electron:dev               # 以 Electron 桌面外壳启动
 ```
 
-> 前端与本地服务跑在同一个 127.0.0.1 上。服务只监听本机，不对外提供任何端口。
+> 常驻本地服务默认只监听 `127.0.0.1`；仅在用户主动打开「一扫同步 / 手机接力」弹窗时，才会临时创建隔离的 120 秒 Token + PIN 校验配对端口（仅暴露 `/pair/*` 同步接口，不包含流代理路由）。
 
 ### 手机端 · 从源码运行
 
@@ -276,7 +276,7 @@ mobile/          Android 客户端（Expo SDK 58 + React Native）
 - 本项目**不提供、不托管、不存储、不转码**任何直播视频内容，也不**内置**任何直播直链
 - 集锦与官方回放只提供第三方官方频道的链接，由系统浏览器打开；本项目不下载、不代理、不转码任何视频
 - 直播源信息来自第三方公开索引，其可用性、合法性由来源方负责；桌面端仅按用户要求在本机做格式转发，手机端由原生播放器直接打开直链
-- 桌面端本地服务**只监听 127.0.0.1**，不向局域网或公网提供任何服务；手机端**不包含**本地或远程代理服务
+- 桌面端常驻本地服务**只监听 127.0.0.1**（仅手动发起「局域网一扫同步 / 手机接力」时会临时启用 120 秒自动销毁、受随机 Token + 6 位 PIN 保护的 `/pair/*` 同步微端口，不包含流代理）；手机端**不包含**本地或远程代理服务
 - 请仅将本项目用于**个人学习与技术研究**，遵守所在地区法律法规及相关内容平台的用户协议
 - 项目内所有比赛数据、球队名称与队徽版权归各自权利人所有
 

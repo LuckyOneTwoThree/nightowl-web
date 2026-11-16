@@ -20,6 +20,8 @@
 
 import { Readable } from 'node:stream';
 import { readFileSync } from 'node:fs';
+import { lookup as dnsLookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { rewritePlaylist, isPlaylistResponse, cacheControlFor } from './m3u8.js';
@@ -92,6 +94,81 @@ export function isValidHost(h, allowLoopback = false) {
   if (typeof h !== 'string' || h.length === 0 || h.length > 253) return false;
   if (!/^[a-z0-9.-]+$/i.test(h) || h.startsWith('.')) return false;
   return allowLoopback ? true : !isPrivateHost(h);
+}
+
+/**
+ * 校验已解析的 IP 地址是否属于公网单播地址（防 DNS Rebinding / 域名指回内网）
+ */
+export function isPublicIp(rawIp) {
+  if (typeof rawIp !== 'string') return false;
+  const ip = rawIp.trim().toLowerCase().replace(/^\[|\]$/g, '').split('%')[0];
+  const ver = isIP(ip);
+  if (ver === 4) {
+    const parts = ip.split('.').map(Number);
+    const [a, b] = parts;
+    if (a === 0 || a === 10 || a === 127) return false;
+    if (a === 100 && b >= 64 && b <= 127) return false;
+    if (a === 169 && b === 254) return false;
+    if (a === 172 && b >= 16 && b <= 31) return false;
+    if (a === 192 && b === 0 && (parts[2] === 0 || parts[2] === 2)) return false;
+    if (a === 192 && b === 168) return false;
+    if (a === 198 && (b === 18 || b === 19)) return false;
+    if (a === 198 && b === 51 && parts[2] === 100) return false;
+    if (a === 203 && b === 0 && parts[2] === 113) return false;
+    if (a >= 224) return false;
+    return true;
+  }
+  if (ver === 6) {
+    if (ip === '::' || ip === '::1') return false;
+    if (ip.startsWith('::ffff:')) {
+      const tail = ip.slice('::ffff:'.length);
+      if (isIP(tail) === 4) return isPublicIp(tail);
+      const hex = tail.split(':');
+      if (hex.length === 2) {
+        const hi = parseInt(hex[0], 16);
+        const lo = parseInt(hex[1], 16);
+        if (Number.isFinite(hi) && Number.isFinite(lo)) {
+          return isPublicIp(`${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}`);
+        }
+      }
+      return false;
+    }
+    const firstHextet = parseInt(ip.split(':')[0] || '0', 16);
+    if ((firstHextet & 0xfe00) === 0xfc00) return false; // fc00::/7 ULA
+    if ((firstHextet & 0xffc0) === 0xfe80) return false; // fe80::/10 link-local
+    if ((firstHextet & 0xff00) === 0xff00) return false; // ff00::/8 multicast
+    if (ip.startsWith('2001:db8:') || ip.startsWith('2001:0db8:')) return false;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * 发起上游建连前校验域名解析出的 IP，拒绝私网 / 回环地址（DNS Rebinding 防护）。
+ * 显式列在 rules.proxy.allowedHosts 的固定本地测试主机或 allowLoopbackHosts 除外。
+ */
+export async function assertPublicDestination(hostname, rules = {}, lookupFn = dnsLookup) {
+  const host = typeof hostname === 'string' ? hostname.trim().toLowerCase() : '';
+  if (!host) throw new ProxyError('bad-request', '缺少目标主机名', 400);
+  if (rules?.proxy?.allowLoopbackHosts) return;
+  const exact = (rules?.proxy?.allowedHosts || []).map(h => String(h || '').trim().toLowerCase());
+  if (exact.includes(host)) return;
+  if (isIP(host)) {
+    if (!isPublicIp(host)) throw new ProxyError('blocked', `拒绝访问私网或回环地址：${host}`, 403);
+    return;
+  }
+  if (isPrivateHost(host)) {
+    throw new ProxyError('blocked', `拒绝访问内网主机：${host}`, 403);
+  }
+  let addrs;
+  try {
+    addrs = await lookupFn(host, { all: true, verbatim: true });
+  } catch {
+    return; // 解析失败交由后续 fetch 返回统一 504 网络语义
+  }
+  if (Array.isArray(addrs) && addrs.some(entry => entry?.address && !isPublicIp(entry.address))) {
+    throw new ProxyError('blocked', `域名解析到私网或回环地址，已拦截：${host}`, 403);
+  }
 }
 
 /**
@@ -214,7 +291,8 @@ function createSemaphore(max, queueTimeoutMs = 0) {
  *   且只作用于其声明的那个域名。
  *   ⚠️ 用户提交的是**自己的**会话信息，仅发往其指定的域名，不落盘、不外发。
  */
-export function createProxy(rules = loadRules(), log = console, sessionAllowed = new Set()) {
+export function createProxy(rules = loadRules(), log = console, sessionAllowed = new Set(), deps = {}) {
+  const lookupFn = deps.lookup || dnsLookup;
   const gate = createSemaphore(
     rules.proxy?.maxConcurrent || 16,
     rules.proxy?.queueTimeoutMs ?? 30000
@@ -315,11 +393,13 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
     const maxRedirects = rules.proxy?.maxRedirects || 5;
     let url = target;
     for (let hop = 0; hop <= maxRedirects; hop++) {
+      const hopHost = new URL(url).hostname;
+      await assertPublicDestination(hopHost, rules, lookupFn);
       const timer = setTimeout(() => ac.abort(), timeoutMs);
       let res;
       try {
         // 优先级：用户会话头（按本跳主机解析）> 请求自带（白名单内）> rules 里的上游头
-        const custom = sessionHeaders.get(new URL(url).hostname) || {};
+        const custom = sessionHeaders.get(hopHost) || {};
         res = await fetch(url, {
           headers: {
             ...(rules.proxy?.upstreamHeaders || {}),
@@ -441,6 +521,27 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
 
     try {
       const contentType = upstream.headers.get('content-type') || '';
+
+      /* ---- 304 Not Modified：透传条件缓存命中响应 ---- */
+      if (upstream.status === 304) {
+        try {
+          await upstream.body?.cancel();
+        } catch {
+          /* 忽略 */
+        }
+        const headers304 = {};
+        const cors304 = allowedLocalOrigin(req, rules);
+        if (cors304) headers304['Access-Control-Allow-Origin'] = cors304;
+        for (const h of ['etag', 'last-modified', 'cache-control']) {
+          const v = upstream.headers.get(h);
+          if (v) headers304[h.replace(/(^|-)([a-z])/g, (m, a, b) => a + b.toUpperCase())] = v;
+        }
+        disarmIdle();
+        res.writeHead(304, headers304);
+        res.end();
+        releaseOnce();
+        return;
+      }
 
       /* ---- 上游无源：明确区别于网络失败 ---- */
       if (!upstream.ok) {

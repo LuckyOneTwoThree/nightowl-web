@@ -20,6 +20,7 @@ import {
 import { narrativeOf } from './core/narrative.js';
 import { unrevealedTonightIds } from './core/reveal.js';
 import { buildSyncBundle } from './core/sync-bundle.js';
+import { normalizePrefs } from './core/prefs.js';
 
 import TopBar from './components/TopBar.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
@@ -243,10 +244,16 @@ export default function App() {
     }
   }, []);
 
-  // 托盘菜单的导航动作（今晚之选 / 本周规划）
+  // 托盘菜单的导航动作（今晚 / 赛程 / 本周 / 我的）；若正处于迷你小窗则先展开回标准视口
   useEffect(() => {
     const unsub = window.desktop?.onNavigate?.(payload => {
-      if (payload?.view && VALID_VIEWS.includes(payload.view)) setView(payload.view);
+      if (payload?.view && VALID_VIEWS.includes(payload.view)) {
+        setMiniMode(prev => {
+          if (prev) window.desktop?.setMiniMode?.(false);
+          return false;
+        });
+        setView(payload.view);
+      }
     });
     return unsub;
   }, []);
@@ -338,7 +345,7 @@ export default function App() {
           const m = data.merged;
           if (m.prefs) {
             setPrefs(
-              { ...prefsRef.current, ...m.prefs },
+              normalizePrefs(m.prefs, prefsRef.current),
               Number.isFinite(m.prefsUpdatedAt) ? { updatedAt: m.prefsUpdatedAt } : undefined
             );
           }
@@ -1405,9 +1412,10 @@ export default function App() {
           />
         </div>
 
-        {/* 主工作区：左栏黄金比例（330-390px） + 右栏核心主舞台（~75%）；「我的看台」全画幅双栏工作台 */}
+        {/* 主工作区：左栏黄金比例（330-390px） + 右栏核心主舞台（~75%）；
+            「我的看台」全画幅工作台期间用 CSS 隐藏右栏而不卸载 PlayerStage，防止正在播的直播断流 */}
         <main className="flex min-h-0 flex-1 overflow-hidden">
-          {!miniMode && view === 'me' ? (
+          {!miniMode && view === 'me' && (
             <MeView
               prefs={prefs}
               onPrefsChange={setPrefs}
@@ -1428,10 +1436,15 @@ export default function App() {
               focusTeamsSeq={focusTeamsSeq}
               radarEnabled={radarState.enabled}
             />
-          ) : (
-            <>
+          )}
           {/* 左栏：决策与列表 */}
-          <section className={miniMode ? 'hidden' : 'flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] 2xl:w-[390px] shrink-0 flex-col overflow-hidden border-r border-line-hairline bg-surface-panel p-4'}>
+          <section
+            className={
+              miniMode || view === 'me'
+                ? 'hidden'
+                : 'flex min-h-0 w-[330px] lg:w-[345px] xl:w-[355px] 2xl:w-[390px] shrink-0 flex-col overflow-hidden border-r border-line-hairline bg-surface-panel p-4'
+            }
+          >
           {/* 计划有变（FR-05）：一次同步检测到的与用户相关的改期/延期，关闭后本轮不再出现 */}
           {visibleScheduleChanges && dismissedChangesAt !== scheduleChanges?.at && (
             <div className="mb-2 shrink-0">
@@ -1511,7 +1524,13 @@ export default function App() {
           {/* 右栏：转播舞台 + 情报中枢 */}
           <section
             ref={rightPaneRef}
-            className={miniMode ? 'flex min-h-0 flex-1 flex-col overflow-hidden p-0' : 'scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto p-4'}
+            className={
+              !miniMode && view === 'me'
+                ? 'hidden'
+                : miniMode
+                  ? 'flex min-h-0 flex-1 flex-col overflow-hidden p-0'
+                  : 'scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto p-4'
+            }
           >
             <div className={miniMode ? 'flex h-full w-full flex-col' : 'mx-auto flex w-full max-w-[1800px] 2xl:max-w-full flex-col gap-3'}>
               {/* 连续补看会话条取代「正在查看」提示条：连看时已经有位置指示，
@@ -1594,8 +1613,6 @@ export default function App() {
               />
             </div>
           </section>
-            </>
-          )}
         </main>
       </div>
 

@@ -618,11 +618,11 @@ export function validateFixtures(fixtures) {
     );
   }
 
-  const doneNoScore = fixtures.filter(m => m.st === 'done' && !m.sc);
-  if (doneNoScore.length) {
-    const sample = doneNoScore.slice(0, 10).map(m => m.id).join('、');
+  const doneBadScore = fixtures.filter(m => m.st === 'done' && !/^\d+-\d+$/.test(String(m.sc || '')));
+  if (doneBadScore.length) {
+    const sample = doneBadScore.slice(0, 10).map(m => `${m.id}(${m.sc ?? 'null'})`).join('、');
     issues.push(
-      `${doneNoScore.length} 场次 st=done 但无比分：${sample}${doneNoScore.length > 10 ? ` … 共 ${doneNoScore.length} 场` : ''}`
+      `${doneBadScore.length} 场次 st=done 但无比分或格式非法：${sample}${doneBadScore.length > 10 ? ` … 共 ${doneBadScore.length} 场` : ''}`
     );
   }
 
