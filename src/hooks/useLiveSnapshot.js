@@ -99,10 +99,22 @@ export function useLiveSnapshot({ matchId = null, state = null, intervalMs = 300
     setRefreshing(false);
 
     if (!matchId || state !== 'live') return undefined;
-    load();
-    const timer = setInterval(() => load(), intervalMs);
+    let timer = null;
+    const syncVisibility = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      if (typeof document === 'undefined' || document.visibilityState !== 'hidden') {
+        load();
+        timer = setInterval(() => load(), intervalMs);
+      }
+    };
+    syncVisibility();
+    document?.addEventListener?.('visibilitychange', syncVisibility);
     return () => {
-      clearInterval(timer);
+      if (timer) clearInterval(timer);
+      document?.removeEventListener?.('visibilitychange', syncVisibility);
       if (inFlightRef.current.matchId === matchId) {
         inFlightRef.current.controller?.abort();
         inFlightRef.current = { matchId: null, manual: false, reqId: 0, controller: null };

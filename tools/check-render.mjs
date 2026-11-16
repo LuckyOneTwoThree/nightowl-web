@@ -15,7 +15,7 @@
  * CI 在 Windows runner 上执行同一脚本。
  */
 
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -132,8 +132,17 @@ app.whenReady().then(async () => {
   win.setContentSize(1440, 900);
 
   const errors = [];
-  win.webContents.on('console-message', (_e, level, message) => {
-    if (level >= 3) errors.push(message);
+  ipcMain.handle('desktop:settings:get', () => ({
+    closeToTray: false,
+    launchAtLogin: false,
+    platform: process.platform,
+    trayAvailable: true,
+    launchAtLoginApplied: true,
+    launchAtLoginError: null,
+    settingsSaved: true
+  }));
+  win.webContents.on('console-message', event => {
+    if (event?.level === 'error' && event.message) errors.push(event.message);
   });
   win.webContents.on('render-process-gone', (_e, details) => {
     errors.push(`render-process-gone ${JSON.stringify(details)}`);
@@ -1320,6 +1329,12 @@ app.whenReady().then(async () => {
       })()
     `);
     await sleep(250);
+    const firstSettingsFocusReturned = await win.webContents.executeJavaScript(`
+      !document.querySelector('[aria-labelledby="settings-title"]') &&
+        (document.activeElement?.textContent?.includes('偏好与数据') || false)
+    `);
+    ok('★ 懒加载设置抽屉首次打开关闭后焦点回到触发按钮', firstSettingsFocusReturned);
+
     await win.webContents.executeJavaScript(`
       (() => {
         const tab = [...document.querySelectorAll('nav button')].find(
@@ -1347,6 +1362,72 @@ app.whenReady().then(async () => {
       meViewCheck.hasHeading && meViewCheck.hasWatchLater && meViewCheck.hasDiary &&
         meViewCheck.hasTeams && meViewCheck.hasSync && meViewCheck.overflow <= 1,
       JSON.stringify(meViewCheck));
+
+    const seasonOpened = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = [...document.querySelectorAll('button')].find(
+          b => (b.textContent || '').includes('完整赛季账单')
+        );
+        btn?.focus();
+        btn?.click();
+        return !!btn;
+      })()
+    `);
+    await sleep(400);
+    const seasonModalCheck = await win.webContents.executeJavaScript(`
+      (() => ({
+        open: !!document.querySelector('[aria-labelledby="season-report-title"]'),
+        bgInert: !!document.querySelector('main')?.parentElement?.hasAttribute('inert')
+      }))()
+    `);
+    await win.webContents.executeJavaScript(
+      `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); true`
+    );
+    await sleep(250);
+    const seasonClosedCheck = await win.webContents.executeJavaScript(`
+      (() => ({
+        closed: !document.querySelector('[aria-labelledby="season-report-title"]'),
+        bgInert: !!document.querySelector('main')?.parentElement?.hasAttribute('inert'),
+        focusBack: (document.activeElement?.textContent || '').includes('完整赛季账单')
+      }))()
+    `);
+    ok('★ 赛季账单弹窗受浮层栈纳管（背景 inert、Esc 关闭且首次打开归还焦点）',
+      seasonOpened && seasonModalCheck.open && seasonModalCheck.bgInert &&
+        seasonClosedCheck.closed && !seasonClosedCheck.bgInert && seasonClosedCheck.focusBack,
+      JSON.stringify({ seasonModalCheck, seasonClosedCheck }));
+
+    const pairOpened = await win.webContents.executeJavaScript(`
+      (() => {
+        const btn = [...document.querySelectorAll('button')].find(
+          b => (b.textContent || '').includes('局域网同步 / 接力')
+        );
+        btn?.focus();
+        btn?.click();
+        return !!btn;
+      })()
+    `);
+    await sleep(400);
+    const pairModalCheck = await win.webContents.executeJavaScript(`
+      (() => ({
+        open: !!document.querySelector('[aria-labelledby="lan-pair-title"]'),
+        bgInert: !!document.querySelector('main')?.parentElement?.hasAttribute('inert')
+      }))()
+    `);
+    await win.webContents.executeJavaScript(
+      `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); true`
+    );
+    await sleep(250);
+    const pairClosedCheck = await win.webContents.executeJavaScript(`
+      (() => ({
+        closed: !document.querySelector('[aria-labelledby="lan-pair-title"]'),
+        bgInert: !!document.querySelector('main')?.parentElement?.hasAttribute('inert'),
+        focusBack: (document.activeElement?.textContent || '').includes('局域网同步 / 接力')
+      }))()
+    `);
+    ok('★ 局域网配对弹窗受浮层栈纳管（背景 inert、Esc 关闭且首次打开归还焦点）',
+      pairOpened && pairModalCheck.open && pairModalCheck.bgInert &&
+        pairClosedCheck.closed && !pairClosedCheck.bgInert && pairClosedCheck.focusBack,
+      JSON.stringify({ pairModalCheck, pairClosedCheck }));
 
     await win.webContents.executeJavaScript(`
       (() => {
@@ -1839,8 +1920,8 @@ app.whenReady().then(async () => {
     });
     win2.setContentSize(1440, 900);
     const errs2 = [];
-    win2.webContents.on('console-message', (_e, level, message) => {
-      if (level >= 3) errs2.push(message);
+    win2.webContents.on('console-message', event => {
+      if (event?.level === 'error' && event.message) errs2.push(event.message);
     });
 
     try {

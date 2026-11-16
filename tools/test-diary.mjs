@@ -106,4 +106,44 @@ check('buildSeasonReport maps deterministic persona titles', () => {
   assert.equal(report.persona.code, 'SECOND_HALF_ACTUARY');
 });
 
+check('buildSeasonReport parses string scores from real fixtures snapshot and clamps future timestamps', () => {
+  const stringScoreFixtures = sampleFixtures.map(m => ({
+    ...m,
+    sc: `${m.sc[0]}-${m.sc[1]}`
+  }));
+  const now = 1_795_000_000_000;
+  let diary = null;
+  diary = upsertDiaryEntry(diary, { matchId: 'f1', mode: 'live', stamp: 'epic' }, now - 1000);
+  diary = upsertDiaryEntry(diary, { matchId: 'f2', mode: 'live', stamp: 'sleepy' }, now - 900);
+  diary = upsertDiaryEntry(diary, { matchId: 'f3', mode: 'replay', stamp: 'disaster' }, now - 800);
+  diary = upsertDiaryEntry(diary, { matchId: 'f4', mode: 'live', stamp: 'epic' }, now - 700);
+  const report = buildSeasonReport(
+    diary,
+    stringScoreFixtures,
+    { spoilerFree: true, followedTeams: ['ARS'] },
+    ['f3']
+  );
+  assert.equal(report.outcomeSummary.inspectedCount, 4);
+  assert.equal(report.outcomeSummary.worthItCount, 2);
+  assert.equal(report.outcomeSummary.dullDrawCount, 1);
+  const ars = report.teamRecords.find(r => r.teamId === 'ARS');
+  assert.equal(ars.w, 1);
+  assert.equal(ars.d, 1);
+  assert.equal(ars.l, 1);
+  assert.equal(ars.winRate, 33);
+
+  const clamped = normalizeDiary(
+    {
+      version: 1,
+      entries: {
+        f1: { matchId: 'f1', mode: 'live', stamp: 'epic', recordedAt: now + 1e12, updatedAt: now + 1e12 }
+      },
+      deleted: { f2: now + 1e12 }
+    },
+    now
+  );
+  assert.ok(clamped.entries.f1.updatedAt <= now + 5 * 60 * 1000);
+  assert.ok(clamped.deleted.f2 <= now + 5 * 60 * 1000);
+});
+
 console.log(`[test:diary] ${passed} passed`);

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from '../server/index.js';
 import { loadRules } from '../server/proxy.js';
 
-const { app, BrowserWindow } = electron;
+const { app, BrowserWindow, ipcMain } = electron;
 
 app.disableHardwareAcceleration();
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -28,6 +28,15 @@ app.whenReady().then(async () => {
   if (!existsSync(resolve(DIST, 'index.html'))) { console.error('no dist'); app.exit(1); return; }
   const failures = [];
   const silent = { log: () => {}, warn: () => {}, error: () => {} };
+  ipcMain.handle('desktop:settings:get', () => ({
+    closeToTray: false,
+    launchAtLogin: false,
+    platform: process.platform,
+    trayAvailable: true,
+    launchAtLoginApplied: true,
+    launchAtLoginError: null,
+    settingsSaved: true
+  }));
   const server = createServer(loadRules(), silent, { backgroundSync: false });
   const port = await new Promise((res) => server.listen(0, '127.0.0.1', () => res(server.address().port)));
   const base = `http://127.0.0.1:${port}`;

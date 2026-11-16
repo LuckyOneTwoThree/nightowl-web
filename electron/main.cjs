@@ -124,7 +124,7 @@ let launchAtLoginError = null;
 function applyLaunchAtLogin(enabled) {
   try {
     if (process.platform === 'darwin') {
-      app.setLoginItemSettings({ openAtLogin: !!enabled, openAsHidden: true });
+      app.setLoginItemSettings({ openAtLogin: !!enabled });
     } else if (process.platform === 'win32') {
       app.setLoginItemSettings({ openAtLogin: !!enabled, args: ['--hidden'] });
     }
@@ -691,7 +691,7 @@ onAuthorized('updater:check', () => {
 });
 
 onAuthorized('updater:download', () => {
-  if (!app.isPackaged || !autoUpdater) return;
+  if (process.platform === 'darwin' || !app.isPackaged || !autoUpdater) return;
   autoUpdater.downloadUpdate().catch(err => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('updater:event', {
@@ -703,7 +703,7 @@ onAuthorized('updater:download', () => {
 });
 
 onAuthorized('updater:install', () => {
-  if (!app.isPackaged || !autoUpdater) return;
+  if (process.platform === 'darwin' || !app.isPackaged || !autoUpdater) return;
   if (!updateDownloaded) {
     // 状态漂移（渲染层以为已就绪、主进程其实没有）：直接装会无反应。
     // 改为重新检测并告知渲染层，让按钮不再「点了没动静」。

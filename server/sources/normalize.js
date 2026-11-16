@@ -124,34 +124,48 @@ export function utcToBeijingWall(iso) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 export async function fetchJSON(url, { timeoutMs = 20000, retries = 3, baseDelayMs = 500, log = console, viaCurl = false } = {}) {
+  const startedAt = Date.now();
+  const remainingMs = () => (Number.isFinite(timeoutMs) && timeoutMs > 0 ? Math.max(0, timeoutMs - (Date.now() - startedAt)) : 20000);
+
   if (viaCurl) {
     const { execFile } = await import('node:child_process');
+    const sec = Math.max(1, Math.ceil(timeoutMs / 1000));
     const stdout = await new Promise((res, rej) => {
-      execFile('curl', ['-s', '--max-time', String(Math.ceil(timeoutMs / 1000)), '--compressed', url],
-        { maxBuffer: 64 * 1024 * 1024 }, (err, out) => (err ? rej(err) : res(out)));
+      execFile('curl', ['-s', '--max-time', String(sec), '--compressed', url],
+        { maxBuffer: 64 * 1024 * 1024, timeout: Math.max(50, timeoutMs) }, (err, out) => (err ? rej(err) : res(out)));
     });
     return JSON.parse(stdout);
   }
 
   let lastErr;
   for (let i = 0; i < retries; i++) {
+    const left = remainingMs();
+    if (left <= 0) break;
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    const timer = setTimeout(() => ac.abort(), left);
     try {
       const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: ac.signal });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return await r.json();
     } catch (err) {
       lastErr = err;
-      if (i < retries - 1) await sleep(baseDelayMs * Math.pow(2, i));
+      const delayLeft = remainingMs();
+      if (i < retries - 1 && delayLeft > 0) {
+        await sleep(Math.min(baseDelayMs * Math.pow(2, i), delayLeft));
+      }
     } finally {
       clearTimeout(timer);
     }
   }
 
+  const curlLeft = remainingMs();
+  if (curlLeft <= 50) {
+    throw new Error(`Node(${lastErr?.cause?.code || lastErr?.message || 'timeout'}) 且已耗尽预算(${timeoutMs}ms)`);
+  }
+
   // Node 通道失败 → curl 兜底（TLS 指纹不同，短线场景常能过）
   try {
-    const j = await fetchJSON(url, { timeoutMs, log, viaCurl: true });
+    const j = await fetchJSON(url, { timeoutMs: curlLeft, log, viaCurl: true });
     log.warn?.(`[sources] Node 直连失败（${lastErr?.cause?.code || lastErr?.message}），已用 curl 兜底：${url.slice(0, 70)}`);
     return j;
   } catch (err2) {

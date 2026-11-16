@@ -45,7 +45,7 @@ function displayRows(rows, league) {
  * （它们的积分/净胜球变化等于把比分数学揭晓了）；排除数量在「截至」行如实标注。
  * 只排今晚窗口——把所有未揭晓场次都排掉会让榜停在看不出年代的时点，反而在撒谎。
  */
-export default function StandingsModal({ open, onClose, initialLeague, match, now, dataRev, spoilerFree = false, revealed = null }) {
+export default function StandingsModal({ open, onClose, initialLeague, match, now, dataRev, spoilerFree = false, revealed = null, returnFocusEl = null }) {
   const closeRef = useRef(null);
   const scrollRef = useRef(null);
   const [league, setLeague] = useState(initialLeague || 'PL');
@@ -68,7 +68,7 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
     }
   }, [open, initialLeague]);
 
-  useDialogFocus(open, closeRef);
+  useDialogFocus(open, closeRef, returnFocusEl);
 
   const activeLeague = STANDINGS_LEAGUES.includes(league) ? league : 'PL';
   const nowTs = Number.isFinite(now) ? now : Date.now();

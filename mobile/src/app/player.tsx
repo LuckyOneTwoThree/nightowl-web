@@ -118,12 +118,14 @@ function PlayerView({
     return () => clearTimeout(timer);
   }, [hudVisible, panelOpen, active.id]);
 
+  const initialSourceRef = useRef({
+    uri: active.url,
+    headers: { 'User-Agent': USER_AGENT },
+    contentType: (active.kind === 'm3u8' ? 'hls' : undefined) as 'hls' | undefined,
+  });
+
   const player = useVideoPlayer(
-    {
-      uri: active.url,
-      headers: { 'User-Agent': USER_AGENT },
-      contentType: active.kind === 'm3u8' ? 'hls' : undefined,
-    },
+    initialSourceRef.current,
     instance => {
       instance.loop = false;
       // 夜间首次起播默认静音；用户显式选择过的偏好在下面异步恢复。
@@ -157,17 +159,28 @@ function PlayerView({
   useEffect(() => {
     if (firstSourceRef.current) {
       firstSourceRef.current = false;
-      return;
+      return undefined;
     }
-    player.replace({
-      uri: active.url,
-      headers: { 'User-Agent': USER_AGENT },
-      contentType: active.kind === 'm3u8' ? 'hls' : undefined,
-    });
-    // 自动换线不能把夜间静音重置为外放。
-    player.muted = mutedRef.current;
-    player.play();
-  }, [active.id, player, active.url, active.kind]);
+    let alive = true;
+    void (async () => {
+      try {
+        await player.replaceAsync({
+          uri: active.url,
+          headers: { 'User-Agent': USER_AGENT },
+          contentType: active.kind === 'm3u8' ? 'hls' : undefined,
+        });
+        if (!alive) return;
+        // 自动换线不能把夜间静音重置为外放。
+        player.muted = mutedRef.current;
+        player.play();
+      } catch {
+        // 换源失败交由 statusChange('error') 或用户手动切线处理
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [player, active.url, active.kind]);
 
   useEffect(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});

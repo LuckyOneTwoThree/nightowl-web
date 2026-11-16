@@ -25,7 +25,8 @@ export default function UpdateModal({
   updateState,
   onCheck,
   onDownload,
-  onInstall
+  onInstall,
+  returnFocusEl = null
 }) {
   const isDesktop = !!window.desktop?.isDesktop;
   // ad-hoc 签名的 designated requirement 是 cdhash，Squirrel 校验必然拒绝新包，
@@ -34,7 +35,7 @@ export default function UpdateModal({
   const closeBtnRef = useRef(null);
 
   // 弹窗打开时背景已 inert，焦点必须进入对话框；关闭时还回原处（hook 内统一处理）。
-  useDialogFocus(open, closeBtnRef);
+  useDialogFocus(open, closeBtnRef, returnFocusEl);
 
   // Web 回退状态（纯浏览器环境通过 GitHub API 探测）
   const [webCheck, setWebCheck] = useState({

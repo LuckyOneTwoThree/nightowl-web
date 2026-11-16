@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import {
   Ban,
@@ -79,7 +79,14 @@ export default function PlanScreen() {
   const prefs = usePrefs();
   const setBudget = usePrefsStore(state => state.setBudget);
   const rev = useDataRev();
-  const now = useNow(60_000);
+  const [focused, setFocused] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      return () => setFocused(false);
+    }, [])
+  );
+  const now = useNow(60_000, focused);
   const [weekOffset, setWeekOffset] = useState(0);
   const [showZero, setShowZero] = useState(false);
   const [showMinefield, setShowMinefield] = useState(false);

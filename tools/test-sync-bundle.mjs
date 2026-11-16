@@ -160,4 +160,45 @@ check('buildSyncBundle tolerates null input and mergeSyncBundles protects prefs 
   assert.equal(clean.sleepWakeTime, '07:30');
 });
 
+check('mergeSyncBundles clamps future clock skew on weekUpdatedAtByWeek, diary, and watchLater', () => {
+  const now = 1_795_000_000_000;
+  const evilRemote = {
+    version: 1,
+    weekUpdatedAtByWeek: { '2026-11-16': now + 365 * 86400_000 },
+    weekOverridesByWeek: {
+      '2026-11-16': { pinnedIds: ['evil-pin'], excludedIds: [], blockedNights: [] }
+    },
+    watchLater: [
+      { id: 'evil-q', night: '2026-11-16', addedAt: now + 365 * 86400_000, status: 'pending' }
+    ],
+    diary: {
+      version: 1,
+      entries: {
+        'm-evil': { matchId: 'm-evil', mode: 'live', stamp: 'disaster', recordedAt: now + 1e10, updatedAt: now + 1e10 }
+      }
+    }
+  };
+  const localBase = buildSyncBundle({}, now);
+  const merged = mergeSyncBundles(localBase, evilRemote, now);
+  assert.ok(merged.weekUpdatedAtByWeek['2026-11-16'] <= now + MAX_FUTURE_CLOCK_SKEW_MS);
+  assert.ok(merged.diary.entries['m-evil'].updatedAt <= now + MAX_FUTURE_CLOCK_SKEW_MS);
+  assert.ok(merged.watchLater[0].addedAt <= now + MAX_FUTURE_CLOCK_SKEW_MS);
+
+  // 本地超越容差窗口的更新必须能正常胜出，不被远端未来时间戳永久锁死
+  const laterTs = now + MAX_FUTURE_CLOCK_SKEW_MS + 5000;
+  const localLater = buildSyncBundle(
+    {
+      weekUpdatedAtByWeek: { '2026-11-16': laterTs },
+      weekOverridesByWeek: {
+        '2026-11-16': { pinnedIds: ['local-win'], excludedIds: [], blockedNights: [] }
+      },
+      diary: upsertDiaryEntry(null, { matchId: 'm-evil', mode: 'live', stamp: 'epic' }, laterTs)
+    },
+    laterTs
+  );
+  const resolved = mergeSyncBundles(localLater, merged, laterTs);
+  assert.deepEqual(resolved.weekOverridesByWeek['2026-11-16'].pinnedIds, ['local-win']);
+  assert.equal(resolved.diary.entries['m-evil'].stamp, 'epic');
+});
+
 console.log(`[test:sync-bundle] ${passed} passed`);

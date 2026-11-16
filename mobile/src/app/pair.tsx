@@ -154,11 +154,15 @@ export default function PairScreen() {
 
   const handlePasteUri = (text: string) => {
     setUriPaste(text);
+    if (!text.trim()) {
+      setToken('');
+      return;
+    }
     const parsed = parsePairUriInput(text);
     if (!parsed) return;
     if (parsed.host) setHost(parsed.host);
     if (parsed.port) setPort(parsed.port);
-    if (parsed.token) setToken(parsed.token);
+    setToken(parsed.token || '');
     if (parsed.mode === 'handoff') setMode('handoff');
     else if (parsed.mode === 'sync') setMode('sync');
   };
@@ -365,7 +369,10 @@ export default function PairScreen() {
           <Text style={styles.fieldLabel}>桌面端局域网 IP</Text>
           <TextInput
             value={host}
-            onChangeText={setHost}
+            onChangeText={next => {
+              setHost(next);
+              setToken('');
+            }}
             placeholder="例如 192.168.1.24"
             placeholderTextColor={colors.textFaint}
             autoCapitalize="none"
@@ -377,7 +384,10 @@ export default function PairScreen() {
           <Text style={styles.fieldLabel}>临时端口</Text>
           <TextInput
             value={port}
-            onChangeText={setPort}
+            onChangeText={next => {
+              setPort(next);
+              setToken('');
+            }}
             placeholder="例如 54321"
             placeholderTextColor={colors.textFaint}
             keyboardType="number-pad"

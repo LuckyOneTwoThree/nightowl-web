@@ -109,6 +109,21 @@ export async function cancelAllMatchReminders(): Promise<void> {
   }
 }
 
+export async function cancelPrematchReminders(): Promise<void> {
+  if (!notificationsAvailable()) return;
+  try {
+    const Notifications = await import('expo-notifications');
+    const existing = await Notifications.getAllScheduledNotificationsAsync();
+    for (const item of existing) {
+      if (item.content.data?.kind === 'prematch') {
+        await Notifications.cancelScheduledNotificationAsync(item.identifier);
+      }
+    }
+  } catch {
+    // 忽略清理失败
+  }
+}
+
 export async function cancelMatchReminder(matchId: string): Promise<boolean> {
   if (!notificationsAvailable() || !matchId) return false;
   try {
@@ -253,29 +268,40 @@ async function runReminderSync(prefs: Prefs): Promise<ReminderResult> {
       .sort((a, b) => ts(a.t) - ts(b.t))
       .slice(0, MAX_REMINDERS);
 
-    // 先安排新版赛前提醒，全部成功后再取消旧批提醒，避免中途异常导致全量提醒丢失
+    // 先安排新版赛前提醒，全部成功后再取消旧批提醒；若中途出错则回滚本次已排程项，避免新旧并存重复提醒
     const previousIdentifiers = existing
       .filter(item => item.content.data?.kind === 'prematch')
       .map(item => item.identifier);
 
-    let scheduled = 0;
-    for (const match of list) {
-      const when = new Date(ts(match.t) - LEAD_MS);
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: `赛前 15 分钟提醒 · ${teamName(match.h)} vs ${teamName(match.a)}`,
-          body: `${hm(match.t)} · ${leagueName(match.l)}${
-            match.r ? ` 第 ${match.r} 轮` : ''
-          }`,
-          data: { matchId: match.id, kind: 'prematch', kickoff: match.t },
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: when,
-          channelId: CHANNEL_ID,
-        },
-      });
-      scheduled += 1;
+    const newlyScheduledIds: string[] = [];
+    try {
+      for (const match of list) {
+        const when = new Date(ts(match.t) - LEAD_MS);
+        const identifier = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `赛前 15 分钟提醒 · ${teamName(match.h)} vs ${teamName(match.a)}`,
+            body: `${hm(match.t)} · ${leagueName(match.l)}${
+              match.r ? ` 第 ${match.r} 轮` : ''
+            }`,
+            data: { matchId: match.id, kind: 'prematch', kickoff: match.t },
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: when,
+            channelId: CHANNEL_ID,
+          },
+        });
+        newlyScheduledIds.push(identifier);
+      }
+    } catch (scheduleErr) {
+      for (const id of newlyScheduledIds) {
+        try {
+          await Notifications.cancelScheduledNotificationAsync(id);
+        } catch {
+          /* 回滚尽力而为 */
+        }
+      }
+      throw scheduleErr;
     }
 
     for (const identifier of previousIdentifiers) {
@@ -286,7 +312,7 @@ async function runReminderSync(prefs: Prefs): Promise<ReminderResult> {
       }
     }
 
-    return { ok: true, scheduled };
+    return { ok: true, scheduled: newlyScheduledIds.length };
   } catch (error) {
     return {
       ok: false,

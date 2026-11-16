@@ -153,12 +153,13 @@ export default function SeasonReportModal({
   revealedIds,
   onImportDiary,
   onOpenMatch,
-  onClose
+  onClose,
+  returnFocusEl = null
 }) {
   const closeBtnRef = useRef(null);
   const fileInputRef = useRef(null);
   const [feedback, setFeedback] = useState(null);
-  useDialogFocus(open, closeBtnRef);
+  useDialogFocus(open, closeBtnRef, returnFocusEl);
 
   const fixtures = getFixtures();
   const report = useMemo(

@@ -176,6 +176,34 @@ await check('qToken+qPin failures enforce PIN rate limit, concurrent /pair/sync 
   await mgr2.stopSession();
   assert.ok(Date.now() - t0 < 800);
   assert.equal(mgr2.getStatus().active, false);
+
+  // 4. 并发请求触发吊销临界时，第 6 个在途请求必须收到完整 410 JSON，而非先销毁连接造成 socket hang up
+  const mgr3 = createLanPairManager();
+  const s3 = await mgr3.startSession({
+    bindHost: '127.0.0.1',
+    port: 0,
+    ttlMs: 30_000
+  });
+  const base3 = `http://127.0.0.1:${s3.port}`;
+  const burst = await Promise.all(
+    Array.from({ length: 6 }, () => fetch(`${base3}/pair/info?pin=000000`))
+  );
+  const statuses = burst.map(r => r.status).sort();
+  assert.deepEqual(statuses, [401, 401, 401, 401, 401, 410]);
+  const revokedRes = burst.find(r => r.status === 410);
+  const revokedJson = await revokedRes.json();
+  assert.equal(revokedJson.ok, false);
+  await mgr3.stopSession();
+
+  // 5. handoff 绝不回落漏出 127.0.0.1 或 localhost
+  const sanitizedLoopback = sanitizeHandoffLines([
+    { url: 'http://127.0.0.1:3100/api/proxy?missingUrlParam=1' },
+    { url: 'http://localhost:3100/live.m3u8' }
+  ]);
+  assert.equal(sanitizedLoopback[0].url, null);
+  assert.equal(sanitizedLoopback[0].proxyRequired, true);
+  assert.equal(sanitizedLoopback[1].url, null);
+  assert.equal(sanitizedLoopback[1].proxyRequired, true);
 });
 
 console.log(`[test:lan-pair] ${passed} passed`);

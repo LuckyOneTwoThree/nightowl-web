@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 /** 浮层栈的固定顺序（与渲染顺序无关，只用于稳定排序与 Esc 目标识别） */
-const ORDER = ['settings', 'onboarding', 'update', 'standings', 'palette', 'morning'];
+const ORDER = ['settings', 'onboarding', 'update', 'standings', 'season', 'lanPair', 'palette', 'morning'];
 
 /**
  * 浮层栈：任一全屏浮层打开时背景 inert、Esc 只关最上层、打开顺序决定层级。
@@ -14,19 +14,33 @@ const ORDER = ['settings', 'onboarding', 'update', 'standings', 'palette', 'morn
  *   3. 新打开但 effect 还没同步的浮层要追加到末尾，否则首帧被 inert 掉、焦点进不去。
  *
  * @param {object} p
- * @param {Record<string, boolean>} p.flags 各浮层是否打开（settings/onboarding/update/standings/palette/morning）
+ * @param {Record<string, boolean>} p.flags 各浮层是否打开（settings/onboarding/update/standings/season/lanPair/palette/morning）
  * @param {Record<string, Function>} p.closers 各浮层的关闭函数（同键名）
  * @param {boolean} [p.splashOpen] 开屏是否打开（只影响背景 inert，不参与栈）
  */
 export function useOverlayStack({ flags, closers, splashOpen = false }) {
   const [overlayOrder, setOverlayOrder] = useState([]);
   const prevRef = useRef({});
+  const triggerElsRef = useRef({});
   // closers 每次渲染是新对象；用 ref 持有最新值，避免 Esc 监听器每次渲染重挂
   const closersRef = useRef(closers);
   closersRef.current = closers;
 
   const openMap = {};
   for (const id of ORDER) openMap[id] = !!flags[id];
+  // 关键时序：必须在 commit 把背景设成 inert 之前捕获触发按钮。
+  // 否则懒加载弹窗首个 chunk 尚未就绪期间，inert 会先一步把聚焦按钮 blur 到 document.body，
+  // 导致 chunk 挂上后 useDialogFocus 拿不到原入口。
+  if (typeof document !== 'undefined') {
+    for (const id of ORDER) {
+      if (openMap[id] && !prevRef.current[id] && !triggerElsRef.current[id]) {
+        const el = document.activeElement;
+        if (el && el !== document.body && !el.closest?.('[inert]')) {
+          triggerElsRef.current[id] = el;
+        }
+      }
+    }
+  }
   const openOverlayIds = ORDER.filter(id => openMap[id]);
   const effectiveOverlayOrder = [
     ...overlayOrder.filter(id => openOverlayIds.includes(id)),
@@ -35,6 +49,7 @@ export function useOverlayStack({ flags, closers, splashOpen = false }) {
   const topOverlay = effectiveOverlayOrder[effectiveOverlayOrder.length - 1] || null;
   const overlayOpen = !!splashOpen || openOverlayIds.length > 0;
   const inertFor = id => (openOverlayIds.includes(id) && id !== topOverlay ? true : undefined);
+  const triggerElFor = id => triggerElsRef.current[id] || null;
 
   const signature = ORDER.map(id => (openMap[id] ? '1' : '0')).join('');
 
@@ -42,6 +57,9 @@ export function useOverlayStack({ flags, closers, splashOpen = false }) {
   useEffect(() => {
     const prev = prevRef.current;
     const next = openMap;
+    for (const id of ORDER) {
+      if (!next[id]) delete triggerElsRef.current[id];
+    }
     setOverlayOrder(order => {
       const kept = order.filter(id => next[id]);
       const added = ORDER.filter(id => next[id] && !prev[id]);
@@ -61,5 +79,5 @@ export function useOverlayStack({ flags, closers, splashOpen = false }) {
     return () => window.removeEventListener('keydown', onEsc);
   }, [overlayOrder]);
 
-  return { overlayOpen, inertFor, topOverlay, effectiveOverlayOrder };
+  return { overlayOpen, inertFor, triggerElFor, topOverlay, effectiveOverlayOrder };
 }

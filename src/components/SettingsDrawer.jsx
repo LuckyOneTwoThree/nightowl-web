@@ -64,7 +64,8 @@ export default function SettingsDrawer({
   onRadarEnabledChange,
   onOpenSeasonReport,
   onOpenLanPair,
-  onOpenMeView = null
+  onOpenMeView = null,
+  returnFocusEl = null
 }) {
   const leagueCount = prefs.followedLeagues.length;
   const bonusActive = leagueCount > 0 && leagueCount < 6;
@@ -80,7 +81,7 @@ export default function SettingsDrawer({
     }
   }, [open, initialTab]);
 
-  useDialogFocus(open, closeBtnRef);
+  useDialogFocus(open, closeBtnRef, returnFocusEl);
 
   const { health, refresh } = useServiceHealth(open);
 

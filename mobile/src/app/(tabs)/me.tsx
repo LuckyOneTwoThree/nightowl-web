@@ -38,7 +38,7 @@ import { openExternal } from '@/lib/openExternal';
 import { useNow } from '@/lib/useNow';
 import { useAppStore, useDataRev } from '@/state/app';
 import {
-  cancelAllMatchReminders,
+  cancelPrematchReminders,
   getNotificationPermissionStatus,
   type NotificationPermissionState,
   notificationsAvailable,
@@ -304,7 +304,7 @@ export default function MeScreen() {
             onValueChange={value => {
               if (!value) {
                 setPrefs({ notifyBefore15: false });
-                void cancelAllMatchReminders();
+                void cancelPrematchReminders();
                 return;
               }
               if (!notificationsAvailable()) {

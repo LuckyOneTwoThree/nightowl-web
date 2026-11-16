@@ -13,9 +13,10 @@ import { defaultPrefs, extractValidPrefPatch, normalizePrefs } from './prefs.js'
 import { normalizeQueue, WATCH_LATER_LIMIT, WATCH_LATER_STATUS } from './queue.js';
 import { normalizeWeekOverrides } from './week-overrides.js';
 import { normalizeDiary } from './diary.js';
+import { clampTimestamp, MAX_FUTURE_CLOCK_SKEW_MS } from './sync-clock.js';
 
+export { MAX_FUTURE_CLOCK_SKEW_MS };
 export const SYNC_SCHEMA_VERSION = 1;
-export const MAX_FUTURE_CLOCK_SKEW_MS = 5 * 60 * 1000;
 
 export const ALLOWED_PREF_KEYS = Object.freeze([
   'followedTeams',
@@ -31,12 +32,6 @@ export const ALLOWED_PREF_KEYS = Object.freeze([
   'sleepMinHours'
 ]);
 
-function clampTimestamp(rawTs, nowTs) {
-  const n = Number(rawTs);
-  if (!Number.isFinite(n) || n < 0) return nowTs;
-  return Math.min(n, nowTs + MAX_FUTURE_CLOCK_SKEW_MS);
-}
-
 function sanitizePrefs(rawPrefs) {
   return normalizePrefs(rawPrefs, defaultPrefs());
 }
@@ -51,13 +46,13 @@ function sanitizeWeekOverridesMap(rawMap) {
   return out;
 }
 
-function sanitizeWeekUpdatedAtMap(rawMap) {
+function sanitizeWeekUpdatedAtMap(rawMap, nowTs = Date.now()) {
   if (!rawMap || typeof rawMap !== 'object' || Array.isArray(rawMap)) return {};
   const out = {};
   for (const [weekKey, tsVal] of Object.entries(rawMap)) {
     if (typeof weekKey !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(weekKey)) continue;
-    const t = Number(tsVal);
-    if (Number.isFinite(t) && t >= 0) out[weekKey] = t;
+    const t = clampTimestamp(tsVal, nowTs, -1);
+    if (t >= 0) out[weekKey] = t;
   }
   return out;
 }
@@ -89,11 +84,11 @@ export function buildSyncBundle(input = {}, nowTs = Date.now()) {
     ),
     prefs: sanitizePrefs(safeInput.prefs),
     weekOverridesUpdatedAt,
-    weekUpdatedAtByWeek: sanitizeWeekUpdatedAtMap(safeInput.weekUpdatedAtByWeek),
+    weekUpdatedAtByWeek: sanitizeWeekUpdatedAtMap(safeInput.weekUpdatedAtByWeek, nowTs),
     weekOverridesByWeek: sanitizeWeekOverridesMap(safeInput.weekOverridesByWeek),
     watchLater: normalizeQueue(safeInput.watchLater, nowTs),
     revealedIds: sanitizeRevealedIds(safeInput.revealedIds),
-    diary: normalizeDiary(safeInput.diary)
+    diary: normalizeDiary(safeInput.diary, nowTs)
   };
 }
 
@@ -195,7 +190,7 @@ export function mergeSyncBundles(localRaw, remoteRaw, nowTs = Date.now()) {
     const addedAt = Math.max(prev.addedAt || 0, item.addedAt || 0);
     const watchedAt =
       status === WATCH_LATER_STATUS.WATCHED
-        ? Math.max(prev.watchedAt || 0, item.watchedAt || 0) || nowTs
+        ? clampTimestamp(Math.max(prev.watchedAt || 0, item.watchedAt || 0) || nowTs, nowTs)
         : null;
     qMap.set(item.id, {
       id: item.id,
@@ -240,11 +235,14 @@ export function mergeSyncBundles(localRaw, remoteRaw, nowTs = Date.now()) {
       diaryEntries[matchId] = bestEntry;
     }
   }
-  const mergedDiary = normalizeDiary({
-    version: 1,
-    entries: diaryEntries,
-    ...(Object.keys(diaryDeleted).length > 0 ? { deleted: diaryDeleted } : {})
-  });
+  const mergedDiary = normalizeDiary(
+    {
+      version: 1,
+      entries: diaryEntries,
+      ...(Object.keys(diaryDeleted).length > 0 ? { deleted: diaryDeleted } : {})
+    },
+    nowTs
+  );
 
   return {
     version: SYNC_SCHEMA_VERSION,

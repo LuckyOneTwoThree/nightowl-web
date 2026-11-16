@@ -10,6 +10,7 @@
  */
 
 import { parseMin, tierOf } from './engine.js';
+import { clampTimestamp } from './sync-clock.js';
 
 export const DIARY_VERSION = 1;
 export const DIARY_MAX_ENTRIES = 500;
@@ -39,15 +40,15 @@ function cleanNote(note) {
   return note.trim().slice(0, DIARY_NOTE_MAX_LEN);
 }
 
-function normalizeEntry(matchId, raw, fallbackNow = 0) {
+function normalizeEntry(matchId, raw, fallbackNow = 0, nowTs = Date.now()) {
   if (!raw || typeof raw !== 'object') return null;
   const id = typeof raw.matchId === 'string' && raw.matchId ? raw.matchId : matchId;
   if (!id || typeof id !== 'string') return null;
   const mode = MODE_SET.has(raw.mode) ? raw.mode : 'live';
   const stamp = STAMP_SET.has(raw.stamp) ? raw.stamp : null;
   if (!stamp) return null;
-  const recordedAt = Number.isFinite(raw.recordedAt) ? raw.recordedAt : fallbackNow;
-  const updatedAt = Number.isFinite(raw.updatedAt) ? raw.updatedAt : recordedAt;
+  const recordedAt = clampTimestamp(raw.recordedAt, nowTs, fallbackNow);
+  const updatedAt = clampTimestamp(raw.updatedAt, nowTs, recordedAt);
   return {
     matchId: id,
     mode,
@@ -70,13 +71,15 @@ function trimToMaxEntries(entriesObj) {
   return next;
 }
 
-function sanitizeDeletedMap(rawDeleted, entries) {
+function sanitizeDeletedMap(rawDeleted, entries, nowTs = Date.now()) {
   if (!rawDeleted || typeof rawDeleted !== 'object' || Array.isArray(rawDeleted)) return {};
   const pairs = [];
   for (const [k, tsVal] of Object.entries(rawDeleted)) {
     if (typeof k !== 'string' || !k) continue;
-    const t = Number(tsVal);
-    if (!Number.isFinite(t) || t <= 0) continue;
+    const rawNum = Number(tsVal);
+    if (!Number.isFinite(rawNum) || rawNum <= 0) continue;
+    const t = clampTimestamp(rawNum, nowTs, 0);
+    if (t <= 0) continue;
     if (entries[k] && (entries[k].updatedAt || 0) > t) continue;
     pairs.push([k, t]);
   }
@@ -89,8 +92,9 @@ function sanitizeDeletedMap(rawDeleted, entries) {
 /**
  * 规范化 diary 对象
  * @param {any} raw
+ * @param {number} [nowTs]
  */
-export function normalizeDiary(raw) {
+export function normalizeDiary(raw, nowTs = Date.now()) {
   const rawEntries =
     raw && typeof raw === 'object' && raw.entries && typeof raw.entries === 'object'
       ? raw.entries
@@ -99,11 +103,11 @@ export function normalizeDiary(raw) {
         : {};
   const entries = {};
   for (const [k, val] of Object.entries(rawEntries)) {
-    const clean = normalizeEntry(k, val);
+    const clean = normalizeEntry(k, val, 0, nowTs);
     if (clean) entries[clean.matchId] = clean;
   }
   const trimmedEntries = trimToMaxEntries(entries);
-  const deleted = sanitizeDeletedMap(raw?.deleted, trimmedEntries);
+  const deleted = sanitizeDeletedMap(raw?.deleted, trimmedEntries, nowTs);
   const out = {
     version: DIARY_VERSION,
     entries: trimmedEntries
@@ -118,14 +122,14 @@ export function normalizeDiary(raw) {
  * 新增或更新一条观赛印章记录（纯函数，不修改原对象）
  */
 export function upsertDiaryEntry(diary, patch, nowTs = Date.now()) {
-  const base = normalizeDiary(diary);
+  const base = normalizeDiary(diary, nowTs);
   if (!patch || !patch.matchId || typeof patch.matchId !== 'string') return base;
   const prev = base.entries[patch.matchId];
   const stamp = STAMP_SET.has(patch.stamp) ? patch.stamp : prev?.stamp || 'epic';
   const mode = MODE_SET.has(patch.mode) ? patch.mode : prev?.mode || 'live';
   const note = patch.note !== undefined ? cleanNote(patch.note) : prev?.note || '';
   const recordedAt = prev?.recordedAt && Number.isFinite(prev.recordedAt) ? prev.recordedAt : nowTs;
-  const updatedAt = Number.isFinite(patch.updatedAt) ? patch.updatedAt : nowTs;
+  const updatedAt = clampTimestamp(patch.updatedAt, nowTs, nowTs);
 
   const entries = {
     ...base.entries,
@@ -154,22 +158,42 @@ export function upsertDiaryEntry(diary, patch, nowTs = Date.now()) {
  * 移除指定场次的印章记录（写入删除墓碑以防局域网同步误恢复）
  */
 export function removeDiaryEntry(diary, matchId, nowTs = Date.now()) {
-  const base = normalizeDiary(diary);
+  const base = normalizeDiary(diary, nowTs);
   if (!matchId || typeof matchId !== 'string') return base;
   const hadEntry = matchId in base.entries;
   const entries = { ...base.entries };
   if (hadEntry) delete entries[matchId];
   const deleted = { ...(base.deleted || {}) };
   const prevDel = deleted[matchId] || 0;
-  const delTs = Number.isFinite(nowTs) ? Math.max(prevDel, nowTs) : prevDel;
+  const delTs = clampTimestamp(Math.max(prevDel, nowTs), nowTs, prevDel);
   if (hadEntry || delTs > 0) {
     deleted[matchId] = delTs;
   }
-  return normalizeDiary({
-    version: DIARY_VERSION,
-    entries,
-    deleted
-  });
+  return normalizeDiary(
+    {
+      version: DIARY_VERSION,
+      entries,
+      deleted
+    },
+    nowTs
+  );
+}
+
+function parseMatchScore(sc) {
+  if (Array.isArray(sc) && sc.length === 2) {
+    const hg = Number(sc[0]);
+    const ag = Number(sc[1]);
+    if (Number.isInteger(hg) && Number.isInteger(ag) && hg >= 0 && ag >= 0) {
+      return [hg, ag];
+    }
+    return null;
+  }
+  if (typeof sc === 'string') {
+    const matched = sc.trim().match(/^(\d+)\s*-\s*(\d+)$/);
+    if (!matched) return null;
+    return [Number(matched[1]), Number(matched[2])];
+  }
+  return null;
 }
 
 function resolvePersona(safeSummary, outcomeSummary) {
@@ -285,21 +309,16 @@ export function buildSeasonReport(diaryOrEntries, fixtures = [], prefs = {}, rev
     }
 
     const canInspectScore = !spoilerFree || revealedSet.has(entry.matchId) || entry.mode === 'live';
-    const hasScore =
-      m.st === 'done' &&
-      Array.isArray(m.sc) &&
-      m.sc.length === 2 &&
-      Number.isFinite(m.sc[0]) &&
-      Number.isFinite(m.sc[1]);
+    const parsedScore = m.st === 'done' ? parseMatchScore(m.sc) : null;
 
     if (!canInspectScore) {
       maskedBySpoilerCount += 1;
       continue;
     }
-    if (!hasScore) continue;
+    if (!parsedScore) continue;
 
     inspectedCount += 1;
-    const [hg, ag] = m.sc;
+    const [hg, ag] = parsedScore;
     const totalGoals = hg + ag;
     const diff = Math.abs(hg - ag);
 

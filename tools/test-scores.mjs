@@ -653,9 +653,18 @@ console.log('十、★ 已检查场次的判定口径（两条同步路径必须
     ids(fx, blFailed, { matchId: 'BL-P1' }).length === 0,
     JSON.stringify(ids(fx, blFailed, { matchId: 'BL-P1' })));
 
-  // ⑤ 零请求 / 全失败 → 不动新鲜度
+  // ⑤ 零请求 / 全失败 / 时间预算截断 → 不动新鲜度
   ok('零请求：一条都不记', ids(fx, noRequest).length === 0, JSON.stringify(ids(fx, noRequest)));
   ok('全部请求失败：一条都不记', ids(fx, allFailed).length === 0, JSON.stringify(ids(fx, allFailed)));
+  const truncatedOk = {
+    bySource: { espn: { ok: 1 } },
+    errors: [],
+    truncated: true,
+    remainingTargets: 17
+  };
+  ok('★ 时间预算截断（truncated=true）：不虚报整轮已检查',
+    ids(fx, truncatedOk).length === 0,
+    JSON.stringify(ids(fx, truncatedOk)));
 
   // ⑥ 时间边界：未到完赛时间的场次不算查过（NOW=10-02 00:00，本场 02:00 才结束）
   const future = [{ id: 'PL-F', l: 'PL', t: '2026-10-01T23:30', st: 'sched', h: 'X', a: 'Y' }];

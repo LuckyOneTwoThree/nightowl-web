@@ -138,8 +138,23 @@ export default function App() {
    */
   const [clockTs, setClockTs] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setClockTs(Date.now()), 30000);
-    return () => clearInterval(t);
+    let t = null;
+    const syncVisibility = () => {
+      if (t) {
+        clearInterval(t);
+        t = null;
+      }
+      if (typeof document === 'undefined' || document.visibilityState !== 'hidden') {
+        setClockTs(Date.now());
+        t = setInterval(() => setClockTs(Date.now()), 30000);
+      }
+    };
+    syncVisibility();
+    document?.addEventListener?.('visibilitychange', syncVisibility);
+    return () => {
+      if (t) clearInterval(t);
+      document?.removeEventListener?.('visibilitychange', syncVisibility);
+    };
   }, []);
   const minuteKey = Math.floor(clockTs / 60000);
 
@@ -207,12 +222,13 @@ export default function App() {
 
   // ---- M5: 同窗置顶小窗看球（Mini Mode）----
   const [miniMode, setMiniMode] = useState(false);
+  const miniModeRef = useRef(miniMode);
+  miniModeRef.current = miniMode;
   const handleToggleMiniMode = useCallback(next => {
-    setMiniMode(prev => {
-      const target = typeof next === 'boolean' ? next : !prev;
-      window.desktop?.setMiniMode?.(target);
-      return target;
-    });
+    const target = typeof next === 'boolean' ? next : !miniModeRef.current;
+    miniModeRef.current = target;
+    setMiniMode(target);
+    window.desktop?.setMiniMode?.(target);
   }, []);
 
   // ---- M6: 局域网一扫同步 / 被窝手机接力 ----
@@ -350,7 +366,11 @@ export default function App() {
         if (!res.ok) return;
         const data = await res.json();
         if (!alive) return;
-        if (data.active) setLanPairSession(prev => ({ ...(prev || {}), ...data }));
+        if (data.active) {
+          setLanPairSession(prev => ({ ...(prev || {}), ...data }));
+        } else {
+          setLanPairSession(prev => (prev && !prev.error ? { ...prev, active: false } : prev));
+        }
         if (data.latestMergedAt && data.latestMergedAt > lastAppliedMergedAtRef.current && data.merged) {
           lastAppliedMergedAtRef.current = data.latestMergedAt;
           const m = data.merged;
@@ -1027,7 +1047,7 @@ export default function App() {
   // 于是提醒在用户看不见的情况下被永久用掉。
   const anyOverlayOpen = !!(
     settingsOpen || onboardingOpen || splashOpen || updateModalOpen
-    || standingsState || morningDigestOpen || paletteOpen
+    || standingsState || seasonReportOpen || lanPairOpen || morningDigestOpen || paletteOpen
   );
   const {
     stopLossContext,
@@ -1160,14 +1180,14 @@ export default function App() {
     if (
       !prefs.sleepEnabled || !morningDigestAuto.canShow || morningDigestOpen ||
       morningDismissed.night === morningDigestAuto.night ||
-      settingsOpen || onboardingOpen || splashOpen || updateModalOpen || standingsState || paletteOpen
+      settingsOpen || onboardingOpen || splashOpen || updateModalOpen || standingsState || seasonReportOpen || lanPairOpen || paletteOpen
     ) {
       return;
     }
     setMorningDigestOpen(true);
   }, [
     prefs.sleepEnabled, morningDigestAuto, morningDigestOpen, morningDismissed,
-    settingsOpen, onboardingOpen, splashOpen, updateModalOpen, standingsState, paletteOpen
+    settingsOpen, onboardingOpen, splashOpen, updateModalOpen, standingsState, seasonReportOpen, lanPairOpen, paletteOpen
   ]);
   const closeMorningDigest = useCallback(() => {
     const night = morningDigestAll.night || morningDigestNight(clockTs);
@@ -1375,7 +1395,7 @@ export default function App() {
   }, [tonight, triggerSync, openLanPair]);
 
   // ---- 浮层栈：背景 inert / Esc 只关最上层 / 打开顺序决定层级（实现见 hooks/useOverlayStack）----
-  const { overlayOpen, inertFor } = useOverlayStack({
+  const { overlayOpen, inertFor, triggerElFor } = useOverlayStack({
     flags: {
       settings: settingsOpen,
       onboarding: onboardingVisible,
@@ -1606,7 +1626,7 @@ export default function App() {
               <PlayerStage
                 match={activeMatch}
                 state={activeMatch ? stateOf(activeMatch, clockTs) : 'sched'}
-                isOverlayOpen={overlayOpen}
+                isOverlayOpen={overlayOpen || (!miniMode && view === 'me')}
                 spoilerFree={prefs.spoilerFree}
                 revealed={activeMatch ? revealed.has(activeMatch.id) : false}
                 onReveal={reveal}
@@ -1659,8 +1679,8 @@ export default function App() {
         />
       )}
 
-      <Suspense fallback={null}>
-        {morningDigestOpen && (
+      {morningDigestOpen && (
+        <Suspense fallback={null}>
           <div inert={inertFor('morning') || undefined}>
             <MorningDigest
               open={morningDigestOpen}
@@ -1682,21 +1702,24 @@ export default function App() {
                 closeMorningDigest();
                 openSeasonReport();
               }}
+              returnFocusEl={triggerElFor('morning')}
             />
           </div>
-        )}
+        </Suspense>
+      )}
 
-        {paletteOpen && (
-          <div inert={inertFor('palette') || undefined}>
-            <CommandPalette
-              items={paletteItems}
-              onClose={closePalette}
-              onRun={runPaletteItem}
-            />
-          </div>
-        )}
+      {paletteOpen && (
+        <div inert={inertFor('palette') || undefined}>
+          <CommandPalette
+            items={paletteItems}
+            onClose={closePalette}
+            onRun={runPaletteItem}
+          />
+        </div>
+      )}
 
-        {settingsOpen && (
+      {settingsOpen && (
+        <Suspense fallback={null}>
           <div inert={inertFor('settings') || undefined}>
             <SettingsDrawer
               open={settingsOpen}
@@ -1733,24 +1756,27 @@ export default function App() {
                   handleCheckUpdate();
                 }
               }}
+              returnFocusEl={triggerElFor('settings')}
             />
           </div>
-        )}
+        </Suspense>
+      )}
 
-        {onboardingVisible && (
-          <div inert={inertFor('onboarding') || undefined}>
-            <Onboarding
-              open={onboardingVisible}
-              prefs={prefs}
-              onPrefsChange={setPrefs}
-              onClose={closeOnboarding}
-            />
-          </div>
-        )}
+      {onboardingVisible && (
+        <div inert={inertFor('onboarding') || undefined}>
+          <Onboarding
+            open={onboardingVisible}
+            prefs={prefs}
+            onPrefsChange={setPrefs}
+            onClose={closeOnboarding}
+          />
+        </div>
+      )}
 
-        {splashOpen && <SplashScreen onClose={handleCloseSplash} />}
+      {splashOpen && <SplashScreen onClose={handleCloseSplash} />}
 
-        {!!standingsState && (
+      {!!standingsState && (
+        <Suspense fallback={null}>
           <div inert={inertFor('standings') || undefined}>
             <StandingsModal
               open={!!standingsState}
@@ -1761,11 +1787,14 @@ export default function App() {
               spoilerFree={prefs.spoilerFree}
               revealed={revealed}
               onClose={closeStandings}
+              returnFocusEl={triggerElFor('standings')}
             />
           </div>
-        )}
+        </Suspense>
+      )}
 
-        {seasonReportOpen && (
+      {seasonReportOpen && (
+        <Suspense fallback={null}>
           <div inert={inertFor('season') || undefined}>
             <SeasonReportModal
               open={seasonReportOpen}
@@ -1775,11 +1804,14 @@ export default function App() {
               onImportDiary={handleImportDiary}
               onOpenMatch={id => selectAndLeaveMe(id)}
               onClose={closeSeasonReport}
+              returnFocusEl={triggerElFor('season')}
             />
           </div>
-        )}
+        </Suspense>
+      )}
 
-        {lanPairOpen && (
+      {lanPairOpen && (
+        <Suspense fallback={null}>
           <div inert={inertFor('lanPair') || undefined}>
             <LanPairModal
               open={lanPairOpen}
@@ -1789,11 +1821,14 @@ export default function App() {
               onSwitchHost={host => void startLanPairSession({ ...lastPairOptsRef.current, displayHost: host })}
               onRestart={() => void startLanPairSession(lastPairOptsRef.current)}
               onClose={closeLanPair}
+              returnFocusEl={triggerElFor('lanPair')}
             />
           </div>
-        )}
+        </Suspense>
+      )}
 
-        {updateModalOpen && (
+      {updateModalOpen && (
+        <Suspense fallback={null}>
           <div inert={inertFor('update') || undefined}>
             <UpdateModal
               open={updateModalOpen}
@@ -1803,10 +1838,11 @@ export default function App() {
               onCheck={handleCheckUpdate}
               onDownload={handleDownloadUpdate}
               onInstall={handleInstallUpdate}
+              returnFocusEl={triggerElFor('update')}
             />
           </div>
-        )}
-      </Suspense>
+        </Suspense>
+      )}
 
       {/* 发现新版本时的轻量主动浮动提醒（避免用户不知道有更新） */}
       {updateAvailable && !toastDismissed && !updateModalOpen && !settingsOpen && !onboardingOpen && !splashOpen && !standingsState && !seasonReportOpen && !lanPairOpen && (

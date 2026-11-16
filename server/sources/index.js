@@ -101,20 +101,27 @@ export async function fetchAllEvents({
     }
   }
 
-  // 串行 + 间隔 + 整轮时间预算：到达 maxDurationMs 后主动截断并返回已拿到的数据，避免一直挂起
+  // 串行 + 间隔 + 整轮硬时间预算：到达 maxDurationMs 后主动截断，且单次请求超时也受剩余预算约束
   for (let i = 0; i < requests.length; i++) {
-    if (Number.isFinite(maxDurationMs) && maxDurationMs > 0 && Date.now() - startedAt >= maxDurationMs) {
+    const remainingBudgetMs =
+      Number.isFinite(maxDurationMs) && maxDurationMs > 0
+        ? maxDurationMs - (Date.now() - startedAt)
+        : Infinity;
+    if (remainingBudgetMs <= 0) {
       truncated = true;
       remainingTargets = requests.length - i;
       log.warn?.(`[sources] 同步达到时间预算 (${maxDurationMs}ms)，主动截断剩余 ${remainingTargets} 个请求`);
       break;
     }
+    const reqTimeoutMs = Number.isFinite(remainingBudgetMs)
+      ? Math.max(1, Math.min(timeoutMs || 20000, remainingBudgetMs))
+      : timeoutMs;
     const r = requests[i];
     bySource[r.sid].requests++;
     try {
       const evs = runFetch
-        ? await runFetch(r.sid, r.league, r.unit, { log, season, timeoutMs })
-        : await r.strat.fetch(r.league, r.unit, { log, season, timeoutMs });
+        ? await runFetch(r.sid, r.league, r.unit, { log, season, timeoutMs: reqTimeoutMs })
+        : await r.strat.fetch(r.league, r.unit, { log, season, timeoutMs: reqTimeoutMs });
       events.push(...evs);
       bySource[r.sid].events += evs.length;
       bySource[r.sid].ok++;
@@ -126,12 +133,12 @@ export async function fetchAllEvents({
       log.warn?.(`[sources] ${r.sid} ${r.league} ${unitLabel} 拉取失败：${err.message}`);
     }
     if (delayMs > 0 && i < requests.length - 1) {
-      const remainingBudget =
+      const remainingAfter =
         Number.isFinite(maxDurationMs) && maxDurationMs > 0
           ? maxDurationMs - (Date.now() - startedAt)
           : Infinity;
-      if (remainingBudget <= 0) continue;
-      await new Promise(res => setTimeout(res, Math.min(delayMs, remainingBudget)));
+      if (remainingAfter <= 0) continue;
+      await new Promise(res => setTimeout(res, Math.min(delayMs, remainingAfter)));
     }
   }
 

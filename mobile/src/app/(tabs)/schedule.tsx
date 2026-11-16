@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Check, ChevronDown, Search, X } from 'lucide-react-native';
 
 import { LEAGUE_ORDER, leagueName } from '@data/index.js';
@@ -61,7 +61,20 @@ export default function ScheduleScreen() {
   const params = useLocalSearchParams<{ q?: string; date?: string; nav?: string }>();
   const prefs = usePrefs();
   const rev = useDataRev();
-  const now = useNow(60_000);
+  const [focused, setFocused] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      return () => setFocused(false);
+    }, [])
+  );
+  const now = useNow(60_000, focused);
+  const handleOpenMatch = useCallback(
+    (id: string) => {
+      router.push({ pathname: '/match/[id]', params: { id } });
+    },
+    [router]
+  );
   const { syncing, quickSyncing } = useSyncState();
 
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
@@ -423,9 +436,7 @@ export default function ScheduleScreen() {
                   now={now}
                   prefs={prefs}
                   isLast={isLast}
-                  onPress={() =>
-                    router.push({ pathname: '/match/[id]', params: { id: item.id } })
-                  }
+                  onPress={handleOpenMatch}
                 />
               </View>
             );

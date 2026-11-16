@@ -264,7 +264,11 @@ export async function fetchGameSources(gameId, force = false) {
     if (streamUrl.includes("play.88player.top/m3u8.html?url=")) {
       const u = streamUrl.split("url=")[1];
       if (u) {
-        streamUrl = decodeURIComponent(u);
+        try {
+          streamUrl = decodeURIComponent(u);
+        } catch {
+          continue;
+        }
         isDirect = true;
         kind = "m3u8";
       }

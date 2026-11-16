@@ -57,12 +57,13 @@ export default function LanPairModal({
   syncNotice = null,
   onSwitchHost = null,
   onRestart,
-  onClose
+  onClose,
+  returnFocusEl = null
 }) {
   const closeBtnRef = useRef(null);
   const [nowTs, setNowTs] = useState(() => Date.now());
   const [copied, setCopied] = useState(null);
-  useDialogFocus(open, closeBtnRef);
+  useDialogFocus(open, closeBtnRef, returnFocusEl);
 
   useEffect(() => {
     if (!open) return undefined;

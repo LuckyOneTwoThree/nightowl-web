@@ -1,0 +1,53 @@
+name: ci
+
+# 日常提交与 PR 质量门禁：在打发版 tag 之前先拦下核心算法、服务端、前端构建、Lint 与移动端类型退化。
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  desktop-and-server:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Run test:all (units + secrets + biome lint)
+        run: npm run test:all
+
+  mobile-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install mobile dependencies
+        run: npm ci
+        working-directory: mobile
+
+      - name: Verify shared pipeline & TypeScript
+        run: npm run check
+        working-directory: mobile

@@ -18,6 +18,8 @@
  *  10. 流式转发，不做内存驻留（单场 1080p 数据量在 GB 级）
  */
 
+import http from 'node:http';
+import https from 'node:https';
 import { Readable } from 'node:stream';
 import { readFileSync } from 'node:fs';
 import { lookup as dnsLookup } from 'node:dns/promises';
@@ -71,7 +73,7 @@ export function isHostAllowed(hostname, rules, sessionAllowed = null) {
  */
 export function isPrivateHost(h) {
   if (typeof h !== 'string') return true;
-  const host = h.toLowerCase().replace(/^\[|\]$/g, '').trim();
+  const host = h.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.+$/, '').trim();
   if (!host) return true;
   // IPv4 字面量：无法可靠区分私网/公网，且合法源不用 IP，一律拒绝
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true;
@@ -91,9 +93,20 @@ export function isPrivateHost(h) {
  * 生产默认关闭 —— 这条默认值就是 SSRF 防护本身。
  */
 export function isValidHost(h, allowLoopback = false) {
-  if (typeof h !== 'string' || h.length === 0 || h.length > 253) return false;
-  if (!/^[a-z0-9.-]+$/i.test(h) || h.startsWith('.')) return false;
-  return allowLoopback ? true : !isPrivateHost(h);
+  if (typeof h !== 'string') return false;
+  const clean = h.trim().replace(/\.+$/, '');
+  if (!clean || clean.length > 253) return false;
+  if (!/^[a-z0-9.-]+$/i.test(clean) || clean.startsWith('.')) return false;
+  return allowLoopback ? true : !isPrivateHost(clean);
+}
+
+function normalizeIpv6(ip) {
+  try {
+    const parsed = new URL(`http://[${ip}]/`).hostname;
+    return parsed.startsWith('[') && parsed.endsWith(']') ? parsed.slice(1, -1) : parsed;
+  } catch {
+    return ip;
+  }
 }
 
 /**
@@ -101,8 +114,9 @@ export function isValidHost(h, allowLoopback = false) {
  */
 export function isPublicIp(rawIp) {
   if (typeof rawIp !== 'string') return false;
-  const ip = rawIp.trim().toLowerCase().replace(/^\[|\]$/g, '').split('%')[0];
-  const ver = isIP(ip);
+  const rawClean = rawIp.trim().toLowerCase().replace(/^\[|\]$/g, '').split('%')[0];
+  const ver = isIP(rawClean);
+  const ip = ver === 6 ? normalizeIpv6(rawClean) : rawClean;
   if (ver === 4) {
     const parts = ip.split('.').map(Number);
     const [a, b] = parts;
@@ -133,6 +147,9 @@ export function isPublicIp(rawIp) {
       }
       return false;
     }
+    if (ip.startsWith('64:ff9b::') || ip.startsWith('64:ff9b:1::') || ip.startsWith('100::')) {
+      return false;
+    }
     const firstHextet = parseInt(ip.split(':')[0] || '0', 16);
     if ((firstHextet & 0xfe00) === 0xfc00) return false; // fc00::/7 ULA
     if ((firstHextet & 0xffc0) === 0xfe80) return false; // fe80::/10 link-local
@@ -146,16 +163,17 @@ export function isPublicIp(rawIp) {
 /**
  * 发起上游建连前校验域名解析出的 IP，拒绝私网 / 回环地址（DNS Rebinding 防护）。
  * 显式列在 rules.proxy.allowedHosts 的固定本地测试主机或 allowLoopbackHosts 除外。
+ * 返回首个通过校验的 { address, family } 供底层 socket 钉死目标 IP（消除 TOCTOU）。
  */
 export async function assertPublicDestination(hostname, rules = {}, lookupFn = dnsLookup) {
-  const host = typeof hostname === 'string' ? hostname.trim().toLowerCase() : '';
+  const host = typeof hostname === 'string' ? hostname.trim().toLowerCase().replace(/\.+$/, '') : '';
   if (!host) throw new ProxyError('bad-request', '缺少目标主机名', 400);
-  if (rules?.proxy?.allowLoopbackHosts) return;
-  const exact = (rules?.proxy?.allowedHosts || []).map(h => String(h || '').trim().toLowerCase());
-  if (exact.includes(host)) return;
+  if (rules?.proxy?.allowLoopbackHosts) return null;
+  const exact = (rules?.proxy?.allowedHosts || []).map(h => String(h || '').trim().toLowerCase().replace(/\.+$/, ''));
+  if (exact.includes(host)) return null;
   if (isIP(host)) {
     if (!isPublicIp(host)) throw new ProxyError('blocked', `拒绝访问私网或回环地址：${host}`, 403);
-    return;
+    return { address: host, family: isIP(host) };
   }
   if (isPrivateHost(host)) {
     throw new ProxyError('blocked', `拒绝访问内网主机：${host}`, 403);
@@ -163,12 +181,23 @@ export async function assertPublicDestination(hostname, rules = {}, lookupFn = d
   let addrs;
   try {
     addrs = await lookupFn(host, { all: true, verbatim: true });
-  } catch {
-    return; // 解析失败交由后续 fetch 返回统一 504 网络语义
+  } catch (err) {
+    throw new ProxyError('network', `域名解析失败：${host}（${err?.code || err?.message || err}）`, 504);
   }
-  if (Array.isArray(addrs) && addrs.some(entry => entry?.address && !isPublicIp(entry.address))) {
+  if (!Array.isArray(addrs) || addrs.length === 0) {
+    throw new ProxyError('network', `域名未返回有效解析记录：${host}`, 504);
+  }
+  if (addrs.some(entry => entry?.address && !isPublicIp(entry.address))) {
     throw new ProxyError('blocked', `域名解析到私网或回环地址，已拦截：${host}`, 403);
   }
+  const chosen = addrs.find(entry => entry?.address && isIP(entry.address));
+  if (!chosen) {
+    throw new ProxyError('network', `域名未返回可用 IP：${host}`, 504);
+  }
+  return {
+    address: chosen.address,
+    family: chosen.family === 6 || isIP(chosen.address) === 6 ? 6 : 4
+  };
 }
 
 /**
@@ -389,26 +418,76 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
    * 改为手动逐跳跟随：每一跳都重新过 isHostAllowed、重新解析**本跳主机**的会话头，
    * 并限制总跳数防止重定向环。允许的跳数取自 rules，默认 5。
    */
+  async function requestPinnedHop(urlStr, headers, signal, pinnedAddr) {
+    const parsed = new URL(urlStr);
+    const transport = parsed.protocol === 'https:' ? https : http;
+    const reqOpts = {
+      method: 'GET',
+      headers,
+      signal
+    };
+    if (pinnedAddr) {
+      reqOpts.lookup = (_hostname, opts, cb) => {
+        if (typeof opts === 'function') {
+          opts(null, pinnedAddr.address, pinnedAddr.family);
+          return;
+        }
+        if (opts?.all) {
+          cb(null, [{ address: pinnedAddr.address, family: pinnedAddr.family }]);
+        } else {
+          cb(null, pinnedAddr.address, pinnedAddr.family);
+        }
+      };
+      if (parsed.protocol === 'https:') {
+        reqOpts.servername = parsed.hostname;
+      }
+    }
+    return new Promise((resolveReq, rejectReq) => {
+      const upstreamReq = transport.request(parsed, reqOpts, inRes => {
+        const respHeaders = new Headers();
+        for (const [k, val] of Object.entries(inRes.headers)) {
+          if (val === undefined) continue;
+          if (Array.isArray(val)) {
+            for (const item of val) respHeaders.append(k, String(item));
+          } else {
+            respHeaders.set(k, String(val));
+          }
+        }
+        const status = inRes.statusCode || 502;
+        resolveReq({
+          status,
+          ok: status >= 200 && status < 300,
+          url: urlStr,
+          headers: respHeaders,
+          body: Readable.toWeb(inRes)
+        });
+      });
+      upstreamReq.on('error', rejectReq);
+      upstreamReq.end();
+    });
+  }
+
   async function fetchUpstream(target, incomingHeaders, timeoutMs, ac) {
     const maxRedirects = rules.proxy?.maxRedirects || 5;
     let url = target;
     for (let hop = 0; hop <= maxRedirects; hop++) {
       const hopHost = new URL(url).hostname;
-      await assertPublicDestination(hopHost, rules, lookupFn);
+      const pinnedAddr = await assertPublicDestination(hopHost, rules, lookupFn);
       const timer = setTimeout(() => ac.abort(), timeoutMs);
       let res;
       try {
         // 优先级：用户会话头（按本跳主机解析）> 请求自带（白名单内）> rules 里的上游头
         const custom = sessionHeaders.get(hopHost) || {};
-        res = await fetch(url, {
-          headers: {
+        res = await requestPinnedHop(
+          url,
+          {
             ...(rules.proxy?.upstreamHeaders || {}),
             ...incomingHeaders,
             ...custom
           },
-          redirect: 'manual',
-          signal: ac.signal
-        });
+          ac.signal,
+          pinnedAddr
+        );
       } finally {
         clearTimeout(timer);
       }
@@ -506,9 +585,20 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
     };
 
     let upstream;
+    const onPreUpstreamClose = () => {
+      disarmIdle();
+      ac.abort();
+      releaseOnce();
+    };
+    if (res.destroyed || req.destroyed) {
+      releaseOnce();
+      return;
+    }
+    res.once('close', onPreUpstreamClose);
     try {
       upstream = await fetchUpstream(target.toString(), pickHeaders(req.headers, rules), timeoutMs, ac);
     } catch (err) {
+      res.off?.('close', onPreUpstreamClose);
       disarmIdle();
       releaseOnce();
       // 逐跳复核抛出的 blocked / bad-request 是明确的策略判定，必须保留语义与状态码，
@@ -518,9 +608,27 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
       // 网络失败不缓存、不闩锁 —— 下次请求照常重试
       throw new ProxyError('network', msg, 504);
     }
+    res.off?.('close', onPreUpstreamClose);
+    if (res.destroyed || req.destroyed) {
+      try {
+        await upstream.body?.cancel();
+      } catch {}
+      disarmIdle();
+      releaseOnce();
+      return;
+    }
 
     try {
       const contentType = upstream.headers.get('content-type') || '';
+      const finalBaseUrl = upstream.url || target.toString();
+      const finalPath = (() => {
+        try {
+          const u = new URL(finalBaseUrl);
+          return u.pathname + u.search;
+        } catch {
+          return target.pathname + target.search;
+        }
+      })();
 
       /* ---- 304 Not Modified：透传条件缓存命中响应 ---- */
       if (upstream.status === 304) {
@@ -557,7 +665,7 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
       }
 
       /* ---- M3U8：必须整体读出并重写 ---- */
-      if (isPlaylistResponse(contentType, target.pathname + target.search)) {
+      if (isPlaylistResponse(contentType, finalPath)) {
         // readLimited 同样会无限期等待上游 —— 一并纳入 idle 保护。
         // 客户端在读取期间断开时，与流式分支一样要中断上游并归还槽位，
         // 否则并发闸门要等读完成或 idle 超时才释放（有 4MB 上限兜底，但仍占槽）。
@@ -570,7 +678,6 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
         const buf = await readLimited(upstream, rules.proxy?.maxPlaylistBytes || 4194304);
         disarmIdle();
         const raw = Buffer.from(buf).toString('utf8');
-        const finalBaseUrl = upstream.url || target.toString();
         const { text } = rewritePlaylist(raw, finalBaseUrl);
 
         const playlistHeaders = {
@@ -589,7 +696,7 @@ export function createProxy(rules = loadRules(), log = console, sessionAllowed =
       /* ---- 分片 / 其它媒体：流式转发，零内存驻留 ---- */
       const headers = {
         'Content-Type': contentType || 'application/octet-stream',
-        'Cache-Control': cacheControlFor(target.toString(), contentType)
+        'Cache-Control': cacheControlFor(finalBaseUrl, contentType)
       };
       const mediaCorsOrigin = allowedLocalOrigin(req, rules);
       if (mediaCorsOrigin) headers['Access-Control-Allow-Origin'] = mediaCorsOrigin;

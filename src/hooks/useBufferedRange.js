@@ -8,11 +8,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export function useBufferedRange(committedValue, onCommit, debounceMs = 180) {
   const [draft, setDraft] = useState(committedValue);
   const draftRef = useRef(committedValue);
+  const committedRef = useRef(committedValue);
+  committedRef.current = committedValue;
   const timerRef = useRef(null);
   const onCommitRef = useRef(onCommit);
   onCommitRef.current = onCommit;
 
   useEffect(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     setDraft(committedValue);
     draftRef.current = committedValue;
   }, [committedValue]);
@@ -22,13 +28,19 @@ export function useBufferedRange(committedValue, onCommit, debounceMs = 180) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-    if (draftRef.current !== committedValue) {
+    if (draftRef.current !== committedRef.current) {
       onCommitRef.current?.(draftRef.current);
     }
-  }, [committedValue]);
+  }, []);
 
   useEffect(() => () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+      if (draftRef.current !== committedRef.current) {
+        onCommitRef.current?.(draftRef.current);
+      }
+    }
   }, []);
 
   const handleChange = useCallback(

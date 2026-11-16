@@ -330,8 +330,11 @@ export function saveFixtures(next) {
     writeFileSync(tmp, body, 'utf8');
     renameSync(tmp, p);
     // 盖章：这份用户数据属于哪个赛季、以什么方式写、对应哪个内置修订
-    saveUserMeta(builtinSeason() || 'unknown', { writer: 'sparse', builtinRev: builtinRev() });
+    const metaSaved = saveUserMeta(builtinSeason() || 'unknown', { writer: 'sparse', builtinRev: builtinRev() });
     fixturesCache = null;
+    if (!metaSaved) {
+      return { ok: false, reason: '用户数据元信息（meta）写入失败', path: p };
+    }
     return { ok: true, path: p, bytes: Buffer.byteLength(body), changedFields };
   } catch (err) {
     return { ok: false, reason: err.message, path: p };

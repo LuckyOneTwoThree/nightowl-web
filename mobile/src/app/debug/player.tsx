@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
@@ -17,11 +17,13 @@ export default function PlayerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [withHeaders, setWithHeaders] = useState(false);
+  const firstMountRef = useRef(true);
+  const initialSourceRef = useRef({ uri: TEST_URL });
 
   useKeepAwake();
 
   const player = useVideoPlayer(
-    { uri: TEST_URL, headers: { 'X-NightOwl-Phase0': '1' } },
+    initialSourceRef.current,
     instance => {
       instance.loop = true;
       instance.play();
@@ -36,11 +38,26 @@ export default function PlayerScreen() {
   }, []);
 
   useEffect(() => {
-    player.replace({
-      uri: TEST_URL,
-      headers: withHeaders ? { 'X-NightOwl-Phase0': '1' } : undefined,
-    });
-    player.play();
+    if (firstMountRef.current) {
+      firstMountRef.current = false;
+      return undefined;
+    }
+    let alive = true;
+    void (async () => {
+      try {
+        await player.replaceAsync({
+          uri: TEST_URL,
+          headers: withHeaders ? { 'X-NightOwl-Phase0': '1' } : undefined,
+        });
+        if (!alive) return;
+        player.play();
+      } catch {
+        // 调试流切换失败时维持当前播放器状态
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, [player, withHeaders]);
 
   return (

@@ -11,12 +11,17 @@ import { useEffect, useRef } from 'react';
  *   · 原元素已经不在文档里（列表重排、视图切换）；
  *   · 原元素现在处于 inert 子树内（被另一层浮层挡住，聚焦它没有意义）。
  */
-export function useDialogFocus(open, initialRef) {
+export function useDialogFocus(open, initialRef, fallbackReturnEl = null) {
   const returnRef = useRef(null);
 
   useEffect(() => {
     if (!open) return undefined;
-    returnRef.current = typeof document !== 'undefined' ? document.activeElement : null;
+    const active = typeof document !== 'undefined' ? document.activeElement : null;
+    const fallback =
+      fallbackReturnEl && fallbackReturnEl !== document.body && fallbackReturnEl.isConnected
+        ? fallbackReturnEl
+        : null;
+    returnRef.current = active && active !== document.body ? active : fallback || active;
     // 有些弹窗的首个控件自带 autoFocus（首次引导里的搜索框），此时 initialRef 为空，
     // 不抢焦点，让输入框自己拿。
     initialRef?.current?.focus?.();
@@ -27,5 +32,5 @@ export function useDialogFocus(open, initialRef) {
       if (el.closest?.('[inert]')) return;
       el.focus?.();
     };
-  }, [open, initialRef]);
+  }, [open, initialRef, fallbackReturnEl]);
 }

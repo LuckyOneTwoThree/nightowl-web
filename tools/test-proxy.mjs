@@ -9,7 +9,7 @@
 
 import http from 'node:http';
 import { createServer } from '../server/index.js';
-import { assertPublicDestination, createProxy, isPublicIp } from '../server/proxy.js';
+import { assertPublicDestination, createProxy, isPublicIp, isValidHost } from '../server/proxy.js';
 
 let pass = 0;
 let fail = 0;
@@ -367,6 +367,16 @@ console.log('七、端点来源防护与 plan.ics 缺省参数');
   ok('★ /api/calendar/plan.ics 省略 budget/remind 时沿用默认 4.0 与 30m（不变成 0）',
     icsOk.status === 200 && icsBody.includes('BEGIN:VEVENT') && icsBody.includes('TRIGGER:-PT30M'),
     `${icsOk.status} len=${icsBody.length}`);
+
+  for (const ep of ['/api/live?matchId=PL-99-ARS-MCI', '/api/highlights?matchId=PL-99-ARS-MCI', '/api/recap?matchId=PL-99-ARS-MCI', '/api/drama?matchId=PL-99-ARS-MCI', '/api/radar?matchId=PL-99-ARS-MCI']) {
+    const blocked = await fetch(`http://127.0.0.1:${icsPort}${ep}`, {
+      headers: { 'Sec-Fetch-Site': 'cross-site' }
+    });
+    ok(`${ep.split('?')[0]} 拦截 Sec-Fetch-Site: cross-site（403）`, blocked.status === 403, String(blocked.status));
+  }
+
+  ok('isPublicIp 拦截未压缩 IPv6 回环与映射地址',
+    !isPublicIp('0:0:0:0:0:0:0:1') && !isPublicIp('0:0:0:0:0:ffff:127.0.0.1') && !isValidHost('localhost.'));
   srvIcs.close();
 }
 

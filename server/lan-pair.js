@@ -38,8 +38,16 @@ function scoreLanCandidate(ifaceName, ip) {
   return (isVirtual ? 0 : 100) + subnetScore;
 }
 
+function isPrivateLanIpv4(ip) {
+  if (typeof ip !== 'string') return false;
+  if (ip.startsWith('192.168.') || ip.startsWith('10.')) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true;
+  if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip)) return true;
+  return false;
+}
+
 /**
- * 列出本机局域网候选 IPv4（物理网卡与常见私有网段优先，过滤或降权虚拟隧道/容器网卡）
+ * 列出本机局域网候选 IPv4（只收录私有/CGNAT 局域网段，绝不暴露公网网卡 IP）
  */
 export function listLanCandidates() {
   const ifaces = os.networkInterfaces();
@@ -47,7 +55,7 @@ export function listLanCandidates() {
   for (const [ifaceName, list] of Object.entries(ifaces)) {
     for (const info of list || []) {
       if (!info || info.family !== 'IPv4' || info.internal) continue;
-      if (info.address.startsWith('169.254.')) continue;
+      if (!isPrivateLanIpv4(info.address)) continue;
       entries.push({ ip: info.address, score: scoreLanCandidate(ifaceName, info.address) });
     }
   }
@@ -63,8 +71,13 @@ export function detectLanIp() {
   return candidates[0] || '127.0.0.1';
 }
 
+function isLoopbackHost(hostname) {
+  const h = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+  return h === '127.0.0.1' || h === 'localhost' || h === '::1';
+}
+
 /**
- * 脱敏桌面端线路：绝不下发 127.0.0.1/api/proxy 地址给手机，标注 proxyRequired 与 isDirect 供手机端直连起播或重抓
+ * 脱敏桌面端线路：绝不下发 127.0.0.1/localhost/api/proxy 地址给手机，标注 proxyRequired 与 isDirect 供手机端直连起播或重抓
  */
 export function sanitizeHandoffLines(rawLines = []) {
   if (!Array.isArray(rawLines)) return [];
@@ -75,19 +88,32 @@ export function sanitizeHandoffLines(rawLines = []) {
     const label = String(line.name || line.label || '线路');
     const id = line.id ? String(line.id) : label;
     const kind = line.kind ? String(line.kind) : 'm3u8';
-    if (rawUrl.includes('/api/proxy') || rawUrl.includes('127.0.0.1')) {
-      let originUrl = rawUrl;
-      try {
-        const parsed = new URL(rawUrl, 'http://127.0.0.1');
-        originUrl = parsed.searchParams.get('url') || rawUrl;
-      } catch {
-        originUrl = rawUrl;
+    let parsedRaw = null;
+    try {
+      parsedRaw = new URL(rawUrl, 'http://127.0.0.1');
+    } catch {
+      parsedRaw = null;
+    }
+    const isProxyOrLoopback =
+      rawUrl.includes('/api/proxy') || (parsedRaw ? isLoopbackHost(parsedRaw.hostname) : false);
+    if (isProxyOrLoopback) {
+      const innerRaw = parsedRaw?.searchParams?.get('url') || '';
+      let safeInner = null;
+      if (innerRaw) {
+        try {
+          const innerUrl = new URL(innerRaw);
+          if ((innerUrl.protocol === 'http:' || innerUrl.protocol === 'https:') && !isLoopbackHost(innerUrl.hostname)) {
+            safeInner = innerUrl.toString();
+          }
+        } catch {
+          safeInner = null;
+        }
       }
       out.push({
         id,
         name: label,
         label,
-        url: originUrl.startsWith('http') ? originUrl : null,
+        url: safeInner,
         kind,
         isDirect: false,
         proxyRequired: true
@@ -178,10 +204,12 @@ export function createLanPairManager() {
     if (current.timer) clearTimeout(current.timer);
     await new Promise(resolve => {
       let done = false;
+      let forceTimer = null;
       const finish = () => {
         if (done) return;
         done = true;
         clearTimeout(fallbackTimer);
+        if (forceTimer) clearTimeout(forceTimer);
         resolve();
       };
       const fallbackTimer = setTimeout(finish, 500);
@@ -189,7 +217,14 @@ export function createLanPairManager() {
       try {
         current.server.closeIdleConnections?.();
         current.server.close(() => finish());
-        current.server.closeAllConnections?.();
+        // 给刚调用 res.end() 的 401/410 响应留短暂排空窗口，避免同 tick 立刻 closeAllConnections 产生 ECONNRESET；
+        // 超过 120ms 仍挂着的慢连接再强断，既不阻塞 stopSession，也不打断正常回包。
+        forceTimer = setTimeout(() => {
+          try {
+            current.server.closeAllConnections?.();
+          } catch {}
+        }, 120);
+        if (typeof forceTimer.unref === 'function') forceTimer.unref();
       } catch {
         finish();
       }
@@ -197,7 +232,7 @@ export function createLanPairManager() {
   }
 
   function getStatus() {
-    if (!active) return { active: false };
+    if (!active || active.revoked) return { active: false };
     const now = Date.now();
     if (now >= active.expiresAt) return { active: false };
     return {
@@ -216,7 +251,7 @@ export function createLanPairManager() {
   }
 
   async function startSession({
-    bindHost = '0.0.0.0',
+    bindHost = null,
     displayHost = null,
     port = 0,
     ttlMs = PAIR_TTL_MS,
@@ -228,7 +263,12 @@ export function createLanPairManager() {
     await stopSession();
 
     const candidates = listLanCandidates();
-    const resolvedDisplayHost = displayHost || (bindHost !== '0.0.0.0' ? bindHost : candidates[0] || '127.0.0.1');
+    const resolvedDisplayHost = displayHost || (bindHost && bindHost !== '0.0.0.0' ? bindHost : candidates[0] || '127.0.0.1');
+    const listenHost =
+      bindHost ||
+      (isPrivateLanIpv4(resolvedDisplayHost) || resolvedDisplayHost === '127.0.0.1'
+        ? resolvedDisplayHost
+        : candidates[0] || '127.0.0.1');
     const token = crypto.randomBytes(12).toString('hex');
     const pin = String(crypto.randomInt(100000, 1000000));
     const effectiveTtl = Number.isFinite(ttlMs) && ttlMs > 0 ? Math.min(ttlMs, PAIR_TTL_MS) : PAIR_TTL_MS;
@@ -243,6 +283,18 @@ export function createLanPairManager() {
     let failedPinAttempts = 0;
     let failedTokenAttempts = 0;
     let authRevoked = false;
+    const markRevoked = () => {
+      authRevoked = true;
+      if (active && active.server === server) {
+        active.revoked = true;
+      }
+    };
+    const scheduleStop = () => {
+      const t = setTimeout(() => {
+        void stopSession();
+      }, 20);
+      if (typeof t.unref === 'function') t.unref();
+    };
     let syncChain = Promise.resolve();
     const runSerialized = fn => {
       const next = syncChain.then(fn, fn);
@@ -260,14 +312,14 @@ export function createLanPairManager() {
         if (pinOk && tokenOk) return { ok: true, revoke: false };
         failedPinAttempts += 1;
         const revoke = failedPinAttempts >= MAX_PIN_ATTEMPTS;
-        if (revoke) authRevoked = true;
+        if (revoke) markRevoked();
         return { ok: false, revoke };
       }
       if (qToken) {
         if (safeEqualText(String(qToken), token)) return { ok: true, revoke: false };
         failedTokenAttempts += 1;
         const revoke = failedTokenAttempts >= MAX_TOKEN_ATTEMPTS;
-        if (revoke) authRevoked = true;
+        if (revoke) markRevoked();
         return { ok: false, revoke };
       }
       return { ok: false, revoke: false };
@@ -303,8 +355,9 @@ export function createLanPairManager() {
 
         const sessionRef = active;
         if (!sessionRef || authRevoked || Date.now() >= sessionRef.expiresAt || sessionRef.server !== server) {
-          await stopSession();
+          // 先把 410 响应完整写回，再延迟销毁会话；立即 stopSession() 会导致同 tick 已建连的请求收到 ECONNRESET
           sendJson(res, 410, { ok: false, error: '配对会话已过期，请在桌面端重新生成' });
+          scheduleStop();
           return;
         }
 
@@ -312,9 +365,7 @@ export function createLanPairManager() {
         if (!auth.ok) {
           sendJson(res, 401, { ok: false, error: '配对口令或 Token 无效' });
           if (auth.revoke) {
-            setImmediate(() => {
-              void stopSession();
-            });
+            scheduleStop();
           }
           return;
         }
@@ -382,7 +433,7 @@ export function createLanPairManager() {
 
     await new Promise((resolve, reject) => {
       server.once('error', reject);
-      server.listen(port, bindHost, () => resolve());
+      server.listen(port, listenHost, () => resolve());
     });
 
     const addr = server.address();

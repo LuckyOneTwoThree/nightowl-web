@@ -92,6 +92,8 @@ function hadSuccessfulRequest(result) {
  */
 export function checkedPendingIds(fixtures, result, { matchId = null, now = Date.now() } = {}) {
   if (!hadSuccessfulRequest(result)) return [];
+  // 达到时间预算截断时本轮并未覆盖全部待查日期；宁可暂不记「已检查」，也不谎报整轮查过。
+  if (result?.truncated) return [];
   const failed = new Set((result?.errors || []).map(e => e?.league).filter(Boolean));
   const scoped = matchId ? (fixtures || []).filter(m => m.id === matchId) : fixtures || [];
   const checked = failed.size === 0 ? scoped : scoped.filter(m => !failed.has(m.l));
@@ -517,7 +519,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
 
       /* ---------------- 赛后集锦 ---------------- */
       if (pathname === '/api/highlights' && req.method === 'GET') {
-        if (rejectForeignOrigin(req, res)) return;
+        if (rejectForeignOrigin(req, res, { blockCrossSiteFetch: true })) return;
         const matchId = searchParams.get('matchId') || '';
         try {
           const fixtures = await loadFixturesImpl();
@@ -541,7 +543,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
 
       /* ---------------- 实时比分与关键事件 ---------------- */
       if (pathname === '/api/live' && req.method === 'GET') {
-        if (rejectForeignOrigin(req, res)) return;
+        if (rejectForeignOrigin(req, res, { blockCrossSiteFetch: true })) return;
         const matchId = searchParams.get('matchId') || '';
         try {
           const fixtures = await loadFixturesImpl();
@@ -561,7 +563,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
 
       /* ---------------- 赛后回顾（与实时同一份 ESPN 解析，只对已完赛开放） ---------------- */
       if (pathname === '/api/recap' && req.method === 'GET') {
-        if (rejectForeignOrigin(req, res)) return;
+        if (rejectForeignOrigin(req, res, { blockCrossSiteFetch: true })) return;
         const matchId = searchParams.get('matchId') || '';
         try {
           const fixtures = await loadFixturesImpl();
@@ -585,7 +587,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
 
       /* ---------------- 无剧透剧情心电图（仅返回脱敏标签与中性脉冲分钟） ---------------- */
       if (pathname === '/api/drama' && req.method === 'GET') {
-        if (rejectForeignOrigin(req, res)) return;
+        if (rejectForeignOrigin(req, res, { blockCrossSiteFetch: true })) return;
         const matchId = searchParams.get('matchId') || '';
         try {
           const fixtures = await loadFixturesImpl();
@@ -623,7 +625,7 @@ export function createServer(rules = loadRules(), log = console, deps = {}) {
 
       /* ---------------- 无剧透悬念唤醒雷达（严禁下发比分与球队事件） ---------------- */
       if (pathname === '/api/radar' && req.method === 'GET') {
-        if (rejectForeignOrigin(req, res)) return;
+        if (rejectForeignOrigin(req, res, { blockCrossSiteFetch: true })) return;
         const matchId = searchParams.get('matchId') || '';
         const followedParam = searchParams.get('followedTeams') || '';
         const followedTeams = followedParam ? followedParam.split(',').map(s => s.trim()).filter(Boolean) : [];

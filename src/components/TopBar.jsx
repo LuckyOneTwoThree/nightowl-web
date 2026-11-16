@@ -81,6 +81,45 @@ function watchPeriodOf(nowTs) {
   return '日间档';
 }
 
+/** 顶栏时钟独立成叶子组件，避免每秒 tick 触发整个 TopBar 重渲染；窗口隐藏时自动停表。 */
+function TopBarClock() {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    let t = null;
+    const syncVisibility = () => {
+      if (t) {
+        clearInterval(t);
+        t = null;
+      }
+      if (typeof document === 'undefined' || document.visibilityState !== 'hidden') {
+        setNow(Date.now());
+        t = setInterval(() => setNow(Date.now()), 1000);
+      }
+    };
+    syncVisibility();
+    document?.addEventListener?.('visibilitychange', syncVisibility);
+    return () => {
+      if (t) clearInterval(t);
+      document?.removeEventListener?.('visibilitychange', syncVisibility);
+    };
+  }, []);
+
+  return (
+    <div className="no-drag hidden shrink-0 items-center gap-2.5 xl:flex">
+      <div className="flex items-center gap-2 rounded-full border border-line-hairline bg-surface-card px-3 py-1">
+        <span className="h-1.5 w-1.5 rounded-full bg-accent/80" aria-hidden="true" />
+        <span className="font-num text-xs font-semibold tabular-nums text-text-primary">
+          {bjClock(now)}
+        </span>
+        <span className="font-num text-xs tabular-nums text-text-faint">{bjDate(now)}</span>
+        <span className="border-l border-line-hairline pl-2 text-xs font-medium text-text-muted">
+          {watchPeriodOf(now)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function TopBar({
   view,
   onViewChange,
@@ -97,13 +136,6 @@ export default function TopBar({
   onOpenPalette,
   onOpenStandings
 }) {
-  // 时钟是全应用唯一需要秒级显示的地方，把 tick 隔离在本地：
-  // 否则 App 每秒重渲染会连带重建赛程视图的 2000+ 列表元素（实测约 9% CPU）。
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
 
   // 平台感知：macOS 的 hiddenInset 需要给交通灯留位；Windows/Linux 走自绘按钮，不留白。
   // （此前无条件 paddingLeft:80 是给 macOS 交通灯让位的，在 Windows 上凭空留白，
@@ -176,18 +208,7 @@ export default function TopBar({
         </nav>
       </div>
 
-      <div className="no-drag hidden shrink-0 items-center gap-2.5 xl:flex">
-        <div className="flex items-center gap-2 rounded-full border border-line-hairline bg-surface-card px-3 py-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-accent/80" aria-hidden="true" />
-          <span className="font-num text-xs font-semibold tabular-nums text-text-primary">
-            {bjClock(now)}
-          </span>
-          <span className="font-num text-xs tabular-nums text-text-faint">{bjDate(now)}</span>
-          <span className="border-l border-line-hairline pl-2 text-xs font-medium text-text-muted">
-            {watchPeriodOf(now)}
-          </span>
-        </div>
-      </div>
+      <TopBarClock />
 
       <div className="no-drag flex shrink-0 items-center gap-1.5">
         {dataHealth && dataHealth.state !== 'unknown' && (

@@ -21,7 +21,7 @@ type Props = {
   match: Match;
   now: number;
   prefs: Prefs;
-  onPress: () => void;
+  onPress: (matchId: string) => void;
   minefield?: boolean;
   showTier?: boolean;
   showDate?: boolean;
@@ -47,7 +47,10 @@ export const MatchRow = memo(function MatchRow({
   showDate = false,
   isLast = false,
 }: Props) {
-  const { ev, index } = evalOne(match, prefs) as { ev: Ev & { stakes?: Array<{ label?: string }> }; index: number };
+  const { ev, index } = useMemo(
+    () => evalOne(match, prefs) as { ev: Ev & { stakes?: Array<{ label?: string }> }; index: number },
+    [match, prefs]
+  );
   const state = stateOf(match, now) as string;
   const isLive = state === 'live';
   const isDone = state === 'finished' || state === 'ended_pending';
@@ -108,7 +111,7 @@ export const MatchRow = memo(function MatchRow({
     <Pressable
       onPress={() => {
         selectionFeedback();
-        onPress();
+        onPress(match.id);
       }}
       accessibilityRole="button"
       accessibilityLabel={`${teamName(match.h)} 对 ${teamName(match.a)}，${leagueName(match.l)}，${

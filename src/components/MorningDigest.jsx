@@ -32,7 +32,8 @@ export default function MorningDigest({
   diary = null,
   onSaveDiary = null,
   onRemoveDiary = null,
-  onOpenSeasonReport = null
+  onOpenSeasonReport = null,
+  returnFocusEl = null
 }) {
   const [confirmAll, setConfirmAll] = useState(false);
   const [dramaById, setDramaById] = useState({});
@@ -79,7 +80,7 @@ export default function MorningDigest({
    * 摘要多为自动弹出（起床后首次打开），此时 `document.activeElement` 往往是 body；
    * body 不可聚焦，归还时 `focus()` 自然无副作用，不需要特判。
    */
-  useDialogFocus(open, closeBtnRef);
+  useDialogFocus(open, closeBtnRef, returnFocusEl);
 
   if (!open) return null;
 

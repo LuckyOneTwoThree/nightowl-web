@@ -6,6 +6,7 @@
  */
 
 import { owlDay } from './engine.js';
+import { clampTimestamp } from './sync-clock.js';
 
 export const WATCH_LATER_LIMIT = 10;
 export const WATCH_LATER_TTL_MS = 7 * 24 * 3600000;
@@ -30,14 +31,15 @@ export function normalizeQueue(items, now = Date.now()) {
   const seen = new Set();
   const out = [];
   for (const item of items) {
-    if (!isItem(item)) continue;
-    if (now - item.addedAt > WATCH_LATER_TTL_MS) continue;
+    if (!isItem(item) || item.addedAt < 0) continue;
+    const addedAt = clampTimestamp(item.addedAt, now, -1);
+    if (addedAt < 0 || now - addedAt > WATCH_LATER_TTL_MS) continue;
     if (seen.has(item.id)) continue;
     seen.add(item.id);
     out.push({
       id: item.id,
       night: typeof item.night === 'string' ? item.night : '',
-      addedAt: item.addedAt,
+      addedAt,
       status: item.status
     });
     if (out.length >= WATCH_LATER_LIMIT) break;
