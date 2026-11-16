@@ -104,7 +104,7 @@ export default function DecisionStrip({ decision, match, alternative, onSelectAl
               type="button"
               onClick={onOpenSettings}
               title="点击开启个人睡眠账本"
-              className="truncate text-left text-xs font-semibold text-accent underline-offset-2 hover:underline"
+              className="truncate text-left text-xs font-semibold text-text-secondary underline-offset-2 hover:text-text-primary hover:underline"
             >
               未开睡眠账本
             </button>

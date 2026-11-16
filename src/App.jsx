@@ -1523,6 +1523,9 @@ export default function App() {
                 onWatchLater={toggleWatchLater}
                 watchLater={watchLater}
                 onOpenSettings={openSettings}
+                onGoWeek={() => setView('week')}
+                onOpenMorningDigest={() => setMorningDigestOpen(true)}
+                queueCount={pendingQueueCount}
               />
             )}
 

@@ -6,7 +6,7 @@ import { decisionStrip } from '../core/decision-strip.js';
 import { storylines, teamName } from '../data/index.js';
 import HeroCard, { NoMatchCard } from './HeroCard.jsx';
 import MatchRow from './MatchRow.jsx';
-import { Button, Chip, EmptyState, IndexTag, LiveDot, Meta, SectionLabel, SleepBadge } from './atoms.jsx';
+import { Button, Chip, IndexTag, LiveDot, Meta, SectionLabel, SleepBadge } from './atoms.jsx';
 import { formatSleepHours } from '../core/sleep.js';
 import { queueStatusOf } from '../core/queue.js';
 import { sameNightLighterPicks } from '../core/owl.js';
@@ -152,7 +152,10 @@ export default function TonightView({
   replayPicks = [],
   onWatchLater,
   watchLater = [],
-  onOpenSettings
+  onOpenSettings,
+  onGoWeek,
+  onOpenMorningDigest,
+  queueCount = 0
 }) {
   const { night, slice, hero, focal, minefieldIds, nightState } = tonight;
 
@@ -374,22 +377,38 @@ export default function TonightView({
         className={
           sameKickoffExpanded
             ? 'shrink-0 space-y-0.5'
-            : `scrollbar-thin -mr-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1 ${
+            : `scrollbar-thin min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1 ${
                 listed > 0 || replayPicks.length > 0 ? 'min-h-[180px]' : ''
-              } ${centeredEmpty ? 'flex flex-col' : ''}`
+              }`
         }
       >
         {centeredEmpty ? (
-          <EmptyState
-            title={hero ? '今晚仅此一场焦点战' : '今晚没有已排期的比赛'}
-            desc={
-              hero
-                ? '其余场次暂无排期，后续赛程可以在下方「接下来」里查看。'
-                : focal
-                  ? '下一场焦点已在上方展示，后续赛程可以在下方「接下来」里查看。'
-                  : '近期暂无已排期场次，可在「偏好与数据」中检查更新。'
-            }
-          />
+          /* 无赛是白天打开时的默认第一眼，此前用居中空态占掉左栏 60% 高度、文案还是死路。
+             现在改成一张决策卡：说清状态 + 给两个真实出口（去看本周 / 明早补看）。 */
+          <div className="flex flex-col gap-3 rounded-xl border border-line-hairline bg-surface-card/45 p-4">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-text-primary">
+                {hero ? '今晚仅此一场焦点战' : '今晚没有已排期的比赛'}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-text-muted">
+                {hero
+                  ? '其余场次暂无排期，明早补看与后续赛程在下方「接下来」里。'
+                  : focal
+                    ? '下一场焦点在上方。今晚不熬的话，本周还有更划算的夜晚可以挑。'
+                    : '近期暂无已排期场次，可在「偏好与数据」里检查更新。'}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="accentSoft" size="sm" onClick={onGoWeek}>
+                去看本周规划 · 挑一晚
+              </Button>
+              {queueCount > 0 && (
+                <Button variant="ghost" size="sm" onClick={onOpenMorningDigest}>
+                  明早补看 · {queueCount} 场
+                </Button>
+              )}
+            </div>
+          </div>
         ) : (
           <>
             {listed === 0 && (

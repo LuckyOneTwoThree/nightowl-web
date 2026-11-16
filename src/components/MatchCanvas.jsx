@@ -188,9 +188,11 @@ const MatchCanvas = memo(function MatchCanvas({
           </div>
         </div>
 
-        {/* 主舞台：双方 + 大比分/开球时刻/倒计时 */}
-        <div className="flex min-h-0 flex-1 items-center justify-center gap-4 py-2 sm:gap-8">
-          <div className="flex min-w-0 flex-1 flex-col items-center gap-2">
+        {/* 主舞台：双方 + 大比分/开球时刻/倒计时
+            两侧列限宽 200px：此前是 flex-1，在 1440 下把两队推到相隔 600px 的两极，
+            中央只剩倒计时，形成「哑铃」结构。限宽后整组居中，视觉重心回到中央。 */}
+        <div className="flex min-h-0 flex-1 items-center justify-center gap-6 py-2 sm:gap-10">
+          <div className="flex min-w-0 max-w-[200px] flex-1 flex-col items-center gap-2">
             <Crest id={match.h} size={56} className="drop-shadow-[0_6px_18px_rgba(0,0,0,0.45)]" />
             <span className="w-full truncate text-center text-base font-semibold text-text-primary sm:text-lg" title={teamName(match.h)}>
               {teamName(match.h)}
@@ -265,7 +267,7 @@ const MatchCanvas = memo(function MatchCanvas({
             )}
           </div>
 
-          <div className="flex min-w-0 flex-1 flex-col items-center gap-2">
+          <div className="flex min-w-0 max-w-[200px] flex-1 flex-col items-center gap-2">
             <Crest id={match.a} size={56} className="drop-shadow-[0_6px_18px_rgba(0,0,0,0.45)]" />
             <span className="w-full truncate text-center text-base font-semibold text-text-primary sm:text-lg" title={teamName(match.a)}>
               {teamName(match.a)}
@@ -308,7 +310,7 @@ const MatchCanvas = memo(function MatchCanvas({
                   {loadingLines ? '检测中…' : actionLabel}
                 </Button>
                 {onScrollToIntel && (
-                  <Button variant="ghost" onClick={onScrollToIntel} title="定位到赛前情报">
+                  <Button variant="text" onClick={onScrollToIntel} title="定位到赛前情报">
                     情报
                   </Button>
                 )}

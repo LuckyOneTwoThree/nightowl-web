@@ -1194,7 +1194,11 @@ export default function PlayerStage({
       className={`dark relative isolate z-0 w-full overflow-hidden bg-stage-bg transition-all duration-200 ${
         miniMode
           ? 'h-full rounded-none border-0 shadow-none'
-          : `rounded-xl border border-line-hairline shadow-2xl ${!streamUrl ? 'max-h-[36vh] min-h-[220px]' : ''}`
+          : `rounded-xl border border-line-hairline shadow-2xl ${
+              !streamUrl
+                ? 'max-h-[38vh] min-h-[240px] xl:max-h-[52vh] xl:min-h-[300px]'
+                : ''
+            }`
       } ${isOverlayOpen ? 'pointer-events-none select-none' : ''}`}
     >
       {streamUrl ? (
@@ -1394,6 +1398,14 @@ export default function PlayerStage({
                 >
                   <IconChevronLeft size={13} />
                 </IconButton>
+                {/* 折叠态的身份标签：此前只有 4 个无文字图标，用户无法判断这条竖条属于谁 */}
+                <span
+                  aria-hidden="true"
+                  className="mt-0.5 select-none text-2xs tracking-widest text-text-faint"
+                  style={{ writingMode: 'vertical-rl' }}
+                >
+                  线路
+                </span>
               </>
             ) : (
               <>
@@ -1464,7 +1476,7 @@ export default function PlayerStage({
               // 1120 宽度下用两列压缩高度；xl 协同模式再回到单列。
               // 只有一条线路时不要切成两列 —— 否则单按钮只占半行，右半边整块留白。
               <div
-                className={`scrollbar-thin -mr-1 mt-2.5 grid min-h-[48px] max-h-[220px] content-start gap-1.5 overflow-y-auto pr-1 ${
+                className={`scrollbar-thin mt-2.5 grid min-h-[48px] max-h-[220px] content-start gap-1.5 overflow-y-auto pr-1 ${
                   orderedLines.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'
                 } xl:min-h-[56px] xl:grid-cols-1`}
               >
