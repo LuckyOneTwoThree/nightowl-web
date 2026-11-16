@@ -134,7 +134,7 @@ function WeekTimeline({ risk, matchById, bestIds, selectedDay, onToggleDay, bloc
               title={`${zhDate(band.date)} · ${band.count} 场${
                 band.latestEndClock ? ` · 最晚到 ${band.latestEndClock}` : ''
               }${band.belowFloor ? ` · 越过底线 ${band.overMinutes} 分钟` : ''}${isBlocked ? ' · 已设为禁看夜' : ''}`}
-              className={`flex w-full items-center gap-1.5 rounded-md px-0.5 py-0.5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
+              className={`flex w-full min-h-6 items-center gap-1.5 rounded-md px-0.5 py-1 text-left transition-colors focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none cursor-pointer ${
                 isSelected ? 'bg-surface-raised ring-1 ring-accent/50' : 'hover:bg-surface-raised/60'
               } ${isBlocked ? 'opacity-60' : ''}`}
             >
@@ -733,7 +733,7 @@ export default function WeekView({
       <div
         ref={listRef}
         key={`${activeTab}-${selectedDay || 'all'}`}
-        className="scrollbar-thin -mr-1 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1"
+        className="scrollbar-thin min-h-0 flex-1 space-y-2 overflow-y-auto pr-1"
       >
         {selectedDay && activeBand && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-accent/30 bg-surface-accent px-2.5 py-1.5 text-2xs text-text-primary">
@@ -1087,13 +1087,13 @@ function PickRow({ e, active, pinned = false, kickoffGroup, onSelect, onTogglePi
         </button>
 
         {(onTogglePin || (onToggleExclude && !pinned)) && (
-          <div className="flex shrink-0 flex-col items-end justify-end gap-1">
+          <div className="flex shrink-0 flex-col items-end justify-end gap-1.5">
             {onTogglePin && (
               <button
                 type="button"
                 onClick={() => onTogglePin(m.id)}
                 title={pinned ? '取消固定，交回算法排期' : '固定保留在精选'}
-                className={`rounded border px-1.5 py-0.5 text-2xs leading-none transition-colors cursor-pointer ${
+                className={`rounded border px-2 py-1.5 text-2xs leading-none transition-colors cursor-pointer ${
                   pinned
                     ? 'border-accent/45 bg-surface-accent text-accent hover:bg-accent/20'
                     : 'border-line-hairline text-text-muted hover:border-accent/40 hover:text-accent'
@@ -1107,7 +1107,7 @@ function PickRow({ e, active, pinned = false, kickoffGroup, onSelect, onTogglePi
                 type="button"
                 onClick={() => onToggleExclude(m.id)}
                 title="跳过这场，让系统换一场备选"
-                className="rounded border border-line-hairline px-1.5 py-0.5 text-2xs leading-none text-text-muted transition-colors hover:border-warn/40 hover:text-warn cursor-pointer"
+                className="rounded border border-line-hairline px-2 py-1.5 text-2xs leading-none text-text-muted transition-colors hover:border-warn/40 hover:text-warn cursor-pointer"
               >
                 换掉
               </button>

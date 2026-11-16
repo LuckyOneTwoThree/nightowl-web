@@ -105,14 +105,14 @@ function TopBarClock() {
   }, []);
 
   return (
-    <div className="no-drag hidden shrink-0 items-center gap-2.5 xl:flex">
-      <div className="flex items-center gap-2 rounded-full border border-line-hairline bg-surface-card px-3 py-1">
+    <div className="no-drag hidden shrink-0 items-center lg:flex">
+      <div className="flex items-center gap-2 rounded-full border border-line-hairline bg-surface-card px-2.5 py-1 xl:px-3">
         <span className="h-1.5 w-1.5 rounded-full bg-accent/80" aria-hidden="true" />
         <span className="font-num text-xs font-semibold tabular-nums text-text-primary">
           {bjClock(now)}
         </span>
-        <span className="font-num text-xs tabular-nums text-text-faint">{bjDate(now)}</span>
-        <span className="border-l border-line-hairline pl-2 text-xs font-medium text-text-muted">
+        <span className="hidden font-num text-xs tabular-nums text-text-faint xl:inline">{bjDate(now)}</span>
+        <span className="hidden border-l border-line-hairline pl-2 text-xs font-medium text-text-muted xl:inline">
           {watchPeriodOf(now)}
         </span>
       </div>
@@ -148,7 +148,7 @@ export default function TopBar({
 
   return (
     <header
-      className="drag-region relative flex h-[52px] min-h-[52px] select-none items-center justify-between border-b border-line-hairline bg-surface-panel/95 px-3.5 xl:px-5 backdrop-blur-xl shadow-sm"
+      className="drag-region relative grid h-[52px] min-h-[52px] select-none grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center border-b border-line-hairline bg-surface-panel/95 px-3.5 xl:px-5 backdrop-blur-xl shadow-sm"
       style={{ paddingLeft: isMacDesktop ? 80 : undefined }}
     >
       <div className="flex min-w-0 items-center gap-3 xl:gap-5">
@@ -210,7 +210,7 @@ export default function TopBar({
 
       <TopBarClock />
 
-      <div className="no-drag flex shrink-0 items-center gap-1.5">
+      <div className="no-drag flex shrink-0 items-center justify-end gap-1.5">
         {dataHealth && dataHealth.state !== 'unknown' && (() => {
           const compactOk = dataHealth.state === 'ok' && dataHealth.label !== '正在更新比分…';
           return (
