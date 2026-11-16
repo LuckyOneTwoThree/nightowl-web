@@ -29,13 +29,13 @@
   font-display: swap;
   src: url('/fonts/bevietnampro-600.woff2') format('woff2');
 }
-@font-face {
-  font-family: 'Hanken Grotesk';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('/fonts/hankengrotesk-600.woff2') format('woff2');
-}
+/*
+ * Hanken Grotesk（display/标题字族）已移除。
+ * 原因：它只覆盖 Latin 子集，而全站标题 100% 是中文 —— font-headline 落在
+ * 「我的看台 / 偏好与数据 / 欢迎使用」这些纯中文标题上时，实际渲染仍是系统字体，
+ * 视觉收益为 0，却要多带 34.6KB 字体文件与一个误导性的 token。
+ * tailwind 的 `headline` 字族名保留（映射到正文栈），避免组件类名失效。
+ */
 /*
  * JetBrains Mono：只保留一份字重。
  *
@@ -98,8 +98,12 @@
   --text-secondary: #bfc8d6;
   --text-secondary-rgb: 191 200 214;
   /* 11px 元信息在 card/raised/press 上也要过 WCAG AA（4.5:1），
-     旧的 #7d8899/#7c8798 在 raised/press 上只有 3.9~4.48。 */
-  --text-muted: #94a0b2;
+     旧的 #7d8899/#7c8798 在 raised/press 上只有 3.9~4.48。
+     2026-11-16 调平：原 #94a0b2 与 text-faint #8a95a6 亮度仅差 17%（对比度 7.29 vs 6.37），
+     两档灰在 11px 中文上不可分辨，四级文本实际只有三级。抬到 #a4afc0 后
+     secondary/muted/faint 的对比度间隔从 1.70/1.14 变成 1.54/1.37（近似等比），
+     且在 press 底（#232b3b）上仍有 6.40:1，远高于 AA 下限。 */
+  --text-muted: #a4afc0;
   --text-muted-rgb: 148 160 178;
   --text-faint: #8a95a6;
   --text-faint-rgb: 138 149 166;

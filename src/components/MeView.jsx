@@ -175,16 +175,16 @@ export default function MeView({
               <span className="font-num tabular-nums">
                 关注球队 <strong className="font-semibold text-text-primary">{prefs.followedTeams.length}</strong> 支
               </span>
-              <span className="text-line-control" aria-hidden="true">·</span>
+              <span className="text-text-faint" aria-hidden="true">·</span>
               <span className="font-num tabular-nums">
                 偏好联赛 <strong className="font-semibold text-text-primary">{leagueCount}</strong> 个
                 {bonusActive ? <span className="ml-1 text-2xs text-resource">(+8 生效)</span> : ''}
               </span>
-              <span className="text-line-control" aria-hidden="true">·</span>
+              <span className="text-text-faint" aria-hidden="true">·</span>
               <span className="font-num tabular-nums">
                 每周额度 <strong className="font-semibold text-resource">{prefs.weeklyBudget.toFixed(1)}h</strong>
               </span>
-              <span className="text-line-control" aria-hidden="true">·</span>
+              <span className="text-text-faint" aria-hidden="true">·</span>
               <span className="font-num tabular-nums">
                 睡眠底线{' '}
                 <strong className="font-semibold text-text-primary">
@@ -619,12 +619,12 @@ export default function MeView({
                         onClick={() => toggleLeague(code)}
                         className={`inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none ${
                           on
-                            ? 'border-accent/40 bg-accent/12 font-semibold text-accent'
+                            ? 'border-accent/40 bg-accent/18 font-semibold text-accent'
                             : 'border-line-hairline bg-surface-card/55 text-text-secondary hover:border-line-control hover:text-text-primary'
                         }`}
                       >
                         <span
-                          className="h-2.5 w-1 shrink-0 rounded-full"
+                          className="h-2.5 w-1.5 shrink-0 rounded-full"
                           style={{ backgroundColor: leagueColor(code) }}
                           aria-hidden="true"
                         />
@@ -639,7 +639,7 @@ export default function MeView({
                   <button
                     type="button"
                     onClick={() => patch({ followedLeagues: [...FOLLOWABLE_LEAGUES] })}
-                    className="shrink-0 text-2xs text-text-faint hover:text-text-secondary hover:underline"
+                    className="shrink-0 -my-1 py-1 text-2xs text-text-faint hover:text-text-secondary hover:underline"
                   >
                     全选
                   </button>
@@ -659,7 +659,7 @@ export default function MeView({
                 <button
                   type="button"
                   onClick={() => onOpenSettings?.('rules')}
-                  className="shrink-0 text-2xs font-medium text-accent transition-colors hover:underline"
+                  className="shrink-0 -my-1 py-1 text-2xs font-medium text-accent transition-colors hover:underline"
                 >
                   精细时间与提醒 →
                 </button>
@@ -683,7 +683,7 @@ export default function MeView({
                     onPointerUp={budgetSlider.commit}
                     onKeyUp={budgetSlider.commit}
                     onBlur={budgetSlider.commit}
-                    className="mt-2 w-full accent-resource"
+                    className="mt-1 h-6 w-full accent-resource"
                     aria-label="每周熬夜额度"
                   />
                   <div className="mt-1 flex items-center justify-between font-num text-2xs tabular-nums text-text-faint">
@@ -734,7 +734,7 @@ export default function MeView({
                 <button
                   type="button"
                   onClick={() => onOpenSettings?.('rules')}
-                  className="shrink-0 text-text-secondary transition-colors hover:text-accent hover:underline"
+                  className="shrink-0 -my-1 py-1 text-text-secondary transition-colors hover:text-accent hover:underline"
                 >
                   修改
                 </button>

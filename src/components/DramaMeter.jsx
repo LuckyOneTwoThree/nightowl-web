@@ -41,7 +41,7 @@ export default function DramaMeter({ drama, fallbackHint = null, compact = false
           className="mt-0.5 flex items-center gap-2"
           aria-label={`全场高能时间点脉冲共 ${pulses.length} 处`}
         >
-          <span className="font-num text-[10px] text-text-faint">0&apos;</span>
+          <span className="font-num text-2xs text-text-faint">0&apos;</span>
           <div className="relative h-1.5 flex-1 rounded-full bg-surface-raised">
             {pulses.map(min => {
               const leftPct = Math.max(2, Math.min(98, Math.round((min / 100) * 100)));
@@ -54,7 +54,7 @@ export default function DramaMeter({ drama, fallbackHint = null, compact = false
               );
             })}
           </div>
-          <span className="font-num text-[10px] text-text-faint">90&apos;+</span>
+          <span className="font-num text-2xs text-text-faint">90&apos;+</span>
         </div>
       )}
     </div>

@@ -34,15 +34,16 @@ export default {
       display: ['2.75rem', { lineHeight: '1' }] // 44px 比赛中心大比分
     },
     /* 统一圆角设计规范刻度（从微控件到浮层弹窗的严格阶梯）：
-       sm(2px) 赛果块/微小条柱 · DEFAULT(4px) 小标签 · md(6px) 按钮/输入框/胶囊控件 ·
-       lg(8px) 列表条目/抽屉内嵌模块 · xl(12px) 核心卡片模块(Hero/播放器/情报/后续赛程) ·
-       2xl(16px) 浮层弹窗(UpdateModal/Onboarding) · 3xl(24px) 视觉徽章/开屏图腾 ·
-       full(9999px) 队徽/圆环/状态点/进度条 */
+       sm(2px) 赛果块/微小条柱 · 8px = 内容圆角唯一档（按钮/输入框/标签/列表条目/小卡）·
+       xl(12px) 核心卡片模块(Hero/播放器/情报/后续赛程) · 2xl(16px) 浮层弹窗(UpdateModal/Onboarding) ·
+       3xl(24px) 视觉徽章/开屏图腾 · full(9999px) 队徽/圆环/状态点/进度条
+       —— 原 DEFAULT(4)/md(6)/lg(8) 三档在 24~40px 高元素上视觉差 ≤2px，人眼不可分辨，
+          同屏出现过 7 种圆角，等于没有阶梯。已合并为 8px 单档。 */
     borderRadius: {
       none: '0',
       sm: '2px',
-      DEFAULT: '4px',
-      md: '6px',
+      DEFAULT: '8px',
+      md: '8px',
       lg: '8px',
       xl: '12px',
       '2xl': '16px',
@@ -106,7 +107,9 @@ export default {
         pop: 'var(--shadow-pop)'
       },
       fontFamily: {
-        headline: ['Hanken Grotesk', 'system-ui', '-apple-system', 'sans-serif'],
+        /* headline 保留类名，但已并入正文字族：中文界面下 Latin-only 的 display 字族
+           无法给中文标题带来任何差异（见 src/index.css 说明）。 */
+        headline: ['Be Vietnam Pro', 'system-ui', '-apple-system', 'sans-serif'],
         body: ['Be Vietnam Pro', 'system-ui', '-apple-system', 'sans-serif'],
         /* mono 只用于需要列对齐的数字，不用于中文正文 */
         num: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace']

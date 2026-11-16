@@ -356,7 +356,7 @@ export default function SeasonReportModal({
                         title={`${String(hr).padStart(2, '0')}:00 · ${count} 场`}
                       />
                     </div>
-                    <span className="font-num text-[10px] text-text-faint">
+                    <span className="font-num text-2xs text-text-faint">
                       {String(hr).padStart(2, '0')}
                     </span>
                   </div>

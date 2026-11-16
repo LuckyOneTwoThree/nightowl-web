@@ -544,6 +544,9 @@ export function Hint({
           {children}
         </span>
       ) : (
+        /* 视觉 16×16，命中区 24×24：用 ::before 向外扩 4px。
+           不用 -m-1 —— 负边距会让元素外框超出父级，在 overflow-hidden 容器里
+           表现为 4px 横向溢出（实测会污染整条布局链的 scrollWidth）。 */
         <span
           tabIndex={0}
           role="button"
@@ -551,7 +554,7 @@ export function Hint({
           aria-label="查看说明"
           onClick={toggle}
           onKeyDown={onKeyDown}
-          className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full text-text-faint outline-none transition-colors hover:text-text-secondary focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:text-text-secondary"
+          className="relative inline-flex h-4 w-4 shrink-0 cursor-help items-center justify-center rounded-full text-text-faint outline-none transition-colors before:absolute before:-inset-1 before:rounded-full before:content-[''] hover:text-text-secondary focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:text-text-secondary"
         >
           <IconInfo size={13} />
         </span>
