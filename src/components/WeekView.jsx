@@ -471,7 +471,7 @@ export default function WeekView({
 
       {/* 睡眠底线结论：口径 = 整周未开赛场次，与下方时间轴完全同源（core/week-risk.js） */}
       {showRisk && risk.floor && (
-        <div className={`px-0.5 text-2xs ${risk.riskNights > 0 ? 'text-warn' : 'text-text-muted'}`}>
+        <div className="px-0.5 text-2xs text-text-muted">
           按 <span className="font-num tabular-nums">{risk.floor.wakeTime}</span>
           {risk.weekendFloor && risk.weekendFloor.wakeTime !== risk.floor.wakeTime && (
             <>
@@ -487,11 +487,15 @@ export default function WeekView({
               : ''}
           </span>
           {risk.floor.assumed ? '（未设作息，按默认画）' : ''} ·
-          {risk.riskNights > 0
-            ? ` ${risk.riskNights} 晚越过底线${risk.worst ? `，最晚到 ${risk.worst.latestEndClock}` : ''}`
-            : !risk.worst && risk.bands.some(b => !b.empty)
-              ? ' 有比赛夜已禁看'
-              : ' 全周未越线'}
+          {risk.riskNights > 0 ? (
+            <span className="text-warn">
+              {` ${risk.riskNights} 晚越过底线${risk.worst ? `，最晚到 ${risk.worst.latestEndClock}` : ''}`}
+            </span>
+          ) : !risk.worst && risk.bands.some(b => !b.empty) ? (
+            ' 有比赛夜已禁看'
+          ) : (
+            ' 全周未越线'
+          )}
           {risk.tbdCount > 0 ? ` · 另有 ${risk.tbdCount} 场开球待定未计入` : ''}
         </div>
       )}

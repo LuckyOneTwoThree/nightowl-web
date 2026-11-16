@@ -404,7 +404,7 @@ export default function ScheduleView({
       </div>
 
       {/* 列表容器（内嵌左栏全宽滑出筛选层，避免窄气泡被 overflow-hidden 裁切） */}
-      <div className="relative min-h-0 flex-1 overflow-hidden">
+      <div className={`relative min-h-0 flex-1 overflow-hidden ${!showAll && dayMatchCount === 0 ? 'flex flex-col' : ''}`}>
         {filterOpen && (
           <div
             role="region"

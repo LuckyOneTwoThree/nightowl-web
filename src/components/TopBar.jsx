@@ -263,7 +263,7 @@ export default function TopBar({
           onClick={onOpenStandings}
           title="查看完整积分榜"
           aria-label="积分榜"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-line-hairline bg-surface-card text-text-muted transition-colors hover:border-line-control hover:bg-surface-raised hover:text-text-primary focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
         >
           <IconStandings size={14} />
         </button>

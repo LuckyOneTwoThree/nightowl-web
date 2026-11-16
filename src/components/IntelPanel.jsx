@@ -29,11 +29,13 @@ import SleepNote, { sleepLedgerFor } from './SleepNote.jsx';
 import SameNightPicks from './SameNightPicks.jsx';
 import {
   IconCalendar,
+  IconCheck,
   IconCompare,
   IconCost,
   IconDerby,
   IconForm,
   IconIdentity,
+  IconQueue,
   IconTier
 } from './icons.jsx';
 
@@ -512,11 +514,25 @@ function SleepCostSection({
         </div>
       )}
       {onWatchLater && (
-        <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
-          {queueMsg && <Meta className="mr-auto">{queueMsg}</Meta>}
+        <div
+          className={`mt-3 flex flex-wrap items-center justify-between gap-2.5 rounded-xl border px-3 py-2.5 transition-colors ${
+            queued
+              ? 'border-resource/35 bg-resource/[0.08]'
+              : 'border-accent/30 bg-accent/[0.06]'
+          }`}
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-text-primary">
+              {queued ? '已加入明早补看台' : watched ? '已标记看过本场' : '太晚不熬夜？先存进明早补看'}
+            </p>
+            <Meta className="mt-0.5 block">
+              {queueMsg || (queued ? '第二天可在晨间摘要无剧透一口气补完' : '只存赛程不存比分，支持赛后无剧透回看')}
+            </Meta>
+          </div>
           <Button
-            variant="ghost"
-            size="xs"
+            variant={queued ? 'resourceSoft' : 'accentSoft'}
+            size="sm"
+            icon={queued ? <IconCheck /> : <IconQueue />}
             onClick={() => {
               const result = onWatchLater?.();
               if (!result?.ok) {

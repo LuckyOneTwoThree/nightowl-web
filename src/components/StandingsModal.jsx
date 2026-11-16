@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDialogFocus } from '../hooks/useDialogFocus.js';
 import { getFixtures, leagueName, teamName } from '../data/index.js';
 import { STANDINGS_LEAGUES, computeStandings, standingsCutoff } from '../core/standings.js';
+import { computeTeamForm } from '../core/stats.js';
 import {
   canSimulateMatch,
   SANDBOX_DISCLAIMER,
@@ -33,6 +34,36 @@ function displayRows(rows, league) {
     out.push({ type: 'row', key: row.teamId, row });
   });
   return out;
+}
+
+/** 近 5 赛果方块：与情报面板「近 5 场走势」同一套赛果色与字形，左旧右新。 */
+function FormGuide({ form }) {
+  if (!form || form.length === 0) {
+    return <span className="text-2xs text-text-faint">—</span>;
+  }
+  const meta = {
+    W: { char: '胜', cls: 'bg-result-win' },
+    D: { char: '平', cls: 'bg-result-draw' },
+    L: { char: '负', cls: 'bg-result-loss' }
+  };
+  return (
+    <span className="flex items-center gap-0.5">
+      {[...form].reverse().map(f => {
+        const m = meta[f.result] || meta.D;
+        const label = `${f.date.slice(5, 10)} ${f.isHome ? '主' : '客'} vs ${teamName(f.opponent)} ${f.score}`;
+        return (
+          <span
+            key={f.matchId}
+            title={label}
+            aria-label={label}
+            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-2xs font-medium leading-none text-result-ink ${m.cls}`}
+          >
+            {m.char}
+          </span>
+        );
+      })}
+    </span>
+  );
 }
 
 /**
@@ -97,6 +128,19 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
   }, [canSandbox, match, outcome, nowTs, dataRev, hiddenIds]);
 
   const table = sim?.supported && sim.table ? sim.table : baseTable;
+
+  // 近 5 走势与积分榜同口径：历史视图截到本场开球，防剧透排除同一批未揭晓场次。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dataRev 是失效触发器；body 读 getFixtures()
+  const formByTeam = useMemo(() => {
+    const map = new Map();
+    for (const row of table.rows) {
+      map.set(
+        row.teamId,
+        computeTeamForm(row.teamId, historical ? match : null, getFixtures(), 5, { excludeIds: hiddenIds })
+      );
+    }
+    return map;
+  }, [table, historical, match, hiddenIds, dataRev]);
   const baseRankByTeam = useMemo(() => {
     const map = new Map();
     for (const r of baseTable?.rows || []) map.set(r.teamId, r.rank);
@@ -172,7 +216,7 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
         role="dialog"
         aria-modal="true"
         aria-labelledby="standings-title"
-        className="relative flex h-[86vh] max-h-[820px] w-[min(1120px,calc(100vw-48px))] animate-panel-enter flex-col overflow-hidden rounded-2xl border border-line-control bg-surface-card/95 shadow-[0_24px_70px_rgba(0,0,0,0.75)] motion-reduce:animate-none"
+        className="relative flex h-[86vh] max-h-[820px] w-[min(1000px,calc(100vw-48px))] animate-panel-enter flex-col overflow-hidden rounded-2xl border border-line-control bg-surface-card/95 shadow-[0_24px_70px_rgba(0,0,0,0.75)] motion-reduce:animate-none"
       >
         <div className="flex items-center justify-between border-b border-line-hairline px-5 py-3">
           <div>
@@ -286,6 +330,7 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
                 <colgroup>
                   <col style={{ width: 44 }} />
                   <col />
+                  <col style={{ width: 116 }} />
                   <col style={{ width: 48 }} />
                   <col style={{ width: 48 }} />
                   <col style={{ width: 48 }} />
@@ -300,6 +345,13 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
                   <tr className="border-b border-line-hairline">
                     <th scope="col" className="px-2 py-2 text-right text-2xs font-medium text-text-faint">#</th>
                     <th scope="col" className="px-2 py-2 text-left text-2xs font-medium text-text-faint">球队</th>
+                    <th
+                      scope="col"
+                      title="最近 5 场已完赛赛果，左旧右新；悬停查看对手与比分"
+                      className="px-2 py-2 text-left text-2xs font-medium text-text-faint"
+                    >
+                      近5
+                    </th>
                     <th scope="col" className="px-2 py-2 text-right text-2xs font-medium text-text-faint">赛</th>
                     <th scope="col" className="px-2 py-2 text-right text-2xs font-medium text-text-faint">胜</th>
                     <th scope="col" className="px-2 py-2 text-right text-2xs font-medium text-text-faint">平</th>
@@ -317,7 +369,7 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
                       return (
                         <tr key={item.key}>
                           <td
-                            colSpan={11}
+                            colSpan={12}
                             className="border-t border-line-hairline bg-surface-panel px-2 py-1.5 text-2xs font-medium tracking-wide text-text-faint"
                           >
                             {item.label}
@@ -354,6 +406,9 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
                             </span>
                             {focused && <Chip tone="neutral">本场</Chip>}
                           </div>
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <FormGuide form={formByTeam.get(row.teamId)} />
                         </td>
                         <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.played}</td>
                         <td className="px-2 py-1.5 text-right font-num text-2xs tabular-nums text-text-secondary">{row.won}</td>

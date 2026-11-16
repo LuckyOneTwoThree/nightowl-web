@@ -111,6 +111,7 @@ export const IconWarn = mk(TriangleAlert, 13);
 export const IconInfo = mk(Info, 13);
 export const IconKeyboard = mk(Keyboard, 13);
 export const IconEmpty = mk(Inbox, 22);
+export const IconQueue = mk(Inbox, 13);
 
 /* ---- 情报语义 ---- */
 export const IconTier = mk(MoonStar, 13);

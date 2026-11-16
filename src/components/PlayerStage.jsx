@@ -445,6 +445,7 @@ export default function PlayerStage({
    */
   const wideStage = useMediaQuery('(min-width: 1280px)');
   const [railCollapsed, setRailCollapsed] = useState(true);
+  const [compactLinesOpen, setCompactLinesOpen] = useState(false);
   const railExpandRef = useRef(null);
 
   /* 这三个判断只依赖 state 与 streamUrl，提前到早退之前算，
@@ -455,6 +456,9 @@ export default function PlayerStage({
   // 赛前短侧栏仍保持「视频 + 侧栏」的广播台布局。
   const stackIntel = finished || (live && !streamUrl);
   const railMode = wideStage && !streamUrl && railCollapsed && !stackIntel;
+  // <1280 赛前：线路横条铺在画面下方时默认折叠成一行状态条。
+  // 展开态约 210px 高，会把情报面板整块推下首屏（1120×700 实测首屏只剩情报 tab 条）。
+  const compactLines = !wideStage && !streamUrl && !stackIntel && !compactLinesOpen;
 
   // 开播即展开：播放期间线路、画质、停止都在侧栏里，52px 会藏掉操作。
   useEffect(() => {
@@ -465,13 +469,13 @@ export default function PlayerStage({
   useEffect(() => {
     const onLocate = event => {
       if (event.detail?.id !== 'match-lines') return;
-      if (!railMode) return;
       // 同步刷新：高亮 class 由 DOM 直接添加，晚一帧会被 React 重渲染抹掉。
-      flushSync(() => setRailCollapsed(false));
+      if (railMode) flushSync(() => setRailCollapsed(false));
+      else if (compactLines) flushSync(() => setCompactLinesOpen(true));
     };
     window.addEventListener('nightowl:locate', onLocate);
     return () => window.removeEventListener('nightowl:locate', onLocate);
-  }, [railMode]);
+  }, [railMode, compactLines]);
 
   // 广播行（赛前 / 有视频直播）里右栏高度跟随画面卡片：
   // 内容短于画面时拉伸补齐，长于画面时栏内滚动，避免任一侧露出大片空白。
@@ -1190,7 +1194,7 @@ export default function PlayerStage({
       className={`dark relative isolate z-0 w-full overflow-hidden bg-stage-bg transition-all duration-200 ${
         miniMode
           ? 'h-full rounded-none border-0 shadow-none'
-          : `rounded-xl border border-line-hairline shadow-2xl ${!streamUrl ? 'max-h-[36vh] min-h-[280px]' : ''}`
+          : `rounded-xl border border-line-hairline shadow-2xl ${!streamUrl ? 'max-h-[36vh] min-h-[220px]' : ''}`
       } ${isOverlayOpen ? 'pointer-events-none select-none' : ''}`}
     >
       {streamUrl ? (
@@ -1307,11 +1311,17 @@ export default function PlayerStage({
   const ControlSidebar = (
     <div
       className={`broadcast-sheen flex w-full shrink-0 flex-col rounded-2xl border border-line-hairline bg-surface-panel/75 shadow-card backdrop-blur-xl transition-all min-h-0 ${
-        railMode ? 'items-center gap-1.5 p-1.5 xl:w-[52px] xl:p-1.5' : 'p-3 xl:w-[315px] xl:p-4'
+        railMode
+          ? 'items-center gap-1.5 p-1.5 xl:w-[52px] xl:p-1.5'
+          : compactLines
+            ? 'px-3 py-2'
+            : 'p-3 xl:w-[315px] xl:p-4'
       } ${
-        stackIntel || railMode ? '' : 'xl:max-h-[var(--rail-h)] xl:overflow-y-auto xl:overscroll-contain scrollbar-thin'
+        stackIntel || railMode || compactLines
+          ? ''
+          : 'xl:max-h-[var(--rail-h)] xl:overflow-y-auto xl:overscroll-contain scrollbar-thin'
       }`}
-      style={stackIntel || railMode ? undefined : { '--rail-h': videoCardH ? `${videoCardH}px` : 'none' }}
+      style={stackIntel || railMode || compactLines ? undefined : { '--rail-h': videoCardH ? `${videoCardH}px` : 'none' }}
     >
       {live && (
         <LiveMatchPanel
@@ -1403,7 +1413,7 @@ export default function PlayerStage({
                   </Meta>
                 </span>
                 <div className="flex items-center gap-1">
-                  {directLines.length > 1 && (
+                  {!compactLines && directLines.length > 1 && (
                     <Button variant="ghost" icon={<IconSwitchLine />} onClick={nextLine}>
                       换线
                     </Button>
@@ -1424,6 +1434,24 @@ export default function PlayerStage({
                       <IconChevronRight size={13} />
                     </IconButton>
                   )}
+                  {compactLines && (
+                    <IconButton
+                      label="展开线路与官方平台"
+                      aria-expanded={false}
+                      onClick={() => setCompactLinesOpen(true)}
+                    >
+                      <IconChevronDown size={13} />
+                    </IconButton>
+                  )}
+                  {!wideStage && !streamUrl && !stackIntel && !compactLines && (
+                    <IconButton
+                      label="收起线路面板"
+                      aria-expanded={true}
+                      onClick={() => setCompactLinesOpen(false)}
+                    >
+                      <IconChevronUp size={13} />
+                    </IconButton>
+                  )}
                 </div>
               </>
             )}
@@ -1431,6 +1459,7 @@ export default function PlayerStage({
 
           {/* 折叠时不渲染线路列表：52px 里塞不下按钮，留一个藏起来的空壳只会误导读屏 */}
           {!railMode &&
+            !compactLines &&
             (orderedLines.length > 0 ? (
               // 1120 宽度下用两列压缩高度；xl 协同模式再回到单列。
               // 只有一条线路时不要切成两列 —— 否则单按钮只占半行，右半边整块留白。
@@ -1474,21 +1503,25 @@ export default function PlayerStage({
         </div>
       )}
 
-      <div id="match-recap" tabIndex={-1} aria-label="赛后回顾" className="shrink-0 scroll-mt-4 focus:outline-none">
-        <RecapTimeline match={match} spoilerFree={spoilerFree} revealed={revealed} />
-      </div>
+      {!compactLines && (
+        <>
+          <div id="match-recap" tabIndex={-1} aria-label="赛后回顾" className="shrink-0 scroll-mt-4 focus:outline-none">
+            <RecapTimeline match={match} spoilerFree={spoilerFree} revealed={revealed} />
+          </div>
 
-      <div id="match-highlights" tabIndex={-1} aria-label="官方集锦" className="shrink-0 scroll-mt-4 focus:outline-none">
-        <HighlightsPanel
-          match={match}
-          sources={sources}
-          spoilerFree={spoilerFree}
-          revealed={revealed}
-          onReveal={() => onReveal?.(match.id)}
-        />
-      </div>
+          <div id="match-highlights" tabIndex={-1} aria-label="官方集锦" className="shrink-0 scroll-mt-4 focus:outline-none">
+            <HighlightsPanel
+              match={match}
+              sources={sources}
+              spoilerFree={spoilerFree}
+              revealed={revealed}
+              onReveal={() => onReveal?.(match.id)}
+            />
+          </div>
+        </>
+      )}
 
-      {!railMode && (
+      {!railMode && !compactLines && (
         <div className="mt-2.5 shrink-0 border-t border-line-hairline pt-3">
           <SectionLabel>{finished ? '官方全场回放' : '官方平台'}</SectionLabel>
           <div className="mt-1.5">
@@ -1497,7 +1530,7 @@ export default function PlayerStage({
         </div>
       )}
 
-      {!streamUrl && !railMode && (
+      {!streamUrl && !railMode && !compactLines && (
         <div className="mt-auto flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-line-hairline pt-3">
           <div className="flex flex-wrap items-center gap-1.5">
             {onStartHandoff && !finished && (

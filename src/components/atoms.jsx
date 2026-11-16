@@ -254,9 +254,12 @@ export function ScoreText({ match, state, revealed, onReveal, spoilerFree, stale
 /**
  * 按钮：全站唯一按钮实现。
  *
- * variant 只有四种，且**一屏只允许出现一个 primary**。
+ * variant 收敛在这里（default/primary/ghost/surface/text/danger + 语义软底 accentSoft/resourceSoft），
+ * 且**一屏只允许出现一个 primary**。
  * 此前顶栏同时存在虚线金边、实心青边、纯文字三种"按钮"，
  * 用户无法判断哪个是主行动 —— 收敛到这里就不再有这个问题。
+ * 语义色行动（补看/额度）用软底变体，不要用 className 覆盖文字色：
+ * 同属性冲突的最终胜者由 CSS 生成顺序决定，className 写在后面并不保证赢。
  */
 export function Button({
   variant = 'default',
@@ -279,7 +282,13 @@ export function Button({
     text:
       'text-text-secondary hover:text-text-primary hover:underline underline-offset-2 disabled:hover:text-text-secondary disabled:hover:no-underline',
     danger:
-      'border border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 disabled:hover:bg-danger/10'
+      'border border-danger/30 bg-danger/10 text-danger hover:bg-danger/20 disabled:hover:bg-danger/10',
+    /* 语义软底变体：给「额度/补看」这类语义行动用。
+       不要靠 className 覆盖 default 的 text-text-primary —— 同属性冲突由 CSS 顺序决定，覆盖不稳定。 */
+    accentSoft:
+      'border border-accent/50 bg-accent/15 font-semibold text-accent shadow-card hover:border-accent/70 hover:bg-accent/25 disabled:hover:bg-accent/15',
+    resourceSoft:
+      'border border-resource/45 bg-resource/15 font-semibold text-resource shadow-card hover:border-resource/60 hover:bg-resource/25 disabled:hover:bg-resource/15'
   };
   const sizes = {
     xs: 'px-2 py-0.5 text-2xs font-medium',

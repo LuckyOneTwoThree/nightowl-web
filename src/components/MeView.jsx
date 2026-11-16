@@ -14,12 +14,12 @@ import {
 } from '../data/index.js';
 import { useBufferedRange } from '../hooks/useBufferedRange.js';
 import { exportMatchesToIcs } from '../lib/export-ics.js';
-import { Button, Chip, Crest, Meta, RemovableChip, Switch, TogglePill } from './atoms.jsx';
+import { Button, Chip, Crest, Meta, RemovableChip, Switch } from './atoms.jsx';
 import { IconChevronRight } from './icons.jsx';
 
 const NIGHT_HOURS = [20, 21, 22, 23, 0, 1, 2, 3, 4, 5];
 
-/** 紧凑胶囊单选组（替代在窄列里铺满整行的 Segmented） */
+/** 紧凑胶囊单选组 */
 function CompactChoiceGroup({ items, value, onChange, ariaLabel }) {
   return (
     <div
@@ -53,10 +53,11 @@ function CompactChoiceGroup({ items, value, onChange, ariaLabel }) {
 /**
  * 「我的看台」—— 桌面端第四主视图
  *
- * 采用「顶部名片条 + 左列观赛资产流（60%）+ 右列阵营规则台（40%）」结构：
- *   · 去除「面板套重框卡片」的多层嵌套，卡片内部统一使用 hairline 分隔；
- *   · 主队添加/搜索收口至独立居中的 FollowedTeamsModal 弹窗，不再撑爆右栏或重复展示标签；
- *   · 补看列表去掉冗余按钮，整行可点，操作按钮永不折行错位。
+ * 布局遵循「1440×900 单屏齐平平衡」：
+ *   · 顶部荣誉名片条：夜间人格 + 核心 4 项指标 + 局域网/赛季账单双出口；
+ *   · 左栏（7 列）：明早补看台 + 观赛日记与熬夜战报 + 横向双格跨端同步与系统日历；
+ *   · 右栏（5 列）：关注球队墙 & 3×2 工整联赛网格 + 作息规则与防剧透。
+ * 左右两栏在标准桌面高度下自然齐底，彻底避免右栏溢出截断或左栏底部空洞。
  */
 export default function MeView({
   prefs,
@@ -109,10 +110,10 @@ export default function MeView({
     () => buildSeasonReport(diary, fixtures, prefs, revealed),
     [diary, fixtures, prefs, revealed]
   );
-  const maxHourBucket = Math.max(1, ...report.safeSummary.hourBuckets);
+  const maxHourBucket = Math.max(0, ...report.safeSummary.hourBuckets);
   const recentStamps = useMemo(() => {
     const entries = Object.values(diary?.entries || {});
-    return entries.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 4);
+    return entries.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3);
   }, [diary]);
   const matchMap = useMemo(() => {
     const map = {};
@@ -148,12 +149,21 @@ export default function MeView({
   return (
     <section
       aria-label="我的看台"
-      className="scrollbar-thin min-h-0 flex-1 overflow-y-auto bg-bg-app p-4 lg:p-6"
+      className="scrollbar-thin min-h-0 flex-1 overflow-y-auto bg-bg-app p-4 lg:p-5"
     >
-      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-5">
-        {/* 顶部个人看台名片条 */}
-        <header className="flex flex-col gap-3.5 rounded-2xl border border-line-hairline bg-surface-panel px-5 py-4 shadow-card lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0 flex-1 space-y-2">
+      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-4">
+        {/* 顶部个人看台荣誉名片 */}
+        <header className="relative flex flex-col gap-3 overflow-hidden rounded-2xl border border-line-hairline bg-surface-panel px-5 py-3.5 shadow-card lg:flex-row lg:items-center lg:justify-between">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-accent/60 via-accent/20 to-transparent"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -left-12 -top-16 h-36 w-36 rounded-full bg-accent/[0.06] blur-3xl"
+          />
+
+          <div className="relative min-w-0 flex-1 space-y-1.5">
             <div className="flex flex-wrap items-center gap-2.5">
               <h2 className="font-headline text-lg font-bold tracking-tight text-text-primary">
                 我的看台
@@ -186,7 +196,7 @@ export default function MeView({
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="relative flex shrink-0 flex-wrap items-center gap-2">
             <Button variant="default" size="sm" onClick={onOpenLanPair}>
               局域网同步 / 接力
             </Button>
@@ -196,29 +206,24 @@ export default function MeView({
           </div>
         </header>
 
-        {/* 双栏工作台 */}
-        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
-          {/* 左主栏（60%）：观赛行动与记录资产 */}
-          <div className="flex min-w-0 flex-col gap-5 lg:col-span-7">
-            {/* 明早补看台 */}
+        {/* 双栏平衡工作台 */}
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+          {/* 左主栏（7 列）：明早补看台 + 观赛日记战报 + 横向双格同步与日历 */}
+          <div className="flex min-w-0 flex-col gap-4 lg:col-span-7">
+            {/* 1. 明早补看台 */}
             <section
               aria-labelledby="me-watchlater-title"
-              className="rounded-2xl border border-line-hairline bg-surface-panel p-5 shadow-card"
+              className="rounded-2xl border border-line-hairline bg-surface-panel p-4 shadow-card"
             >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 id="me-watchlater-title" className="text-sm font-semibold text-text-primary">
-                      明早补看台
-                    </h3>
-                    <Meta num>
-                      {pendingQueue.length} 场待看
-                      {watchedQueue.length > 0 ? ` · ${watchedQueue.length} 场已看` : ''}
-                    </Meta>
-                  </div>
-                  <p className="mt-0.5 text-2xs text-text-muted">
-                    不保存比分，最多 10 条（7 天自动过期）；点击比赛可直接查看情报或连看摘要。
-                  </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <h3 id="me-watchlater-title" className="text-sm font-semibold text-text-primary">
+                    明早补看台
+                  </h3>
+                  <Meta num>
+                    {pendingQueue.length} 场待看
+                    {watchedQueue.length > 0 ? ` · ${watchedQueue.length} 场已看` : ''}
+                  </Meta>
                 </div>
                 {queueEntries.length > 0 && onOpenMorningDigest && (
                   <Button variant="primary" size="xs" onClick={onOpenMorningDigest}>
@@ -228,12 +233,12 @@ export default function MeView({
               </div>
 
               {queueEntries.length === 0 ? (
-                <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-line-hairline bg-surface-card/45 px-4 py-5">
-                  <div className="min-w-0">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-line-hairline bg-surface-card/35 px-3.5 py-3">
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium text-text-secondary">还没有加入补看的比赛</p>
-                    <p className="mt-1 text-2xs text-text-muted">
-                      熬夜代价太高时，在「今晚之选」或比赛详情点「加入补看」，第二天无剧透一口气补完。
-                    </p>
+                    <Meta className="mt-0.5 block">
+                      熬夜代价太高时在赛前详情点「加入补看」，第二天无剧透一口气补完（最多 10 条 · 7 天过期）。
+                    </Meta>
                   </div>
                   {onGoTonight && (
                     <Button variant="default" size="xs" onClick={onGoTonight}>
@@ -242,9 +247,9 @@ export default function MeView({
                   )}
                 </div>
               ) : (
-                <div className="mt-3.5 space-y-3">
+                <div className="mt-3 space-y-2.5">
                   {pendingQueue.length === 0 ? (
-                    <p className="rounded-xl border border-line-hairline bg-surface-card/35 px-3.5 py-3 text-2xs text-text-muted">
+                    <p className="rounded-xl border border-line-hairline bg-surface-card/35 px-3.5 py-2.5 text-2xs text-text-muted">
                       待看已全部消化，已看过的场次保留在下方。
                     </p>
                   ) : (
@@ -252,7 +257,7 @@ export default function MeView({
                       {pendingQueue.map(({ item, match }) => (
                         <div
                           key={item.id}
-                          className="flex items-center justify-between gap-3 px-3.5 py-2.5 transition-colors hover:bg-surface-raised/45"
+                          className="flex items-center justify-between gap-3 px-3.5 py-2 transition-colors hover:bg-surface-raised/45"
                         >
                           <button
                             type="button"
@@ -262,8 +267,8 @@ export default function MeView({
                           >
                             {match && (
                               <span className="flex shrink-0 items-center -space-x-1">
-                                <Crest id={match.h} size={22} />
-                                <Crest id={match.a} size={22} />
+                                <Crest id={match.h} size={20} />
+                                <Crest id={match.a} size={20} />
                               </span>
                             )}
                             <span className="min-w-0 flex-1">
@@ -304,7 +309,7 @@ export default function MeView({
 
                   {watchedQueue.length > 0 && (
                     <div>
-                      <Meta className="mb-1.5 block">已看过 ({watchedQueue.length})</Meta>
+                      <Meta className="mb-1 block">已看过 ({watchedQueue.length})</Meta>
                       <div className="divide-y divide-line-hairline/75 overflow-hidden rounded-xl border border-line-hairline/75 bg-surface-card/25">
                         {watchedQueue.map(({ item, match }) => (
                           <div
@@ -347,87 +352,97 @@ export default function MeView({
               )}
             </section>
 
-            {/* 观赛日记与熬夜战报 */}
+            {/* 2. 观赛日记与熬夜战报 */}
             <section
               aria-labelledby="me-diary-title"
-              className="rounded-2xl border border-line-hairline bg-surface-panel p-5 shadow-card"
+              className="rounded-2xl border border-line-hairline bg-surface-panel p-4 shadow-card"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
                   <h3 id="me-diary-title" className="text-sm font-semibold text-text-primary">
                     观赛日记与熬夜战报
                   </h3>
-                  <p className="mt-0.5 text-2xs text-text-muted">
-                    本地防剧透统计：未揭晓场次只记出勤时长，不泄漏比分口碑。
-                  </p>
+                  <Meta className="mt-0.5 block">
+                    未揭晓场次仅记出勤时长，严格隔离比分与口碑。
+                  </Meta>
                 </div>
                 {report.outcomeSummary.maskedBySpoilerCount > 0 && (
                   <Chip tone="neutral">
-                    已隔离 {report.outcomeSummary.maskedBySpoilerCount} 场未揭晓结果
+                    已隔离 {report.outcomeSummary.maskedBySpoilerCount} 场未揭晓
                   </Chip>
                 )}
               </div>
 
-              {/* 4 宫格一体化数值条，告别 4 个独立带边框子卡 */}
-              <div className="mt-3.5 grid grid-cols-2 divide-y divide-line-hairline overflow-hidden rounded-xl border border-line-hairline bg-surface-card/45 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
-                <div className="px-3.5 py-3">
+              {/* 4 格统计条 */}
+              <div className="mt-3 grid grid-cols-2 divide-y divide-line-hairline overflow-hidden rounded-xl border border-line-hairline bg-surface-card/45 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+                <div className="px-3.5 py-2.5">
                   <Meta>累计盖章</Meta>
-                  <div className="mt-1 font-num text-xl font-bold tabular-nums text-text-primary">
+                  <div className="mt-1 font-num text-xl font-bold leading-none tabular-nums text-text-primary">
                     {report.safeSummary.totalWatched}
                   </div>
                 </div>
-                <div className="px-3.5 py-3">
+                <div className="px-3.5 py-2.5">
                   <Meta>S3/S4 守夜</Meta>
-                  <div className="mt-1 font-num text-xl font-bold tabular-nums text-accent">
+                  <div className="mt-1 font-num text-xl font-bold leading-none tabular-nums text-text-primary">
                     {report.safeSummary.lateNightCount}
                   </div>
                 </div>
-                <div className="px-3.5 py-3">
+                <div className="px-3.5 py-2.5">
                   <Meta>血赚名局</Meta>
-                  <div className="mt-1 font-num text-xl font-bold tabular-nums text-resource">
+                  <div className="mt-1 font-num text-xl font-bold leading-none tabular-nums text-text-primary">
                     {report.outcomeSummary.worthItCount}
                   </div>
                 </div>
-                <div className="px-3.5 py-3">
+                <div className="px-3.5 py-2.5">
                   <Meta>0-0 催眠</Meta>
-                  <div className="mt-1 font-num text-xl font-bold tabular-nums text-text-secondary">
+                  <div className="mt-1 font-num text-xl font-bold leading-none tabular-nums text-text-primary">
                     {report.outcomeSummary.dullDrawCount}
                   </div>
                 </div>
               </div>
 
-              {/* 夜间时段热力 */}
-              <div className="mt-3.5 rounded-xl border border-line-hairline bg-surface-card/45 p-3.5">
+              {/* 夜间时段热力：轻基线柱图，避免空槽变成 10 个黑块 */}
+              <div className="mt-3 rounded-xl border border-line-hairline bg-surface-card/35 px-3.5 py-3">
                 <div className="flex items-center justify-between gap-2">
                   <Meta>熬夜出勤时段热力（北京时间）</Meta>
                   <Meta num>20:00 – 05:00</Meta>
                 </div>
-                <div className="mt-2.5 grid grid-cols-10 gap-1.5">
-                  {NIGHT_HOURS.map(hr => {
-                    const count = report.safeSummary.hourBuckets[hr] || 0;
-                    const pct = count > 0 ? Math.max(18, Math.round((count / maxHourBucket) * 100)) : 8;
-                    return (
-                      <div key={hr} className="flex flex-col items-center gap-1">
-                        <div className="flex h-12 w-full items-end rounded bg-surface-panel/75 p-0.5">
+                {maxHourBucket === 0 ? (
+                  <div className="mt-2.5 flex h-[62px] items-center justify-center rounded-lg border border-dashed border-line-hairline">
+                    <Meta>还没有熬夜出勤记录 · 盖下第一枚印章后自动点亮</Meta>
+                  </div>
+                ) : (
+                  <div className="mt-2.5 grid grid-cols-10 gap-2">
+                    {NIGHT_HOURS.map(hr => {
+                      const count = report.safeSummary.hourBuckets[hr] || 0;
+                      const pct = count > 0 ? Math.max(20, Math.round((count / maxHourBucket) * 100)) : 0;
+                      return (
+                        <div key={hr} className="flex flex-col items-center gap-1.5">
                           <div
-                            className={`w-full rounded-sm transition-all ${
-                              count > 0 ? 'bg-accent/85' : 'bg-line-hairline/55'
-                            }`}
-                            style={{ height: `${pct}%` }}
+                            className="flex h-11 w-full items-end border-b border-line-control/70 px-0.5 pb-px"
                             title={`${String(hr).padStart(2, '0')}:00 · ${count} 场`}
-                          />
+                          >
+                            {count > 0 ? (
+                              <div
+                                className="w-full rounded-t-sm bg-gradient-to-t from-accent/70 to-accent transition-all"
+                                style={{ height: `${pct}%` }}
+                              />
+                            ) : (
+                              <div className="h-[2px] w-full rounded-full bg-line-control/60" />
+                            )}
+                          </div>
+                          <span className="font-num text-2xs leading-none tabular-nums text-text-faint">
+                            {String(hr).padStart(2, '0')}
+                          </span>
                         </div>
-                        <span className="font-num text-2xs tabular-nums text-text-faint">
-                          {String(hr).padStart(2, '0')}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {recentStamps.length > 0 ? (
-                <div className="mt-3.5">
+                <div className="mt-3">
                   <Meta className="mb-1.5 block">最近盖章记录</Meta>
                   <div className="divide-y divide-line-hairline overflow-hidden rounded-xl border border-line-hairline bg-surface-card/45">
                     {recentStamps.map(e => {
@@ -454,20 +469,89 @@ export default function MeView({
                   </div>
                 </div>
               ) : (
-                <p className="mt-3.5 rounded-xl border border-dashed border-line-hairline bg-surface-card/35 px-3.5 py-2.5 text-2xs text-text-muted">
-                  比赛结束后在右侧情报面板底部给比赛盖一枚情绪印章，会自动生成你的观赛账单。
-                </p>
+                <Meta className="mt-2.5 block px-0.5">
+                  提示：比赛结束后在右侧情报面板底部盖一枚情绪印章，即可自动点亮战报统计。
+                </Meta>
               )}
+            </section>
+
+            {/* 3. 跨端同步与系统日历：占足左栏宽度横排两格，紧凑平衡 */}
+            <section
+              aria-labelledby="me-connect-title"
+              className="rounded-2xl border border-line-hairline bg-surface-panel p-4 shadow-card"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <h3 id="me-connect-title" className="text-sm font-semibold text-text-primary">
+                  跨端同步与系统日历
+                </h3>
+                <Meta>零云端本地传输</Meta>
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 gap-3.5 md:grid-cols-12 md:gap-0">
+                <div className="flex flex-col justify-between gap-2.5 md:col-span-5 md:border-r md:border-line-hairline md:pr-4">
+                  <div>
+                    <p className="text-xs font-medium text-text-primary">局域网一扫同步</p>
+                    <Meta className="mt-1 block leading-relaxed">
+                      开启 120 秒临时端口，与手机双向合并关注球队、补看清单与印章。
+                    </Meta>
+                  </div>
+                  <div>
+                    <Button variant="ghost" size="xs" onClick={onOpenLanPair}>
+                      生成同步码
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 md:col-span-7 md:pl-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-text-primary">日历导出 (.ics)</span>
+                    <Meta>只导已定档未开赛</Meta>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="shrink-0 text-2xs text-text-muted">范围</span>
+                    <CompactChoiceGroup
+                      ariaLabel="日历导出范围"
+                      items={ICS_RANGES.map(r => ({ id: r.id, label: r.label }))}
+                      value={icsRange}
+                      onChange={setIcsRange}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="shrink-0 text-2xs text-text-muted">提醒</span>
+                    <CompactChoiceGroup
+                      ariaLabel="日历提醒时间"
+                      items={[
+                        { id: 0, label: '不提醒' },
+                        { id: 15, label: '提前 15m' },
+                        { id: 30, label: '提前 30m' }
+                      ]}
+                      value={icsRemind}
+                      onChange={setIcsRemind}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-0.5">
+                    <span className={`truncate text-2xs ${icsMsg ? (icsMsg.ok ? 'text-resource' : 'text-warn') : 'text-text-faint'}`}>
+                      {icsMsg ? icsMsg.text : '支持 Apple / Google / Outlook'}
+                    </span>
+                    <Button variant="default" size="xs" onClick={exportIcs}>
+                      导出 .ics 文件
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </section>
           </div>
 
-          {/* 右辅栏（40%）：阵营偏好、作息规则与同步导出 */}
-          <div className="flex min-w-0 flex-col gap-5 lg:col-span-5">
-            {/* 关注球队与联赛（独立弹窗管理球队，常态保持定高整洁） */}
+          {/* 右辅栏（5 列）：关注球队与联赛 + 作息规则与防剧透 */}
+          <div className="flex min-w-0 flex-col gap-4 lg:col-span-5">
+            {/* 4. 关注球队与联赛 */}
             <section
               id="me-teams-card"
               aria-labelledby="me-teams-title"
-              className="rounded-2xl border border-line-hairline bg-surface-panel p-5 shadow-card"
+              className="rounded-2xl border border-line-hairline bg-surface-panel p-4 shadow-card"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -478,23 +562,25 @@ export default function MeView({
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {prefs.followedTeams.length > 0 && (
-                    <Button variant="text" size="xs" onClick={() => patch({ followedTeams: [] })}>
-                      清空
-                    </Button>
+                    <>
+                      <Button variant="text" size="xs" onClick={() => patch({ followedTeams: [] })}>
+                        清空
+                      </Button>
+                      <Button variant="default" size="xs" onClick={() => onManageTeams?.()}>
+                        管理球队
+                      </Button>
+                    </>
                   )}
-                  <Button variant="default" size="xs" onClick={() => onManageTeams?.()}>
-                    {prefs.followedTeams.length > 0 ? '管理球队' : '添加球队'}
-                  </Button>
                 </div>
               </div>
 
-              <div className="mt-3.5">
+              <div className="mt-3">
                 {prefs.followedTeams.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {prefs.followedTeams.map(id => (
                       <RemovableChip
                         key={id}
-                        leading={<Crest id={id} size={15} />}
+                        leading={<Crest id={id} size={16} />}
                         onRemove={() =>
                           patch({ followedTeams: prefs.followedTeams.filter(x => x !== id) })
                         }
@@ -504,8 +590,8 @@ export default function MeView({
                     ))}
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-line-hairline bg-surface-card/40 px-3.5 py-3">
-                    <span className="text-2xs text-text-muted">暂未关注主队，挑选后将高优呈现其赛程</span>
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-line-hairline bg-surface-card/35 px-3.5 py-2.5">
+                    <span className="text-2xs text-text-muted">暂未关注主队，挑选后高优呈现</span>
                     <Button variant="ghost" size="xs" onClick={() => onManageTeams?.()}>
                       挑选主队
                     </Button>
@@ -513,24 +599,41 @@ export default function MeView({
                 )}
               </div>
 
-              <div className="mt-4 border-t border-line-hairline pt-4">
+              <div className="mt-4 border-t border-line-hairline pt-3.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium text-text-primary">关注联赛（+8 指数偏好）</span>
                   <Chip tone={bonusActive ? 'resource' : 'neutral'}>
                     {bonusActive ? '+8 生效' : leagueCount === 0 ? '未选择' : '全选 · +0'}
                   </Chip>
                 </div>
-                <div className="mt-2.5 flex flex-wrap gap-1">
-                  {FOLLOWABLE_LEAGUES.map(code => (
-                    <TogglePill
-                      key={code}
-                      on={prefs.followedLeagues.includes(code)}
-                      onClick={() => toggleLeague(code)}
-                      label={LEAGUE_NAMES[code]}
-                      color={leagueColor(code)}
-                    />
-                  ))}
+
+                {/* 3×2 工整栅格，替代参差不齐的折行胶囊 */}
+                <div className="mt-2.5 grid grid-cols-3 gap-1.5">
+                  {FOLLOWABLE_LEAGUES.map(code => {
+                    const on = prefs.followedLeagues.includes(code);
+                    return (
+                      <button
+                        key={code}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => toggleLeague(code)}
+                        className={`inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none ${
+                          on
+                            ? 'border-accent/40 bg-accent/12 font-semibold text-accent'
+                            : 'border-line-hairline bg-surface-card/55 text-text-secondary hover:border-line-control hover:text-text-primary'
+                        }`}
+                      >
+                        <span
+                          className="h-2.5 w-1 shrink-0 rounded-full"
+                          style={{ backgroundColor: leagueColor(code) }}
+                          aria-hidden="true"
+                        />
+                        <span>{LEAGUE_NAMES[code]}</span>
+                      </button>
+                    );
+                  })}
                 </div>
+
                 <div className="mt-2 flex items-center justify-between gap-2">
                   <Meta>选少于 6 个时生效，全选 6 个等于无偏好</Meta>
                   <button
@@ -544,10 +647,10 @@ export default function MeView({
               </div>
             </section>
 
-            {/* 作息规则与防剧透：单卡片内 hairline 分行，消灭嵌套小框 */}
+            {/* 5. 作息规则与防剧透 */}
             <section
               aria-labelledby="me-rules-title"
-              className="rounded-2xl border border-line-hairline bg-surface-panel p-5 shadow-card"
+              className="rounded-2xl border border-line-hairline bg-surface-panel p-4 shadow-card"
             >
               <div className="flex items-center justify-between gap-2">
                 <h3 id="me-rules-title" className="text-sm font-semibold text-text-primary">
@@ -562,7 +665,7 @@ export default function MeView({
                 </button>
               </div>
 
-              <div className="mt-3.5 divide-y divide-line-hairline overflow-hidden rounded-xl border border-line-hairline bg-surface-card/45">
+              <div className="mt-3 divide-y divide-line-hairline overflow-hidden rounded-xl border border-line-hairline bg-surface-card/45">
                 <div className="px-3.5 py-3">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-xs font-medium text-text-primary">每周熬夜额度</span>
@@ -583,7 +686,11 @@ export default function MeView({
                     className="mt-2 w-full accent-resource"
                     aria-label="每周熬夜额度"
                   />
-                  <Meta className="mt-1 block">零成本（傍晚）场次不占每周额度</Meta>
+                  <div className="mt-1 flex items-center justify-between font-num text-2xs tabular-nums text-text-faint">
+                    <span>0h</span>
+                    <span>零成本（傍晚）场次不占额度</span>
+                    <span>8h</span>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between gap-3 px-3.5 py-3">
@@ -631,70 +738,6 @@ export default function MeView({
                 >
                   修改
                 </button>
-              </div>
-            </section>
-
-            {/* 跨端同步与系统日历 */}
-            <section
-              aria-labelledby="me-connect-title"
-              className="rounded-2xl border border-line-hairline bg-surface-panel p-5 shadow-card"
-            >
-              <h3 id="me-connect-title" className="text-sm font-semibold text-text-primary">
-                跨端同步与系统日历
-              </h3>
-
-              <div className="mt-3.5 space-y-3">
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-line-hairline bg-surface-card/45 px-3.5 py-2.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-text-primary">零云端局域网一扫同步</p>
-                    <Meta className="mt-0.5 block leading-normal">
-                      临时开启 120 秒端口，与手机双向合并关注与记录。
-                    </Meta>
-                  </div>
-                  <Button variant="ghost" size="xs" onClick={onOpenLanPair}>
-                    生成同步码
-                  </Button>
-                </div>
-
-                <div className="space-y-2.5 rounded-xl border border-line-hairline bg-surface-card/45 p-3.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-text-primary">日历导出 (.ics)</span>
-                    <Meta>只导已定档未开赛</Meta>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="shrink-0 text-2xs text-text-muted">范围</span>
-                    <CompactChoiceGroup
-                      ariaLabel="日历导出范围"
-                      items={ICS_RANGES.map(r => ({ id: r.id, label: r.label }))}
-                      value={icsRange}
-                      onChange={setIcsRange}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="shrink-0 text-2xs text-text-muted">提醒</span>
-                    <CompactChoiceGroup
-                      ariaLabel="日历提醒时间"
-                      items={[
-                        { id: 0, label: '不提醒' },
-                        { id: 15, label: '提前 15m' },
-                        { id: 30, label: '提前 30m' }
-                      ]}
-                      value={icsRemind}
-                      onChange={setIcsRemind}
-                    />
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line-hairline/70 pt-2.5">
-                    <span className={`text-2xs ${icsMsg ? (icsMsg.ok ? 'text-resource' : 'text-warn') : 'text-text-faint'}`}>
-                      {icsMsg ? icsMsg.text : '导出的 .ics 可直接拖入 Apple / Google / Outlook 日历'}
-                    </span>
-                    <Button variant="default" size="xs" onClick={exportIcs}>
-                      导出 .ics 文件
-                    </Button>
-                  </div>
-                </div>
               </div>
             </section>
           </div>
