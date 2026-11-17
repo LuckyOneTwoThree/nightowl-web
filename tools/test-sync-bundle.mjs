@@ -201,4 +201,47 @@ check('mergeSyncBundles clamps future clock skew on weekUpdatedAtByWeek, diary, 
   assert.equal(resolved.diary.entries['m-evil'].stamp, 'epic');
 });
 
+check('weekOverrides 未知时间戳语义：显式优先、双未知并集、重复构建不推进时间戳', () => {
+  const now = 1_795_000_000_000;
+  const wk = '2026-11-09';
+  const ov = pins => ({ pinnedIds: pins, excludedIds: [], blockedNights: [] });
+
+  // 回归：本地遗留数据无任何时间戳（全局=null），远端有显式全局时间戳 → 远端胜出，
+  // 绝不能把本地旧值盖上 exportedAt 伪装成「刚刚更新」
+  const legacyLocal = buildSyncBundle({ weekOverridesByWeek: { [wk]: ov(['old-desktop']) } }, now);
+  assert.equal(legacyLocal.weekOverridesUpdatedAt, null);
+  const explicitRemote = buildSyncBundle(
+    { weekOverridesUpdatedAt: now - 5000, weekOverridesByWeek: { [wk]: ov(['new-mobile']) } },
+    now
+  );
+  const merged = mergeSyncBundles(legacyLocal, explicitRemote, now);
+  assert.deepEqual(merged.weekOverridesByWeek[wk].pinnedIds, ['new-mobile']);
+  assert.equal(merged.weekOverridesUpdatedAt, now - 5000);
+
+  // 双方均未知 → 并集合并，全局时间戳保持 null，不推进到当前时刻
+  const unknownA = buildSyncBundle({ weekOverridesByWeek: { [wk]: ov(['a']) } }, now);
+  const unknownB = buildSyncBundle({ weekOverridesByWeek: { [wk]: ov(['b']) } }, now);
+  const unionMerged = mergeSyncBundles(unknownA, unknownB, now);
+  assert.deepEqual(unionMerged.weekOverridesByWeek[wk].pinnedIds.sort(), ['a', 'b']);
+  assert.equal(unionMerged.weekOverridesUpdatedAt, null);
+
+  // 同一 bundle 重复构建不推进时间戳（null 保持 null，显式值保持原值）
+  assert.equal(buildSyncBundle(unionMerged, now + 60000).weekOverridesUpdatedAt, null);
+  assert.equal(buildSyncBundle(explicitRemote, now + 60000).weekOverridesUpdatedAt, now - 5000);
+
+  // 仅一侧有逐周时间戳：逐周显式 > 对端全局未知
+  const perWeekLocal = buildSyncBundle(
+    { weekUpdatedAtByWeek: { [wk]: now - 1000 }, weekOverridesByWeek: { [wk]: ov(['per-week']) } },
+    now
+  );
+  const globalUnknownRemote = buildSyncBundle({ weekOverridesByWeek: { [wk]: ov(['unknown']) } }, now);
+  const perWeekMerged = mergeSyncBundles(perWeekLocal, globalUnknownRemote, now);
+  assert.deepEqual(perWeekMerged.weekOverridesByWeek[wk].pinnedIds, ['per-week']);
+
+  // 未知一侧的重置不生效：远端无该周数据且时间戳未知，不得清除本地显式周计划
+  const resetUnknownRemote = buildSyncBundle({ weekOverridesByWeek: {} }, now);
+  const kept = mergeSyncBundles(perWeekLocal, resetUnknownRemote, now);
+  assert.deepEqual(kept.weekOverridesByWeek[wk].pinnedIds, ['per-week']);
+});
+
 console.log(`[test:sync-bundle] ${passed} passed`);

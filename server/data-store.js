@@ -12,7 +12,7 @@
  * 桌面端由 main.cjs 把 app.getPath('userData') 注入 NIGHTOWL_USER_DATA。
  */
 
-import { accessSync, constants, existsSync, readFileSync, statSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
+import { accessSync, constants, existsSync, readFileSync, statSync, writeFileSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -314,9 +314,11 @@ export function saveFixtures(next) {
   const now = new Date().toISOString();
   let out;
   let changedFields;
+  let prevRaw = null;
   try {
     const builtin = parseFixtures(readFileSync(BUILT_IN, 'utf8'));
-    const prevUser = existsSync(p) ? parseFixtures(readFileSync(p, 'utf8')) : [];
+    if (existsSync(p)) prevRaw = readFileSync(p, 'utf8');
+    const prevUser = prevRaw === null ? [] : parseFixtures(prevRaw);
     ({ out, changedFields } = buildFixturesDiff(builtin, next, prevUser, now));
   } catch (err) {
     return { ok: false, reason: `计算差分失败：${err.message}`, path: p };
@@ -333,7 +335,20 @@ export function saveFixtures(next) {
     const metaSaved = saveUserMeta(builtinSeason() || 'unknown', { writer: 'sparse', builtinRev: builtinRev() });
     fixturesCache = null;
     if (!metaSaved) {
-      return { ok: false, reason: '用户数据元信息（meta）写入失败', path: p };
+      // fixtures 已 rename 而 meta 失败 = 部分成功：下次启动 sparse 会被当 dense 读，
+      // 丢掉 t/r 等同步字段。必须回滚到写前状态，宁可报错也不留不一致
+      try {
+        if (prevRaw === null) {
+          if (existsSync(p)) unlinkSync(p);
+        } else {
+          const rollbackTmp = `${p}.${process.pid}.${Date.now()}.rollback.tmp`;
+          writeFileSync(rollbackTmp, prevRaw, 'utf8');
+          renameSync(rollbackTmp, p);
+        }
+      } catch {
+        /* 回滚失败保留现场，读取侧仍有损坏隔离兜底 */
+      }
+      return { ok: false, reason: '用户数据元信息（meta）写入失败，已回滚赛程数据', path: p };
     }
     return { ok: true, path: p, bytes: Buffer.byteLength(body), changedFields };
   } catch (err) {

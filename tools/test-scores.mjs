@@ -9,7 +9,7 @@
  * 运行：node tools/test-scores.mjs
  */
 
-import { readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -967,6 +967,19 @@ console.log('十五、★ 字段级来源（内置更正能压过用户副本，
     const isolated = await loadFixtures();
     const fallbackMatch = isolated.find(m => m.id === target.id);
     ok('★ 读取期隔离损坏用户记录并回退至内置快照', fallbackMatch && fallbackMatch.st === target.st);
+
+    // 故障注入：meta 写入失败时 fixtures 必须回滚，不能留「部分成功」
+    // （meta 缺失会让下次启动把 sparse 当 dense 读，丢掉 t/r 等同步字段）
+    const metaPath = resolve(tmpDir, 'fixtures-meta.json');
+    const fixturesPath = resolve(tmpDir, 'fixtures.json');
+    const beforeRollback = readFileSync(fixturesPath, 'utf8');
+    rmSync(metaPath, { force: true });
+    mkdirSync(metaPath); // 用目录占据 meta 路径 → saveUserMeta 的 rename 必然失败
+    const failedSave = saveFixtures(changed.map(m => (m.id === target.id ? { ...m, sc: '9-9' } : m)));
+    ok('★ meta 写入失败返回 ok:false', failedSave.ok === false, JSON.stringify(failedSave));
+    ok('★ meta 写入失败后 fixtures 回滚到写前状态',
+      readFileSync(fixturesPath, 'utf8') === beforeRollback);
+    rmSync(metaPath, { recursive: true, force: true });
   } finally {
     if (prevEnv === undefined) delete process.env.NIGHTOWL_USER_DATA;
     else process.env.NIGHTOWL_USER_DATA = prevEnv;

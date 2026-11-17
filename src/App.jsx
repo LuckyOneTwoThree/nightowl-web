@@ -72,8 +72,10 @@ import {
 import {
   loadWeekOverrides,
   loadWeekUpdatedAt,
+  loadWeekOverridesUpdatedAt,
   saveWeekOverrides,
-  saveWeekUpdatedAt
+  saveWeekUpdatedAt,
+  saveWeekOverridesUpdatedAt
 } from './components/week-overrides-storage.js';
 import { loadRevealed, saveRevealed } from './components/reveal-storage.js';
 import { VIEW_COMMANDS, ACTION_COMMANDS, buildMatchCommands } from './core/command-palette.js';
@@ -292,6 +294,7 @@ export default function App() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [weekOverridesByWeek, setWeekOverridesByWeek] = useState(() => loadWeekOverrides());
   const [weekUpdatedAtByWeek, setWeekUpdatedAtByWeek] = useState(() => loadWeekUpdatedAt());
+  const [weekOverridesUpdatedAt, setWeekOverridesUpdatedAt] = useState(() => loadWeekOverridesUpdatedAt());
   const [activeMatchId, setActiveMatchId] = useState(() => {
     if (boot.matchId) return boot.matchId;
     try {
@@ -315,6 +318,7 @@ export default function App() {
           {
             prefsUpdatedAt: loadPrefsUpdatedAt(),
             prefs: prefsRef.current,
+            weekOverridesUpdatedAt,
             weekUpdatedAtByWeek,
             weekOverridesByWeek,
             watchLater,
@@ -340,7 +344,7 @@ export default function App() {
         setLanPairLoading(false);
       }
     },
-    [weekOverridesByWeek, weekUpdatedAtByWeek, watchLater, revealed, diary]
+    [weekOverridesUpdatedAt, weekOverridesByWeek, weekUpdatedAtByWeek, watchLater, revealed, diary]
   );
 
   const openLanPair = useCallback(
@@ -387,6 +391,7 @@ export default function App() {
             if (m.weekUpdatedAtByWeek) {
               setWeekUpdatedAtByWeek(saveWeekUpdatedAt(m.weekUpdatedAtByWeek, minKey));
             }
+            setWeekOverridesUpdatedAt(saveWeekOverridesUpdatedAt(m.weekOverridesUpdatedAt));
           }
           if (Array.isArray(m.watchLater)) commitWatchLater(m.watchLater);
           if (Array.isArray(m.revealedIds)) {
@@ -950,10 +955,12 @@ export default function App() {
       const nextForWeek = updater(cur);
       const savedOverrides = saveWeekOverrides({ ...prevOverrides, [activeWeekKey]: nextForWeek }, minWeekKey);
       const savedUpdatedAt = saveWeekUpdatedAt({ ...weekUpdatedAtRef.current, [activeWeekKey]: nowMs }, minWeekKey);
+      const savedGlobalTs = saveWeekOverridesUpdatedAt(nowMs);
       weekOverridesRef.current = savedOverrides;
       weekUpdatedAtRef.current = savedUpdatedAt;
       setWeekOverridesByWeek(savedOverrides);
       setWeekUpdatedAtByWeek(savedUpdatedAt);
+      setWeekOverridesUpdatedAt(savedGlobalTs);
     },
     [activeWeekKey]
   );

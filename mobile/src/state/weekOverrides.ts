@@ -36,6 +36,7 @@ function sanitizeWeekTs(
 type WeekOverridesStore = {
   byWeek: Record<string, WeekOverrideEntry>;
   updatedAtByWeek: Record<string, number>;
+  updatedAt: number | null;
   hydrated: boolean;
   getForWeek: (weekKey: string) => WeekOverrideEntry;
   setPin: (
@@ -51,7 +52,8 @@ type WeekOverridesStore = {
   replaceByWeek: (
     nextByWeek: Record<string, unknown>,
     minWeekKey?: string | null,
-    nextUpdatedAtByWeek?: Record<string, unknown>
+    nextUpdatedAtByWeek?: Record<string, unknown>,
+    nextUpdatedAt?: number | null
   ) => void;
   setHydrated: (value: boolean) => void;
 };
@@ -61,6 +63,7 @@ export const useWeekOverridesStore = create<WeekOverridesStore>()(
     (set, get) => ({
       byWeek: {},
       updatedAtByWeek: {},
+      updatedAt: null,
       hydrated: false,
       getForWeek: weekKey => {
         if (!weekKey) return EMPTY_WEEK_OVERRIDES as unknown as WeekOverrideEntry;
@@ -81,6 +84,7 @@ export const useWeekOverridesStore = create<WeekOverridesStore>()(
             { ...state.updatedAtByWeek, [weekKey]: nowMs },
             minWeekKey
           ),
+          updatedAt: nowMs,
         }));
         return pinnedNow;
       },
@@ -99,6 +103,7 @@ export const useWeekOverridesStore = create<WeekOverridesStore>()(
             { ...state.updatedAtByWeek, [weekKey]: nowMs },
             minWeekKey
           ),
+          updatedAt: nowMs,
         }));
         return pinnedNow;
       },
@@ -117,6 +122,7 @@ export const useWeekOverridesStore = create<WeekOverridesStore>()(
             { ...state.updatedAtByWeek, [weekKey]: nowMs },
             minWeekKey
           ),
+          updatedAt: nowMs,
         }));
         return excludedNow;
       },
@@ -135,6 +141,7 @@ export const useWeekOverridesStore = create<WeekOverridesStore>()(
             { ...state.updatedAtByWeek, [weekKey]: nowMs },
             minWeekKey
           ),
+          updatedAt: nowMs,
         }));
         return blockedNow;
       },
@@ -147,10 +154,11 @@ export const useWeekOverridesStore = create<WeekOverridesStore>()(
           return {
             byWeek: copy,
             updatedAtByWeek: { ...state.updatedAtByWeek, [weekKey]: nowMs },
+            updatedAt: nowMs,
           };
         });
       },
-      replaceByWeek: (nextByWeek, minWeekKey = null, nextUpdatedAtByWeek) =>
+      replaceByWeek: (nextByWeek, minWeekKey = null, nextUpdatedAtByWeek, nextUpdatedAt) =>
         set(state => ({
           byWeek: pruneWeekOverridesMap(
             nextByWeek || {},
@@ -159,21 +167,37 @@ export const useWeekOverridesStore = create<WeekOverridesStore>()(
           updatedAtByWeek: nextUpdatedAtByWeek
             ? sanitizeWeekTs(nextUpdatedAtByWeek, minWeekKey)
             : sanitizeWeekTs(state.updatedAtByWeek, minWeekKey),
+          updatedAt:
+            nextUpdatedAt !== undefined
+              ? Number.isFinite(nextUpdatedAt) && (nextUpdatedAt as number) >= 0
+                ? (nextUpdatedAt as number)
+                : null
+              : state.updatedAt,
         })),
       setHydrated: value => set({ hydrated: value }),
     }),
     {
       name: 'owl:week-overrides:v1',
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: state => ({ byWeek: state.byWeek, updatedAtByWeek: state.updatedAtByWeek }),
+      partialize: state => ({
+        byWeek: state.byWeek,
+        updatedAtByWeek: state.updatedAtByWeek,
+        updatedAt: state.updatedAt,
+      }),
       merge: (persisted, current) => {
         const saved = persisted as
-          | { byWeek?: Record<string, unknown>; updatedAtByWeek?: Record<string, unknown> }
+          | {
+              byWeek?: Record<string, unknown>;
+              updatedAtByWeek?: Record<string, unknown>;
+              updatedAt?: unknown;
+            }
           | undefined;
+        const savedGlobalTs = Number(saved?.updatedAt);
         return {
           ...current,
           byWeek: pruneWeekOverridesMap(saved?.byWeek || {}) as Record<string, WeekOverrideEntry>,
           updatedAtByWeek: sanitizeWeekTs(saved?.updatedAtByWeek),
+          updatedAt: Number.isFinite(savedGlobalTs) && savedGlobalTs >= 0 ? savedGlobalTs : null,
         };
       },
       onRehydrateStorage: () => state => {

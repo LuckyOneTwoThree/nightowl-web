@@ -70,6 +70,7 @@ async function makeProxy(overrides = {}) {
     listen: { host: '127.0.0.1', port: 0 },
     proxy: {
       allowedHosts: ['127.0.0.1'],
+      allowLoopbackHosts: true,
       allowedHostSuffixes: [],
       forwardHeaders: [],
       upstreamHeaders: {},

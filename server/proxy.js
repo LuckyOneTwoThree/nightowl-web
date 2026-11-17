@@ -162,15 +162,15 @@ export function isPublicIp(rawIp) {
 
 /**
  * 发起上游建连前校验域名解析出的 IP，拒绝私网 / 回环地址（DNS Rebinding 防护）。
- * 显式列在 rules.proxy.allowedHosts 的固定本地测试主机或 allowLoopbackHosts 除外。
+ * allowedHosts 只是授权白名单，不豁免安全校验——精确命中的直播域名同样走解析校验 + 钉扎，
+ * 否则域名过期被抢注或 DNS 投毒后指向内网时代理会照连。
+ * 仅 allowLoopbackHosts（测试/本地调试显式开启）整体豁免。
  * 返回首个通过校验的 { address, family } 供底层 socket 钉死目标 IP（消除 TOCTOU）。
  */
 export async function assertPublicDestination(hostname, rules = {}, lookupFn = dnsLookup) {
   const host = typeof hostname === 'string' ? hostname.trim().toLowerCase().replace(/\.+$/, '') : '';
   if (!host) throw new ProxyError('bad-request', '缺少目标主机名', 400);
   if (rules?.proxy?.allowLoopbackHosts) return null;
-  const exact = (rules?.proxy?.allowedHosts || []).map(h => String(h || '').trim().toLowerCase().replace(/\.+$/, ''));
-  if (exact.includes(host)) return null;
   if (isIP(host)) {
     if (!isPublicIp(host)) throw new ProxyError('blocked', `拒绝访问私网或回环地址：${host}`, 403);
     return { address: host, family: isIP(host) };

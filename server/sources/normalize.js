@@ -143,11 +143,19 @@ export async function fetchJSON(url, { timeoutMs = 20000, retries = 3, baseDelay
     if (left <= 0) break;
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), left);
+    let r;
     try {
-      const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: ac.signal });
+      r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: ac.signal });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return await r.json();
     } catch (err) {
+      // 非 2xx / 解析失败必须显式取消 body，否则 undici 连接无法释放，
+      // 上游全挂 + 重试 + curl 兜底场景下 socket 会堆积
+      try {
+        await r?.body?.cancel();
+      } catch {
+        /* body 已消费或连接已断 */
+      }
       lastErr = err;
       const delayLeft = remainingMs();
       if (i < retries - 1 && delayLeft > 0) {

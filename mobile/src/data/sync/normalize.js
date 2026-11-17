@@ -80,11 +80,18 @@ export async function fetchJSON(url, { timeoutMs = 20000, retries = 3, baseDelay
   for (let i = 0; i < retries; i++) {
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeoutMs);
+    let r;
     try {
-      const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: ac.signal });
+      r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: ac.signal });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return await r.json();
     } catch (err) {
+      // 非 2xx / 解析失败显式取消 body，避免重试期间连接资源滞留
+      try {
+        await r?.body?.cancel();
+      } catch {
+        /* body 已消费或连接已断 */
+      }
       lastErr = err;
       if (i < retries - 1) await sleep(baseDelayMs * Math.pow(2, i));
     } finally {

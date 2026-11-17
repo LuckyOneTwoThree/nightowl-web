@@ -373,9 +373,11 @@ export async function scheduleMatchReminderWithStatus(
     for (const item of existing) {
       const data = item.content.data || {};
       if (data.matchId === match.id && (data.kind === 'prematch' || data.kind === 'manual')) {
-        if (data.kickoff === match.t) {
+        if (data.kickoff === match.t && data.kind === 'manual') {
           alreadyUpToDate = true;
         } else {
+          // 同开球的 prematch 必须取消并以 manual 重排：否则用户关闭自动提醒开关时，
+          // 这场显式设置的提醒会随 prematch 一起被静默取消
           await Notifications.cancelScheduledNotificationAsync(item.identifier);
         }
       }

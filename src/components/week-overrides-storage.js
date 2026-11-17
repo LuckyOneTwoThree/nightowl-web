@@ -2,6 +2,7 @@ import { pruneWeekOverridesMap } from '../core/week-overrides.js';
 
 const KEY = 'owl:week-overrides:v1';
 const TS_KEY = 'owl:week-overrides-ts:v1';
+const GLOBAL_TS_KEY = 'owl:week-overrides-global-ts:v1';
 
 export function loadWeekOverrides() {
   try {
@@ -57,4 +58,26 @@ export function saveWeekUpdatedAt(map, minWeekStartStr = null) {
     /* 容错 */
   }
   return out;
+}
+
+// 全局周计划变更时刻：null = 未知（遗留数据从未记录），同步合并时不得伪装成当前时刻
+export function loadWeekOverridesUpdatedAt() {
+  try {
+    const n = Number(localStorage.getItem(GLOBAL_TS_KEY));
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveWeekOverridesUpdatedAt(ts) {
+  const n = Number(ts);
+  const clean = Number.isFinite(n) && n >= 0 ? n : null;
+  try {
+    if (clean === null) localStorage.removeItem(GLOBAL_TS_KEY);
+    else localStorage.setItem(GLOBAL_TS_KEY, String(clean));
+  } catch {
+    /* 容错 */
+  }
+  return clean;
 }

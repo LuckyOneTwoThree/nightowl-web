@@ -38,6 +38,7 @@ type SyncResponse = {
   merged?: {
     prefsUpdatedAt?: number;
     prefs?: Partial<Prefs>;
+    weekOverridesUpdatedAt?: number | null;
     weekUpdatedAtByWeek?: Record<string, number>;
     weekOverridesByWeek?: Record<string, unknown>;
     watchLater?: unknown[];
@@ -130,6 +131,7 @@ export default function PairScreen() {
   const importDiary = useDiaryStore(state => state.importDiary);
   const weekOverridesByWeek = useWeekOverridesStore(state => state.byWeek);
   const weekUpdatedAtByWeek = useWeekOverridesStore(state => state.updatedAtByWeek);
+  const weekOverridesUpdatedAt = useWeekOverridesStore(state => state.updatedAt);
   const replaceByWeek = useWeekOverridesStore(state => state.replaceByWeek);
   const startPlayer = usePlayerStore(state => state.start);
 
@@ -237,6 +239,7 @@ export default function PairScreen() {
         {
           prefsUpdatedAt,
           prefs,
+          weekOverridesUpdatedAt,
           weekUpdatedAtByWeek,
           weekOverridesByWeek,
           watchLater,
@@ -260,7 +263,12 @@ export default function PairScreen() {
       if (merged.prefs) applySyncedPrefs(merged.prefs, merged.prefsUpdatedAt);
       if (merged.weekOverridesByWeek) {
         const minKey = mondayOfWall(nightOf(Date.now())) as string;
-        replaceByWeek(merged.weekOverridesByWeek, minKey, merged.weekUpdatedAtByWeek);
+        replaceByWeek(
+          merged.weekOverridesByWeek,
+          minKey,
+          merged.weekUpdatedAtByWeek,
+          merged.weekOverridesUpdatedAt
+        );
       }
       if (Array.isArray(merged.watchLater)) {
         replaceItems(merged.watchLater);

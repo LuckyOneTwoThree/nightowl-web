@@ -129,7 +129,6 @@ export async function saveFixtures(next: unknown[]): Promise<{ ok: boolean; reas
     await tmp.move(file, { overwrite: true });
 
     const meta = metaFile();
-    if (!meta.exists) meta.create();
     const body: FixtureMeta = {
       updatedAt: nowIso,
       count: next.length,
@@ -137,7 +136,12 @@ export async function saveFixtures(next: unknown[]): Promise<{ ok: boolean; reas
       writer: 'sparse',
       builtinRev: typeof fixturesMeta?.rev === 'string' ? fixturesMeta.rev : null,
     };
-    await meta.write(JSON.stringify(body));
+    // meta 同样 tmp+move：直接覆盖时进程被杀会留下半截 JSON，
+    // 下次启动 sparse 文件按 dense 校验失败，已同步比分会整批回退内置快照
+    const metaTmp = new File(Paths.document, `${META_FILE}.tmp`);
+    if (!metaTmp.exists) metaTmp.create();
+    await metaTmp.write(JSON.stringify(body));
+    await metaTmp.move(meta, { overwrite: true });
     return { ok: true };
   } catch (error) {
     return {

@@ -119,6 +119,7 @@ const rules = {
   listen: { host: '127.0.0.1', port: 0 },
   proxy: {
     allowedHosts: ['127.0.0.1'],
+    allowLoopbackHosts: true,
     allowedHostSuffixes: [],
     forwardHeaders: ['Range', 'Accept'],
     upstreamHeaders: { Referer: '', 'User-Agent': 'nightowl-test' },
@@ -307,6 +308,26 @@ console.log('六、DNS 重绑定拦截与 304 条件请求透传');
     blockedByDns = err?.status === 403 && err?.kind === 'blocked';
   }
   ok('★ 公网域名 DNS 解析到 127.0.0.1 时被代理拦截（403）', blockedByDns);
+
+  // allowedHosts 精确命中不豁免 DNS 校验：直播域名被投毒指向内网时同样拦截
+  let exactHostBlocked = false;
+  try {
+    await assertPublicDestination(
+      'live.example.com',
+      { proxy: { allowedHosts: ['live.example.com'] } },
+      async () => [{ address: '192.168.1.1', family: 4 }]
+    );
+  } catch (err) {
+    exactHostBlocked = err?.status === 403 && err?.kind === 'blocked';
+  }
+  ok('★ allowedHosts 精确命中的域名解析到私网时仍被拦截（403）', exactHostBlocked);
+
+  const pinnedExact = await assertPublicDestination(
+    'live.example.com',
+    { proxy: { allowedHosts: ['live.example.com'] } },
+    async () => [{ address: '1.1.1.1', family: 4 }]
+  );
+  ok('★ allowedHosts 精确命中的公网域名返回钉扎地址', pinnedExact?.address === '1.1.1.1');
 
   const dnsProxy = createProxy(
     { proxy: { allowedHosts: [], allowedHostSuffixes: ['example.com'] } },
