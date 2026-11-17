@@ -480,9 +480,11 @@ export default function PlayerStage({
   // 宽屏（≥1280）由右侧竖栏接管线路。清掉窄屏的横条展开态，
   // 否则「1120 展开 → 拉宽 → 缩回 1120」会带着展开的横条回来（intelTop 372→589），
   // 把情报面板重新推出首屏，默认收起就失去意义。
+  // 切场/停播回到赛前同样重置：展开态属于上一场，不该残留到下一场。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 三者都是重置触发器；body 只做收起
   useEffect(() => {
-    if (wideStage) setCompactLinesOpen(false);
-  }, [wideStage]);
+    setCompactLinesOpen(false);
+  }, [wideStage, match?.id, streamUrl]);
 
   // 广播行（赛前 / 有视频直播）里右栏高度跟随画面卡片：
   // 内容短于画面时拉伸补齐，长于画面时栏内滚动，避免任一侧露出大片空白。

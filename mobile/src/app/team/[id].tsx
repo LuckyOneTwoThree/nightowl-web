@@ -89,8 +89,8 @@ export default function TeamScreen() {
     return ids.size ? ids : null;
   }, [fixtures, now, prefs.spoilerFree, revealedIds]);
   const form = useMemo(
-    () => (team ? (computeTeamForm(id, null as unknown as object, fixtures, 5, { excludeIds: spoilerExcludedIds }) as FormItem[]) : []),
-    [id, team, fixtures, spoilerExcludedIds]
+    () => (team ? (computeTeamForm(id, null as unknown as object, fixtures, 5, { excludeIds: spoilerExcludedIds, asOfTs: now }) as FormItem[]) : []),
+    [id, team, fixtures, spoilerExcludedIds, now]
   );
   const season = useMemo(
     () =>

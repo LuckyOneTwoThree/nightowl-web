@@ -136,7 +136,7 @@ export default function StandingsModal({ open, onClose, initialLeague, match, no
     for (const row of table.rows) {
       map.set(
         row.teamId,
-        computeTeamForm(row.teamId, historical ? match : null, getFixtures(), 5, { excludeIds: hiddenIds })
+        computeTeamForm(row.teamId, historical ? match : null, getFixtures(), 5, { excludeIds: hiddenIds, asOfTs: nowTs })
       );
     }
     return map;

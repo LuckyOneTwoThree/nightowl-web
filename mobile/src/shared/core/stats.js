@@ -39,7 +39,12 @@ export function computeTeamForm(teamId, currentMatch, allFixtures = null, limit 
   if (!teamId) return [];
   const excludeIds = opts.excludeIds || null;
 
-  const knownTs = knownByTs(currentMatch);
+  // asOfTs 让非历史视图也能与积分表同截止（kick+120min ≤ asOfTs）：
+  // 刚终场不足 120min 的赛果不进「近5」，避免两列口径不齐
+  const knownTs = Math.min(
+    knownByTs(currentMatch),
+    Number.isFinite(opts.asOfTs) ? opts.asOfTs : Infinity
+  );
 
   // 只取「当前比赛开球时已经结束」的场次：开球早但还没终场的比赛不能算已知
   const teamDoneMatches = allFixtures.filter(

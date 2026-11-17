@@ -76,10 +76,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
  * 失败就交给上层显示「同步失败，沿用本地数据」。
  */
 export async function fetchJSON(url, { timeoutMs = 20000, retries = 3, baseDelayMs = 500, log = console } = {}) {
+  const startedAt = Date.now();
+  // timeoutMs 是整次拉取的总预算（含重试与退避），不是单请求上限：
+  // 否则 retries×timeoutMs 会击穿调用方的总 deadline（90s 完整同步被拖到 ~180s）
+  const remainingMs = () => Math.max(0, timeoutMs - (Date.now() - startedAt));
   let lastErr;
   for (let i = 0; i < retries; i++) {
+    const left = remainingMs();
+    if (left <= 0) break;
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    const timer = setTimeout(() => ac.abort(), left);
     let r;
     try {
       r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: ac.signal });
@@ -93,7 +99,9 @@ export async function fetchJSON(url, { timeoutMs = 20000, retries = 3, baseDelay
         /* body 已消费或连接已断 */
       }
       lastErr = err;
-      if (i < retries - 1) await sleep(baseDelayMs * Math.pow(2, i));
+      const delayLeft = remainingMs();
+      const delay = Math.min(baseDelayMs * Math.pow(2, i), delayLeft);
+      if (i < retries - 1 && delay > 0) await sleep(delay);
     } finally {
       clearTimeout(timer);
     }

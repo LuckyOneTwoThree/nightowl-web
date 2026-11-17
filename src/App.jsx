@@ -78,6 +78,7 @@ import {
   saveWeekOverridesUpdatedAt
 } from './components/week-overrides-storage.js';
 import { loadRevealed, saveRevealed } from './components/reveal-storage.js';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { VIEW_COMMANDS, ACTION_COMMANDS, buildMatchCommands } from './core/command-palette.js';
 import { planSecondHalfCutIn } from './core/second-half.js';
 import {
@@ -127,6 +128,16 @@ function initialFromUrl() {
   } catch {
     return { view: 'tonight', matchId: null };
   }
+}
+
+// 浮层专用懒加载壳：chunk 加载/渲染失败时只丢弃该浮层（console 已有记录），
+// 主界面继续可用；视图级懒加载仍交给根 ErrorBoundary 显示可见错误屏。
+function LazyOverlay({ children }) {
+  return (
+    <ErrorBoundary fallback={null}>
+      <Suspense fallback={null}>{children}</Suspense>
+    </ErrorBoundary>
+  );
 }
 
 export default function App() {
@@ -1216,6 +1227,13 @@ export default function App() {
     ).length;
   }, [watchLater, morningDigestAll.night]);
 
+  // 空态 CTA「明早补看 · N 场」必须与摘要实际内容同口径（只算摘要那一夜的 pending），
+  // 不能用全队列 pending 总数——跨夜条目会让 CTA 显示 N>0 却打开空摘要
+  const morningPendingCount = useMemo(
+    () => morningDigestAll.items.filter(entry => entry.item.status === 'pending').length,
+    [morningDigestAll]
+  );
+
   /* ---- 连续补看（P1-5） ----
      摘要的主行动不再是「稍后再看」而是「开始依序补看」：连看的动作是「看下一场」，
      清单的动作才是「逐条点开再退回来」。会话只持 id 快照 + 游标，
@@ -1532,7 +1550,7 @@ export default function App() {
                 onOpenSettings={openSettings}
                 onGoWeek={() => setView('week')}
                 onOpenMorningDigest={() => setMorningDigestOpen(true)}
-                queueCount={pendingQueueCount}
+                queueCount={morningPendingCount}
               />
             )}
 
@@ -1695,7 +1713,7 @@ export default function App() {
       )}
 
       {morningDigestOpen && (
-        <Suspense fallback={null}>
+        <LazyOverlay>
           <div inert={inertFor('morning') || undefined}>
             <MorningDigest
               open={morningDigestOpen}
@@ -1720,7 +1738,7 @@ export default function App() {
               returnFocusEl={triggerElFor('morning')}
             />
           </div>
-        </Suspense>
+        </LazyOverlay>
       )}
 
       {paletteOpen && (
@@ -1734,7 +1752,7 @@ export default function App() {
       )}
 
       {settingsOpen && (
-        <Suspense fallback={null}>
+        <LazyOverlay>
           <div inert={inertFor('settings') || undefined}>
             <SettingsDrawer
               open={settingsOpen}
@@ -1775,7 +1793,7 @@ export default function App() {
               returnFocusEl={triggerElFor('settings')}
             />
           </div>
-        </Suspense>
+        </LazyOverlay>
       )}
 
       {onboardingVisible && (
@@ -1792,7 +1810,7 @@ export default function App() {
       {splashOpen && <SplashScreen onClose={handleCloseSplash} />}
 
       {!!standingsState && (
-        <Suspense fallback={null}>
+        <LazyOverlay>
           <div inert={inertFor('standings') || undefined}>
             <StandingsModal
               open={!!standingsState}
@@ -1806,11 +1824,11 @@ export default function App() {
               returnFocusEl={triggerElFor('standings')}
             />
           </div>
-        </Suspense>
+        </LazyOverlay>
       )}
 
       {seasonReportOpen && (
-        <Suspense fallback={null}>
+        <LazyOverlay>
           <div inert={inertFor('season') || undefined}>
             <SeasonReportModal
               open={seasonReportOpen}
@@ -1823,11 +1841,11 @@ export default function App() {
               returnFocusEl={triggerElFor('season')}
             />
           </div>
-        </Suspense>
+        </LazyOverlay>
       )}
 
       {lanPairOpen && (
-        <Suspense fallback={null}>
+        <LazyOverlay>
           <div inert={inertFor('lanPair') || undefined}>
             <LanPairModal
               open={lanPairOpen}
@@ -1840,11 +1858,11 @@ export default function App() {
               returnFocusEl={triggerElFor('lanPair')}
             />
           </div>
-        </Suspense>
+        </LazyOverlay>
       )}
 
       {teamsModalOpen && (
-        <Suspense fallback={null}>
+        <LazyOverlay>
           <div inert={inertFor('teams') || undefined}>
             <FollowedTeamsModal
               open={teamsModalOpen}
@@ -1854,11 +1872,11 @@ export default function App() {
               returnFocusEl={triggerElFor('teams')}
             />
           </div>
-        </Suspense>
+        </LazyOverlay>
       )}
 
       {updateModalOpen && (
-        <Suspense fallback={null}>
+        <LazyOverlay>
           <div inert={inertFor('update') || undefined}>
             <UpdateModal
               open={updateModalOpen}
@@ -1871,7 +1889,7 @@ export default function App() {
               returnFocusEl={triggerElFor('update')}
             />
           </div>
-        </Suspense>
+        </LazyOverlay>
       )}
 
       {/* 发现新版本时的轻量主动浮动提醒（避免用户不知道有更新） */}

@@ -110,7 +110,8 @@ export default function MeView({
     () => buildSeasonReport(diary, fixtures, prefs, revealed),
     [diary, fixtures, prefs, revealed]
   );
-  const maxHourBucket = Math.max(0, ...report.safeSummary.hourBuckets);
+  // 只按显示的夜间时段取缩放上限：白天场次不参与渲染，却会把全部夜间柱压低
+  const maxHourBucket = Math.max(0, ...NIGHT_HOURS.map(hr => report.safeSummary.hourBuckets[hr] || 0));
   const recentStamps = useMemo(() => {
     const entries = Object.values(diary?.entries || {});
     return entries.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3);

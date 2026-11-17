@@ -103,7 +103,13 @@ export async function fetchAllEvents({ leagues, months, targets, targetDates, se
     }
     bySource[r.sid].requests++;
     try {
-      const evs = await r.strat.fetch(r.league, r.unit, { log, season, ...fetchOptions });
+      const opts = { log, season, ...fetchOptions };
+      // 单请求预算不得超过总 deadline 剩余量：慢网下单请求就能把 90s 上限击穿
+      if (deadlineMs > 0) {
+        const left = deadlineMs - (Date.now() - startedAt);
+        opts.timeoutMs = Math.max(1000, Math.min(opts.timeoutMs || 30000, left));
+      }
+      const evs = await r.strat.fetch(r.league, r.unit, opts);
       events.push(...evs);
       bySource[r.sid].events += evs.length;
       bySource[r.sid].ok++;

@@ -149,7 +149,7 @@ export function SleepBadge({ match, compact = false, className = '' }) {
   const style = TIER_MAP[tier.label] || TIER_MAP.S0;
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded px-1.5 py-px font-num text-2xs font-semibold leading-snug tabular-nums ${style.soft} ${style.text} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-sm px-1.5 py-px font-num text-2xs font-semibold leading-snug tabular-nums ${style.soft} ${style.text} ${className}`}
       title={`${tier.zh}档 · 睡眠成本 ${tier.cost} 小时`}
     >
       {tier.label}
@@ -213,7 +213,7 @@ export function ScoreText({ match, state, revealed, onReveal, spoilerFree, stale
             // 按钮在比赛行（role=button）内部：Enter/Space 只揭晓，不再冒泡成选场。
             if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
           }}
-          className="inline-flex items-center gap-1 rounded border border-line-control/70 bg-surface-raised/80 px-1.5 py-px text-2xs text-text-secondary transition-colors hover:border-accent/40 hover:bg-surface-press hover:text-accent"
+          className="inline-flex items-center gap-1 rounded-sm border border-line-control/70 bg-surface-raised/80 px-1.5 py-px text-2xs text-text-secondary transition-colors hover:border-accent/40 hover:bg-surface-press hover:text-accent"
           title="点击揭晓比分"
         >
           <IconReveal />

@@ -104,8 +104,15 @@ export function useSyncOnLaunch() {
 
     try {
       outcome = needFull ? await syncNow({ silent: true }) : await syncNow({ quick: true });
-      // 失败不写时间戳，否则一次弱网会把完整同步锁掉 24 小时
-      if (needFull && outcome && !outcome.busy && outcome.status !== 'failed') {
+      // 失败/截断不写时间戳：否则一次弱网会把完整同步锁掉 24 小时，
+      // 而快检不覆盖 TBD 开球公布与未来 48h 变动，截断锁 24h 会让这些变更迟到一天
+      if (
+        needFull &&
+        outcome &&
+        !outcome.busy &&
+        outcome.status !== 'failed' &&
+        outcome.status !== 'partial_failure'
+      ) {
         void AsyncStorage.setItem(FULL_SYNC_KEY, String(Date.now())).catch(() => {});
       }
     } catch {

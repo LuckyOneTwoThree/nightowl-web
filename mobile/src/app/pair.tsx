@@ -47,15 +47,19 @@ type SyncResponse = {
   };
 };
 
-async function fetchWithTimeout(
+async function fetchWithTimeout<T>(
   url: string,
   init: RequestInit,
-  timeoutMs = 8000
-): Promise<Response> {
+  timeoutMs: number,
+  read: (res: Response) => Promise<T>
+): Promise<{ res: Response; body: T }> {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...init, signal: ac.signal });
+    const res = await fetch(url, { ...init, signal: ac.signal });
+    // body 读取必须在同一超时预算内：响应头到达即清定时器会让 .json() 无限挂起 busy
+    const body = await read(res);
+    return { res, body };
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
       throw new Error('连接桌面端超时（请确认同一 Wi-Fi 且未被防火墙拦截）');
@@ -216,8 +220,12 @@ export default function PairScreen() {
       let resolvedMode: 'sync' | 'handoff' = mode;
       let hasHandoff = false;
       try {
-        const infoRes = await fetchWithTimeout(`${baseUrl}/pair/info`, { method: 'GET', headers });
-        const infoJson = (await infoRes.json().catch(() => ({}))) as InfoResponse;
+        const { res: infoRes, body: infoJson } = await fetchWithTimeout(
+          `${baseUrl}/pair/info`,
+          { method: 'GET', headers },
+          8000,
+          r => r.json().catch(() => ({})) as Promise<InfoResponse>
+        );
         if (infoRes.ok && infoJson.ok) {
           if (infoJson.mode === 'handoff') resolvedMode = 'handoff';
           hasHandoff = Boolean(infoJson.hasHandoff);
@@ -249,12 +257,16 @@ export default function PairScreen() {
         Date.now()
       );
 
-      const syncRes = await fetchWithTimeout(`${baseUrl}/pair/sync`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(localBundle),
-      });
-      const syncJson = (await syncRes.json().catch(() => ({}))) as SyncResponse;
+      const { res: syncRes, body: syncJson } = await fetchWithTimeout(
+        `${baseUrl}/pair/sync`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(localBundle),
+        },
+        8000,
+        r => r.json().catch(() => ({})) as Promise<SyncResponse>
+      );
       if (!syncRes.ok || !syncJson.ok || !syncJson.merged) {
         throw new Error(syncJson.error || `同步失败（HTTP ${syncRes.status}）`);
       }
@@ -282,8 +294,12 @@ export default function PairScreen() {
 
       // 3. 如为「回被窝手机接力」，继续拉取播控接力信息并跳去播放/选线
       if (resolvedMode === 'handoff' || hasHandoff) {
-        const handoffRes = await fetchWithTimeout(`${baseUrl}/pair/handoff`, { method: 'GET', headers });
-        const handoffJson = (await handoffRes.json().catch(() => ({}))) as HandoffResponse;
+        const { res: handoffRes, body: handoffJson } = await fetchWithTimeout(
+          `${baseUrl}/pair/handoff`,
+          { method: 'GET', headers },
+          8000,
+          r => r.json().catch(() => ({})) as Promise<HandoffResponse>
+        );
         if (handoffRes.ok && handoffJson.ok && handoffJson.handoff?.matchId) {
           const { matchId, lines = [] } = handoffJson.handoff;
           const match = (getFixtures() as Match[]).find(m => m.id === matchId);

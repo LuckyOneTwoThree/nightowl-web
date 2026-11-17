@@ -21,6 +21,8 @@ export default class ErrorBoundary extends React.Component {
 
   render() {
     if (!this.state.error) return this.props.children;
+    // 浮层懒加载的局部兜底：chunk 失败时只放弃该浮层，不把整页打成错误屏
+    if (this.props.fallback !== undefined) return this.props.fallback;
 
     const message = String(this.state.error?.stack || this.state.error?.message || this.state.error || '未知错误');
     return (

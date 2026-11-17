@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  BackHandler,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -119,6 +120,16 @@ function PlayerView({
     return () => clearTimeout(timer);
   }, [hudVisible, panelOpen, active.id]);
 
+  // 选线面板打开时，Android 返回键先关面板而不是直接退出播放页
+  useEffect(() => {
+    if (!panelOpen) return undefined;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setPanelOpen(false);
+      return true;
+    });
+    return () => sub.remove();
+  }, [panelOpen]);
+
   const initialSourceRef = useRef({
     uri: active.url,
     headers: { 'User-Agent': USER_AGENT },
@@ -165,6 +176,12 @@ function PlayerView({
     let alive = true;
     void (async () => {
       try {
+        // 原生控制面板静音不经过 React state：换线前先采纳播放器真实静音态，
+        // 否则 mutedRef 停在旧值，replaceAsync 后会把用户静音强制恢复成外放
+        if (player.muted !== mutedRef.current) {
+          mutedRef.current = player.muted;
+          setMuted(player.muted);
+        }
         await player.replaceAsync({
           uri: active.url,
           headers: { 'User-Agent': USER_AGENT },
