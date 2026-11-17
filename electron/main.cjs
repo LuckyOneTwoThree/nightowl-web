@@ -16,6 +16,7 @@
  */
 
 const { app, BrowserWindow, dialog, ipcMain, shell, Notification, Tray, Menu, nativeImage } = require('electron');
+const { CSP_POLICY } = require('./csp.cjs');
 const path = require('node:path');
 const fs = require('node:fs');
 
@@ -316,21 +317,7 @@ function createWindow({ hidden = false } = {}) {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        'Content-Security-Policy': [
-          [
-            "default-src 'self'",
-            "script-src 'self'",
-            "worker-src 'self' blob:",
-            "style-src 'self' 'unsafe-inline'",
-            "img-src 'self' data: blob:",
-            "font-src 'self'",
-            "media-src 'self' blob:",
-            "connect-src 'self' https://api.github.com",
-            "frame-ancestors 'none'",
-            "base-uri 'self'",
-            "form-action 'self'"
-          ].join('; ')
-        ]
+        'Content-Security-Policy': [CSP_POLICY]
       }
     });
   });

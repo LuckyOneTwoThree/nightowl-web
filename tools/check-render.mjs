@@ -183,6 +183,19 @@ app.whenReady().then(async () => {
       !errors.some(m => /Content Security Policy|Refused to (create|load|execute|connect)/i.test(m)),
       errors.filter(m => /Content Security Policy|Refused to/i.test(m)).join(' | ')
     );
+    // 正向断言：blob Worker 必须能创建并回消息。只查「无违规」不够——
+    // 门禁窗口若没注入 CSP，违规断言恒真；删掉 worker-src 时这条会先红。
+    const workerOk = await win.webContents.executeJavaScript(`
+      new Promise(resolve => {
+        try {
+          const w = new Worker(URL.createObjectURL(new Blob(['postMessage(1)'], { type: 'text/javascript' })));
+          const t = setTimeout(() => { w.terminate(); resolve(false); }, 3000);
+          w.onmessage = () => { clearTimeout(t); w.terminate(); resolve(true); };
+          w.onerror = () => { clearTimeout(t); resolve(false); };
+        } catch { resolve(false); }
+      })
+    `);
+    ok('★ blob Worker 可创建并回消息（CSP worker-src 生效）', workerOk === true, String(workerOk));
 
     /* 决策条（P1-1）：全屏唯一结论条，四段齐全且不重复出现。 */
     const strip = await win.webContents.executeJavaScript(`
@@ -484,7 +497,8 @@ app.whenReady().then(async () => {
     await sleep(1100);
 
     // 固定切到未来场次：当前时刻 Hero 可能正好是直播场，直播态没有“情报/查看线路”入口。
-    await waitLoad(win, `${base}/?view=tonight&match=${futureFixture.id}`);
+    // 赛季末快照可能全完赛（无未来场次）→ 守卫导航，断言按数据依赖跳过，不让门禁抛错。
+    if (futureFixture) await waitLoad(win, `${base}/?view=tonight&match=${futureFixture.id}`);
     await sleep(1400);
 
     const queueAddClicked = await win.webContents.executeJavaScript(`
@@ -516,9 +530,14 @@ app.whenReady().then(async () => {
         };
       })()
     `);
-    ok('★ 比赛详情可加入补看并本地持久化',
-      queueAddClicked && queueAddState.button && queueAddState.savedIds.includes(futureFixture.id),
-      JSON.stringify(queueAddState));
+    if (futureFixture) {
+      ok('★ 比赛详情可加入补看并本地持久化',
+        queueAddClicked && queueAddState.button && queueAddState.savedIds.includes(futureFixture.id),
+        JSON.stringify(queueAddState));
+    } else {
+      skipped += 1;
+      console.log('  ⏭ 无未来场次（赛季末快照）→ 补看加入断言跳过');
+    }
 
     /* 情报面板三级披露（P1-4）：第一层结论级信息 + 第二层唯一主图表，
        其余分区默认收起为抽屉。此前面板把 8 个分区一次铺开，五块等权 = 没有主次。 */
@@ -1312,13 +1331,18 @@ app.whenReady().then(async () => {
       localStorage.setItem('sleepMinHours','7');
       true
     `);
-    await waitLoad(win, `${base}/?view=tonight&match=${futureFixture.id}`);
+    if (futureFixture) await waitLoad(win, `${base}/?view=tonight&match=${futureFixture.id}`);
     await sleep(1500);
     const sleepLedgerText = await win.webContents.executeJavaScript(`document.body.innerText.slice(0, 1400)`);
-    ok('★ 启用睡眠档案后页面显示个人剩余睡眠',
-      sleepLedgerText.includes('起床') &&
-        /看完约剩|看完直接到起床点/.test(sleepLedgerText),
-      sleepLedgerText.slice(0, 240));
+    if (futureFixture) {
+      ok('★ 启用睡眠档案后页面显示个人剩余睡眠',
+        sleepLedgerText.includes('起床') &&
+          /看完约剩|看完直接到起床点/.test(sleepLedgerText),
+        sleepLedgerText.slice(0, 240));
+    } else {
+      skipped += 1;
+      console.log('  ⏭ 无未来场次（赛季末快照）→ 睡眠账本断言跳过');
+    }
 
     await win.webContents.executeJavaScript(`
       (() => {

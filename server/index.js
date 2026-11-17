@@ -13,6 +13,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join, extname, normalize } from 'node:path';
 import { createProxy, loadRules, ProxyError, allowedLocalOrigin } from './proxy.js';
+import { CSP_POLICY } from '../electron/csp.cjs';
 import { syncScores, applyPatches, validateFixtures } from './scores.js';
 import { getLiveSourcesForMatch } from './scraper.js';
 import { loadFixtures, saveFixtures, freshness } from './data-store.js';
@@ -191,7 +192,9 @@ async function serveStatic(pathname, res) {
       'Content-Type': MIME[ext] || 'application/octet-stream',
       'Content-Length': buf.length,
       'X-Content-Type-Options': 'nosniff',
-      'Cache-Control': isHashedAsset ? 'public, max-age=31536000, immutable' : 'no-cache'
+      'Cache-Control': isHashedAsset ? 'public, max-age=31536000, immutable' : 'no-cache',
+      // HTML 入口带 CSP：与 main.cjs 共用同一策略源，渲染门禁窗口也因此受约束
+      ...(ext === '.html' ? { 'Content-Security-Policy': CSP_POLICY } : {})
     });
     res.end(buf);
   } catch {

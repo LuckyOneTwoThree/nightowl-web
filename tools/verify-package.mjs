@@ -134,6 +134,10 @@ const localJsonFiles = existsSync(serverDir)
   : [];
 ok('产物不含 *.local.json（签名 / 个人标识）', localJsonFiles.length === 0, localJsonFiles.join('、'));
 ok('产物不含 server/cache（运行时数据）', !existsSync(join(serverDir, 'cache')));
+// 运行时 bare 依赖：electron-updater 是唯一 prod 依赖，误移 devDeps 时更新会静默失效
+// （main.cjs 加载失败仅 console.warn），相对 import 扫描抓不到这种缺失
+ok('产物含 node_modules/electron-updater（运行时更新依赖）',
+  existsSync(join(appDir, 'node_modules', 'electron-updater')));
 
 /* ---------- ③ 打包输入（在仓库根，不在产物内） ---------- */
 console.log('');

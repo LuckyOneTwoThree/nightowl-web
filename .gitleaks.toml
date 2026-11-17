@@ -39,12 +39,19 @@ tags = ["secret", "signed-url"]
 # 已知历史泄漏：23e47a3 的 server/scraper.js 内联过带签名的直播直链（2 处）。
 # 56f0c0d 已外置到 gitignore 的文件，但历史仍可读 —— 清洗需要 force-push，属未完成项（H1）。
 # 这里显式豁免该提交，让门禁只对「新发生的泄漏」报警，而不是长期红着没人看。
+#
+# 2026-11-17 全历史实测（gitleaks git --log-opts=--all，227 commits）：
+# 自定义签名直链规则 0 命中；仅内置 generic-api-key 误报 2 处——
+# 64a510e 的 diary-storage/radar-storage 把 localStorage 键名当 API key。
+# 用下方 regexes 精确豁免键名（不豁免整个 commit，避免放行该大提交里的其他内容）。
 commits = ["23e47a3d3d17b2b2eca8cb3e9a126bc50369a136"]
 
 description = "允许出现的公开地址与模板"
 paths = [
   # 模板文件（只有占位符，不含真实签名）
   '''server/tv-channels\.example\.json''',
+  # 本地运行时容器：签名直链的合法存放处（已 gitignore、不入包、check-secrets 跳过）
+  '''server/[^/]*\.local\.json''',
   # 公开上游与官方平台首页 / 搜索模板
   '''server/watch-sources\.json''',
   # 测试固件里刻意构造的假 URL
@@ -54,6 +61,8 @@ paths = [
 regexes = [
   # 文档里说明背景时引用的特征词（不带真实值）
   '''SecurityKey=\<[^>]*\>''',
+  # localStorage 键名常量，不是密钥（generic-api-key 误报，2026-11-17 全历史实测）
+  '''nightowl_(?:diary|radar)_v1''',
   # 公开 CDN / 官方域名，不带签名
   '''https?://(?:www\.)?(?:miguvideo|qq|youku|iqiyi|bilibili)\.com'''
 ]

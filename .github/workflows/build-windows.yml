@@ -214,6 +214,16 @@ jobs:
         shell: bash
         run: npm run test:all
 
+      # mac 专属边框口径（hiddenInset 红绿灯留白）必须在 mac runner 上实测；
+      # 与 Windows job / ci.yml 同款门禁，发版产物不留渲染盲区
+      - name: Render smoke (headless Electron, real dist)
+        shell: bash
+        run: npm run check:render
+
+      - name: Layout gate (no horizontal overflow)
+        shell: bash
+        run: npm run check:layout
+
       # package.json 里 mac.target 固定 arm64（Apple Silicon）；identity=null 跳过正式签名，
       # 由 build/after-pack.cjs 做 ad-hoc 签名，否则 arm64 机器连本机都无法启动。
       - name: Package macOS (DMG + ZIP)

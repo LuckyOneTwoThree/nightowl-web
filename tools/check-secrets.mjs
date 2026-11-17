@@ -56,7 +56,9 @@ async function walk(dir) {
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
-  } catch {
+  } catch (err) {
+    // 检查自身失败不能静默跳过：否则权限/损坏场景下整片目录逃过扫描
+    errors.push(`readdir 失败：${rel(dir)}（${err?.message || err}）`);
     return;
   }
   for (const e of entries) {
@@ -155,7 +157,7 @@ if (errors.length) {
   console.log('');
 }
 
-if (findings.length === 0) {
+if (findings.length === 0 && errors.length === 0) {
   console.log('  ✅ 工作区未发现签名直链 / 个人标识');
   console.log('  ✅ server/*.local.json 与 server/cache 未被 git 跟踪');
   console.log('  ✅ 打包规则已排除本地敏感文件');
