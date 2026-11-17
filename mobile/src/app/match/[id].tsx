@@ -387,7 +387,11 @@ export default function MatchScreen() {
     const result = await scheduleMatchReminderWithStatus(match);
     if (result.ok) {
       setReminderSet(true);
-      toast.success('已设置赛前提醒');
+      toast.success(
+        result.exactAlarm === false
+          ? '已设置赛前提醒（系统未允许精确闹钟，可能延迟几分钟）'
+          : '已设置赛前提醒'
+      );
       return;
     }
     if (result.reason === 'permission-denied') {

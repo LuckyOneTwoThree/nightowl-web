@@ -349,7 +349,7 @@ export async function scheduleTestNotification(
 }
 
 export type ManualReminderStatus =
-  | { ok: true }
+  | { ok: true; exactAlarm?: boolean }
   | { ok: false; reason: 'unavailable' | 'ineligible' | 'permission-denied' | 'too-late' | 'error' };
 
 export async function scheduleMatchReminderWithStatus(
@@ -362,6 +362,22 @@ export async function scheduleMatchReminderWithStatus(
     await configure(Notifications);
     const granted = await requestNotificationPermission();
     if (!granted) return { ok: false, reason: 'permission-denied' };
+
+    // Android 12+ 声明 SCHEDULE_EXACT_ALARM ≠ 已授权：不申请精确闹钟能力时
+    // DATE 通知会被降级为非精确调度，赛前 15 分钟提醒可能晚几分钟。
+    // 只在用户显式设提醒时申请（自动同步不打扰）；仍不授权则走降级路径并由 UI 告知。
+    let exactAlarm = true;
+    if (Platform.OS === 'android' && Platform.Version >= 31) {
+      try {
+        const status = await Notifications.getExactAlarmPermissionsAsync();
+        if (!status.granted) {
+          const requested = await Notifications.requestExactAlarmPermissionsAsync();
+          exactAlarm = requested.granted;
+        }
+      } catch {
+        exactAlarm = true;
+      }
+    }
     const when = new Date(ts(match.t) - LEAD_MS);
     if (!Number.isFinite(when.getTime()) || when.getTime() <= Date.now()) {
       return { ok: false, reason: 'too-late' };
@@ -396,7 +412,7 @@ export async function scheduleMatchReminderWithStatus(
         channelId: CHANNEL_ID,
       },
     });
-    return { ok: true };
+    return { ok: true, exactAlarm };
   } catch {
     return { ok: false, reason: 'error' };
   }

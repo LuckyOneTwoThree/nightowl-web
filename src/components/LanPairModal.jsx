@@ -111,6 +111,9 @@ export default function LanPairModal({
                 ? '手机在同一 Wi-Fi 下扫码或输入配对码，直接合并看台偏好并切到同一场播控。'
                 : '仅在当前会话开启 120 秒临时局域网端口，不经过任何云端与账号。'}
             </p>
+            <p className="mt-1 text-2xs text-text-faint">
+              配对与同步经明文 HTTP 传输，请仅在可信的家庭/个人 Wi-Fi 使用，勿在公共热点开启。
+            </p>
           </div>
           <button
             ref={closeBtnRef}
