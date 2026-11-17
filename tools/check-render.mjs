@@ -178,6 +178,11 @@ app.whenReady().then(async () => {
       !errors.some(m => /Uncaught|ReferenceError|TypeError|is not defined|Cannot read/i.test(m)),
       errors.join(' | ')
     );
+    ok(
+      '★ 无 CSP 违规（含 hls.js blob Worker 通道）',
+      !errors.some(m => /Content Security Policy|Refused to (create|load|execute|connect)/i.test(m)),
+      errors.filter(m => /Content Security Policy|Refused to/i.test(m)).join(' | ')
+    );
 
     /* 决策条（P1-1）：全屏唯一结论条，四段齐全且不重复出现。 */
     const strip = await win.webContents.executeJavaScript(`

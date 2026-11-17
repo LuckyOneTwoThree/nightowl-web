@@ -83,22 +83,22 @@
     "lint": "biome lint ."
   },
   "dependencies": {
-    "artplayer": "^5.4.0",
-    "electron-updater": "^6.8.11",
-    "hls.js": "^1.7.4",
-    "lucide-react": "^1.45.0",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "virtua": "^0.51.3"
+    "electron-updater": "^6.8.11"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.5",
     "@vitejs/plugin-react": "^6.2.1",
+    "artplayer": "^5.4.0",
     "autoprefixer": "^10.6.2",
     "electron": "^45.3.2",
     "electron-builder": "^26.18.0",
+    "hls.js": "^1.7.4",
+    "lucide-react": "^1.45.0",
     "postcss": "^8.5.32",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "tailwindcss": "^3.4.19",
+    "virtua": "^0.51.3",
     "vite": "^8.3.5"
   },
   "build": {

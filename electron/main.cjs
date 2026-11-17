@@ -302,6 +302,8 @@ function createWindow({ hidden = false } = {}) {
    *
    * 策略说明：
    *   · script-src 'self' —— 构建产物是 Vite 标准外部模块，无内联脚本
+ *   · worker-src 'self' blob: —— hls.js 的解复用 Worker 走 blob:，缺这条会被
+ *     script-src 拦截并静默退回主线程解封装（enableWorker 失效，高码率直播卡顿）
    *   · style-src 需 'unsafe-inline' —— 组件大量使用 style={{}} 内联样式（React 行为，
    *     非用户输入），不放行会整体破坏布局；内联样式不是脚本执行通道
    *   · media-src blob: —— hls.js 通过 MediaSource 给 video 喂 blob: 流
@@ -318,6 +320,7 @@ function createWindow({ hidden = false } = {}) {
           [
             "default-src 'self'",
             "script-src 'self'",
+            "worker-src 'self' blob:",
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: blob:",
             "font-src 'self'",
