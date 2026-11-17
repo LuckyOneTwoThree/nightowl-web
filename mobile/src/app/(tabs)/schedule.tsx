@@ -107,6 +107,7 @@ export default function ScheduleScreen() {
     [todayTs]
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const rows = useMemo(() => {
     if (mode === 'standings' || filters.leagues.length === 0) return [] as Row[];
     return computeScheduleRows(0, prefs, {
@@ -217,6 +218,7 @@ export default function ScheduleScreen() {
     return supported.length === 1 ? supported[0] : 'PL';
   }, [filters.leagues]);
   // 在赛程页内切换模式时保留榜单联赛选择；筛选条件变化后再回到筛选联赛
+  // biome-ignore lint/correctness/useExhaustiveDependencies: standingsLeague 是重置触发器；筛选推导联赛变化时清掉页内选择
   useEffect(() => {
     setTableLeague(null);
   }, [standingsLeague]);

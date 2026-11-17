@@ -34,6 +34,7 @@ export function useLiveSources(match: Match | null, enabled: boolean) {
   // 请求序号：切场/关闭后旧请求仍可能返回，必须让它无法覆盖新比赛的结果。
   const requestIdRef = useRef(0);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 字段级依赖——只在身份字段变化时重新请求，match 对象 identity 每次同步修订都变，整体依赖会造成反复拉取
   const load = useCallback(
     async (force = false) => {
       if (!match) return;
@@ -63,6 +64,7 @@ export function useLiveSources(match: Match | null, enabled: boolean) {
     [matchId, match?.h, match?.a, match?.t]
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: matchId+load 已覆盖 match 身份；match 仅用于空判断
   useEffect(() => {
     if (!enabled || !match) {
       // 关闭面板/切场时作废在途请求，并把旧线路从状态里摘掉。

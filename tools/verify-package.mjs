@@ -66,7 +66,7 @@ const pushJs = dir => {
   for (const f of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, f.name);
     if (f.isDirectory()) pushJs(p);
-    else if (f.name.endsWith('.js')) scanTargets.push(p);
+    else if (f.name.endsWith('.js') || f.name.endsWith('.mjs')) scanTargets.push(p);
   }
 };
 pushJs(join(appDir, 'server'));

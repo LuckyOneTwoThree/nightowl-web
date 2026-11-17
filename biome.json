@@ -34,17 +34,5 @@
         "noUnsafeNegation": "error"
       }
     }
-  },
-  "overrides": [
-    {
-      "includes": ["mobile/src/**"],
-      "linter": {
-        "rules": {
-          "correctness": {
-            "useExhaustiveDependencies": "warn"
-          }
-        }
-      }
-    }
-  ]
+  }
 }

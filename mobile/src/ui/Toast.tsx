@@ -54,7 +54,7 @@ export function ToastHost() {
     }, ttl);
 
     return () => clearTimeout(timer);
-  }, [id]);
+  }, [id, current?.kind, fade, rise, dismiss]);
 
   if (!current) return null;
   const tone = TONE[current.kind];

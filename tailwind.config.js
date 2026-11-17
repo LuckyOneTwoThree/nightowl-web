@@ -7,8 +7,8 @@
  * 约定：
  *   - 颜色一律走下方语义名，组件里出现 `emerald-500` 之类的 Tailwind 原生色即为回归。
  *   - 字号只有 fontSize 里这 8 档，`text-[13px]` 之类的任意值同理。
- *   - 圆角规范：sm(2px) 柱条 · DEFAULT(4px) 小标签 · md(6px) 控件/按钮 ·
- *     lg(8px) 列表条目 · xl(12px) 核心模块大卡 · 2xl(16px) 浮层弹窗 · 3xl(24px) 视觉徽章 · full(9999px) 队徽/圆环。
+ *   - 圆角规范：sm(2px) 柱条 · 8px 单档（DEFAULT/md/lg 同值：按钮/输入框/标签/列表条目/小卡）·
+ *     xl(12px) 核心模块大卡 · 2xl(16px) 浮层弹窗 · 3xl(24px) 视觉徽章 · full(9999px) 队徽/圆环。
  *   - 阴影两档：shadow-card 卡片 · shadow-pop 浮层。发光类阴影已废除。
  *   - 层叠只用 zIndex 的命名档（overlay / pop / scrim / drawer / modal / toast），
  *     组件里出现 `z-[999]` 之类的数字即为回归。

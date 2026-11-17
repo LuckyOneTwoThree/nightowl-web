@@ -207,6 +207,7 @@ export default function MatchScreen() {
   };
 
   // 以系统已排程通知为事实来源，而不是页面 state。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev/notifyBefore15 是重读触发器；同步补丁或开关变化后重取系统排程事实
   useEffect(() => {
     if (!id) return undefined;
     let alive = true;
@@ -228,6 +229,7 @@ export default function MatchScreen() {
     };
   }, [id, rev, prefs.notifyBefore15]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const match = useMemo(
     () => getFixtures().find((item: Match) => item.id === id) as Match | undefined,
     [id, rev]
@@ -236,11 +238,13 @@ export default function MatchScreen() {
   // 此时不能消费「今晚已提示」的状态，否则这条一夜只有一次的提醒会凭空消失。
   const stopLoss = useStopLossPrompt(match ?? null, prefs, now, focused, watchOpen);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const spoilerExcludedIds = useMemo(
     () => unrevealedTonightIds(getFixtures(), now, prefs.spoilerFree, revealedIds),
     [now, prefs.spoilerFree, revealedIds, rev]
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const intel = useMemo(() => {
     if (!match) return null;
     const { ev, index } = evalOne(match, prefs) as { ev: Ev; index: number };
@@ -279,6 +283,7 @@ export default function MatchScreen() {
   const liveInitFor = useRef<string | null>(null);
 
   // 切场先作废上一场的事件基线：否则新比赛首个快照里的历史事件会被当成“新事件”提示。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: match?.id 是切场重置触发器
   useEffect(() => {
     liveInitFor.current = null;
     prevLiveEvents.current = new Set();
@@ -1358,6 +1363,7 @@ function StandingsCard({
   onOpenStandings: (league: string) => void;
 }) {
   const [outcome, setOutcome] = useState<string>(SANDBOX_OUTCOME.NONE);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: match.id 是切场重置触发器；清空沙盘选择
   useEffect(() => {
     setOutcome(SANDBOX_OUTCOME.NONE);
   }, [match.id]);

@@ -26,6 +26,7 @@ export function usePrematchReminders() {
   const teamsKey = prefs.followedTeams.join(',');
   const leaguesKey = prefs.followedLeagues.join(',');
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: teamsKey/leaguesKey 是关注列表的稳定序列化触发器；rev/night 覆盖数据补丁与跨夜；prefs 字段级依赖避免无关设置重排提醒
   useEffect(() => {
     if (!notificationsAvailable()) return undefined;
 
@@ -41,6 +42,7 @@ export function usePrematchReminders() {
   }, [teamsKey, leaguesKey, prefs.notifyBefore15, rev, night]);
 
   // 跨夜/回前台：hero 可能已经换人，必须重算提醒。不能只依赖 rev（没有新补丁时 rev 不变）。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: teamsKey/leaguesKey 是稳定序列化触发器；prefs 字段级依赖只在提醒相关设置变化时重建订阅
   useEffect(() => {
     if (!notificationsAvailable()) return undefined;
     const subscription = AppState.addEventListener('change', state => {

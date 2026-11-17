@@ -112,6 +112,7 @@ function PlayerView({
     }).start();
   }, [hudVisible, panelOpen, hudOpacity]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: active.id 是切场触发器；换场后重新计时 HUD 自动隐藏
   useEffect(() => {
     if (!hudVisible || panelOpen) return undefined;
     const timer = setTimeout(() => setHudVisible(false), 4000);

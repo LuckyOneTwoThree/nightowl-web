@@ -47,6 +47,7 @@ export function useLiveMatch(
   // 记录当前数据归属的比赛：切场时先清空，避免用上一场比分渲染新比赛。
   const dataMatchRef = useRef<string | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: matchId/kickoff 是切场触发器；match 仅用于空判断与读 id，已由 matchId 覆盖
   useEffect(() => {
     if (!enabled || !match) {
       dataMatchRef.current = null;

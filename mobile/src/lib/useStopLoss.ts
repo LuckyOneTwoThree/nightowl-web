@@ -66,6 +66,7 @@ export function useStopLossPrompt(
   }, []);
 
   // 切场收起上一场的卡片，避免旧场次提示覆盖新场次。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: match?.id 是切场重置触发器
   useEffect(() => {
     setContext(null);
     setNotice(null);
@@ -100,6 +101,7 @@ export function useStopLossPrompt(
     };
   }, [enabled]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: prefs 字段级依赖——只在睡眠相关设置变化时重新评估，避免无关偏好变更触发提示
   useEffect(() => {
     if (!enabled || blocked || !loaded || !match || !prefs.sleepEnabled || context) return;
     const night = stopLossNightKey(match);

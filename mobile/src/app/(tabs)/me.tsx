@@ -68,6 +68,7 @@ export default function MeScreen() {
   const markWatchLaterWatched = useWatchLaterStore(state => state.markWatched);
   const toggleWatchLater = useWatchLaterStore(state => state.toggle);
   const now = useNow(60_000);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const queueEntries = useMemo(
     () => queueWithMatches(watchLaterItems, getFixtures(), now, { includeWatched: true }),
     [watchLaterItems, rev, now]
@@ -115,6 +116,7 @@ export default function MeScreen() {
     };
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const freshness = useMemo(
     () => freshnessOf(getFixtures(), now, source),
     [now, source, rev]

@@ -61,6 +61,7 @@ function AppShell() {
   const revealedIds = useAppStore(state => state.revealedIds);
   const revealMatch = useAppStore(state => state.revealMatch);
   const markWatched = useWatchLaterStore(state => state.markWatched);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const fixtures = useMemo(() => getFixtures(), [rev]);
   const digest = useMorningDigest(
     queueItems,
@@ -72,9 +73,9 @@ function AppShell() {
   // 「我的」页的「看摘要」发出递增信号，由这里唯一的摘要实例响应。
   // 不把 digest.open 放进依赖（每次渲染 identity 都变），只在信号变化时调用一次。
   const digestOpenSignal = useMorningDigestStore(state => state.openSignal);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: digest.open 每次渲染 identity 都变；只响应递增信号
   useEffect(() => {
     if (digestOpenSignal > 0) digest.open();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [digestOpenSignal]);
 
   return (

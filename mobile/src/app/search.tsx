@@ -54,6 +54,7 @@ export default function SearchScreen() {
   }, [trimmed]);
   const teamResults = useMemo(() => teamAll.slice(0, 8), [teamAll]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const matchAll = useMemo(() => {
     if (!trimmed) return [] as Match[];
     const rows = computeScheduleRows(now, prefs, {

@@ -3,6 +3,9 @@
   "version": "0.2.5",
   "private": true,
   "main": "expo-router/entry",
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
@@ -16,7 +19,8 @@
     "export:android": "expo export --platform android",
     "typecheck": "tsc --noEmit",
     "audit:touch": "node scripts/audit-touch.mjs",
-    "check": "npm run verify:shared && npm run verify:pipeline && npm run audit:touch && npm run typecheck",
+    "lint": "npm --prefix .. run lint",
+    "check": "npm run verify:shared && npm run verify:pipeline && npm run audit:touch && npm run typecheck && npm run lint",
     "doctor": "expo-doctor",
     "eas:dev": "npx eas-cli@latest build --platform android --profile development",
     "eas:preview": "npx eas-cli@latest build --platform android --profile preview",

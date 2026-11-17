@@ -83,11 +83,13 @@ export default function StandingsPanel({
   const [league, setLeague] = useState(safeInitial);
   const [outcome, setOutcome] = useState<string>(SANDBOX_OUTCOME.NONE);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: matchId 是切场重置触发器；重置联赛与沙盘选择
   useEffect(() => {
     setLeague(safeInitial);
     setOutcome(SANDBOX_OUTCOME.NONE);
   }, [safeInitial, matchId]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const match = useMemo(
     () => getFixtures().find(item => item.id === matchId) as Match | undefined,
     [matchId, rev]
@@ -96,16 +98,19 @@ export default function StandingsPanel({
   const historical = isMatchLeague && isFinished(match);
   const canSandbox = !!match && isMatchLeague && canSimulateMatch(match);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const excludedIds = useMemo(() => {
     const ids = unrevealedTonightIds(getFixtures(), now, prefs.spoilerFree, revealedIds);
     return ids.size ? ids : null;
   }, [now, prefs.spoilerFree, revealedIds, rev]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const baseTable = useMemo(() => {
     const asOfTs = historical ? standingsCutoff(match, now) : now;
     return computeStandings(league, getFixtures(), { asOfTs, excludeIds: excludedIds || undefined }) as LeagueTable;
   }, [league, historical, match, now, rev, excludedIds]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const sim = useMemo(() => {
     if (!canSandbox || !match || outcome === SANDBOX_OUTCOME.NONE) return null;
     return (simulateMatchStandings as (

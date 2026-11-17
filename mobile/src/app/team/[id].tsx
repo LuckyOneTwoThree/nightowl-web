@@ -50,6 +50,7 @@ export default function TeamScreen() {
   const revealedIds = useAppStore(state => state.revealedIds);
   const toggleTeam = usePrefsStore(state => state.toggleTeam);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const fixtures = useMemo(() => getFixtures() as Match[], [rev]);
   const matches = useMemo(
     () =>

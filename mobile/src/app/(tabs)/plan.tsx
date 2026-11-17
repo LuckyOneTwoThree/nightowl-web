@@ -109,6 +109,7 @@ export default function PlanScreen() {
     [byWeek, activeWeekKey]
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const week = useMemo(
     // 周偏移只移动「看哪一周」的锚点；可排性始终用真实 now（后移 now 会把未来周
     // 前半段误判成历史，见 core computeWeek 的 weekOffset 语义）
@@ -141,6 +142,7 @@ export default function PlanScreen() {
     }>;
     totalTbdSkipped: number;
   };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const crunchReport = useMemo(
     () => detectCrunchPeriods(prefs.followedTeams, getFixtures(), now) as CrunchReport,
     [prefs.followedTeams, now, rev]
@@ -177,13 +179,16 @@ export default function PlanScreen() {
 
   /* 点某一晚 → 原地只看那晚：精选 / 零成本 / 雷区 / 备选一起收窄。
      再点一次同一天取消。筛选是视图层的事，不动预算与背包结果。 */
-  const inNight = (matchTime: string) => !selectedDay || owlDay(matchTime) === selectedDay;
-  const bestShown = useMemo(() => plan.best.filter(e => inNight(e.m.t)), [plan.best, selectedDay]);
-  const zeroShown = useMemo(() => plan.zeroList.filter(e => inNight(e.m.t)), [plan.zeroList, selectedDay]);
-  const altShown = useMemo(() => plan.alt.filter(e => inNight(e.m.t)), [plan.alt, selectedDay]);
+  const inNight = useCallback(
+    (matchTime: string) => !selectedDay || owlDay(matchTime) === selectedDay,
+    [selectedDay]
+  );
+  const bestShown = useMemo(() => plan.best.filter(e => inNight(e.m.t)), [plan.best, inNight]);
+  const zeroShown = useMemo(() => plan.zeroList.filter(e => inNight(e.m.t)), [plan.zeroList, inNight]);
+  const altShown = useMemo(() => plan.alt.filter(e => inNight(e.m.t)), [plan.alt, inNight]);
   const mineShown = useMemo(
     () => week.minefield.filter(item => inNight(item.m.t)),
-    [week.minefield, selectedDay]
+    [week.minefield, inNight]
   );
   const activeBand = useMemo(
     () => (selectedDay ? risk.bands.find(b => b.date === selectedDay) ?? null : null),

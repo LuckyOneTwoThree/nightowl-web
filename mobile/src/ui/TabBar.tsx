@@ -41,6 +41,7 @@ export function AppTabBar({ state, navigateToTab }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const now = useNow(60_000);
   const rev = useDataRev();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；liveCountAt 读最新 fixtures
   const liveCount = useMemo(() => liveCountAt(now) as number, [now, rev]);
   const pendingQueueCount = useWatchLaterStore(
     s => s.items.filter(item => item.status !== 'watched').length

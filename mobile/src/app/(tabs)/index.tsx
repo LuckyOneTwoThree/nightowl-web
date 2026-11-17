@@ -93,6 +93,7 @@ export default function TonightScreen() {
   const [checking, setChecking] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const tonight = useMemo(
     () => computeTonight(now, prefs),
     [now, prefs, rev]
@@ -129,6 +130,7 @@ export default function TonightScreen() {
   const watchLaterItems = useWatchLaterStore(state => state.items);
   const manualIds = useMemo(() => watchLaterItems.map(item => item.id), [watchLaterItems]);
   const manualIdSet = useMemo(() => new Set(manualIds), [manualIds]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const replay = useMemo(
     () => computeReplayPicks(now, prefs, 3, { manualIds }) as ReplayPick[],
     [now, prefs, rev, manualIds]
@@ -140,6 +142,7 @@ export default function TonightScreen() {
     groups.upcoming.length === 0 &&
     groups.finished.length === 0;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const nextUpcoming = useMemo(() => {
     if (!isQuietTonight) return [] as Match[];
     const focalId = tonight.focal?.m.id;
@@ -155,6 +158,7 @@ export default function TonightScreen() {
       .slice(0, 5);
   }, [isQuietTonight, tonight.focal, now, rev]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const fallbackReplays = useMemo(() => {
     if (replay.length > 0) return [] as ReplayPick[];
     const REPLAY_FALLBACK_WINDOW = 21 * 86_400_000;
@@ -218,6 +222,7 @@ export default function TonightScreen() {
     () => (hero ? (narrativeOf(hero.m, hero.ev, storylines) as Narrative) : null),
     [hero]
   );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rev 是数据修订触发器；body 读模块级 fixtures
   const freshness = useMemo(
     () => freshnessOf(getFixtures(), now, source),
     [now, source, rev]

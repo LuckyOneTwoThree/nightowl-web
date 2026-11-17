@@ -126,7 +126,7 @@ function runSuite(themeName, vars) {
 console.log('Design token 对比度门禁（Dark 31 项 + 变量引用 1 项）');
 runSuite('Dark', darkVars);
 
-/* 变量引用类型：rgb(var(--x)) 里的 x 必须是以 -rgb 结尾的三元组。 */
+/* 变量引用类型：rgb(var(--x)) 与 rgb(var(--x) / 0.28) 里的 x 必须是以 -rgb 结尾的三元组。 */
 console.log('\n=== 变量引用类型 ===');
 const badRefs = [];
 const walk = dir => {
@@ -138,7 +138,7 @@ const walk = dir => {
     }
     if (!/\.(jsx?|css)$/.test(name)) continue;
     const body = readFileSync(full, 'utf8');
-    for (const m of body.matchAll(/rgb\(\s*var\(--([\w-]+)\)\s*\)/g)) {
+    for (const m of body.matchAll(/rgb\(\s*var\(--([\w-]+)\)(?:\s*\/\s*[\d.]+%?)?\s*\)/g)) {
       if (!m[1].endsWith('-rgb')) badRefs.push(`${full.replace(ROOT + '/', '')}: rgb(var(--${m[1]}))`);
     }
   }
