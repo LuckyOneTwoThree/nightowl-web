@@ -13,6 +13,7 @@ import {
 
 import type { Prefs } from '@/state/prefs';
 import type { Match } from '@/types';
+import { planManualReminder } from '@/lib/reminder-plan';
 
 const CHANNEL_ID = 'prematch';
 const LEAD_MS = 15 * 60 * 1000;
@@ -22,6 +23,20 @@ const MAX_REMINDERS = 30;
 
 type NotificationsModule = typeof import('expo-notifications');
 let handlerConfigured = false;
+
+// Android 12+ 声明 SCHEDULE_EXACT_ALARM ≠ 已授权。只查不申请：
+// requestExactAlarmPermissionsAsync 跳系统设置，用户在那里拒绝时 Android 会重启应用、
+// Promise 永不 resolve（expo 文档明示）——放进调度流程会静默丢掉提醒。
+// 申请留给用户在系统设置完成；UI 按检查结果告知「可能延迟几分钟」的降级态。
+async function exactAlarmGranted(Notifications: NotificationsModule): Promise<boolean> {
+  if (Platform.OS !== 'android' || Platform.Version < 31) return true;
+  try {
+    const status = await Notifications.getExactAlarmPermissionsAsync();
+    return status.granted;
+  } catch {
+    return false;
+  }
+}
 let syncInFlight: Promise<ReminderResult> | null = null;
 let queuedPrefs: Prefs | null = null;
 
@@ -363,21 +378,6 @@ export async function scheduleMatchReminderWithStatus(
     const granted = await requestNotificationPermission();
     if (!granted) return { ok: false, reason: 'permission-denied' };
 
-    // Android 12+ 声明 SCHEDULE_EXACT_ALARM ≠ 已授权：不申请精确闹钟能力时
-    // DATE 通知会被降级为非精确调度，赛前 15 分钟提醒可能晚几分钟。
-    // 只在用户显式设提醒时申请（自动同步不打扰）；仍不授权则走降级路径并由 UI 告知。
-    let exactAlarm = true;
-    if (Platform.OS === 'android' && Platform.Version >= 31) {
-      try {
-        const status = await Notifications.getExactAlarmPermissionsAsync();
-        if (!status.granted) {
-          const requested = await Notifications.requestExactAlarmPermissionsAsync();
-          exactAlarm = requested.granted;
-        }
-      } catch {
-        exactAlarm = true;
-      }
-    }
     const when = new Date(ts(match.t) - LEAD_MS);
     if (!Number.isFinite(when.getTime()) || when.getTime() <= Date.now()) {
       return { ok: false, reason: 'too-late' };
@@ -385,21 +385,13 @@ export async function scheduleMatchReminderWithStatus(
 
     // 幂等且跟随改期：同一场若已有提醒但开球时间已变，先清掉旧提醒再按新时间重排。
     const existing = await Notifications.getAllScheduledNotificationsAsync();
-    let alreadyUpToDate = false;
-    for (const item of existing) {
-      const data = item.content.data || {};
-      if (data.matchId === match.id && (data.kind === 'prematch' || data.kind === 'manual')) {
-        if (data.kickoff === match.t && data.kind === 'manual') {
-          alreadyUpToDate = true;
-        } else {
-          // 同开球的 prematch 必须取消并以 manual 重排：否则用户关闭自动提醒开关时，
-          // 这场显式设置的提醒会随 prematch 一起被静默取消
-          await Notifications.cancelScheduledNotificationAsync(item.identifier);
-        }
-      }
+    const { cancelIds, alreadyUpToDate } = planManualReminder(existing, match.id, match.t);
+    for (const identifier of cancelIds) {
+      await Notifications.cancelScheduledNotificationAsync(identifier);
     }
-    if (alreadyUpToDate) return { ok: true };
+    if (alreadyUpToDate) return { ok: true, exactAlarm: await exactAlarmGranted(Notifications) };
 
+    const exactAlarm = await exactAlarmGranted(Notifications);
     await Notifications.scheduleNotificationAsync({
       content: {
         title: `赛前 15 分钟提醒 · ${teamName(match.h)} vs ${teamName(match.a)}`,
@@ -489,8 +481,9 @@ export async function scheduleSecondHalfCutInReminder(
     const granted = await requestNotificationPermission();
     if (!granted) return { ok: false, reason: 'permission-denied' };
     await cancelSecondHalfCutInReminder(match.id);
+    const exactAlarm = await exactAlarmGranted(Notifications);
     await scheduleSecondHalfDateNotification(Notifications, match, when.getTime());
-    return { ok: true };
+    return { ok: true, exactAlarm };
   } catch {
     return { ok: false, reason: 'error' };
   }

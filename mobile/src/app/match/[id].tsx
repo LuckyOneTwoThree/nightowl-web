@@ -720,7 +720,11 @@ export default function MatchScreen() {
                       const res = await scheduleSecondHalfCutInReminder(match, cutInPlan.alarmAt);
                       if (res.ok) {
                         setCutInSet(true);
-                        toast.success(`已设 ${bjClock(cutInPlan.alarmAt, false)} 半场切入提醒`);
+                        toast.success(
+                          res.exactAlarm === false
+                            ? `已设 ${bjClock(cutInPlan.alarmAt, false)} 半场切入提醒（系统未允许精确闹钟，可能延迟）`
+                            : `已设 ${bjClock(cutInPlan.alarmAt, false)} 半场切入提醒`
+                        );
                       } else if (res.reason === 'permission-denied') {
                         toast.error('请先允许通知权限后再设唤醒');
                       } else {
