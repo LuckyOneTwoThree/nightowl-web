@@ -130,11 +130,12 @@ function initialFromUrl() {
   }
 }
 
-// 浮层专用懒加载壳：chunk 加载/渲染失败时只丢弃该浮层（console 已有记录），
-// 主界面继续可用；视图级懒加载仍交给根 ErrorBoundary 显示可见错误屏。
-function LazyOverlay({ children }) {
+// 浮层专用懒加载壳：chunk 加载/渲染失败时丢弃该浮层并复位 open flag
+// （否则 overlayOpen 恒真、主 UI 持续 inert，鼠标用户没有可见出口）；
+// 视图级懒加载仍交给根 ErrorBoundary 显示可见错误屏。
+function LazyOverlay({ children, onError }) {
   return (
-    <ErrorBoundary fallback={null}>
+    <ErrorBoundary fallback={null} onError={onError}>
       <Suspense fallback={null}>{children}</Suspense>
     </ErrorBoundary>
   );
@@ -1713,7 +1714,7 @@ export default function App() {
       )}
 
       {morningDigestOpen && (
-        <LazyOverlay>
+        <LazyOverlay onError={() => setMorningDigestOpen(false)}>
           <div inert={inertFor('morning') || undefined}>
             <MorningDigest
               open={morningDigestOpen}
@@ -1752,7 +1753,7 @@ export default function App() {
       )}
 
       {settingsOpen && (
-        <LazyOverlay>
+        <LazyOverlay onError={() => setSettingsOpen(false)}>
           <div inert={inertFor('settings') || undefined}>
             <SettingsDrawer
               open={settingsOpen}
@@ -1810,7 +1811,7 @@ export default function App() {
       {splashOpen && <SplashScreen onClose={handleCloseSplash} />}
 
       {!!standingsState && (
-        <LazyOverlay>
+        <LazyOverlay onError={() => setStandingsState(null)}>
           <div inert={inertFor('standings') || undefined}>
             <StandingsModal
               open={!!standingsState}
@@ -1828,7 +1829,7 @@ export default function App() {
       )}
 
       {seasonReportOpen && (
-        <LazyOverlay>
+        <LazyOverlay onError={closeSeasonReport}>
           <div inert={inertFor('season') || undefined}>
             <SeasonReportModal
               open={seasonReportOpen}
@@ -1845,7 +1846,7 @@ export default function App() {
       )}
 
       {lanPairOpen && (
-        <LazyOverlay>
+        <LazyOverlay onError={() => setLanPairOpen(false)}>
           <div inert={inertFor('lanPair') || undefined}>
             <LanPairModal
               open={lanPairOpen}
@@ -1862,7 +1863,7 @@ export default function App() {
       )}
 
       {teamsModalOpen && (
-        <LazyOverlay>
+        <LazyOverlay onError={() => setTeamsModalOpen(false)}>
           <div inert={inertFor('teams') || undefined}>
             <FollowedTeamsModal
               open={teamsModalOpen}
@@ -1876,7 +1877,7 @@ export default function App() {
       )}
 
       {updateModalOpen && (
-        <LazyOverlay>
+        <LazyOverlay onError={() => setUpdateModalOpen(false)}>
           <div inert={inertFor('update') || undefined}>
             <UpdateModal
               open={updateModalOpen}

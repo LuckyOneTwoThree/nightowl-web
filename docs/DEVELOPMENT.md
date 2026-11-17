@@ -8,7 +8,7 @@
 
 | 项 | 版本 | 说明 |
 | :--- | :--- | :--- |
-| Node | ≥ 20 | 开发环境（本项目在 mac 上开发，CI 在 Windows 上打包） |
+| Node | ≥ 22.12 | 与 package.json engines / .nvmrc / CI 一致（Electron 45 要求） |
 | npm | ≥ 10 | 依赖安装与脚本执行 |
 | Python | ≥ 3.9 | 仅桌面端图标生成脚本用到（Pillow） |
 | Expo 账号 | — | 仅 Android 云构建（EAS）需要 |

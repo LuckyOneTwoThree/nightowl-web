@@ -25,7 +25,7 @@
 export const DEFAULT_PROXY_BASE = '/api/proxy?url=';
 
 /** 携带 URI 属性的标签前缀（大小写不敏感） */
-const URI_ATTR_TAG = /^#EXT-X-(KEY|SESSION-KEY|MAP|MEDIA|I-FRAME-STREAM-INF|PART|PRELOAD-HINT|RENDITION-REPORT|SESSION-DATA|DEFINE)/i;
+const URI_ATTR_TAG = /^#EXT-X-(KEY|SESSION-KEY|MAP|MEDIA|I-FRAME-STREAM-INF|IMAGE-STREAM-INF|PART|PRELOAD-HINT|RENDITION-REPORT|SESSION-DATA|DEFINE)/i;
 
 /** 把可能是相对路径的地址按 baseUrl 解析为绝对地址（已是绝对地址则原样返回） */
 export function resolveUrl(baseUrl, target) {

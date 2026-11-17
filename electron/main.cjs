@@ -266,7 +266,7 @@ function createWindow({ hidden = false } = {}) {
   // 严禁打开内部无地址栏、无登录态的 Electron 裸窗口，一律直接唤起用户的系统默认浏览器（Chrome / Safari / Edge 等）
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
-      shell.openExternal(url);
+      shell.openExternal(url).catch(() => {});
     }
     return { action: 'deny' };
   });
@@ -546,8 +546,8 @@ function setupAutoUpdater(win) {
   };
 
   autoUpdater.on('checking-for-update', () => {
-    // 开始新一轮检测，上一轮的「已下载」状态作废
-    updateDownloaded = false;
+    // 不重置 updateDownloaded：后台 45 分钟轮询会把「已下载待安装」状态作废、
+    // 安装按钮降级；已下载状态只应由新的下载完成或安装动作覆盖
     sendUpdate('checking');
   });
 
@@ -763,10 +763,15 @@ if (!gotLock) {
     const hiddenStart = isHiddenStart();
     const win = createWindow({ hidden: hiddenStart });
     setupAutoUpdater(win);
-    await win.loadURL(`http://${HOST}:${appPort}/`);
-
-    // 托盘常驻：即使窗口隐藏，通知与菜单仍然可达（FR-08 的核心）
+    // 托盘先于加载创建：loadURL 失败时弹对话框退出，不留无窗口无托盘的僵尸进程
     createTray();
+    try {
+      await win.loadURL(`http://${HOST}:${appPort}/`);
+    } catch (err) {
+      dialog.showErrorBox('夜猫看台启动失败', `无法加载界面（本地服务端口 ${appPort}）：${err?.message || err}`);
+      app.exit(1);
+      return;
+    }
     // 隐藏启动时不要抢焦点，直接把窗口留在后台
     if (!hiddenStart) win.show();
 

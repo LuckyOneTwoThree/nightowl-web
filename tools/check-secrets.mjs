@@ -71,8 +71,8 @@ async function walk(dir) {
     }
     if (!e.isFile()) continue;
     if (ALLOW_FILES.has(r)) continue;
-    // 本地频道文件本身合法（已在 .gitignore），但内容不扫 —— 它就是签名直链的合法容器
-    if (r === 'server/tv-channels.local.json') continue;
+    // 本地运行时文件本身合法（已在 .gitignore），但内容不扫 —— 它就是签名直链的合法容器
+    if (r.startsWith('server/') && r.endsWith('.local.json')) continue;
 
     const ext = extname(e.name).toLowerCase();
     if (!TEXT_EXT.has(ext)) continue;

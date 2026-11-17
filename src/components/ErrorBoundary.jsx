@@ -17,6 +17,8 @@ export default class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, info) {
     console.error('[ErrorBoundary]', error, info?.componentStack);
+    // 浮层懒加载兜底：通知父级复位 open flag，否则主 UI 会持续 inert
+    this.props.onError?.(error);
   }
 
   render() {

@@ -174,7 +174,7 @@ export async function fetchJSON(url, { timeoutMs = 20000, retries = 3, baseDelay
   // Node 通道失败 → curl 兜底（TLS 指纹不同，短线场景常能过）
   try {
     const j = await fetchJSON(url, { timeoutMs: curlLeft, log, viaCurl: true });
-    log.warn?.(`[sources] Node 直连失败（${lastErr?.cause?.code || lastErr?.message}），已用 curl 兜底：${url.slice(0, 70)}`);
+    log.warn?.(`[sources] Node 直连失败（${lastErr?.cause?.code || lastErr?.message}），已用 curl 兜底：${url.replace(/\/json\/[^/]+/, '/json/***').slice(0, 90)}`);
     return j;
   } catch (err2) {
     throw new Error(`Node(${lastErr?.cause?.code || lastErr?.message}) 与 curl(${err2?.message}) 均失败`);

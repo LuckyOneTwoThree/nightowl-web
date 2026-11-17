@@ -124,6 +124,7 @@ export async function fetchSchedule(force = false) {
           activeMirror = base;
           break;
         }
+        void res.body?.cancel().catch(() => {});
       } catch (e) {
         lastErr = e;
       }
@@ -229,6 +230,7 @@ export async function fetchGameSources(gameId, force = false) {
         json = await res.json();
         break;
       }
+      void res.body?.cancel().catch(() => {});
     } catch (e) {
       lastErr = e;
     }
@@ -253,7 +255,7 @@ export async function fetchGameSources(gameId, force = false) {
     return [];
   }
 
-  const links = decodedJson.links || [];
+  const links = Array.isArray(decodedJson?.links) ? decodedJson.links : [];
   const lines = [];
 
   for (let i = 0; i < links.length; i++) {
@@ -480,10 +482,11 @@ export async function getLiveSourcesForMatch({ matchId, h, a, date, t }) {
   }
 
   const scoreLine = (l) => {
+    const lid = String(l.id ?? '');
     if (l.isDirect && /咪咕/i.test(l.name)) return 100;
     if (l.isDirect && /中文|超清/i.test(l.name)) return 90;
-    if (l.isDirect && !l.id.startsWith('tv-')) return 80;
-    if (l.id.startsWith('tv-')) return 70;
+    if (l.isDirect && !lid.startsWith('tv-')) return 80;
+    if (lid.startsWith('tv-')) return 70;
     if (l.kind === 'embed') return 50;
     return 10;
   };

@@ -201,14 +201,14 @@ const MAX_LIVE_CACHE = 200;
 const liveCache = new Map();
 const inFlight = new Map();
 
-function cacheLiveResult(matchId, nowTs, data) {
+function cacheLiveResult(matchId, nowTs, data, fail = false) {
   if (liveCache.has(matchId)) liveCache.delete(matchId);
   while (liveCache.size >= MAX_LIVE_CACHE) {
     const oldestKey = liveCache.keys().next().value;
     if (oldestKey === undefined) break;
     liveCache.delete(oldestKey);
   }
-  liveCache.set(matchId, { at: nowTs, data });
+  liveCache.set(matchId, { at: nowTs, data, ...(fail ? { fail: true } : {}) });
 }
 
 /** 测试用：清空实时缓存 */
@@ -219,6 +219,8 @@ export function resetLiveCache() {
 
 function cacheFresh(entry, nowTs, cfg) {
   if (!entry || !Number.isFinite(entry.at)) return false;
+  // 失败结果短 TTL 入缓存：否则前端 30s 轮询在弱网下反复触发 12s 超时+重试+curl 兜底
+  if (entry.fail) return nowTs - entry.at < (cfg.failCacheTtlMs ?? 30000);
   const ttl =
     entry.data?.state === 'finished'
       ? cfg.finishedCacheTtlMs ?? FINISHED_CACHE_TTL_MS
@@ -261,7 +263,9 @@ export async function resolveLive(match, opts = {}) {
         log
       });
     } catch (err) {
-      return { ok: false, reason: 'upstream-error', message: String(err?.message || err) };
+      const fail = { ok: false, reason: 'upstream-error', message: String(err?.message || err) };
+      cacheLiveResult(match.id, now, fail, true);
+      return fail;
     }
 
     const ev = pickEspnEvent(match, events);

@@ -56,7 +56,7 @@ jobs:
       # 必须排在 build 之前 —— 推荐数据会被打进 dist，晚于构建等于没生成。
       - name: Rebuild L1 recommendations
         shell: bash
-        run: npm run build:recs
+        run: npm run build:recs -- --now="$(TZ=Asia/Shanghai git log -1 --date=format:%Y-%m-%dT%H:%M --format=%cd)"
 
       - name: Build frontend
         run: npm run build
@@ -205,7 +205,7 @@ jobs:
       # 且避免仓库快照跨周后 macOS 在 test:all 因窗口过期而中断发布。
       - name: Rebuild L1 recommendations
         shell: bash
-        run: npm run build:recs
+        run: npm run build:recs -- --now="$(TZ=Asia/Shanghai git log -1 --date=format:%Y-%m-%dT%H:%M --format=%cd)"
 
       - name: Build frontend
         run: npm run build

@@ -320,7 +320,20 @@ async function waitForSlot(minIntervalMs) {
  * @param {object} opts  rules / fetchJSON / now / cache / persist / teams / aliases
  * @returns {Promise<{ok:boolean, videos:Array, reason?:string, cached?:boolean, fetchedAt?:string}>}
  */
-export async function resolveHighlights(match, opts = {}) {
+// 同场并发去重：前端多组件同时要集锦时，只打一次上游（与 live.js 的 inFlight 同款）
+const highlightsInFlight = new Map();
+
+export function resolveHighlights(match, opts = {}) {
+  const key = match?.id;
+  if (key && highlightsInFlight.has(key)) return highlightsInFlight.get(key);
+  const task = resolveHighlightsImpl(match, opts).finally(() => {
+    if (key) highlightsInFlight.delete(key);
+  });
+  if (key) highlightsInFlight.set(key, task);
+  return task;
+}
+
+async function resolveHighlightsImpl(match, opts = {}) {
   const cfg = opts.rules?.highlights || {};
   if (cfg.enabled === false) {
     return { ok: false, videos: [], reason: 'disabled' };
