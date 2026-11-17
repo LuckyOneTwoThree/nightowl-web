@@ -279,6 +279,25 @@ export async function loadFixtures() {
 }
 
 /**
+ * 把用户 fixtures 恢复到写前状态（prevRaw=null 表示写前不存在）。
+ * 返回是否成功——调用方必须据此如实报告，不能把回滚失败说成「已回滚」。
+ */
+export function rollbackUserFixtures(p, prevRaw) {
+  try {
+    if (prevRaw === null) {
+      if (existsSync(p)) unlinkSync(p);
+    } else {
+      const rollbackTmp = `${p}.${process.pid}.${Date.now()}.rollback.tmp`;
+      writeFileSync(rollbackTmp, prevRaw, 'utf8');
+      renameSync(rollbackTmp, p);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * 增量同步的**扩窗**边界（天）。
  *
  * 注意它控制的是「要不要为一场缺分比赛多查前后几天」，不是「要不要查这场比赛」——
@@ -337,18 +356,14 @@ export function saveFixtures(next) {
     if (!metaSaved) {
       // fixtures 已 rename 而 meta 失败 = 部分成功：下次启动 sparse 会被当 dense 读，
       // 丢掉 t/r 等同步字段。必须回滚到写前状态，宁可报错也不留不一致
-      try {
-        if (prevRaw === null) {
-          if (existsSync(p)) unlinkSync(p);
-        } else {
-          const rollbackTmp = `${p}.${process.pid}.${Date.now()}.rollback.tmp`;
-          writeFileSync(rollbackTmp, prevRaw, 'utf8');
-          renameSync(rollbackTmp, p);
-        }
-      } catch {
-        /* 回滚失败保留现场，读取侧仍有损坏隔离兜底 */
-      }
-      return { ok: false, reason: '用户数据元信息（meta）写入失败，已回滚赛程数据', path: p };
+      const rolledBack = rollbackUserFixtures(p, prevRaw);
+      return {
+        ok: false,
+        reason: rolledBack
+          ? '用户数据元信息（meta）写入失败，已回滚赛程数据'
+          : '用户数据元信息（meta）写入失败且回滚失败，数据可能不一致，需人工处理',
+        path: p
+      };
     }
     return { ok: true, path: p, bytes: Buffer.byteLength(body), changedFields };
   } catch (err) {

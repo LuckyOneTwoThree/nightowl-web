@@ -54,7 +54,7 @@ function sanitizeWeekUpdatedAtMap(rawMap, nowTs = Date.now()) {
   for (const [weekKey, tsVal] of Object.entries(rawMap)) {
     if (typeof weekKey !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(weekKey)) continue;
     const t = clampTimestamp(tsVal, nowTs, -1);
-    if (t >= 0) out[weekKey] = t;
+    if (t > 0) out[weekKey] = t;
   }
   return out;
 }
@@ -64,8 +64,9 @@ function sanitizeRevealedIds(raw) {
   return [...new Set(raw.filter(x => typeof x === 'string' && x.trim()).map(x => x.trim()))];
 }
 
-// 未知（null/非法）时间戳参与比较的语义：显式 > 未知；双未知视为相等（走并集）
-const tsKnown = t => Number.isFinite(t);
+// 未知（null/非法/0）时间戳参与比较的语义：显式 > 未知；双未知视为相等（走并集）。
+// 0 视为未知：epoch 0 不可能是真实编辑时刻，只可能来自适配层误转或伪造。
+const tsKnown = t => Number.isFinite(t) && t > 0;
 const tsNewer = (a, b) => tsKnown(a) && (!tsKnown(b) || a > b);
 const tsEqual = (a, b) => (!tsKnown(a) && !tsKnown(b)) || (tsKnown(a) && tsKnown(b) && a === b);
 
@@ -80,9 +81,10 @@ export function buildSyncBundle(input = {}, nowTs = Date.now()) {
   );
   // 缺失全局时间戳 = 未知（null）。绝不能回退 exportedAt：
   // 那会把「不知道何时改的」伪装成「刚刚改的」，让旧数据赢过对端真实较新的修改。
-  const weekOverridesUpdatedAt = Number.isFinite(safeInput.weekOverridesUpdatedAt)
-    ? clampTimestamp(safeInput.weekOverridesUpdatedAt, nowTs)
-    : null;
+  const weekOverridesUpdatedAt =
+    Number.isFinite(safeInput.weekOverridesUpdatedAt) && safeInput.weekOverridesUpdatedAt > 0
+      ? clampTimestamp(safeInput.weekOverridesUpdatedAt, nowTs)
+      : null;
   return {
     version: SYNC_SCHEMA_VERSION,
     exportedAt,

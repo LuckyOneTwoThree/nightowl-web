@@ -18,7 +18,7 @@ import { createServer, checkedPendingIds, pendingMatchIds } from '../server/inde
 import { mergeEvents, fetchAllEvents } from '../server/sources/index.js';
 import { parseRound } from '../server/sources/openfootball.js';
 import { loadRules } from '../server/proxy.js';
-import { freshness, mergeFixtures, loadFixtures, saveFixtures, builtinSeason } from '../server/data-store.js';
+import { freshness, mergeFixtures, loadFixtures, saveFixtures, builtinSeason, rollbackUserFixtures } from '../server/data-store.js';
 import { ts } from '../src/core/engine.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -980,6 +980,21 @@ console.log('十五、★ 字段级来源（内置更正能压过用户副本，
     ok('★ meta 写入失败后 fixtures 回滚到写前状态',
       readFileSync(fixturesPath, 'utf8') === beforeRollback);
     rmSync(metaPath, { recursive: true, force: true });
+
+    // 回滚自身失败必须如实返回 false（不能谎报「已回滚」）：用目录占据目标路径
+    const rbDir = mkdtempSync(resolve(tmpdir(), 'nightowl-rollback-'));
+    try {
+      const occupied = resolve(rbDir, 'fixtures.json');
+      mkdirSync(occupied);
+      ok('★ 回滚失败如实返回 false（rename 目标是目录）', rollbackUserFixtures(occupied, '[]') === false);
+      ok('★ 回滚失败如实返回 false（unlink 目标是目录）', rollbackUserFixtures(occupied, null) === false);
+      const okFile = resolve(rbDir, 'ok.json');
+      writeFileSync(okFile, 'new-content');
+      ok('回滚成功恢复写前内容', rollbackUserFixtures(okFile, 'old-content') === true
+        && readFileSync(okFile, 'utf8') === 'old-content');
+    } finally {
+      rmSync(rbDir, { recursive: true, force: true });
+    }
   } finally {
     if (prevEnv === undefined) delete process.env.NIGHTOWL_USER_DATA;
     else process.env.NIGHTOWL_USER_DATA = prevEnv;

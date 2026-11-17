@@ -244,4 +244,23 @@ check('weekOverrides 未知时间戳语义：显式优先、双未知并集、�
   assert.deepEqual(kept.weekOverridesByWeek[wk].pinnedIds, ['per-week']);
 });
 
+check('ts=0 视为未知：不击败对端未知、逐周 0 被过滤', () => {
+  const now = 1_795_000_000_000;
+  const wk = '2026-11-09';
+  const ov = pins => ({ pinnedIds: pins, excludedIds: [], blockedNights: [] });
+  const zeroLocal = buildSyncBundle(
+    { weekOverridesUpdatedAt: 0, weekOverridesByWeek: { [wk]: ov(['zero']) } },
+    now
+  );
+  assert.equal(zeroLocal.weekOverridesUpdatedAt, null);
+  const unknownRemote = buildSyncBundle({ weekOverridesByWeek: { [wk]: ov(['unknown']) } }, now);
+  const merged = mergeSyncBundles(zeroLocal, unknownRemote, now);
+  assert.deepEqual(merged.weekOverridesByWeek[wk].pinnedIds.sort(), ['unknown', 'zero']);
+  const perWeekZero = buildSyncBundle(
+    { weekUpdatedAtByWeek: { [wk]: 0 }, weekOverridesByWeek: { [wk]: ov(['pw']) } },
+    now
+  );
+  assert.deepEqual(perWeekZero.weekUpdatedAtByWeek, {});
+});
+
 console.log(`[test:sync-bundle] ${passed} passed`);

@@ -9,7 +9,8 @@
       "mobile/src/**",
       "!**/*.css",
       "!**/*.json",
-      "!**/*.md"
+      "!**/*.md",
+      "!.claude/**"
     ]
   },
   "formatter": { "enabled": false },

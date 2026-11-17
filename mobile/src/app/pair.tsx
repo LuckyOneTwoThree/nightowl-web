@@ -47,6 +47,15 @@ type SyncResponse = {
   };
 };
 
+// body 读取期的 abort 必须重抛：吞成 {} 会把超时误报为「同步失败（HTTP 200）」，
+// 而桌面侧已先合并落盘——手机不应用 merged 会造成两端状态分叉
+function readJsonBody<T>(res: Response): Promise<T> {
+  return res.json().catch(err => {
+    if (err instanceof Error && err.name === 'AbortError') throw err;
+    return {} as T;
+  });
+}
+
 async function fetchWithTimeout<T>(
   url: string,
   init: RequestInit,
@@ -224,7 +233,7 @@ export default function PairScreen() {
           `${baseUrl}/pair/info`,
           { method: 'GET', headers },
           8000,
-          r => r.json().catch(() => ({})) as Promise<InfoResponse>
+          r => readJsonBody<InfoResponse>(r)
         );
         if (infoRes.ok && infoJson.ok) {
           if (infoJson.mode === 'handoff') resolvedMode = 'handoff';
@@ -265,7 +274,7 @@ export default function PairScreen() {
           body: JSON.stringify(localBundle),
         },
         8000,
-        r => r.json().catch(() => ({})) as Promise<SyncResponse>
+        r => readJsonBody<SyncResponse>(r)
       );
       if (!syncRes.ok || !syncJson.ok || !syncJson.merged) {
         throw new Error(syncJson.error || `同步失败（HTTP ${syncRes.status}）`);
@@ -298,7 +307,7 @@ export default function PairScreen() {
           `${baseUrl}/pair/handoff`,
           { method: 'GET', headers },
           8000,
-          r => r.json().catch(() => ({})) as Promise<HandoffResponse>
+          r => readJsonBody<HandoffResponse>(r)
         );
         if (handoffRes.ok && handoffJson.ok && handoffJson.handoff?.matchId) {
           const { matchId, lines = [] } = handoffJson.handoff;

@@ -32,7 +32,7 @@ export function loadWeekUpdatedAt() {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
     const out = {};
     for (const [k, v] of Object.entries(parsed)) {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(k) && Number.isFinite(Number(v))) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(k) && Number.isFinite(Number(v)) && Number(v) > 0) {
         out[k] = Number(v);
       }
     }
@@ -49,7 +49,7 @@ export function saveWeekUpdatedAt(map, minWeekStartStr = null) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) continue;
       if (minWeekStartStr && k < minWeekStartStr) continue;
       const n = Number(v);
-      if (Number.isFinite(n) && n >= 0) out[k] = n;
+      if (Number.isFinite(n) && n > 0) out[k] = n;
     }
   }
   try {
@@ -60,19 +60,23 @@ export function saveWeekUpdatedAt(map, minWeekStartStr = null) {
   return out;
 }
 
-// 全局周计划变更时刻：null = 未知（遗留数据从未记录），同步合并时不得伪装成当前时刻
+// 全局周计划变更时刻：null = 未知（遗留数据从未记录），同步合并时不得伪装成当前时刻。
+// ⚠️ Number(null) === 0：必须先判 raw 缺失，否则「从未记录」会被读成 epoch 0，
+// 在 LWW 合并里击败对端的未知一侧，丢掉双未知本应的并集。0 一律视为未知。
 export function loadWeekOverridesUpdatedAt() {
   try {
-    const n = Number(localStorage.getItem(GLOBAL_TS_KEY));
-    return Number.isFinite(n) && n >= 0 ? n : null;
+    const raw = localStorage.getItem(GLOBAL_TS_KEY);
+    if (raw === null) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
   } catch {
     return null;
   }
 }
 
 export function saveWeekOverridesUpdatedAt(ts) {
-  const n = Number(ts);
-  const clean = Number.isFinite(n) && n >= 0 ? n : null;
+  const n = ts == null ? NaN : Number(ts);
+  const clean = Number.isFinite(n) && n > 0 ? n : null;
   try {
     if (clean === null) localStorage.removeItem(GLOBAL_TS_KEY);
     else localStorage.setItem(GLOBAL_TS_KEY, String(clean));

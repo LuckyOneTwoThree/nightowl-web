@@ -28,7 +28,7 @@ function sanitizeWeekTs(
     if (!/^\d{4}-\d{2}-\d{2}$/.test(wk)) continue;
     if (minWeekKey && wk < minWeekKey) continue;
     const n = Number(val);
-    if (Number.isFinite(n) && n >= 0) out[wk] = n;
+    if (Number.isFinite(n) && n > 0) out[wk] = n;
   }
   return out;
 }
@@ -169,7 +169,7 @@ export const useWeekOverridesStore = create<WeekOverridesStore>()(
             : sanitizeWeekTs(state.updatedAtByWeek, minWeekKey),
           updatedAt:
             nextUpdatedAt !== undefined
-              ? Number.isFinite(nextUpdatedAt) && (nextUpdatedAt as number) >= 0
+              ? Number.isFinite(nextUpdatedAt) && (nextUpdatedAt as number) > 0
                 ? (nextUpdatedAt as number)
                 : null
               : state.updatedAt,
@@ -192,12 +192,15 @@ export const useWeekOverridesStore = create<WeekOverridesStore>()(
               updatedAt?: unknown;
             }
           | undefined;
-        const savedGlobalTs = Number(saved?.updatedAt);
+        // Number(null) === 0：persisted 的 null（双未知合并结果）必须先判空，
+        // 否则 rehydrate 把「未知」读成 epoch 0，配对时击败对端未知一侧
+        const rawGlobalTs = saved?.updatedAt;
+        const savedGlobalTs = rawGlobalTs == null ? NaN : Number(rawGlobalTs);
         return {
           ...current,
           byWeek: pruneWeekOverridesMap(saved?.byWeek || {}) as Record<string, WeekOverrideEntry>,
           updatedAtByWeek: sanitizeWeekTs(saved?.updatedAtByWeek),
-          updatedAt: Number.isFinite(savedGlobalTs) && savedGlobalTs >= 0 ? savedGlobalTs : null,
+          updatedAt: Number.isFinite(savedGlobalTs) && savedGlobalTs > 0 ? savedGlobalTs : null,
         };
       },
       onRehydrateStorage: () => state => {
