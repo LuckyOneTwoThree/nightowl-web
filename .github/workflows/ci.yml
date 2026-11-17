@@ -25,11 +25,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # 无头 Electron 渲染/布局门禁需要的系统库与虚拟显示（ubuntu-latest）
+      # 无头 Electron 渲染/布局门禁需要的系统库与虚拟显示。
+      # ubuntu-24.04 的库带 t64 后缀，22.04 用旧名——两套包名依次尝试。
       - name: Install Electron runtime libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libgtk-3-0 libgbm1 libasound2 libxss1 libxtst6 libsecret-1-0
+          sudo apt-get install -y xvfb libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libgtk-3-0t64 libgbm1 libasound2t64 libxss1 libxtst6 libsecret-1-0 \
+          || sudo apt-get install -y xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libgtk-3-0 libgbm1 libasound2 libxss1 libxtst6 libsecret-1-0
 
       # L1 推荐池按「未来 6 周」生成：不重跑就会在供给耗尽后让 test:recs 无代码变更也红。
       # 必须排在 build 之前 —— 推荐数据会被打进 dist，晚于构建等于没生成（与发版工作流一致）。
@@ -69,6 +71,13 @@ jobs:
       - name: Install mobile dependencies
         run: npm ci
         working-directory: mobile
+
+      # mobile check 的 lint 门禁跑根目录 Biome，需要根 node_modules；
+      # 跳过 Electron 二进制下载（mobile job 不需要桌面运行时）
+      - name: Install root dependencies (for Biome lint gate)
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
 
       - name: Verify shared pipeline & TypeScript
         run: npm run check
