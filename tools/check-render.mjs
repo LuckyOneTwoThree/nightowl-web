@@ -51,6 +51,7 @@ const futureFixture = repoFixtures.find(
 let pass = 0;
 let fail = 0;
 let skipped = 0;
+const failedNames = [];
 
 function ok(name, cond, detail = '') {
   if (cond) {
@@ -58,6 +59,7 @@ function ok(name, cond, detail = '') {
     console.log(`  ✅ ${name}`);
   } else {
     fail++;
+    failedNames.push(`${name}${detail ? ` — ${detail}` : ''}`);
     console.log(`  ❌ ${name}${detail ? ` — ${detail}` : ''}`);
   }
 }
@@ -185,11 +187,12 @@ app.whenReady().then(async () => {
     );
     // 正向断言：blob Worker 必须能创建并回消息。只查「无违规」不够——
     // 门禁窗口若没注入 CSP，违规断言恒真；删掉 worker-src 时这条会先红。
+    // 超时给 10s：高负载 mac runner 上 Worker 冷启动可能远超本地耗时（3s 曾假红）。
     const workerOk = await win.webContents.executeJavaScript(`
       new Promise(resolve => {
         try {
           const w = new Worker(URL.createObjectURL(new Blob(['postMessage(1)'], { type: 'text/javascript' })));
-          const t = setTimeout(() => { w.terminate(); resolve(false); }, 3000);
+          const t = setTimeout(() => { w.terminate(); resolve(false); }, 10000);
           w.onmessage = () => { clearTimeout(t); w.terminate(); resolve(true); };
           w.onerror = () => { clearTimeout(t); resolve(false); };
         } catch { resolve(false); }
@@ -2454,6 +2457,11 @@ app.whenReady().then(async () => {
       (skipped ? `，跳过 ${skipped} 项（数据形态不满足）` : '') +
       (deferred ? `（其中 ${deferred} 项由人造数据场景承接）` : '')
   );
+  // 失败清单放在日志末尾：CI 日志尾部即可诊断，不用翻全文找 ❌
+  if (failedNames.length) {
+    console.log('失败清单：');
+    failedNames.forEach(n => console.log(`  ❌ ${n}`));
+  }
   app.exit(fail ? 1 : 0);
 }).catch(err => {
   console.error('FATAL', err?.stack || err);
