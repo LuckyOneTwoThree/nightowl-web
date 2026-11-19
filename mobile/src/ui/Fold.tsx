@@ -12,6 +12,8 @@ type Props = {
   summary: string;
   children: ReactNode;
   defaultOpen?: boolean;
+  /** 设置页的分组标题需要更高一级；默认 sm 保持比赛页原样 */
+  size?: 'sm' | 'base';
   style?: StyleProp<ViewStyle>;
 };
 
@@ -22,7 +24,7 @@ type Props = {
  * 收起时用一行摘要说明「里面有什么」，展开后才铺开正文。
  * 摘要是必需的 —— 空标题抽屉会让用户永远不点开。
  */
-export function Fold({ title, summary, children, defaultOpen = false, style }: Props) {
+export function Fold({ title, summary, children, defaultOpen = false, size = 'sm', style }: Props) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <View style={[styles.card, style]}>
@@ -38,7 +40,7 @@ export function Fold({ title, summary, children, defaultOpen = false, style }: P
         accessibilityLabel={`${title}，${summary}${open ? '，已展开' : '，已收起'}`}
       >
         <View style={styles.headerText}>
-          <Text style={styles.title}>{title}</Text>
+          <Text style={[styles.title, size === 'base' && styles.titleBase]}>{title}</Text>
           {!open ? (
             <Text style={styles.summary} numberOfLines={1}>
               {summary}
@@ -74,6 +76,7 @@ const styles = StyleSheet.create({
   },
   headerText: { flex: 1, minWidth: 0, gap: 1 },
   title: { color: colors.text, fontSize: fontSize.sm, fontWeight: weight.title },
+  titleBase: { fontSize: fontSize.base },
   summary: {
     color: colors.textMuted,
     fontSize: fontSize.xs,
