@@ -114,22 +114,6 @@ export default function MeScreen() {
         </Pressable>
       </View>
 
-      <Card style={styles.profile}>
-        <Image
-          source={require('../../../assets/brand/logo.png')}
-          style={styles.logo}
-          contentFit="cover"
-          accessibilityLabel="夜猫看台"
-        />
-        <View style={styles.profileText}>
-          <Text style={styles.profileName}>夜猫看台</Text>
-          <Text style={styles.profileSub}>
-            {prefs.followedTeams.length} 支球队 · {prefs.followedLeagues.length} 个联赛 · 每周{' '}
-            {prefs.weeklyBudget}h
-          </Text>
-        </View>
-      </Card>
-
       <View style={styles.section}>
         <SectionHeader
           title="明早补看"
@@ -194,6 +178,22 @@ export default function MeScreen() {
           )}
         </Card>
       </View>
+
+      <Card style={styles.profile}>
+        <Image
+          source={require('../../../assets/brand/logo.png')}
+          style={styles.logo}
+          contentFit="cover"
+          accessibilityLabel="夜猫看台"
+        />
+        <View style={styles.profileText}>
+          <Text style={styles.profileName}>夜猫看台</Text>
+          <Text style={styles.profileSub}>
+            {prefs.followedTeams.length} 支球队 · {prefs.followedLeagues.length} 个联赛 · 每周{' '}
+            {prefs.weeklyBudget}h
+          </Text>
+        </View>
+      </Card>
 
       <View style={styles.section}>
         <SectionHeader title="战报与连接" />
